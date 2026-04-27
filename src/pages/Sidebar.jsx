@@ -1,3 +1,6 @@
+
+
+
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -7,8 +10,9 @@ import {
   FlaskConical,
   Pill,
   UserCog,
+  Settings,
 } from "lucide-react";
-import { useState } from "react";   // 👈 ADD THIS
+import { useState } from "react";
 
 const menu = [
   {
@@ -26,12 +30,12 @@ const menu = [
       { label: "Doctors", icon: Stethoscope, path: "/doctors" },
       { label: "Requests", icon: CalendarDays, path: "/requests" },
       {
-  label: "Appointments",
-  icon: CalendarDays,
-  children: [
-    { label: "Consultation", path: "/appointments/consultation" },
-  ],
-},
+        label: "Appointments",
+        icon: CalendarDays,
+        children: [
+          { label: "Consultation", path: "/appointments/consultation" },
+        ],
+      },
       { label: "Visits", icon: CalendarDays, path: "/visits" },
       { label: "Laboratory", icon: FlaskConical, path: "/laboratory" },
       { label: "Pharmacy", icon: Pill, path: "/pharmacy" },
@@ -40,6 +44,10 @@ const menu = [
   {
     title: "MANAGE",
     items: [{ label: "Staffs", icon: UserCog, path: "/staffs" }],
+  },
+  {
+    title: "SYSTEM",
+    items: [{ label: "Settings", icon: Settings, path: "/settings" }],
   },
 ];
 
@@ -71,74 +79,74 @@ export default function Sidebar({ sidebarOpen }) {
             )}
 
             <div className="space-y-1">
-            {section.items.map((item) => {
-  const isDropdown = item.children;
-  const isOpen = openMenu === item.label;
+              {section.items.map((item) => {
+                const isDropdown = item.children;
+                const isOpen = openMenu === item.label;
 
-  if (isDropdown) {
-    return (
-      <div key={item.label}>
-        {/* Parent */}
-        <button
-          onClick={() =>
-            setOpenMenu(isOpen ? null : item.label)
-          }
-          className={`flex items-center w-full ${
-            sidebarOpen ? "gap-3 px-3" : "justify-center"
-          } py-2 rounded-md text-sm transition text-gray-300 hover:bg-slate-700`}
-        >
-          <item.icon size={18} />
-          {sidebarOpen && item.label}
-        </button>
+                if (isDropdown) {
+                  return (
+                    <div key={item.label}>
+                      {/* Parent */}
+                      <button
+                        onClick={() =>
+                          setOpenMenu(isOpen ? null : item.label)
+                        }
+                        className={`flex items-center w-full ${
+                          sidebarOpen ? "gap-3 px-3" : "justify-center"
+                        } py-2 rounded-md text-sm transition text-gray-300 hover:bg-slate-700`}
+                      >
+                        <item.icon size={18} />
+                        {sidebarOpen && item.label}
+                      </button>
 
-        {/* Dropdown */}
-        {isOpen && sidebarOpen && (
-          <div className="ml-6 mt-1 space-y-1">
-            {item.children.map((child) => {
-              const active = location.pathname === child.path;
+                      {/* Dropdown */}
+                      {isOpen && sidebarOpen && (
+                        <div className="ml-6 mt-1 space-y-1">
+                          {item.children.map((child) => {
+                            const active = location.pathname === child.path;
 
-              return (
-                <Link
-                  key={child.path}
-                  to={child.path}
-                  className={`block px-3 py-2 rounded-md text-sm transition
-                  ${
-                    active
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:bg-slate-700"
-                  }`}
-                >
-                  {child.label}
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
+                            return (
+                              <Link
+                                key={child.path}
+                                to={child.path}
+                                className={`block px-3 py-2 rounded-md text-sm transition
+                                  ${
+                                    active
+                                      ? "bg-blue-600 text-white"
+                                      : "text-gray-400 hover:bg-slate-700"
+                                  }`}
+                              >
+                                {child.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
-  // normal items
-  const active = location.pathname === item.path;
+                // normal items
+                const active = location.pathname === item.path;
 
-  return (
-    <Link
-      key={item.path}
-      to={item.path}
-      className={`flex items-center ${
-        sidebarOpen ? "gap-3 px-3" : "justify-center"
-      } py-2 rounded-md text-sm transition
-      ${
-        active
-          ? "bg-blue-600 text-white"
-          : "text-gray-300 hover:bg-slate-700"
-      }`}
-    >
-      <item.icon size={18} />
-      {sidebarOpen && item.label}
-    </Link>
-  );
-})}
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center ${
+                      sidebarOpen ? "gap-3 px-3" : "justify-center"
+                    } py-2 rounded-md text-sm transition
+                      ${
+                        active
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:bg-slate-700"
+                      }`}
+                  >
+                    <item.icon size={18} />
+                    {sidebarOpen && item.label}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ))}

@@ -5,7 +5,7 @@ import Sidebar from "./pages/Sidebar";
 import TopBar from "./pages/TopBar";
 
 import Dashboard from "./pages/Dashboard";
-import Settings from "./pages/Settings";
+import Settings from "./components/Settings/Settings";
 import Doctors from "./components/Doctor/Doctors";
 import AddDoctor from "./components/Doctor/AddDoctors";
 import EditDoctor from "./components/Doctor/EditDoctor";
@@ -17,6 +17,8 @@ import ViewMedicalHistory from "./components/Appointment/ViewMedicalHistory";
 import CalendarPage from "./components/Appointment/CalendarPage";
 import LaboratoryRegistrationForm from "./components/Laboratory/LaboratoryRegistrationForm";
 import NotificationsPage from "./components/Notification/NotificationsPage";
+import PermissionList from "./components/Settings/PermissionList";
+import UserPermissions from "./components/Settings/UserPermissions";
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -54,7 +56,9 @@ function App() {
         <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
-
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/roles" element={<UserPermissions />} />
+        <Route path="/permissions/:roleName" element={<PermissionList />} />
       </Routes>
     </div>
   </div>
