@@ -1,18 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Add this import
 import { 
-  Bell, 
-  ChevronDown, 
-  Maximize2, 
-  Minimize2, 
-  Menu, 
-  UserCheck, 
-  Settings, 
-  LogOut,
-  Sun,
-  Moon
+  Bell, ChevronDown, Maximize2, Minimize2, Menu, 
+  UserCheck, Settings, LogOut, Sun, Moon 
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
+  const navigate = useNavigate(); // Create navigate function
+  const { logout } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -39,6 +35,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     }
   };
 
+  const handleLogout = () => {
+    console.log("Logout button clicked");
+    logout(); // Clear auth state
+    navigate("/sign-in"); // Navigate to login page
+  };
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -53,16 +55,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
       }
     };
 
-    // Check for saved theme preference
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setTheme('dark');
-      document.documentElement.classList.add('dark');
-    } else {
-      setTheme('light');
-      document.documentElement.classList.remove('dark');
-    }
-
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('mousedown', handleClickOutside);
     
@@ -70,12 +62,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [setTheme]);
-
-  // Save theme to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, []);
 
   const notifications = [
     { id: 1, title: 'New leave request', message: 'John Doe requested sick leave', time: '5 mins ago', read: false },
@@ -86,31 +73,21 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleLogout = () => {
-    console.log('Logging out...');
-  };
-
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20 transition-colors">
-      {/* Left side - Menu Toggle Button */}
       <div className="flex items-center gap-4 flex-1">
-        {/* Sidebar Toggle Button - THIS MAKES THE MENUBAR WORK */}
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
         >
           <Menu size={22} className="text-gray-700 dark:text-gray-300" />
         </button>
       </div>
 
-      {/* Right side - Action Buttons */}
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Dark/Light Theme Toggle */}
         <button 
           onClick={toggleTheme}
           className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
         >
           {theme === 'dark' ? (
             <Sun size={20} className="text-gray-700 dark:text-gray-300" />
@@ -119,11 +96,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           )}
         </button>
 
-        {/* Fullscreen Toggle Button */}
         <button 
           onClick={toggleFullscreen}
           className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
         >
           {isFullscreen ? (
             <Minimize2 size={20} className="text-gray-700 dark:text-gray-300" />
@@ -132,7 +107,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           )}
         </button>
 
-        {/* Notification Bell */}
         <div className="relative" ref={notificationRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
@@ -177,7 +151,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           )}
         </div>
 
-        {/* User Profile Dropdown */}
         <div className="relative" ref={profileMenuRef}>
           <button 
             onClick={() => setShowProfileMenu(!showProfileMenu)}
@@ -209,7 +182,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
                   <span>Settings</span>
                 </button>
                 <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                <button onClick={handleLogout} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3">
+                <button 
+                  onClick={handleLogout} 
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3"
+                >
                   <LogOut size={16} />
                   <span>Logout</span>
                 </button>
