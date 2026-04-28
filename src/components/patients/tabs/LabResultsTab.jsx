@@ -14,65 +14,95 @@ const LabResultsTab = ({ patient, handleDeleteClick, openMenu, setOpenMenu, getS
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="text-sm font-medium">Total Lab Results <span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs ml-1">{patient.labResultsList.length}</span></div>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+        <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">
+            Total Lab Results
+            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+              {patient.labResultsList?.length || 0}
+            </span>
+          </h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100 text-gray-600">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
               <tr>
-                <th className="p-3 text-left">Test ID</th>
-                <th className="p-3 text-left">Appointment Date</th>
-                <th className="p-3 text-left">Referred By</th>
-                <th className="p-3 text-left">Test Name</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left"></th>
+                <th className="px-6 py-3">Test ID</th>
+                <th className="px-6 py-3">Appointment Date</th>
+                <th className="px-6 py-3">Referred By</th>
+                <th className="px-6 py-3">Test Name</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {patient.labResultsList.map((item, index) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition">
-                  <td className="p-3 font-medium text-gray-800">{item.id}</td>
-                  <td className="p-3 text-gray-600">{item.appointmentDate}</td>
-                  <td className="p-3 text-gray-800">{item.referredBy}</td>
-                  <td className="p-3 text-gray-700">{item.testName}</td>
-                  <td className="p-3"><span className={getStatusBadge(item.status)}>{item.status}</span></td>
-                  <td className="p-3 text-right relative">
-                    <button 
+              {patient.labResultsList?.map((item, index) => (
+                <tr key={item.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                  <td 
+                    className="px-6 py-4 text-[#1C62A0] font-medium cursor-pointer"
+                    onClick={() => handleViewReport(item)}
+                  >
+                    {item.id}
+                  </td>
+                  <td 
+                    className="px-6 py-4 text-gray-600 cursor-pointer"
+                    onClick={() => handleViewReport(item)}
+                  >
+                    {item.appointmentDate}
+                  </td>
+                  <td 
+                    className="px-6 py-4 font-medium text-gray-800 cursor-pointer"
+                    onClick={() => handleViewReport(item)}
+                  >
+                    {item.referredBy}
+                  </td>
+                  <td 
+                    className="px-6 py-4 text-gray-700 cursor-pointer"
+                    onClick={() => handleViewReport(item)}
+                  >
+                    {item.testName}
+                  </td>
+                  <td 
+                    className="px-6 py-4 cursor-pointer"
+                    onClick={() => handleViewReport(item)}
+                  >
+                    <span className={getStatusBadge(item.status)}>{item.status}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right relative action-menu-container">
+                    <button
                       onClick={(e) => { 
                         e.stopPropagation(); 
-                        setOpenMenu(openMenu === `lab-${index}` ? null : `lab-${index}`);
-                      }} 
-                      className="p-2 border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100"
+                        setOpenMenu(openMenu === `lab-${item.id}` ? null : `lab-${item.id}`);
+                      }}
+                      className="p-2 rounded hover:bg-gray-100 transition-colors"
                     >
-                      <MoreVertical size={16} />
+                      <MoreVertical size={16} className="text-gray-500" />
                     </button>
-                    {openMenu === `lab-${index}` && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 action-menu-container">
-                        <button 
+                    {openMenu === `lab-${item.id}` && (
+                      <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                        <button
                           onClick={(e) => { 
-                            e.stopPropagation();
+                            e.stopPropagation(); 
                             handleViewReport(item);
-                          }} 
-                          className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                            setOpenMenu(null);
+                          }}
+                          className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <Eye size={15} />
-                          View Report
+                          <Eye size={15} /> View Report
                         </button>
-                        <button 
+                        <button
                           onClick={(e) => { 
-                            e.stopPropagation();
+                            e.stopPropagation(); 
                             handleDeleteClick('lab', item.id, index, `${item.testName} (${item.id})`);
-                          }} 
-                          className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-red-50"
+                            setOpenMenu(null);
+                          }}
+                          className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
                         >
-                          <Trash2 size={15} />
-                          Delete
+                          <Trash2 size={15} /> Delete
                         </button>
                       </div>
                     )}
-                  </td>
+                   </td>
                 </tr>
               ))}
             </tbody>

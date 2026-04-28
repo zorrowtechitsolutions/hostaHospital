@@ -15,7 +15,6 @@ import {
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
 
-
 // Dummy data for requests
 const dummyRequests = [
   {
@@ -272,9 +271,12 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
 
   if (safeData.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="text-sm font-medium">Total Requests <span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs ml-1">0</span></div>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+        <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">
+            Total Requests
+            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">0</span>
+          </h2>
         </div>
         <div className="p-12 text-center">
           <div className="flex flex-col items-center justify-center text-gray-400">
@@ -289,24 +291,25 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
+      <div className="p-6 bg-gray-50 min-h-screen">
         {/* Page Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-            Requests
-          </h1>
-          <div className="text-sm text-gray-500 flex items-center gap-2">
-            <span>Home</span>
-            <ChevronRight size={14} />
-            <span className="text-gray-700 font-medium">Requests</span>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-gray-800">Requests</h1>
+          <p className="text-sm text-gray-500">Home / Requests</p>
         </div>
 
         {/* Main Content */}
-        <div className="p-6">
-          {/* Search Bar and Action Buttons */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div className="flex-1 max-w-md">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+          {/* Header with Search and Actions */}
+          <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700">
+              Total Requests
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {filteredRequests.length}
+              </span>
+            </h2>
+            
+            <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -314,22 +317,20 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search by Patient ID, Name or Doctor..."
-                  className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0]"
                 />
               </div>
-            </div>
 
-            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`relative p-2.5 rounded-lg transition-all duration-200 ${
+                className={`relative p-2 rounded-lg transition-all duration-200 ${
                   showFilters || activeFilterCount > 0
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "border border-gray-300 text-gray-600 hover:bg-gray-100"
+                    ? "bg-[#1C62A0] text-white shadow-md"
+                    : "border border-gray-200 text-gray-600 hover:bg-gray-100"
                 }`}
                 title="Toggle Filters"
               >
-                <Filter size={18} />
+                <Filter size={16} />
                 {activeFilterCount > 0 && !showFilters && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                     {activeFilterCount}
@@ -339,35 +340,34 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
 
               <button
                 onClick={handleRefresh}
-                className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
+                className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200"
                 title="Refresh"
               >
-                <RefreshCcw size={18} />
+                <RefreshCcw size={16} />
               </button>
 
-              <label className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200 cursor-pointer">
-                <Upload size={18} />
+              <label className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200 cursor-pointer">
+                <Upload size={16} />
                 <input type="file" accept=".json" onChange={handleImport} className="hidden" />
               </label>
 
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200 text-sm"
               >
-                <Download size={18} />
-                <span className="hidden sm:inline">Export</span>
+                <Download size={16} />
               </button>
             </div>
           </div>
 
           {/* Collapsible Filter Section */}
           {showFilters && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-              <div className="px-6 py-4 border-b border-gray-200">
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="px-6 py-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <Filter className="w-5 h-5 text-gray-500" />
-                    <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+                    <h2 className="text-sm font-semibold text-gray-700">Filters</h2>
                     {activeFilterCount > 0 && (
                       <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
                         {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
@@ -385,7 +385,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                     <select
                       value={departmentFilter}
                       onChange={(e) => setDepartmentFilter(e.target.value)}
-                      className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-200 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
                     >
                       <option value="">All Departments</option>
                       {getAllDepartments().map(dept => (
@@ -400,41 +400,32 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                       type="date"
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-200 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
                     />
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    Showing <span className="font-semibold text-gray-900">{filteredRequests.length}</span> of{' '}
-                    <span className="font-semibold text-gray-900">{safeData.length}</span> requests
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Requests Table - List View */}
+          {/* Requests Table */}
           {filteredRequests.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+            <div className="text-center py-12">
               <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
               <p className="text-gray-500">Try adjusting your search or filter criteria</p>
               <button
                 onClick={clearAllFilters}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154A7D] transition-colors text-sm"
               >
                 Clear All Filters
               </button>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-visible">
-              <div className="overflow-x-auto overflow-visible" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <>
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                     <tr>
                       <th className="px-6 py-3">Patient ID</th>
                       <th className="px-6 py-3">Patient Name</th>
@@ -451,7 +442,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                           <span className="font-mono text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded">
                             {item.patientId}
                           </span>
-                        </td>
+                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <img 
@@ -461,7 +452,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                             />
                             <span className="font-medium text-gray-900">{item.patientName}</span>
                           </div>
-                        </td>
+                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
@@ -469,17 +460,17 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                             </div>
                             <span className="text-gray-700">{item.doctorName}</span>
                           </div>
-                        </td>
+                         </td>
                         <td className="px-6 py-4 text-gray-600">{item.department}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1 text-gray-600">
                             <Calendar size={14} className="text-gray-400" />
                             {item.appointmentDate} at {item.time}
                           </div>
-                        </td>
+                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-3">
-                            {/* Approve Button - Check icon */}
+                            {/* Approve Button */}
                             <button
                               onClick={() => handleApproveClick(item)}
                               className="w-9 h-9 flex items-center justify-center rounded-lg border border-green-200 text-green-500 hover:bg-green-50 hover:border-green-300 transition-all"
@@ -488,7 +479,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                               <Check size={18} />
                             </button>
                             
-                            {/* Reject Button - X icon */}
+                            {/* Reject Button */}
                             <button
                               onClick={() => handleRejectClick(item)}
                               className="w-9 h-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all"
@@ -497,8 +488,8 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                               <X size={18} />
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                         </td>
+                       </tr>
                     ))}
                   </tbody>
                 </table>
@@ -506,7 +497,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
               
               {/* Pagination */}
               {filteredRequests.length > 0 && (
-                <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+                <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center">
                   <div className="text-sm text-gray-500">
                     Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
                     {Math.min(currentPage * itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
@@ -518,7 +509,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                       className={`px-3 py-1 border rounded-md text-sm transition-all ${
                         currentPage === 1
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-white text-gray-600 hover:bg-gray-50"
+                          : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                       }`}
                     >
                       Previous
@@ -532,7 +523,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                       className={`px-3 py-1 border rounded-md text-sm transition-all ${
                         currentPage === totalPages || totalPages === 0
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-white text-gray-600 hover:bg-gray-50"
+                          : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                       }`}
                     >
                       Next
@@ -540,7 +531,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

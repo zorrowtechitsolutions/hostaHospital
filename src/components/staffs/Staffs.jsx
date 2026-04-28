@@ -1,4 +1,4 @@
-// Staffs.jsx - With DeleteModal integration
+// Staffs.jsx - With Pagination
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -32,6 +32,10 @@ const Staffs = () => {
   // Filter states
   const [designationFilter, setDesignationFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Staff data state
   const [staffsData, setStaffsData] = useState([]);
@@ -41,7 +45,12 @@ const Staffs = () => {
     loadStaffsFromStorage();
   }, []);
 
-  // Default staff data with salary transactions
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, designationFilter, genderFilter]);
+
+  // Default staff data
   const defaultStaffsData = [
     { 
       id: '#SF0025', 
@@ -63,16 +72,7 @@ const Staffs = () => {
       salary: '$18,600',
       joiningDate: '17 Jun 2024',
       department: 'Pharmacy',
-      staffType: 'Permanent',
-      salaryTransactions: [
-        { id: '#TN578193', amount: '$18,600', creditOn: '16 Feb 2025', salaryFor: 'Jan 2025' },
-        { id: '#TN578192', amount: '$18,600', creditOn: '18 Jan 2025', salaryFor: 'Dec 2024' },
-        { id: '#TN578190', amount: '$18,600', creditOn: '15 Dec 2024', salaryFor: 'Nov 2024' },
-        { id: '#TN578189', amount: '$18,600', creditOn: '17 Nov 2024', salaryFor: 'Oct 2024' },
-        { id: '#TN578188', amount: '$18,600', creditOn: '15 Oct 2024', salaryFor: 'Sep 2024' },
-        { id: '#TN578187', amount: '$18,600', creditOn: '18 Sep 2024', salaryFor: 'Aug 2024' },
-        { id: '#TN578186', amount: '$18,600', creditOn: '15 Aug 2024', salaryFor: 'Jul 2024' }
-      ]
+      staffType: 'Permanent'
     },
     { 
       id: '#SF0024', 
@@ -94,11 +94,7 @@ const Staffs = () => {
       salary: '$22,500',
       joiningDate: '10 Jun 2024',
       department: 'Nursing',
-      staffType: 'Permanent',
-      salaryTransactions: [
-        { id: '#TN578193', amount: '$22,500', creditOn: '16 Feb 2025', salaryFor: 'Jan 2025' },
-        { id: '#TN578192', amount: '$22,500', creditOn: '18 Jan 2025', salaryFor: 'Dec 2024' }
-      ]
+      staffType: 'Permanent'
     },
     { 
       id: '#SF0023', 
@@ -120,10 +116,7 @@ const Staffs = () => {
       salary: '$21,000',
       joiningDate: '22 May 2024',
       department: 'Procurement',
-      staffType: 'Contract',
-      salaryTransactions: [
-        { id: '#TN578193', amount: '$21,000', creditOn: '16 Feb 2025', salaryFor: 'Jan 2025' }
-      ]
+      staffType: 'Contract'
     },
     { 
       id: '#SF0022', 
@@ -145,10 +138,7 @@ const Staffs = () => {
       salary: '$25,000',
       joiningDate: '15 May 2024',
       department: 'Administration',
-      staffType: 'Permanent',
-      salaryTransactions: [
-        { id: '#TN578193', amount: '$25,000', creditOn: '16 Feb 2025', salaryFor: 'Jan 2025' }
-      ]
+      staffType: 'Permanent'
     },
     { 
       id: '#SF0021', 
@@ -170,8 +160,7 @@ const Staffs = () => {
       salary: '$14,200',
       joiningDate: '30 Apr 2024',
       department: 'Nursing',
-      staffType: 'Temporary',
-      salaryTransactions: []
+      staffType: 'Temporary'
     },
     { 
       id: '#SF0020', 
@@ -193,8 +182,7 @@ const Staffs = () => {
       salary: '$16,500',
       joiningDate: '25 Apr 2024',
       department: 'Front Office',
-      staffType: 'Permanent',
-      salaryTransactions: []
+      staffType: 'Permanent'
     },
     { 
       id: '#SF0019', 
@@ -216,8 +204,7 @@ const Staffs = () => {
       salary: '$15,800',
       joiningDate: '13 Mar 2024',
       department: 'Laboratory',
-      staffType: 'Permanent',
-      salaryTransactions: []
+      staffType: 'Permanent'
     },
     { 
       id: '#SF0018', 
@@ -239,31 +226,7 @@ const Staffs = () => {
       salary: '$24,000',
       joiningDate: '16 Feb 2024',
       department: 'Pharmacy',
-      staffType: 'Permanent',
-      salaryTransactions: []
-    },
-    { 
-      id: '#SF0017', 
-      name: 'Eric Patterson', 
-      firstName: 'Eric', 
-      lastName: 'Patterson', 
-      gender: 'Male', 
-      designation: 'Nurse', 
-      phone: '+1 89105 78103', 
-      email: 'eric@example.com', 
-      appointmentDate: '2025-01-20',
-      appointmentDateDisplay: '20 Jan 2025', 
-      patientsCount: 150, 
-      imageUrl: 'https://i.pravatar.cc/80?img=8', 
-      status: 'Active',
-      jobType: 'Full Time',
-      dob: '30 Nov 1991',
-      address: '56 Healthcare Dr, Miami, FL 33101',
-      salary: '$18,200',
-      joiningDate: '20 Jan 2024',
-      department: 'Nursing',
-      staffType: 'Permanent',
-      salaryTransactions: []
+      staffType: 'Permanent'
     }
   ];
 
@@ -306,10 +269,22 @@ const Staffs = () => {
     return filtered;
   };
 
+  const filteredStaffs = getFilteredStaffs();
+  const totalPages = Math.ceil(filteredStaffs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedStaffs = filteredStaffs.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
   const handleRefresh = () => {
     setSearchTerm("");
     setDesignationFilter("all");
     setGenderFilter("all");
+    setCurrentPage(1);
     loadStaffsFromStorage();
   };
 
@@ -323,9 +298,7 @@ const Staffs = () => {
       'Phone Number': staff.phone,
       'Email': staff.email,
       'Appointment Date': staff.appointmentDateDisplay,
-      'Job Type': staff.jobType,
-      'Department': staff.department,
-      'Salary': staff.salary
+      'Department': staff.department
     }));
     
     const dataStr = JSON.stringify(exportData, null, 2);
@@ -374,7 +347,6 @@ const Staffs = () => {
     navigate(`/edit-staff/${encodedId}`, { state: { staff } });
   };
 
-  // Updated delete handler to use modal
   const handleDeleteClick = (staff) => {
     setStaffToDelete(staff);
     setShowDeleteModal(true);
@@ -386,8 +358,6 @@ const Staffs = () => {
       const updatedStaffs = existingStaffs.filter(s => s.id !== staffToDelete.id);
       localStorage.setItem('staffs', JSON.stringify(updatedStaffs));
       setStaffsData(updatedStaffs);
-      
-      // Close modal and clear selection
       setShowDeleteModal(false);
       setStaffToDelete(null);
     }
@@ -415,260 +385,85 @@ const Staffs = () => {
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
 
-    const salaryTransactions = staff.salaryTransactions && staff.salaryTransactions.length > 0 
-      ? staff.salaryTransactions 
-      : [
-          { id: '#TN578193', amount: staff.salary || '$18,600', creditOn: '16 Feb 2025', salaryFor: 'Jan 2025' },
-          { id: '#TN578192', amount: staff.salary || '$18,600', creditOn: '18 Jan 2025', salaryFor: 'Dec 2024' },
-          { id: '#TN578190', amount: staff.salary || '$18,600', creditOn: '15 Dec 2024', salaryFor: 'Nov 2024' },
-          { id: '#TN578189', amount: staff.salary || '$18,600', creditOn: '17 Nov 2024', salaryFor: 'Oct 2024' },
-          { id: '#TN578188', amount: staff.salary || '$18,600', creditOn: '15 Oct 2024', salaryFor: 'Sep 2024' },
-          { id: '#TN578187', amount: staff.salary || '$18,600', creditOn: '18 Sep 2024', salaryFor: 'Aug 2024' },
-          { id: '#TN578186', amount: staff.salary || '$18,600', creditOn: '15 Aug 2024', salaryFor: 'Jul 2024' }
-        ];
-
     return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.35)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-        fontFamily: "'Segoe UI', sans-serif"
-      }}>
-        <div style={{
-          width: '800px',
-          maxWidth: '90vw',
-          background: '#fff',
-          borderRadius: '10px',
-          overflow: 'hidden',
-          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
-        }}>
-          {/* Header */}
-          <div style={{
-            padding: '15px 20px',
-            background: '#f8f9fb',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderBottom: '1px solid #e5e7eb'
-          }}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Staff Details</h3>
-            <button
-              onClick={onClose}
-              style={{
-                width: '28px',
-                height: '28px',
-                background: '#0f172a',
-                color: '#fff',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderRadius: '50%',
-                cursor: 'pointer',
-                border: 'none',
-                fontSize: '18px'
-              }}
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999]">
+        <div className="bg-white w-[600px] rounded-xl shadow-xl">
+          <div className="flex justify-between items-center px-6 py-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-800">Staff Details</h2>
+            <button 
+              onClick={onClose} 
+              className="bg-gray-800 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-700"
             >
               ×
             </button>
           </div>
+          
+          <div className="p-6">
+            <div className="flex items-center gap-4 mb-6">
+              <img 
+                src={staff.imageUrl || 'https://i.pravatar.cc/80'} 
+                alt={staff.name}
+                className="w-16 h-16 rounded-full object-cover"
+              />
+              <div>
+                <h3 className="font-semibold text-gray-800 text-lg">{staff.name}</h3>
+                <p className="text-sm text-gray-500">{staff.id}</p>
+              </div>
+            </div>
 
-          {/* Profile */}
-          <div style={{
-            display: 'flex',
-            padding: '20px'
-          }}>
-            <img 
-              src={staff.imageUrl || 'https://i.pravatar.cc/80'} 
-              alt={staff.name}
-              style={{
-                width: '70px',
-                height: '70px',
-                borderRadius: '8px',
-                marginRight: '15px',
-                objectFit: 'cover'
-              }}
-            />
-            <div>
-              <span style={{
-                background: '#f3e8ff',
-                color: '#a855f7',
-                padding: '3px 8px',
-                borderRadius: '6px',
-                fontSize: '12px'
-              }}>
-                {staff.id}
-              </span>
-              <h4 style={{ margin: '6px 0 2px', fontSize: '18px' }}>{staff.name}</h4>
-              <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
-                Date Joined : {staff.joiningDate || staff.appointmentDateDisplay}
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Designation</label>
+                <p className="text-sm text-gray-800">{staff.designation}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Department</label>
+                <p className="text-sm text-gray-800">{staff.department || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Gender</label>
+                <p className="text-sm text-gray-800">{staff.gender}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Phone</label>
+                <p className="text-sm text-gray-800">{staff.phone}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Email</label>
+                <p className="text-sm text-gray-800">{staff.email}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Appointment Date</label>
+                <p className="text-sm text-gray-800">{staff.appointmentDateDisplay}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Salary</label>
+                <p className="text-sm text-gray-800">{staff.salary}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500">Status</label>
+                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">{staff.status}</span>
+              </div>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div style={{
-            padding: '0 20px 15px'
-          }}>
+          <div className="flex gap-2 p-4 border-t">
             <button
-              onClick={() => setActiveTab('basic')}
-              style={{
-                border: 'none',
-                background: activeTab === 'basic' ? '#3b82f6' : '#eef2f7',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                marginRight: '8px',
-                cursor: 'pointer',
-                color: activeTab === 'basic' ? '#fff' : '#333',
-                transition: 'all 0.2s'
-              }}
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
             >
-              Basic Info
+              Close
             </button>
             <button
-              onClick={() => setActiveTab('salary')}
-              style={{
-                border: 'none',
-                background: activeTab === 'salary' ? '#3b82f6' : '#eef2f7',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                color: activeTab === 'salary' ? '#fff' : '#333',
-                transition: 'all 0.2s'
+              onClick={() => {
+                handleEditStaff(staff);
+                onClose();
               }}
+              className="flex-1 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154a7d]"
             >
-              Salary Info
+              Edit Staff
             </button>
           </div>
-
-          {/* Basic Info Tab Content */}
-          {activeTab === 'basic' && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '18px',
-              padding: '0 20px 20px'
-            }}>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Job Type</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.jobType || 'Full Time'}</p>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Mobile</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.phone}</p>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Email</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.email}</p>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Gender</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.gender}</p>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>DOB</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.dob || 'N/A'}</p>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Staff Type</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>{staff.staffType || 'Permanent'}</p>
-              </div>
-              <div style={{ gridColumn: 'span 3' }}>
-                <label style={{ fontSize: '13px', color: '#6b7280', display: 'block' }}>Address</label>
-                <p style={{ fontWeight: 500, marginTop: '3px' }}>
-                  {staff.address || '10 Elizabethtown Plaza, Downers Grove, Elizabeth UK07202'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Salary Info Tab Content */}
-          {activeTab === 'salary' && (
-            <div style={{ padding: '0 20px 20px' }}>
-              <div style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse'
-                }}>
-                  <thead>
-                    <tr style={{ background: '#f8f9fb', borderBottom: '1px solid #e5e7eb' }}>
-                      <th style={{ 
-                        textAlign: 'left', 
-                        padding: '12px 16px', 
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        borderRight: '1px solid #e5e7eb'
-                      }}>Transaction ID</th>
-                      <th style={{ 
-                        textAlign: 'left', 
-                        padding: '12px 16px', 
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        borderRight: '1px solid #e5e7eb'
-                      }}>Amount</th>
-                      <th style={{ 
-                        textAlign: 'left', 
-                        padding: '12px 16px', 
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        borderRight: '1px solid #e5e7eb'
-                      }}>Credit On</th>
-                      <th style={{ 
-                        textAlign: 'left', 
-                        padding: '12px 16px', 
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: '#374151'
-                      }}>Salary For</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {salaryTransactions.map((transaction, idx) => (
-                      <tr key={idx} style={{ 
-                        borderBottom: idx !== salaryTransactions.length - 1 ? '1px solid #e5e7eb' : 'none',
-                        backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fafafa'
-                      }}>
-                        <td style={{ 
-                          padding: '12px 16px', 
-                          fontSize: '14px',
-                          borderRight: '1px solid #e5e7eb',
-                          color: '#1f2937'
-                        }}>{transaction.id}</td>
-                        <td style={{ 
-                          padding: '12px 16px', 
-                          fontSize: '14px',
-                          borderRight: '1px solid #e5e7eb',
-                          color: '#1f2937',
-                          fontWeight: 500
-                        }}>{transaction.amount}</td>
-                        <td style={{ 
-                          padding: '12px 16px', 
-                          fontSize: '14px',
-                          borderRight: '1px solid #e5e7eb',
-                          color: '#6b7280'
-                        }}>{transaction.creditOn}</td>
-                        <td style={{ 
-                          padding: '12px 16px', 
-                          fontSize: '14px',
-                          color: '#6b7280'
-                        }}>{transaction.salaryFor}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -737,141 +532,157 @@ const Staffs = () => {
     );
   };
 
-  const filteredStaffs = getFilteredStaffs();
   const activeFilterCount = getActiveFilterCount();
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {/* Page Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-          Staffs
-        </h1>
-        <div className="text-sm text-gray-500 flex items-center gap-2">
-          <span>Home</span>
-          <ChevronRight size={14} />
-          <span className="text-gray-700 font-medium">Staffs</span>
+    <>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        {/* Breadcrumb Navigation */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              title="Go back"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <div className="text-xs text-gray-500">
+              <span className="text-gray-700">Staffs</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Home</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Staffs</span>
+            </div>
+          </div>
+          <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="p-6">
         {/* Search Bar and Action Buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
+                placeholder="Search by name, staff ID, designation or phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, staff ID, designation or phone..."
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+              <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
+                <Search size={14} className="text-white" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2 flex-wrap items-center">
+            <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+              <RefreshCcw size={16} />
+            </button>
+
+            <input
+              type="file"
+              onChange={handleImport}
+              accept=".json"
+              className="hidden"
+              id="import-file"
+            />
+            <label
+              htmlFor="import-file"
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer"
+              title="Import Staffs"
+            >
+              <Upload size={16} />
+            </label>
+
+            <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Staffs">
+              <Download size={16} />
+            </button>
+
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`relative p-2.5 rounded-lg transition-all duration-200 ${
-                showFilters || activeFilterCount > 0
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "border border-gray-300 text-gray-600 hover:bg-gray-100"
-              }`}
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+                showFilters || activeFilterCount > 0 ? 'text-blue-600' : 'text-gray-500'
+              } hover:bg-gray-50`}
               title="Toggle Filters"
             >
-              <Filter size={18} />
+              <Filter size={16} />
               {activeFilterCount > 0 && !showFilters && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}
             </button>
 
             <button
-              onClick={handleRefresh}
-              className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-              title="Refresh"
-            >
-              <RefreshCcw size={18} />
-            </button>
-
-            <label className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200 cursor-pointer">
-              <Upload size={18} />
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
-
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-            >
-              <Download size={18} />
-              <span className="hidden sm:inline">Export</span>
-            </button>
-
-            <button
               onClick={handleAddStaff}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-all duration-200 shadow-sm"
+              className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2"
             >
-              <Plus size={18} />
-              <span className="hidden sm:inline">New Staff</span>
+              <Plus size={16} /> New Staff
             </button>
           </div>
         </div>
 
         {/* Collapsible Filter Section */}
         {showFilters && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Filter className="w-5 h-5 text-gray-500" />
-                  <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-                  {activeFilterCount > 0 && (
-                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                      {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-                <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
-                  Clear All Filters
-                </button>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Filter className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Designation</label>
-                  <select
-                    value={designationFilter}
-                    onChange={(e) => setDesignationFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Designations</option>
-                    {getAllDesignations().map(des => (
-                      <option key={des} value={des}>{des}</option>
-                    ))}
-                  </select>
-                </div>
+              <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
+                Clear All Filters
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Designation</label>
+                <select
+                  value={designationFilter}
+                  onChange={(e) => setDesignationFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Designations</option>
+                  {getAllDesignations().map(des => (
+                    <option key={des} value={des}>{des}</option>
+                  ))}
+                </select>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
-                  <select
-                    value={genderFilter}
-                    onChange={(e) => setGenderFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Genders</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Genders</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
               </div>
             </div>
           </div>
         )}
 
-        {/* Staff Table View */}
+        {/* Staff Table with Pagination */}
         {filteredStaffs.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -879,59 +690,98 @@ const Staffs = () => {
             <p className="text-gray-500">Try adjusting your search or filter criteria</p>
             <button
               onClick={clearAllFilters}
-              className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors"
+              className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-blue-700"
             >
               Clear All Filters
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-visible">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Staffs
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {filteredStaffs.length}
+                </span>
+              </h2>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
                     <th className="px-6 py-3">Staff ID</th>
                     <th className="px-6 py-3">Staff Name</th>
                     <th className="px-6 py-3">Gender</th>
                     <th className="px-6 py-3">Designation</th>
                     <th className="px-6 py-3">Phone Number</th>
-                    <th className="px-6 py-3">Email</th>
                     <th className="px-6 py-3">Appointment Date</th>
-                    <th className="px-6 py-3 text-center">Actions</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredStaffs.map((staff, index) => (
-                    <tr key={staff.id || index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-gray-700">{staff.id}</td>
-                      <td className="px-6 py-4 flex items-center gap-3">
-                        <img 
-                          src={staff.imageUrl || 'https://i.pravatar.cc/80'} 
-                          alt={staff.name} 
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <span className="font-medium text-gray-900">{staff.name}</span>
+                <tbody>
+                  {paginatedStaffs.map((staff, index) => (
+                    <tr key={staff.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.id}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={staff.imageUrl || 'https://i.pravatar.cc/80'} 
+                            alt={staff.name} 
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          <span className="font-medium text-gray-800">{staff.name}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{staff.gender}</td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-600">
-                          {staff.designation}
-                        </span>
-                       </td>
+                      <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
-                      <td className="px-6 py-4 text-gray-600 max-w-[200px] truncate">{staff.email}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="px-6 py-4 text-right">
                         <RowActionMenu staff={staff} />
-                       </td>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 text-xs text-gray-500">
-              Showing {filteredStaffs.length} of {staffsData.length} staff members
-            </div>
+
+            {/* Pagination */}
+            {filteredStaffs.length > 0 && (
+              <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
+                  {Math.min(currentPage * itemsPerPage, filteredStaffs.length)} of {filteredStaffs.length} staff members
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                      currentPage === 1
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+                    {currentPage}
+                  </span>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                      currentPage === totalPages || totalPages === 0
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -953,7 +803,7 @@ const Staffs = () => {
         message="Are you sure you want to delete this staff member? This action cannot be undone."
         itemName={staffToDelete?.name}
       />
-    </div>
+    </>
   );
 };
 

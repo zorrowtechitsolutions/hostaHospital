@@ -1,4 +1,4 @@
-// AllLabResults.jsx (Updated - Remove TestResultsForm modal)
+// AllLabResults.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -38,7 +38,6 @@ const AllLabResults = () => {
     if (stored) {
       return JSON.parse(stored);
     }
-    // Sample data
     return [
       {
         id: "LAB-001",
@@ -299,297 +298,325 @@ const AllLabResults = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
+  // Row Action Menu Component
+  const RowActionMenu = ({ result }) => {
+    const [showMenu, setShowMenu] = useState(false);
+
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setShowMenu(!showMenu)}
+          className="p-2 rounded hover:bg-gray-100 transition-colors"
+        >
+          <MoreVertical size={18} />
+        </button>
+        
+        {showMenu && (
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+            <button
+              onClick={() => {
+                handleViewReport(result);
+                setShowMenu(false);
+              }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+            >
+              <Eye size={16} />
+              View Report
+            </button>
+            <button
+              onClick={() => {
+                handleEditResult(result);
+                setShowMenu(false);
+              }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              <Edit size={16} />
+              Edit
+            </button>
+            <div className="border-t border-gray-100 my-1"></div>
+            <button
+              onClick={() => {
+                handleDeleteClick(result);
+                setShowMenu(false);
+              }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
-        {/* Page Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-            Lab Results
-          </h1>
-          <div className="text-sm text-gray-500 flex items-center gap-2">
-            <span>Home</span>
-            <ChevronRight size={14} />
-            <span>Laboratory</span>
-            <ChevronRight size={14} />
-            <span className="text-gray-700 font-medium">Lab Results</span>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        {/* Breadcrumb Navigation */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              title="Go back"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <div className="text-xs text-gray-500">
+              <span className="text-gray-700">Lab Results</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Home</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Laboratory</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Lab Results</span>
+            </div>
+          </div>
+          <h1 className="text-xl font-bold text-gray-800">Lab Results</h1>
+        </div>
+
+        {/* Search Bar and Action Buttons - Status filter removed from here */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex-1 max-w-md">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search by Test ID, Patient Name, Test Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+              <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
+                <Search size={14} className="text-white" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+              <RefreshCcw size={16} />
+            </button>
+
+            <input
+              type="file"
+              onChange={handleImport}
+              accept=".json"
+              className="hidden"
+              id="import-file"
+            />
+            <label
+              htmlFor="import-file"
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer"
+              title="Import Lab Results"
+            >
+              <Upload size={16} />
+            </label>
+
+            <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Lab Results">
+              <Download size={16} />
+            </button>
+
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+                showFilters || activeFilterCount > 0 ? 'text-blue-600' : 'text-gray-500'
+              } hover:bg-gray-50`}
+              title="Toggle Filters"
+            >
+              <Filter size={16} />
+              {activeFilterCount > 0 && !showFilters && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={handleAddNewResult}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2"
+            >
+              <Plus size={16} /> New Lab Result
+            </button>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="p-6">
-          {/* Search Bar and Action Buttons */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by Test ID, Patient Name, Test Name..."
-                  className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`relative p-2.5 rounded-lg transition-all duration-200 ${
-                  showFilters || activeFilterCount > 0
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "border border-gray-300 text-gray-600 hover:bg-gray-100"
-                }`}
-                title="Toggle Filters"
-              >
-                <Filter size={18} />
-                {activeFilterCount > 0 && !showFilters && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {activeFilterCount}
+        {/* Collapsible Filter Section - Status and Date filters inside */}
+        {showFilters && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Filter className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
                   </span>
                 )}
-              </button>
-
-              <button
-                onClick={handleRefresh}
-                className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-                title="Refresh"
-              >
-                <RefreshCcw size={18} />
-              </button>
-
-              <label className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200 cursor-pointer">
-                <Upload size={18} />
-                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-              </label>
-
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-              >
-                <Download size={18} />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-
-              <button
-                onClick={handleAddNewResult}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1C62A0] text-white hover:bg-[#154a7d] transition-all duration-200"
-              >
-                <Plus size={18} />
-                <span className="hidden sm:inline">New Lab Result</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Collapsible Filter Section */}
-          {showFilters && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Filter className="w-5 h-5 text-gray-500" />
-                    <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-                    {activeFilterCount > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                        {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
-                    Clear All Filters
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">All Status</option>
-                      {getAllStatuses().map(status => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
-                    <input
-                      type="date"
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
               </div>
-
-              <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    Showing <span className="font-semibold text-gray-900">{filteredResults.length}</span> of{' '}
-                    <span className="font-semibold text-gray-900">{labResults.length}</span> lab results
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Lab Results Table */}
-          {filteredResults.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No lab results found</h3>
-              <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-              <button
-                onClick={clearAllFilters}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
+              <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
                 Clear All Filters
               </button>
             </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-visible">
-              <div className="overflow-x-auto overflow-visible" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                    <tr>
-                      <th className="px-6 py-3">Test ID</th>
-                      <th className="px-6 py-3">Patient Name</th>
-                      <th className="px-6 py-3">Gender</th>
-                      <th className="px-6 py-3">Appointment Date</th>
-                      <th className="px-6 py-3">Referred By</th>
-                      <th className="px-6 py-3">Test Name</th>
-                      <th className="px-6 py-3">Status</th>
-                      <th className="px-6 py-3 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {paginatedResults.map((item, index) => (
-                      <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                            {item.testId}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <img 
-                              src={item.avatar} 
-                              alt={item.patientName} 
-                              className="w-8 h-8 rounded-full object-cover"
-                              onError={(e) => {
-                                e.target.src = `https://randomuser.me/api/portraits/${item.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
-                              }}
-                            />
-                            <span className="font-medium text-gray-900">{item.patientName}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            item.gender === 'Male' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
-                          }`}>
-                            {item.gender}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">
-                          {formatDate(item.appointmentDate)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-gray-700">{item.referredBy}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <div className="text-gray-800">{item.testName}</div>
-                            <div className="text-xs text-gray-500">{item.testType}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={getStatusBadge(item.status)}>{item.status}</span>
-                        </td>
-                        <td className="px-6 py-4 text-center relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenu(openMenu === item.id ? null : item.id);
-                            }}
-                            className="p-2 border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all"
-                          >
-                            <MoreVertical size={16} />
-                          </button>
-                          
-                          {openMenu === item.id && (
-                            <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
-                              <button
-                                onClick={() => handleViewReport(item)}
-                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-t-lg"
-                              >
-                                <Eye size={15} /> View Report
-                              </button>
-                              <button
-                                onClick={() => handleEditResult(item)}
-                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                              >
-                                <Edit size={15} /> Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteClick(item)}
-                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded-b-lg"
-                              >
-                                <Trash2 size={15} /> Delete
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Status</option>
+                  {getAllStatuses().map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
               </div>
-              
-              {/* Pagination */}
-              {filteredResults.length > 0 && (
-                <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-                    {Math.min(currentPage * itemsPerPage, filteredResults.length)} of {filteredResults.length} lab results
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                        currentPage === 1
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-white text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      Previous
-                    </button>
-                    <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-                      {currentPage}
-                    </span>
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages || totalPages === 0}
-                      className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                        currentPage === totalPages || totalPages === 0
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-white text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Lab Results Table - List View */}
+        {filteredResults.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No lab results found</h3>
+            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+            <button
+              onClick={clearAllFilters}
+              className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-blue-700"
+            >
+              Clear All Filters
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Lab Results
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {filteredResults.length}
+                </span>
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Test ID</th>
+                    <th className="px-6 py-3">Patient Name</th>
+                    <th className="px-6 py-3">Gender</th>
+                    <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Referred By</th>
+                    <th className="px-6 py-3">Test Name</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedResults.map((item, index) => (
+                    <tr key={item.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{item.testId}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={item.avatar} 
+                            alt={item.patientName} 
+                            className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => {
+                              e.target.src = `https://randomuser.me/api/portraits/${item.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
+                            }}
+                          />
+                          <span className="font-medium text-gray-800">{item.patientName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          item.gender === 'Male' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                        }`}>
+                          {item.gender}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{formatDate(item.appointmentDate)}</td>
+                      <td className="px-6 py-4 text-gray-600">{item.referredBy}</td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-gray-800">{item.testName}</div>
+                          <div className="text-xs text-gray-500">{item.testType}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={getStatusBadge(item.status)}>{item.status}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <RowActionMenu result={item} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {filteredResults.length > 0 && (
+              <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
+                  {Math.min(currentPage * itemsPerPage, filteredResults.length)} of {filteredResults.length} lab results
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                      currentPage === 1
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+                    {currentPage}
+                  </span>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                      currentPage === totalPages || totalPages === 0
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Laboratory Report Modal */}

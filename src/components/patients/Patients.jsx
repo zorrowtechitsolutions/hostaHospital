@@ -1,4 +1,3 @@
-// Patients.jsx - With DeleteModal integration
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -37,6 +36,8 @@ import DeleteModal from './DeleteModel';
 
 const Patients = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -56,6 +57,10 @@ const Patients = () => {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Patient data state
   const [patientsData, setPatientsData] = useState({
     outpatient: [],
@@ -67,7 +72,13 @@ const Patients = () => {
     loadPatientsFromStorage();
   }, []);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, departmentFilter, dateFilter, genderFilter]);
+
   const loadPatientsFromStorage = () => {
+    setLoading(true);
     const storedPatients = localStorage.getItem('patients');
     if (storedPatients) {
       const parsedPatients = JSON.parse(storedPatients);
@@ -209,6 +220,7 @@ const Patients = () => {
       setPatientsData(defaultPatients);
       localStorage.setItem('patients', JSON.stringify([...defaultPatients.outpatient, ...defaultPatients.inpatient]));
     }
+    setLoading(false);
   };
 
   // Navigation handler for View Details
@@ -295,12 +307,24 @@ const Patients = () => {
     return patients;
   };
 
+  const filteredPatients = getFilteredPatients();
+  const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedPatients = filteredPatients.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
   const handleRefresh = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setDepartmentFilter("");
     setDateFilter("");
     setGenderFilter("");
+    setCurrentPage(1);
     loadPatientsFromStorage();
   };
 
@@ -376,7 +400,7 @@ const Patients = () => {
     return count;
   };
 
-  // PatientCard for Grid View with dropdown menu
+  // PatientCard for Grid View with FIXED button positioning (buttons align at bottom)
   const PatientCard = ({ patient, type }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -402,8 +426,9 @@ const Patients = () => {
     }, []);
 
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-300 overflow-hidden">
-        <div className="p-5">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-300 overflow-hidden h-full flex flex-col">
+        <div className="p-5 flex flex-col h-full">
+          {/* Header section - This stays at top */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <img 
@@ -488,7 +513,8 @@ const Patients = () => {
             </div>
           </div>
           
-          <div className="space-y-3 mb-4">
+          {/* Info rows - This grows to push button down */}
+          <div className="flex-grow space-y-3 mb-4">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Stethoscope className="w-4 h-4" />
@@ -530,7 +556,8 @@ const Patients = () => {
             </div>
           </div>
           
-          <div className="flex gap-2 pt-3 border-t border-gray-100">
+          {/* Button section - This sticks to bottom of card */}
+          <div className="flex gap-2 pt-3 border-t border-gray-100 mt-auto">
             <button 
               onClick={() => handleAddAppointmentModal(patient)}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
@@ -618,237 +645,246 @@ const Patients = () => {
     );
   };
 
-  const filteredPatients = getFilteredPatients();
   const activeFilterCount = getActiveFilterCount();
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-y-auto">
-      {/* Page Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-          Patients
-        </h1>
-        <div className="text-sm text-gray-500 flex items-center gap-2">
-          <span>Home</span>
-          <ChevronRight size={14} />
-          <span className="text-gray-700 font-medium">Patients</span>
+    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      {/* Breadcrumb Navigation */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            title="Go back"
+          >
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </button>
+          <div className="text-xs text-gray-500">
+            <span className="text-gray-700">Patients</span>
+            <span className="mx-1 text-gray-400">»</span>
+            <span>Home</span>
+            <span className="mx-1 text-gray-400">»</span>
+            <span>Patients</span>
+          </div>
+        </div>
+        <h1 className="text-xl font-bold text-gray-800">Patients</h1>
+      </div>
+
+      {/* Search Bar and Action Buttons */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 max-w-sm">
+            <input
+              type="text"
+              placeholder="Search by name, ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+            <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white"
+          >
+            <option value="all">All Status</option>
+            <option value="outpatient">Out Patient</option>
+            <option value="inpatient">In Patient</option>
+          </select>
+        </div>
+
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+            <button onClick={() => setViewMode('grid')} className={`p-2 ${viewMode === 'grid' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+              <LayoutGrid size={16} />
+            </button>
+            <button onClick={() => setViewMode('list')} className={`p-2 ${viewMode === 'list' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+              <List size={16} />
+            </button>
+          </div>
+
+          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+            <RefreshCcw size={16} />
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImport}
+            accept=".json"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current.click()}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            title="Import Patients"
+          >
+            <Upload size={16} />
+          </button>
+
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Patients">
+            <Download size={16} />
+          </button>
+
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+              showFilters || activeFilterCount > 0 ? 'text-blue-600' : 'text-gray-500'
+            } hover:bg-gray-50`}
+            title="Toggle Filters"
+          >
+            <Filter size={16} />
+            {activeFilterCount > 0 && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={handleAddPatient}
+            className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2"
+          >
+            <Plus size={16} /> New Patient
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-6">
-        {/* Search Bar and Action Buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex-1 max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by patient name or ID..."
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`relative p-2.5 rounded-lg transition-all duration-200 ${
-                showFilters || activeFilterCount > 0
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "border border-gray-300 text-gray-600 hover:bg-gray-100"
-              }`}
-              title="Toggle Filters"
-            >
-              <Filter size={18} />
-              {activeFilterCount > 0 && !showFilters && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {activeFilterCount}
+      {/* Collapsible Filter Section */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Filter className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+              {activeFilterCount > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
                 </span>
               )}
-            </button>
-
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2.5 rounded-lg transition-all duration-200 ${
-                viewMode === "grid"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "border border-gray-300 text-gray-600 hover:bg-gray-100"
-              }`}
-              title="Grid View"
-            >
-              <LayoutGrid size={18} />
-            </button>
-
-            <button
-              onClick={() => setViewMode("list")}
-              className={`p-2.5 rounded-lg transition-all duration-200 ${
-                viewMode === "list"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "border border-gray-300 text-gray-600 hover:bg-gray-100"
-              }`}
-              title="List View"
-            >
-              <List size={18} />
-            </button>
-
-            <button
-              onClick={handleRefresh}
-              className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-              title="Refresh"
-            >
-              <RefreshCcw size={18} />
-            </button>
-
-            <label className="p-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200 cursor-pointer">
-              <Upload size={18} />
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
-
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all duration-200"
-            >
-              <Download size={18} />
-              <span className="hidden sm:inline">Export</span>
-            </button>
-
-            <button
-              onClick={handleAddPatient}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-all duration-200 shadow-sm"
-            >
-              <Plus size={18} />
-              <span className="hidden sm:inline">New Patient</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Collapsible Filter Section */}
-        {showFilters && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Filter className="w-5 h-5 text-gray-500" />
-                  <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-                  {activeFilterCount > 0 && (
-                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                      {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-                <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
-                  Clear All Filters
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Patients</option>
-                    <option value="outpatient">Out Patient</option>
-                    <option value="inpatient">In Patient</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Last Visit Date</label>
-                  <input
-                    type="date"
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                  <select
-                    value={departmentFilter}
-                    onChange={(e) => setDepartmentFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">All Departments</option>
-                    {getAllDepartments().map(dept => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
-                  <select
-                    value={genderFilter}
-                    onChange={(e) => setGenderFilter(e.target.value)}
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">All Genders</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-              </div>
             </div>
-            </div>
-        )}
-
-        {/* Patients View */}
-        {filteredPatients.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-            <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
-            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-            <button
-              onClick={clearAllFilters}
-              className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors"
-            >
+            <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
               Clear All Filters
             </button>
           </div>
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPatients.map((patient, index) => {
-              const isOutpatient = patientsData.outpatient.some(p => p.id === patient.id);
-              return <PatientCard key={patient.id || index} patient={patient} type={isOutpatient ? 'outpatient' : 'inpatient'} />;
-            })}
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Departments</option>
+                {getAllDepartments().map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Genders</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Last Visit Date</label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-visible">
-            <div 
-              className="overflow-x-auto overflow-visible" 
-              style={{ 
-                scrollbarWidth: 'none', 
-                msOverflowStyle: 'none',
-                WebkitOverflowScrolling: 'touch'
-              }}
-            >
-              <table className="w-full text-sm text-left overflow-visible">
-                <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                  <tr>
-                    <th className="px-6 py-3">Patient ID</th>
-                    <th className="px-6 py-3">Patient Name</th>
-                    <th className="px-6 py-3">Gender</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Doctor Name</th>
-                    <th className="px-6 py-3">Last Visit</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredPatients.map((patient, index) => {
-                    const isInPatient = patient.roomNumber ? true : false;
-                    return (
-                      <tr key={patient.id || index} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-gray-700">#{patient.id}</td>
-                        <td className="px-6 py-4 flex items-center gap-3">
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1C62A0]"></div>
+        </div>
+      )}
+
+      {/* Patients View */}
+      {!loading && filteredPatients.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
+          <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+          <button
+            onClick={clearAllFilters}
+            className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-blue-700"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      ) : !loading && viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {filteredPatients.map((patient, index) => {
+            const isOutpatient = patientsData.outpatient.some(p => p.id === patient.id);
+            return <PatientCard key={patient.id || index} patient={patient} type={isOutpatient ? 'outpatient' : 'inpatient'} />;
+          })}
+        </div>
+      ) : !loading && viewMode === 'list' ? (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700">
+              Total Patients
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {filteredPatients.length}
+              </span>
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                <tr>
+                  <th className="px-6 py-3">Patient ID</th>
+                  <th className="px-6 py-3">Patient Name</th>
+                  <th className="px-6 py-3">Gender</th>
+                  <th className="px-6 py-3">Department</th>
+                  <th className="px-6 py-3">Doctor Name</th>
+                  <th className="px-6 py-3">Last Visit</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedPatients.map((patient, index) => {
+                  const isInPatient = patient.roomNumber ? true : false;
+                  return (
+                    <tr key={patient.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">#{patient.id}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
                           <img 
                             src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
                             alt={patient.name} 
@@ -857,34 +893,71 @@ const Patients = () => {
                               e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
                             }}
                           />
-                          <span className="font-medium text-gray-900">{patient.name}</span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{patient.gender}</td>
-                        <td className="px-6 py-4 text-gray-600">{patient.department || 'General'}</td>
-                        <td className="px-6 py-4 flex items-center gap-2">
-                          <span className="text-gray-700">{patient.doctor || 'Not Assigned'}</span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{patient.lastVisitDisplay || 'N/A'}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 text-xs rounded-full ${isInPatient ? "bg-purple-100 text-purple-600" : "bg-orange-100 text-orange-600"}`}>
-                            {isInPatient ? "In Patient" : "Out Patient"}
+                          <span
+                            onClick={() => handleViewDetails(patient)}
+                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                          >
+                            {patient.name}
                           </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <RowActionMenu patient={patient} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 text-xs text-gray-500">
-              Showing {filteredPatients.length} of {patientsData.outpatient.length + patientsData.inpatient.length} patients
-            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{patient.gender}</td>
+                      <td className="px-6 py-4 text-gray-600">{patient.department || 'General'}</td>
+                      <td className="px-6 py-4 text-gray-600">{patient.doctor || 'Not Assigned'}</td>
+                      <td className="px-6 py-4 text-gray-600">{patient.lastVisitDisplay || 'N/A'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs rounded-full ${isInPatient ? "bg-purple-100 text-purple-600" : "bg-orange-100 text-orange-600"}`}>
+                          {isInPatient ? "In Patient" : "Out Patient"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <RowActionMenu patient={patient} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+
+          {/* Pagination */}
+          {filteredPatients.length > 0 && (
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
+                {Math.min(currentPage * itemsPerPage, filteredPatients.length)} of {filteredPatients.length} patients
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === 1
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+                  {currentPage}
+                </span>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === totalPages || totalPages === 0
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Modals */}
       {showAppointmentModal && (
