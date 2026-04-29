@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useMemo, useEffect, } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import Security from './Security';
 import Preference from './Preference';
 import Notification from './Notification';
 import UserPermissions from './UserPermissions';
 import Billing from './Billing';
 import { useLocation } from 'react-router-dom';
+import Map from './Map'; // Import the Map component
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('General');
@@ -22,10 +23,10 @@ const Settings = () => {
   const [editForm, setEditForm] = useState({ name: hospitalInfo.name, email: hospitalInfo.email });
 
   useEffect(() => {
-  if (location.state?.tab) {
-    setActiveTab(location.state.tab);
-  }
-}, [location]);
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location]);
 
   const handleEditSubmit = useCallback((e) => {
     e.preventDefault();
@@ -61,7 +62,7 @@ const Settings = () => {
     setIsEditing(false);
   }, []);
 
-  const tabs = useMemo(() => ['General', 'Security', 'Preferences', 'Notifications', 'User Permissions'], []);
+  const tabs = useMemo(() => ['General', 'Security', 'Preferences', 'Notifications', 'User Permissions', 'Map'], []);
 
   // General Tab Content - Memoized to prevent re-renders
   const GeneralTab = useMemo(() => {
@@ -166,23 +167,12 @@ const Settings = () => {
         return <Security />;
       case 'Preferences':
         return <Preference />;
-      case 'Appearance':
-        return (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-900">Appearance</h2>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-500">Theme and layout customization options will appear here.</p>
-            </div>
-          </div>
-        );
       case 'Notifications':
         return <Notification />;
       case 'User Permissions':
         return <UserPermissions />;
-      case 'Plans & Billing':
-        return <Billing />;
+      case 'Map':
+        return <Map />; // Use Map component here
       default:
         return null;
     }

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Mail, Lock, MapPin, Building, Building2,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
   Clock, Sun, Briefcase, ChevronDown
 } from 'lucide-react';
+import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
 
-// Input component
+
 const Input = ({ label, placeholder, value, onChange, type = "text", required = true }) => {
   return (
     <div className="space-y-2">
@@ -18,13 +19,13 @@ const Input = ({ label, placeholder, value, onChange, type = "text", required = 
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#154A7D] focus:border-transparent bg-gray-50"
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#154A7D] focus:border-transparent bg-gray-50 text-black font-medium"
       />
     </div>
   );
 };
 
-// Textarea component
+// Textarea component with improved styling
 const Textarea = ({ label, placeholder, value, onChange, required = true }) => {
   return (
     <div className="space-y-2">
@@ -36,7 +37,7 @@ const Textarea = ({ label, placeholder, value, onChange, required = true }) => {
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50"
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50 text-black font-medium"
       />
     </div>
   );
@@ -85,15 +86,23 @@ const Register = () => {
 
   const [locationStatus, setLocationStatus] = useState('');
   const [registerError, setRegisterError] = useState('');
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
   const daysOfWeek = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
 
-  // Get current working hours based on active tab
-  const getCurrentHours = () => {
-    return activeTab === "clinic" ? clinicHours : normalHours;
-  };
+  // Check if Google Maps is loaded
+  useEffect(() => {
+    const checkGoogleMaps = setInterval(() => {
+      if (window.google && window.google.maps && window.google.maps.Geocoder) {
+        setIsGoogleMapsLoaded(true);
+        clearInterval(checkGoogleMaps);
+      }
+    }, 100);
+    
+    return () => clearInterval(checkGoogleMaps);
+  }, []);
 
   const handleNormalHoursChange = (day, field, value) => {
     const dayKey = day.toLowerCase();
@@ -171,8 +180,10 @@ const Register = () => {
     }
   };
 
+  // Fixed getCurrentLocation with proper state updates
   const getCurrentLocation = () => {
     setLocationStatus('loading');
+
     if (!navigator.geolocation) {
       setLocationStatus('error');
       setTimeout(() => setLocationStatus(''), 3000);
@@ -181,17 +192,59 @@ const Register = () => {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        setLatitude(latitude.toString());
-        setLongitude(longitude.toString());
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        console.log('Got coordinates:', lat, lng);
+
+        // Set latitude and longitude
+        setLatitude(lat.toString());
+        setLongitude(lng.toString());
+
+        // Try to get address if Google Maps is loaded
+        if (window.google && window.google.maps && window.google.maps.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          
+          geocoder.geocode(
+            { location: { lat, lng } },
+            (results, status) => {
+              if (status === 'OK' && results && results[0]) {
+                setAddress(results[0].formatted_address);
+                console.log('Address set:', results[0].formatted_address);
+              } else {
+                console.log('Geocoding failed:', status);
+              }
+            }
+          );
+        } else {
+          console.log('Google Maps not ready yet');
+        }
+
         setLocationStatus('success');
         setTimeout(() => setLocationStatus(''), 3000);
       },
       (error) => {
+        console.error('Geolocation error:', error);
         setLocationStatus('error');
         setTimeout(() => setLocationStatus(''), 3000);
       }
     );
+  };
+
+  const handleLocationSelect = (lat, lng, addressText) => {
+    console.log('Location selected from map:', { lat, lng, addressText });
+    
+    // Update latitude and longitude
+    setLatitude(lat.toString());
+    setLongitude(lng.toString());
+    
+    // Update address if provided
+    if (addressText) {
+      setAddress(addressText);
+    }
+    
+    setLocationStatus('success');
+    setTimeout(() => setLocationStatus(''), 3000);
   };
 
   const validateForm = () => {
@@ -269,6 +322,8 @@ const Register = () => {
           createdAt: new Date().toISOString()
         };
         
+        console.log('Saving hospital data:', hospitalData);
+        
         localStorage.setItem('hospitals', JSON.stringify([...existingHospitals, hospitalData]));
         
         alert('Hospital account created successfully! Please login.');
@@ -305,7 +360,6 @@ const Register = () => {
               onChange={(e) => setHospitalName(e.target.value)}
             />
             
-            {/* Updated Hospital Type Select with Icon and Chevron */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Hospital Type <span className="text-red-500">*</span>
@@ -320,7 +374,7 @@ const Register = () => {
                   className="
                     w-full pl-10 pr-10 py-3
                     rounded-xl border border-gray-200
-                    bg-white text-gray-800
+                    bg-white text-black font-medium
                     focus:outline-none focus:ring-2 focus:ring-[#154A7D]
                     appearance-none
                     cursor-pointer
@@ -379,6 +433,19 @@ const Register = () => {
             </div>
           </div>
 
+          {/* Google Maps Location Picker */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              Location Picker
+            </label>
+            <GoogleMapsLocationPicker
+              latitude={latitude}
+              longitude={longitude}
+              onLocationSelect={handleLocationSelect}
+            />
+            <p className="text-xs text-gray-500">Click on the map to select your hospital location</p>
+          </div>
+
           {/* Get Current Location Button */}
           <button
             type="button"
@@ -410,6 +477,7 @@ const Register = () => {
             <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter manually.</p>
           )}
 
+          {/* Working Hours Section */}
           <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-gray-900">Working Hours</h2>
@@ -427,7 +495,6 @@ const Register = () => {
               </button>
             </div>
 
-            {/* Underline Tab Buttons */}
             <div className="flex gap-6 border-b border-slate-200">
               <button
                 type="button"
@@ -463,7 +530,6 @@ const Register = () => {
 
             {/* Working Hours Display */}
             {activeTab === "normal" ? (
-              /* Normal Hospital - Single Session */
               <div className="space-y-3">
                 {daysOfWeek.map((day) => {
                   const dayKey = day.toLowerCase();
@@ -491,7 +557,7 @@ const Register = () => {
                               type="time"
                               value={dayHours.start}
                               onChange={(e) => handleNormalHoursChange(day, 'start', e.target.value)}
-                              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                             />
                           </div>
                           <div>
@@ -500,7 +566,7 @@ const Register = () => {
                               type="time"
                               value={dayHours.end}
                               onChange={(e) => handleNormalHoursChange(day, 'end', e.target.value)}
-                              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                             />
                           </div>
                         </div>
@@ -513,7 +579,6 @@ const Register = () => {
                 })}
               </div>
             ) : (
-              /* Clinic - Morning and Evening Sessions with Break Option Below Evening */
               <div className="space-y-3">
                 {daysOfWeek.map((day) => {
                   const dayKey = day.toLowerCase();
@@ -540,7 +605,6 @@ const Register = () => {
 
                       {!dayHours.isHoliday && (
                         <div className="space-y-4">
-                          {/* Morning Session */}
                           <div>
                             <p className="text-sm font-medium text-slate-500 mb-2">Morning Session</p>
                             <div className="grid md:grid-cols-2 gap-4">
@@ -548,18 +612,17 @@ const Register = () => {
                                 type="time"
                                 value={dayHours.start}
                                 onChange={(e) => handleClinicHoursChange(day, 'start', e.target.value)}
-                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                               />
                               <input
                                 type="time"
                                 value={dayHours.end}
                                 onChange={(e) => handleClinicHoursChange(day, 'end', e.target.value)}
-                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                               />
                             </div>
                           </div>
 
-                          {/* Evening Session */}
                           <div>
                             <p className="text-sm font-medium text-slate-500 mb-2">Evening Session</p>
                             <div className="grid md:grid-cols-2 gap-4">
@@ -567,18 +630,17 @@ const Register = () => {
                                 type="time"
                                 value={dayHours.eveningStart}
                                 onChange={(e) => handleClinicHoursChange(day, 'eveningStart', e.target.value)}
-                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                               />
                               <input
                                 type="time"
                                 value={dayHours.eveningEnd}
                                 onChange={(e) => handleClinicHoursChange(day, 'eveningEnd', e.target.value)}
-                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                className="border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                               />
                             </div>
                           </div>
 
-                          {/* Has Break Between Sessions Checkbox - Below Evening Session */}
                           <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer pt-2">
                             <input
                               type="checkbox"
@@ -589,7 +651,6 @@ const Register = () => {
                             Has Break Between Sessions
                           </label>
 
-                          {/* Break Time Inputs (shown only if hasBreak is true) */}
                           {dayHours.hasBreak && (
                             <div className="pl-6 border-l-2 border-blue-200 space-y-3">
                               <p className="text-sm font-medium text-slate-500">Break Time</p>
@@ -600,7 +661,7 @@ const Register = () => {
                                     type="time"
                                     value={dayHours.breakStart}
                                     onChange={(e) => handleClinicHoursChange(day, 'breakStart', e.target.value)}
-                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                                   />
                                 </div>
                                 <div>
@@ -609,7 +670,7 @@ const Register = () => {
                                     type="time"
                                     value={dayHours.breakEnd}
                                     onChange={(e) => handleClinicHoursChange(day, 'breakEnd', e.target.value)}
-                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none"
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                                   />
                                 </div>
                               </div>
@@ -642,7 +703,7 @@ const Register = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
-                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50"
+                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50 text-black font-medium"
                   />
                   <button
                     type="button"
@@ -664,7 +725,7 @@ const Register = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm password"
-                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50"
+                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50 text-black font-medium"
                   />
                   <button
                     type="button"
