@@ -7,7 +7,6 @@ import {
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
 
-// ✅ Fixed: Only one function declaration with all props
 const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -17,7 +16,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
-  // ✅ Fixed: Only declare unreadCount once (derived from notifications)
   const notifications = [
     { id: 1, title: 'New leave request', message: 'John Doe requested sick leave', time: '5 mins ago', read: false },
     { id: 2, title: 'Project deadline', message: 'Mobile App project due in 2 days', time: '1 hour ago', read: false },
@@ -26,7 +24,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   ];
 
   const unreadCount = notifications.filter(n => !n.read).length;
-  // Removed the useState for unreadCount since it's derived from notifications
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -78,45 +75,45 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   }, []);
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20 transition-colors">
+    <header className="bg-[#0f172a] border-b border-slate-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
       <div className="flex items-center gap-4 flex-1">
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="p-2 rounded-md hover:bg-slate-700 transition-colors"
         >
-          <Menu size={22} className="text-gray-700" />
+          <Menu size={22} className="!text-white" stroke="white" />
         </button>
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
         <button 
           onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="p-2 rounded-full hover:bg-slate-700 transition-colors"
         >
           {theme === 'dark' ? (
-            <Sun size={20} className="text-gray-700 dark:text-gray-300" />
+            <Sun size={20} className="!text-white" stroke="white" />
           ) : (
-            <Moon size={20} className="text-gray-700 dark:text-gray-300" />
+            <Moon size={20} className="!text-white" stroke="white" />
           )}
         </button>
 
         <button 
           onClick={toggleFullscreen}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="p-2 rounded-full hover:bg-slate-700 transition-colors"
         >
           {isFullscreen ? (
-            <Minimize2 size={20} className="text-gray-700" />
+            <Minimize2 size={20} className="!text-white" stroke="white" />
           ) : (
-            <Maximize2 size={20} className="text-gray-700" />
+            <Maximize2 size={20} className="!text-white" stroke="white" />
           )}
         </button>
 
         <div className="relative" ref={notificationRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+            className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
           >
-            <Bell size={20} className="text-gray-700" />
+            <Bell size={20} className="!text-white" stroke="white" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                 {unreadCount}
@@ -133,39 +130,39 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
         <div className="relative" ref={profileMenuRef}>
           <button 
             onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
+            className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-lg transition-colors hover:bg-slate-700"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
               <span className="text-white font-medium text-sm">SS</span>
             </div>
             <div className="hidden lg:block text-left">
-              <p className="text-sm font-medium text-gray-800">Sarah Smith</p>
-              <p className="text-xs text-gray-500">Administrator</p>
+              <p className="text-sm font-medium text-white">Sarah Smith</p>
+              <p className="text-xs text-slate-300">Administrator</p>
             </div>
-            <ChevronDown size={16} className="text-gray-500 hidden lg:block" />
+            <ChevronDown size={16} className="!text-white hidden lg:block" stroke="white" />
           </button>
 
           {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50">
-              <div className="px-4 py-3 border-b border-gray-200">
-                <p className="text-sm font-semibold text-gray-800">Sarah Smith</p>
-                <p className="text-xs text-gray-500">sarah.smith@dreamsemr.com</p>
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Sarah Smith</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">sarah.smith@dreamsemr.com</p>
               </div>
               <div className="py-2">
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                  <UserCheck size={16} />
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3">
+                  <UserCheck size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>My Profile</span>
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                  <Settings size={16} />
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3">
+                  <Settings size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>Settings</span>
                 </button>
                 <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                 <button 
                   onClick={handleLogout} 
-                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3"
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3"
                 >
-                  <LogOut size={16} />
+                  <LogOut size={16} className="text-red-500 dark:text-red-400" />
                   <span>Logout</span>
                 </button>
               </div>

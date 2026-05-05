@@ -1,8 +1,7 @@
-
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Button } from "../ui/button";
+import { Button } from "../ui/Button";
 import { useDropzone } from "react-dropzone";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";

@@ -1,6 +1,7 @@
-// AddVisitModal.jsx
+// src/components/visits/AddVisitModal.jsx - Refactored
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
+import { Modal, Input, Select, Textarea, Button } from '../ui';
 
 const AddVisitModal = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -22,13 +23,10 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Generate a unique ID for the new visit
     const newId = `VIS${String(Math.floor(Math.random() * 10000)).padStart(3, '0')}`;
     const visitDateObj = new Date(formData.visitDate);
     const visitDateDisplay = visitDateObj.toLocaleDateString('en-US', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric' 
+      day: 'numeric', month: 'short', year: 'numeric' 
     });
     
     const timeParts = formData.time.split(' - ');
@@ -80,177 +78,38 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
     onClose();
   };
 
+  const departments = [
+    'Cardiology', 'Neurology', 'Orthopedics', 'Pediatrics', 'Dermatology',
+    'ENT', 'Ophthalmology', 'General Medicine', 'Surgery', 'Pulmonology',
+    'Nursing', 'Pharmacy'
+  ];
+  const patientTypes = ['Out Patient', 'In Patient'];
+  const paymentMethods = ['Cash', 'Card', 'Insurance', 'Online'];
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b sticky top-0 bg-white">
-          <h2 className="text-lg font-semibold text-gray-800">Add New Visit</h2>
-          <button
-            onClick={handleClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-500" />
-          </button>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add New Visit" size="lg" showCloseButton={false}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input label="Patient Name" name="patientName" value={formData.patientName} onChange={handleChange} required placeholder="Enter patient name" />
+          <Select label="Patient Type" name="patientType" options={patientTypes} value={formData.patientType} onChange={handleChange} />
+          <Select label="Department" name="department" options={departments} value={formData.department} onChange={handleChange} required placeholder="Select Department" />
+          <Input label="Doctor Name" name="doctorName" value={formData.doctorName} onChange={handleChange} required placeholder="Enter doctor name" />
+          <Input label="Visit Date" name="visitDate" type="date" value={formData.visitDate} onChange={handleChange} required />
+          <Input label="Time" name="time" value={formData.time} onChange={handleChange} required placeholder="09:00 AM - 10:00 AM" />
+          <div className="md:col-span-2">
+            <Textarea label="Reason for Visit" name="reason" rows={3} value={formData.reason} onChange={handleChange} placeholder="Enter reason for visit..." />
+          </div>
+          <Select label="Payment Method" name="paymentMethod" options={paymentMethods} value={formData.paymentMethod} onChange={handleChange} placeholder="Select Payment Method" />
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Patient Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="patientName"
-                value={formData.patientName}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Patient Type
-              </label>
-              <select
-                name="patientType"
-                value={formData.patientType}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-              >
-                <option value="Out Patient">Out Patient</option>
-                <option value="In Patient">In Patient</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Department <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                required
-              >
-                <option value="">Select Department</option>
-                <option value="Cardiology">Cardiology</option>
-                <option value="Neurology">Neurology</option>
-                <option value="Orthopedics">Orthopedics</option>
-                <option value="Pediatrics">Pediatrics</option>
-                <option value="Dermatology">Dermatology</option>
-                <option value="ENT">ENT</option>
-                <option value="Ophthalmology">Ophthalmology</option>
-                <option value="General Medicine">General Medicine</option>
-                <option value="Surgery">Surgery</option>
-                <option value="Pulmonology">Pulmonology</option>
-                <option value="Nursing">Nursing</option>
-                <option value="Pharmacy">Pharmacy</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Doctor Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="doctorName"
-                value={formData.doctorName}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Visit Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                name="visitDate"
-                value={formData.visitDate}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="time"
-                value={formData.time}
-                onChange={handleChange}
-                placeholder="09:00 AM - 10:00 AM"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                required
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Visit
-              </label>
-              <textarea
-                name="reason"
-                value={formData.reason}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                placeholder="Enter reason for visit..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Method
-              </label>
-              <select
-                name="paymentMethod"
-                value={formData.paymentMethod}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-              >
-                <option value="">Select Payment Method</option>
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Insurance">Insurance</option>
-                <option value="Online">Online</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors flex items-center gap-2"
-            >
-              <Save size={16} />
-              Add Visit
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+          <Button type="submit" variant="primary" icon={Save}>Add Visit</Button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 

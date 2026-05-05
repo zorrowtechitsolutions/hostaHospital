@@ -1,10 +1,11 @@
+// src/components/Settings/Billing.jsx - Refactored
 import React, { useState } from 'react';
+import { Button, Card, Badge, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Alert } from '../ui';
 
 const Billing = () => {
   const [selectedCard, setSelectedCard] = useState(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
 
-  // Billing history data
   const billingHistory = [
     { id: '#IV0020', createdDate: '22 Jun 2025', amount: '$299', plan: 'Basic', status: 'Success' },
     { id: '#IV0019', createdDate: '10 Jun 2025', amount: '$399', plan: 'Standard', status: 'Success' },
@@ -13,7 +14,6 @@ const Billing = () => {
     { id: '#IV0016', createdDate: '05 May 2025', amount: '$499', plan: 'Standard', status: 'Success' },
   ];
 
-  // Saved cards data
   const savedCards = [
     { id: 1, type: 'VISA', holderName: 'James Peterson', lastDigits: '1568', isDefault: true },
     { id: 2, type: 'Mastercard', holderName: 'Sarah Johnson', lastDigits: '2345', isDefault: false },
@@ -30,25 +30,16 @@ const Billing = () => {
     setIsUpgrading(false);
   };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Success':
-        return 'bg-green-100 text-green-800';
-      case 'Pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getStatusBadge = (status) => {
+    const variants = { Success: 'success', Pending: 'warning', Failed: 'danger' };
+    return variants[status] || 'default';
   };
 
   return (
     <div className="space-y-6">
-      {/* Current Plan and Saved Cards Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Current Plan Information */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <Card>
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h2 className="text-lg font-semibold text-gray-900">Current Plan Information</h2>
           </div>
@@ -66,32 +57,21 @@ const Billing = () => {
               </div>
               <p className="text-sm text-gray-500 mt-2">40% used of 50GB storage</p>
             </div>
-            <button
-              onClick={handleUpgrade}
-              disabled={isUpgrading}
-              className="w-full mt-4 px-4 py-2 bg-[#1C62A0] hover:bg-[#1C62A0] text-white font-medium rounded-lg transition-colors shadow-sm"
-            >
+            <Button variant="primary" onClick={handleUpgrade} disabled={isUpgrading} fullWidth className="mt-4">
               {isUpgrading ? 'Processing...' : 'Upgrade Plan'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
 
         {/* Saved Cards */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <Card>
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h2 className="text-lg font-semibold text-gray-900">Saved Cards</h2>
           </div>
           <div className="p-6">
             <div className="space-y-4">
               {savedCards.map((card) => (
-                <div
-                  key={card.id}
-                  className={`p-4 rounded-lg border transition-all ${
-                    card.isDefault 
-                      ? 'border-[#1C62A0] bg-blue-50' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
+                <div key={card.id} className={`p-4 rounded-lg border transition-all ${card.isDefault ? 'border-[#1C62A0] bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center">
@@ -99,40 +79,28 @@ const Billing = () => {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{card.holderName}</p>
-                        <p className="text-sm text-gray-500">
-                          {card.type} •••• {card.lastDigits}
-                        </p>
+                        <p className="text-sm text-gray-500">{card.type} •••• {card.lastDigits}</p>
                       </div>
                     </div>
-                    {card.isDefault && (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                        Default
-                      </span>
-                    )}
+                    {card.isDefault && <Badge variant="success">Default</Badge>}
                   </div>
                   {!card.isDefault && (
-                    <button
-                      onClick={() => handleSetDefault(card.id)}
-                      className="mt-2 text-sm text-[#1C62A0] hover:text-[#1C62A0] font-medium"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleSetDefault(card.id)} className="mt-2 text-sm text-[#1C62A0]">
                       Set as Default
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => alert('Add new card form would open')}
-              className="w-full mt-4 px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 font-medium rounded-lg hover:border-[#1C62A0] hover:text-[#1C62A0] transition-colors"
-            >
+            <Button variant="outline" onClick={() => alert('Add new card form would open')} fullWidth className="mt-4 border-2 border-dashed">
               + Add New Card
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Billing History */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Billing History</h2>
           <p className="text-sm text-gray-500 mt-1">View your past invoices and payments</p>
@@ -141,73 +109,28 @@ const Billing = () => {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Invoice ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Plan
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
-              </tr>
+              <tr><TableHeader>Invoice ID</TableHeader><TableHeader>Created Date</TableHeader><TableHeader>Amount</TableHeader><TableHeader>Plan</TableHeader><TableHeader>Status</TableHeader><TableHeader>Action</TableHeader></tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {billingHistory.map((invoice, idx) => (
-                <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">{invoice.id}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-500">{invoice.createdDate}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">{invoice.amount}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-500">{invoice.plan}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(invoice.status)}`}>
-                      {invoice.status}
-                    </span>
-                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => alert(`Download invoice ${invoice.id}`)}
-                      className="text-[#1C62A0] hover:text-[#1C62A0] font-medium text-sm"
-                    >
-                      Download
-                    </button>
-                   </td>
-                 </tr>
+                <TableRow key={idx} hover>
+                  <TableCell><span className="text-sm font-medium text-gray-900">{invoice.id}</span></TableCell>
+                  <TableCell><span className="text-sm text-gray-500">{invoice.createdDate}</span></TableCell>
+                  <TableCell><span className="text-sm font-medium text-gray-900">{invoice.amount}</span></TableCell>
+                  <TableCell><span className="text-sm text-gray-500">{invoice.plan}</span></TableCell>
+                  <TableCell><Badge variant={getStatusBadge(invoice.status)}>{invoice.status}</Badge></TableCell>
+                  <TableCell><Button variant="ghost" size="sm" onClick={() => alert(`Download invoice ${invoice.id}`)} className="text-[#1C62A0]">Download</Button></TableCell>
+                </TableRow>
               ))}
             </tbody>
           </table>
         </div>
         
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">Showing {billingHistory.length} invoices</p>
-            <button
-              onClick={() => alert('View all invoices')}
-              className="text-sm text-[#1C62A0] hover:text-[#1C62A0] font-medium"
-            >
-              View All
-            </button>
-          </div>
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+          <p className="text-sm text-gray-500">Showing {billingHistory.length} invoices</p>
+          <Button variant="ghost" size="sm" onClick={() => alert('View all invoices')} className="text-[#1C62A0]">View All</Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

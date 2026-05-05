@@ -1,72 +1,40 @@
-// VitalDetailsModal.jsx
+// src/components/patients/modals/VitalDetailsModal.jsx - Refactored
 import React from "react";
 import { Droplet, Heart, Activity, Thermometer, Wind, Weight, X } from "lucide-react";
+import { Modal, Button, Card } from "../../ui";
 
 const VitalDetailsModal = ({ data, onClose }) => {
   if (!data) return null;
 
+  const vitals = [
+    { icon: Droplet, label: "Blood Pressure", value: `${data.bloodPressure} mmHg` },
+    { icon: Heart, label: "Heart Rate", value: `${data.heartRate} Bpm` },
+    { icon: Activity, label: "SPO2", value: `${data.spo2} %` },
+    { icon: Thermometer, label: "Temperature", value: `${data.temperature} °F` },
+    { icon: Wind, label: "Respiratory Rate", value: `${data.respiratoryRate} rpm` },
+    { icon: Weight, label: "Weight", value: `${data.weight} kg` },
+  ];
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999]">
-      <div className="bg-white w-[520px] rounded-xl shadow-xl">
-        <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">Vital Details</h2>
-          <button 
-            onClick={onClose} 
-            className="bg-gray-800 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-700"
-          >
-            <X size={14} />
-          </button>
-        </div>
-        <div className="p-6">
-          
-          {/* Vital Signs Grid */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Droplet size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Blood Pressure</p>
-                <p className="font-medium">{data.bloodPressure} mmHg</p>
-              </div>
+    <Modal isOpen={true} onClose={onClose} title="Vital Details" size="md" showCloseButton={false}>
+      <div className="grid grid-cols-2 gap-4">
+        {vitals.map((vital, index) => (
+          <div key={index} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+            <div className="bg-gray-200 p-2 rounded-md">
+              <vital.icon size={18} />
             </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Heart size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Heart Rate</p>
-                <p className="font-medium">{data.heartRate} Bpm</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Activity size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">SPO2</p>
-                <p className="font-medium">{data.spo2} %</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Thermometer size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Temperature</p>
-                <p className="font-medium">{data.temperature} °F</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Wind size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Respiratory Rate</p>
-                <p className="font-medium">{data.respiratoryRate} rpm</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-              <div className="bg-gray-200 p-2 rounded-md"><Weight size={18} /></div>
-              <div>
-                <p className="text-sm text-gray-500">Weight</p>
-                <p className="font-medium">{data.weight} kg</p>
-              </div>
+            <div>
+              <p className="text-sm text-gray-500">{vital.label}</p>
+              <p className="font-medium">{vital.value}</p>
             </div>
           </div>
-        </div>
+        ))}
       </div>
-    </div>
+      
+      <div className="flex justify-end mt-6 pt-4 border-t">
+        <Button variant="primary" onClick={onClose}>Close</Button>
+      </div>
+    </Modal>
   );
 };
 

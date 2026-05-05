@@ -40,6 +40,7 @@ import NotificationsPage from "./components/Notification/NotificationsPage";
 import PermissionList from "./components/Settings/PermissionList";
 import UserPermissions from "./components/Settings/UserPermissions";
 import Visits from "./components/visits/Visits";
+import Appointments from "./components/Appointment/Appointment";
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -194,6 +195,7 @@ useEffect(() => {
             <Route path="/permissions/:roleName" element={<PermissionList />} /> 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
             <Route path="/visits" element={<Visits/>} />
+            <Route path="/appointments" element={<Appointments/>} />
           </Routes>
         </div>
       </div>
