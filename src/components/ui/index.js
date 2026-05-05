@@ -1,0 +1,21 @@
+// src/components/ui/index.js - Complete updated exports
+export { Button } from './button';
+export { Input } from './input';
+export { Select } from './select';
+export { Textarea } from './TextArea';
+export { Modal } from './Modal';
+export { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from './table';
+export { Badge } from './Badge';
+export { Loader } from './Loader';
+export { Pagination } from './Pagination';
+export { Tabs } from './Tabs';
+export { Alert } from './Alert';
+export { Card } from './card';
+export { SearchBar } from './SearchBar';
+export { FilterBar } from './FilterBar';
+export { DataTable } from './DataTable';
+export { Breadcrumb } from './Breadcrumb';
+export { Switch } from './Switch';
+export { Avatar } from './Avatar';
+export { Checkbox } from './Checkbox';
+export { RadioGroup } from './RadioGroup';

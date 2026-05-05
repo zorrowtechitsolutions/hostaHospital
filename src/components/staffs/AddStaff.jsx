@@ -1,7 +1,8 @@
-// AddStaff.jsx - Page component for adding new staff with inline validation and status toggle
+// src/components/staffs/AddStaff.jsx - Complete with UI components and S3 upload
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Save, X, AlertCircle } from 'lucide-react';
+import { ChevronRight, Save, AlertCircle, Upload, X } from 'lucide-react';
+import { Button, Input, Select, Card, Tabs, Avatar, Alert, Switch } from '../ui';
 
 const AddStaff = () => {
   const navigate = useNavigate();
@@ -10,46 +11,35 @@ const AddStaff = () => {
   const [touched, setTouched] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [previewImage, setPreviewImage] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [formData, setFormData] = useState({
-    // Basic Info
-    id: '',
-    name: '',
-    gender: 'Male',
-    dob: '',
-    mobile: '',
-    email: '',
-    designation: '',
-    appointmentDate: '',
-    staffType: 'Permanent',
-    jobType: 'Full Time',
-    addressLine1: '',
-    addressLine2: '',
-    city: '',
-    state: '',
-    country: '',
-    pinCode: '',
-    status: true,
-    profileImage: 'https://i.pravatar.cc/80',
-    
-    // Salary Info
-    netSalary: '',
-    basic: '',
-    da: '',
-    hra: '',
-    conveyance: '',
-    allowance: '',
-    medicalAllowance: '',
-    otherEarnings: '',
-    tds: '',
-    pf: '',
-    leave: '',
-    profTax: '',
-    labourWelfare: '',
-    otherDeductions: ''
+    id: '', name: '', gender: 'Male', dob: '', mobile: '', email: '',
+    designation: '', appointmentDate: '', staffType: 'Permanent', jobType: 'Full Time',
+    addressLine1: '', addressLine2: '', city: '', state: '', country: '', pinCode: '',
+    status: true, profileImage: null,
+    netSalary: '', basic: '', da: '', hra: '', conveyance: '', allowance: '',
+    medicalAllowance: '', otherEarnings: '', tds: '', pf: '', leave: '',
+    profTax: '', labourWelfare: '', otherDeductions: ''
   });
 
-  // Validation functions
+  // Mock S3 upload function - replace with actual AWS SDK implementation
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          const mockS3Url = `https://your-bucket.s3.amazonaws.com/staff-images/${Date.now()}-${file.name}`;
+          resolve(mockS3Url);
+        }
+      }, 200);
+    });
+  };
+
   const validateName = (name) => {
     if (!name || name.trim() === '') return 'Full name is required';
     if (name.length < 2) return 'Name must be at least 2 characters';
@@ -82,9 +72,7 @@ const AddStaff = () => {
       const birthDate = new Date(dob);
       let age = today.getFullYear() - birthDate.getFullYear();
       const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
       if (age < 18 && age > 0) return 'Staff must be at least 18 years old';
       if (age > 70) return 'Age cannot exceed 70 years';
     }
@@ -109,101 +97,92 @@ const AddStaff = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  // Generate next staff ID
   const generateStaffId = () => {
     const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
     const maxNum = existingStaffs.reduce((max, s) => {
-      const match = s.id.match(/#SF(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
-      }
+      const match = s.id?.match(/#SF(\d+)/);
+      if (match) return Math.max(max, parseInt(match[1], 10));
       return max;
     }, 0);
-    const newNum = maxNum + 1;
-    return `#SF${String(newNum).padStart(4, '0')}`;
+    return `#SF${String(maxNum + 1).padStart(4, '0')}`;
   };
 
-  // Handle input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
     if (submitError) setSubmitError('');
   };
 
-  // Handle status toggle
   const handleStatusToggle = () => {
-    setFormData(prev => ({
-      ...prev,
-      status: !prev.status
-    }));
+    setFormData(prev => ({ ...prev, status: !prev.status }));
   };
 
-  // Handle image upload
-  const handleImageUpload = (e) => {
+  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'Image size must be less than 2MB' }));
+      return false;
+    }
+    
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setUploadProgress(0);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+    
+    try {
+      const s3Url = await uploadToS3(file);
+      setFormData(prev => ({ ...prev, profileImage: s3Url }));
+      setUploadProgress(100);
+      return true;
+    } catch (error) {
+      console.error('S3 upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      setPreviewImage(null);
+      return false;
+    }
+  };
+
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, profileImage: 'Image size must be less than 2MB' }));
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          profileImage: reader.result
-        }));
-        setErrors(prev => ({ ...prev, profileImage: '' }));
-      };
-      reader.readAsDataURL(file);
+      handleImageUpload(file);
     }
   };
 
   const handleRemoveImage = () => {
-    setFormData(prev => ({
-      ...prev,
-      profileImage: 'https://i.pravatar.cc/80'
-    }));
+    setFormData(prev => ({ ...prev, profileImage: null }));
+    setPreviewImage(null);
+    setUploadProgress(0);
+    setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
-  // Validate all required fields
   const validateForm = () => {
     const newErrors = {};
     const requiredFields = ['name', 'mobile', 'email', 'designation'];
-    
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
-    
-    // Validate DOB if provided
     const dobError = validateDob(formData.dob);
     if (dobError) newErrors.dob = dobError;
-    
     setErrors(newErrors);
-    
-    // Mark all fields as touched
-    const allTouched = {};
-    Object.keys(formData).forEach(key => {
-      allTouched[key] = true;
-    });
-    setTouched(allTouched);
-    
+    Object.keys(formData).forEach(key => setTouched(prev => ({ ...prev, [key]: true })));
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle form submission
   const handleSubmit = () => {
     if (!validateForm()) {
-      // Switch to basic tab if there are errors there
       if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) {
         setActiveTab('basic');
       }
@@ -226,7 +205,7 @@ const AddStaff = () => {
       appointmentDate: formData.appointmentDate || isoDate,
       appointmentDateDisplay: formattedDate,
       patientsCount: 0,
-      imageUrl: formData.profileImage,
+      imageUrl: formData.profileImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
       status: formData.status ? 'Active' : 'Inactive',
       jobType: formData.jobType,
       dob: formData.dob || 'N/A',
@@ -259,13 +238,9 @@ const AddStaff = () => {
     };
 
     const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-    const updatedStaffs = [newStaff, ...existingStaffs];
-    localStorage.setItem('staffs', JSON.stringify(updatedStaffs));
-
+    localStorage.setItem('staffs', JSON.stringify([newStaff, ...existingStaffs]));
     setSubmitSuccess(true);
-    setTimeout(() => {
-      navigate('/staffs');
-    }, 1500);
+    setTimeout(() => navigate('/staffs'), 1500);
   };
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
@@ -273,373 +248,177 @@ const AddStaff = () => {
   const states = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
   const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
 
-  // Helper to render input with validation
-  const renderInput = (name, label, type = 'text', placeholder = '', required = false, options = null) => {
-    const hasError = touched[name] && errors[name];
-    const value = formData[name];
-    
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        {options ? (
-          <select
-            name={name}
-            value={value}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
-            }`}
-          >
-            <option value="">Select {label}</option>
-            {options.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type={type}
-            name={name}
-            placeholder={placeholder}
-            value={value}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
-            }`}
-          />
-        )}
-        {hasError && (
-          <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-            <AlertCircle size={12} />
-            {errors[name]}
-          </p>
-        )}
-      </div>
-    );
-  };
+  const tabs = [
+    { id: 'basic', label: 'Basic Info' },
+    { id: 'salary', label: 'Salary Info' }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {/* Page Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-          Add New Staff
-        </h1>
+        <h1 className="text-2xl font-semibold text-gray-900 mb-1">Add New Staff</h1>
         <div className="text-sm text-gray-500 flex items-center gap-2">
-          <span>Home</span>
-          <ChevronRight size={14} />
-          <span className="text-gray-700 font-medium">Staffs</span>
-          <ChevronRight size={14} />
-          <span className="text-gray-700 font-medium">Add Staff</span>
+          <span>Home</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Staffs</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Add Staff</span>
         </div>
       </div>
 
-      {/* Success Message */}
-      {submitSuccess && (
-        <div className="fixed top-20 right-6 z-50 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg animate-pulse">
-          Staff added successfully! Redirecting...
-        </div>
-      )}
+      {submitSuccess && <Alert type="success" message="Staff added successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
 
-      {/* Main Content */}
       <div className="p-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {/* Tabs */}
-          <div className="border-b border-gray-200 px-6 pt-4">
-            <div className="flex gap-4">
-              <button
-                onClick={() => setActiveTab('basic')}
-                className={`pb-3 px-2 text-sm font-medium transition-colors ${
-                  activeTab === 'basic'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Basic Info
-              </button>
-              <button
-                onClick={() => setActiveTab('salary')}
-                className={`pb-3 px-2 text-sm font-medium transition-colors ${
-                  activeTab === 'salary'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Salary Info
-              </button>
-            </div>
-          </div>
+        <Card>
+          <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-          {/* Basic Info Tab */}
           {activeTab === 'basic' && (
             <div className="p-6">
-              {/* Profile Image Upload */}
-              <div className="flex gap-4 mb-6 pb-6 border-b border-gray-200">
-                <img 
-                  src={formData.profileImage} 
-                  alt="Profile"
-                  className="w-20 h-20 rounded-lg object-cover"
-                />
-                <div>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif"
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
-                    id="imageUpload"
-                  />
-                  <button
-                    onClick={() => document.getElementById('imageUpload').click()}
-                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 mr-2"
-                  >
-                    Change Image
-                  </button>
-                  <button
-                    onClick={handleRemoveImage}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    Remove
-                  </button>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Use JPEG, PNG, or GIF. Best size: 200×200 pixels. Max 2MB.
-                  </p>
-                  {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-1">{errors.profileImage}</p>
+              {/* Profile Image Upload with S3 Support */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6 pb-6 border-b border-gray-200">
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img 
+                          src={previewImage} 
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Avatar 
+                          src={formData.profileImage || 'https://i.pravatar.cc/80'} 
+                          alt="Profile" 
+                          size="lg" 
+                          rounded="lg" 
+                        />
+                      )}
+                    </div>
+                    {previewImage && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
+                  <div>
+                    <input
+                      id="profileImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('profileImageInput').click()}
+                      className="inline-flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Image
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 2MB
+                    </p>
+                  </div>
+                  
+                  {/* Upload Progress Bar */}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
                   )}
+                  
+                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                 </div>
               </div>
 
-              {/* Form Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
                   <input
                     type="text"
-                    name="id"
-                    placeholder="Auto-generated"
-                    value={formData.id}
+                    value={formData.id || "Auto-generated"}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                    disabled
                   />
                   <p className="text-xs text-gray-400 mt-1">Leave empty for auto-generation</p>
                 </div>
-                
-                {renderInput('name', 'Full Name', 'text', 'Enter full name', true)}
-                {renderInput('gender', 'Gender', 'select', '', false, ['Male', 'Female', 'Other'])}
-                {renderInput('dob', 'Date of Birth', 'date', '', false)}
-                {renderInput('mobile', 'Mobile Number', 'tel', '+1 00000 00000', true)}
-                {renderInput('email', 'Email', 'email', 'staff@example.com', true)}
-                {renderInput('designation', 'Designation', 'select', '', true, designations)}
-                {renderInput('appointmentDate', 'Appointment Date', 'date', '', false)}
-                {renderInput('staffType', 'Staff Type', 'select', '', false, ['Permanent', 'Contract', 'Temporary', 'Intern'])}
-                {renderInput('jobType', 'Job Type', 'select', '', false, ['Full Time', 'Part Time', 'Remote', 'Hybrid'])}
-                
+                <Input label="Full Name" name="name" value={formData.name} onChange={handleChange} onBlur={handleBlur} error={errors.name} touched={touched.name} required placeholder="Enter full name" />
+                <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} />
+                <Input label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} />
+                <Input label="Mobile Number" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
+                <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required placeholder="staff@example.com" />
+                <Select label="Designation" name="designation" options={designations} value={formData.designation} onChange={handleChange} onBlur={handleBlur} error={errors.designation} touched={touched.designation} required />
+                <Input label="Appointment Date" name="appointmentDate" type="date" value={formData.appointmentDate} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentDate} touched={touched.appointmentDate} />
+                <Select label="Staff Type" name="staffType" options={['Permanent', 'Contract', 'Temporary', 'Intern']} value={formData.staffType} onChange={handleChange} onBlur={handleBlur} error={errors.staffType} touched={touched.staffType} />
+                <Select label="Job Type" name="jobType" options={['Full Time', 'Part Time', 'Remote', 'Hybrid']} value={formData.jobType} onChange={handleChange} onBlur={handleBlur} error={errors.jobType} touched={touched.jobType} />
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
-                  <input
-                    type="text"
-                    name="addressLine1"
-                    placeholder="Street address"
-                    value={formData.addressLine1}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                  <Input label="Address Line 1" name="addressLine1" value={formData.addressLine1} onChange={handleChange} placeholder="Street address" />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
-                  <input
-                    type="text"
-                    name="addressLine2"
-                    placeholder="Apt, suite, unit (optional)"
-                    value={formData.addressLine2}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                  <Input label="Address Line 2" name="addressLine2" value={formData.addressLine2} onChange={handleChange} placeholder="Apt, suite, unit (optional)" />
                 </div>
-                
-                {renderInput('city', 'City', 'select', '', false, cities)}
-                {renderInput('state', 'State', 'select', '', false, states)}
-                {renderInput('country', 'Country', 'select', '', false, countries)}
-                {renderInput('pinCode', 'Pin Code', 'text', 'Postal code', false)}
+                <Select label="City" name="city" options={cities} value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
+                <Select label="State" name="state" options={states} value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
+                <Select label="Country" name="country" options={countries} value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
+                <Input label="Pin Code" name="pinCode" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} placeholder="Postal code" />
               </div>
 
-              {/* Status Toggle Switch */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
-                <button
-                  type="button"
-                  onClick={handleStatusToggle}
-                  className={`
-                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                    ${formData.status ? 'bg-green-600' : 'bg-gray-300'}
-                  `}
-                >
-                  <span
-                    className={`
-                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                      ${formData.status ? 'translate-x-6' : 'translate-x-1'}
-                    `}
-                  />
-                </button>
-                <span className="ml-3 text-sm text-gray-600">
-                  {formData.status ? 'Active' : 'Inactive'}
-                </span>
-                <p className="text-xs text-gray-400 mt-1">
-                  Toggle to activate or deactivate this staff member
-                </p>
+                <div className="flex items-center">
+                  <Switch checked={formData.status} onChange={handleStatusToggle} />
+                  <span className="ml-3 text-sm text-gray-600">{formData.status ? 'Active' : 'Inactive'}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
               </div>
             </div>
           )}
 
-          {/* Salary Info Tab */}
           {activeTab === 'salary' && (
             <div className="p-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Net Salary</label>
-                <input
-                  type="text"
-                  name="netSalary"
-                  placeholder="Enter net salary"
-                  value={formData.netSalary}
-                  onChange={handleChange}
-                  className="w-full md:w-1/2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
+              <Input label="Net Salary" name="netSalary" value={formData.netSalary} onChange={handleChange} placeholder="Enter net salary" className="mb-6 md:w-1/2" />
+              
               <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                <input
-                  type="text"
-                  name="basic"
-                  placeholder="Basic"
-                  value={formData.basic}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="da"
-                  placeholder="DA"
-                  value={formData.da}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="hra"
-                  placeholder="HRA"
-                  value={formData.hra}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="conveyance"
-                  placeholder="Conveyance"
-                  value={formData.conveyance}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="allowance"
-                  placeholder="Allowance"
-                  value={formData.allowance}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="medicalAllowance"
-                  placeholder="Medical Allowance"
-                  value={formData.medicalAllowance}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="otherEarnings"
-                  placeholder="Others"
-                  value={formData.otherEarnings}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
+                <Input name="basic" placeholder="Basic" value={formData.basic} onChange={handleChange} />
+                <Input name="da" placeholder="DA" value={formData.da} onChange={handleChange} />
+                <Input name="hra" placeholder="HRA" value={formData.hra} onChange={handleChange} />
+                <Input name="conveyance" placeholder="Conveyance" value={formData.conveyance} onChange={handleChange} />
+                <Input name="allowance" placeholder="Allowance" value={formData.allowance} onChange={handleChange} />
+                <Input name="medicalAllowance" placeholder="Medical Allowance" value={formData.medicalAllowance} onChange={handleChange} />
+                <Input name="otherEarnings" placeholder="Others" value={formData.otherEarnings} onChange={handleChange} />
               </div>
 
               <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <input
-                  type="text"
-                  name="tds"
-                  placeholder="TDS"
-                  value={formData.tds}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="pf"
-                  placeholder="PF"
-                  value={formData.pf}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="leave"
-                  placeholder="Leave"
-                  value={formData.leave}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="profTax"
-                  placeholder="Prof. Tax"
-                  value={formData.profTax}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="labourWelfare"
-                  placeholder="Labour Welfare"
-                  value={formData.labourWelfare}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="otherDeductions"
-                  placeholder="Others"
-                  value={formData.otherDeductions}
-                  onChange={handleChange}
-                  className="px-4 py-2 border border-gray-300 rounded-lg"
-                />
+                <Input name="tds" placeholder="TDS" value={formData.tds} onChange={handleChange} />
+                <Input name="pf" placeholder="PF" value={formData.pf} onChange={handleChange} />
+                <Input name="leave" placeholder="Leave" value={formData.leave} onChange={handleChange} />
+                <Input name="profTax" placeholder="Prof. Tax" value={formData.profTax} onChange={handleChange} />
+                <Input name="labourWelfare" placeholder="Labour Welfare" value={formData.labourWelfare} onChange={handleChange} />
+                <Input name="otherDeductions" placeholder="Others" value={formData.otherDeductions} onChange={handleChange} />
               </div>
             </div>
           )}
 
-          {/* Footer */}
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-            <button
-              onClick={() => navigate('/staffs')}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors flex items-center gap-2"
-            >
-              <Save size={16} />
-              Save Staff
-            </button>
+            <Button variant="outline" onClick={() => navigate('/staffs')}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit} icon={Save}>Save Staff</Button>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

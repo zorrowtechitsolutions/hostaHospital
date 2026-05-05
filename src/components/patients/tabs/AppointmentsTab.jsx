@@ -1,5 +1,7 @@
+// src/components/patients/tabs/AppointmentsTab.jsx - Refactored
 import React from "react";
 import { Search, MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
+import { Button, Input, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Pagination, SearchBar } from "../../ui";
 
 const AppointmentsTab = ({ 
   patient, 
@@ -24,25 +26,18 @@ const AppointmentsTab = ({
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-      {/* Header */}
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Appointments
-          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-            {totalItems}
-          </span>
+          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
         </h2>
         <div className="flex gap-2">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search Keyword"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-3 py-1.5 border border-gray-200 rounded-md text-sm w-64 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-            <Search size={14} className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          </div>
+          <SearchBar
+            placeholder="Search Keyword"
+            value={searchTerm}
+            onChange={setSearchTerm}
+            className="w-64"
+          />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -56,34 +51,30 @@ const AppointmentsTab = ({
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
             <tr>
-              <th className="px-6 py-3">Patient ID</th>
-              <th className="px-6 py-3">Doctor Name</th>
-              <th className="px-6 py-3">Department</th>
-              <th className="px-6 py-3">Appointment Date</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <TableHeader>Patient ID</TableHeader>
+              <TableHeader>Doctor Name</TableHeader>
+              <TableHeader>Department</TableHeader>
+              <TableHeader>Appointment Date</TableHeader>
+              <TableHeader>Status</TableHeader>
+              <TableHeader className="text-right"></TableHeader>
             </tr>
           </thead>
           <tbody>
             {paginatedAppointments.length > 0 ? (
               paginatedAppointments.map((apt, index) => (
-                <tr 
-                  key={apt.id} 
-                  className="hover:bg-gray-50 border-b border-gray-100"
-                >
-                  <td 
-                    className="px-6 py-4 text-[#1C62A0] font-medium cursor-pointer"
+                <TableRow key={apt.id} hover>
+                  <TableCell 
+                    className="text-[#1C62A0] font-medium cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
                     #{patient.id}
-                  </td>
-                  <td 
-                    className="px-6 py-4 cursor-pointer"
+                  </TableCell>
+                  <TableCell 
+                    className="cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
                     <div className="flex items-center gap-2">
@@ -94,35 +85,37 @@ const AppointmentsTab = ({
                       </div>
                       <span className="font-medium text-gray-800">{apt.doctorName}</span>
                     </div>
-                  </td>
-                  <td 
-                    className="px-6 py-4 text-gray-600 cursor-pointer"
+                  </TableCell>
+                  <TableCell 
+                    className="text-gray-600 cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
                     {apt.department}
-                  </td>
-                  <td 
-                    className="px-6 py-4 text-gray-600 cursor-pointer"
+                  </TableCell>
+                  <TableCell 
+                    className="text-gray-600 cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
                     {apt.appointmentDate}
-                  </td>
-                  <td 
-                    className="px-6 py-4 cursor-pointer"
+                  </TableCell>
+                  <TableCell 
+                    className="cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
-                    <span className={getStatusBadge(apt.status)}>{apt.status}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right relative action-menu-container">
-                    <button
+                    <Badge variant={getStatusBadge(apt.status)}>{apt.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right relative action-menu-container">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         setOpenMenu(openMenu === `apt-${apt.id}` ? null : `apt-${apt.id}`);
                       }}
-                      className="p-2 rounded hover:bg-gray-100 transition-colors"
+                      className="p-2"
                     >
                       <MoreVertical size={16} className="text-gray-500" />
-                    </button>
+                    </Button>
                     {openMenu === `apt-${apt.id}` && (
                       <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                         <button
@@ -157,52 +150,45 @@ const AppointmentsTab = ({
                         </button>
                       </div>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             ) : (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-gray-500 py-12">
                   No appointments found
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination */}
       {totalItems > 0 && (
         <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center">
           <div className="text-sm text-gray-500">
             Showing {paginatedAppointments.length} of {totalItems} appointments
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                currentPage === 1
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-              }`}
             >
               Previous
-            </button>
+            </Button>
             <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
               {currentPage}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages || totalPages === 0}
-              className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                currentPage === totalPages || totalPages === 0
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-              }`}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}

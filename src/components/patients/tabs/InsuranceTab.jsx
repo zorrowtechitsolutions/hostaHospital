@@ -1,56 +1,117 @@
-import React from "react";
-import { MoreVertical, Trash2 } from "lucide-react";
+// src/components/patients/tabs/InsuranceTab.jsx - With span, pagination, and proper styling
+import React, { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { Button, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../ui";
 
 const InsuranceTab = ({ patient, handleDeleteClick, getStatusBadge }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  const insuranceList = patient?.insuranceList || [];
+  const totalItems = insuranceList.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedInsurance = insuranceList.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <h2 className="text-sm font-semibold text-gray-700">
           Insurance Details
           <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-            {patient.insuranceList.length}
+            {totalItems}
           </span>
         </h2>
       </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
             <tr>
-              <th className="px-6 py-3">Policy No</th>
-              <th className="px-6 py-3">Insurance Provider</th>
-              <th className="px-6 py-3">Plan Type</th>
-              <th className="px-6 py-3">Coverage Amount</th>
-              <th className="px-6 py-3">Start Date</th>
-              <th className="px-6 py-3">Expiry Date</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <TableHeader>Policy No</TableHeader>
+              <TableHeader>Insurance Provider</TableHeader>
+              <TableHeader>Plan Type</TableHeader>
+              <TableHeader>Coverage Amount</TableHeader>
+              <TableHeader>Start Date</TableHeader>
+              <TableHeader>Expiry Date</TableHeader>
+              <TableHeader>Status</TableHeader>
+              <TableHeader className="text-right w-16"></TableHeader>
             </tr>
           </thead>
           <tbody>
-            {patient.insuranceList.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
-                <td className="px-6 py-4 text-[#1C62A0] font-medium">{item.policyNo}</td>
-                <td className="px-6 py-4 font-medium text-gray-800">{item.provider}</td>
-                <td className="px-6 py-4 text-gray-600">{item.planType}</td>
-                <td className="px-6 py-4 text-gray-600">{item.coverageAmount}</td>
-                <td className="px-6 py-4 text-gray-600">{item.startDate}</td>
-                <td className="px-6 py-4 text-gray-600">{item.expiryDate}</td>
-                <td className="px-6 py-4">
-                  <span className={getStatusBadge(item.status)}>{item.status}</span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button
-                    onClick={() => handleDeleteClick('insurance', item.id, null, `${item.provider} - ${item.policyNo}`)}
-                    className="p-2 rounded hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 size={16} className="text-gray-500 hover:text-red-600" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {paginatedInsurance.length > 0 ? (
+              paginatedInsurance.map((item, index) => (
+                <TableRow key={item.id} hover>
+                  <TableCell className="text-[#1C62A0] font-medium">{item.policyNo}</TableCell>
+                  <TableCell className="font-medium text-gray-800">{item.provider}</TableCell>
+                  <TableCell className="text-gray-600">{item.planType}</TableCell>
+                  <TableCell className="text-gray-600">{item.coverageAmount}</TableCell>
+                  <TableCell className="text-gray-600">{item.startDate}</TableCell>
+                  <TableCell className="text-gray-600">{item.expiryDate}</TableCell>
+                  <TableCell>
+                    <span className={getStatusBadge(item.status)}>{item.status}</span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteClick('insurance', item.id, null, `${item.provider} - ${item.policyNo}`)}
+                        className="p-2 hover:text-red-600"
+                        title="Delete Insurance Policy"
+                      >
+                        <Trash2 size={16} className="text-gray-500 hover:text-red-600" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                  No insurance policies found
+                </TableCell>
+              </TableRow>
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalItems > 0 && (
+        <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center">
+          <div className="text-sm text-gray-500">
+            Showing {paginatedInsurance.length} of {totalItems} insurance policies
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+              {currentPage}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

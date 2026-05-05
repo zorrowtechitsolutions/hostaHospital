@@ -1,30 +1,47 @@
+// src/components/patients/EditAppointmentModal.jsx - With useEffect for better reactivity
 import React, { useState, useEffect } from "react";
-import { X, Calendar, Clock, User, Stethoscope, CreditCard, FileText } from "lucide-react";
+import { Modal, Input, Select, Textarea, Button } from "../ui";
 
 const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, allPatients = [] }) => {
   const [form, setForm] = useState({
-    patientId: appointment?.patientId || patient?.id || "",
-    patientName: appointment?.patientName || patient?.name || "",
-    patientType: appointment?.patientType || "In Patient",
-    department: appointment?.department || "",
-    doctor: appointment?.doctorName || "",
-    mode: appointment?.consultationMode || "In Person",
-    date: appointment?.appointmentDate || "",
-    startTime: appointment?.startTime || "",
-    endTime: appointment?.endTime || "",
-    reason: appointment?.reason || "",
-    notes: appointment?.notes || "",
-    payment: appointment?.paymentMethod || "Card"
+    patientId: "",
+    patientName: "",
+    patientType: "In Patient",
+    department: "",
+    doctor: "",
+    mode: "In Person",
+    date: "",
+    startTime: "",
+    endTime: "",
+    reason: "",
+    notes: "",
+    payment: "Card"
   });
 
   const [errors, setErrors] = useState({});
 
-  // Get all patients for dropdown (combine outpatient and inpatient)
-  const getAllPatients = () => {
-    if (allPatients && allPatients.length > 0) {
-      return allPatients;
+  // Populate form when appointment changes
+  useEffect(() => {
+    if (appointment) {
+      setForm({
+        patientId: appointment.patientId || patient?.id || "",
+        patientName: appointment.patientName || patient?.name || "",
+        patientType: appointment.patientType || "In Patient",
+        department: appointment.department || "",
+        doctor: appointment.doctorName || "",
+        mode: appointment.preferredMode || appointment.consultationMode || "In Person",
+        date: appointment.appointmentDate || "",
+        startTime: appointment.startTime || "",
+        endTime: appointment.endTime || "",
+        reason: appointment.reason || "",
+        notes: appointment.notes || "",
+        payment: appointment.paymentMethod || "Card"
+      });
     }
-    // Fallback mock data if no patients passed
+  }, [appointment, patient]);
+
+  const getAllPatients = () => {
+    if (allPatients && allPatients.length > 0) return allPatients;
     return [
       { id: "PT0025", name: "James Carter", type: "Out Patient" },
       { id: "PT0026", name: "Emily Rodriguez", type: "Out Patient" },
@@ -37,14 +54,8 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm({
-      ...form,
-      [name]: value
-    });
-    // Clear error for this field if it exists
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
-    }
+    setForm(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: "" }));
   };
 
   const validateForm = () => {
@@ -62,7 +73,7 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      const updatedData = {
+      onSave({
         patientId: form.patientId,
         patientName: form.patientName,
         patientType: form.patientType,
@@ -75,286 +86,61 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
         reason: form.reason,
         notes: form.notes,
         paymentMethod: form.payment
-      };
-      onSave(updatedData);
+      });
       onClose();
     }
   };
 
   const handlePatientChange = (e) => {
-    const selectedPatientId = e.target.value;
-    const selectedPatient = getAllPatients().find(p => p.id === selectedPatientId);
+    const selectedPatient = getAllPatients().find(p => p.id === e.target.value);
     if (selectedPatient) {
-      setForm({
-        ...form,
+      setForm(prev => ({
+        ...prev,
         patientId: selectedPatient.id,
         patientName: selectedPatient.name,
         patientType: selectedPatient.type || "Out Patient"
-      });
+      }));
     }
   };
 
   if (!isOpen) return null;
 
+  const departments = ["Anaesthesiology", "Cardiology", "Dental Surgery", "Dermatology", "ENT Surgery", "General Medicine", "Neurology", "Ophthalmology", "Orthopaedics", "Paediatrics", "Radiology"];
+  const doctors = ["Dr. Andrew Clark", "Dr. Katherine Brooks", "Dr. Benjamin Harris", "Dr. Laura Mitchell", "Dr. Christopher Lewis", "Dr. Sarah Wilson", "Dr. Michael Lee", "Dr. Emily Chen", "Dr. Robert Johnson", "Dr. Maria Garcia", "Dr. James Wilson"];
+  const modes = ["In Person", "Video", "Phone"];
+  const paymentMethods = ["Card", "Cash", "Insurance", "Online"];
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[999]">
-      <div className="bg-white w-[600px] rounded-xl shadow-xl max-h-[90vh] overflow-y-auto hide-scrollbar">
-        {/* Hide Scrollbar Styles */}
-        <style jsx>{`
-          .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-          }
-          .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
-        
-        {/* Header */}
-        <div className="flex justify-between items-center border-b px-6 py-4 sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Edit Appointment
-          </h2>
-          <button
-            onClick={onClose}
-            className="bg-gray-800 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-700 transition"
-          >
-            <X size={14} />
-          </button>
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Appointment" size="lg" showCloseButton={false}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Select label="Select Patient" name="patientId" options={getAllPatients().map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))} value={form.patientId} onChange={handlePatientChange} />
+          <Select label="Patient Type" name="patientType" options={["In Patient", "Out Patient"]} value={form.patientType} onChange={handleChange} />
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Patient + Type */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Select Patient
-              </label>
-              <select
-                name="patientId"
-                value={form.patientId}
-                onChange={handlePatientChange}
-                className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Patient</option>
-                {getAllPatients().map(pat => (
-                  <option key={pat.id} value={pat.id}>
-                    {pat.name} ({pat.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Patient Type
-              </label>
-              <select
-                name="patientType"
-                value={form.patientType}
-                onChange={handleChange}
-                className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option>In Patient</option>
-                <option>Out Patient</option>
-              </select>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Select label="Select Department" name="department" options={departments} value={form.department} onChange={handleChange} error={errors.department} required />
+          <Select label="Select Doctor" name="doctor" options={doctors} value={form.doctor} onChange={handleChange} error={errors.doctor} required />
+        </div>
 
-          {/* Department + Doctor */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Select Department *
-              </label>
-              <select
-                name="department"
-                value={form.department}
-                onChange={handleChange}
-                className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.department ? "border-red-500" : "border-gray-300"
-                }`}
-              >
-                <option value="">Select Department</option>
-                <option value="Anaesthesiology">Anaesthesiology</option>
-                <option value="Cardiology">Cardiology</option>
-                <option value="Dental Surgery">Dental Surgery</option>
-                <option value="Dermatology">Dermatology</option>
-                <option value="ENT Surgery">ENT Surgery</option>
-                <option value="General Medicine">General Medicine</option>
-                <option value="Neurology">Neurology</option>
-                <option value="Ophthalmology">Ophthalmology</option>
-                <option value="Orthopaedics">Orthopaedics</option>
-                <option value="Paediatrics">Paediatrics</option>
-                <option value="Radiology">Radiology</option>
-              </select>
-              {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Select Doctor *
-              </label>
-              <select
-                name="doctor"
-                value={form.doctor}
-                onChange={handleChange}
-                className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.doctor ? "border-red-500" : "border-gray-300"
-                }`}
-              >
-                <option value="">Select Doctor</option>
-                <option value="Dr. Andrew Clark">Dr. Andrew Clark</option>
-                <option value="Dr. Katherine Brooks">Dr. Katherine Brooks</option>
-                <option value="Dr. Benjamin Harris">Dr. Benjamin Harris</option>
-                <option value="Dr. Laura Mitchell">Dr. Laura Mitchell</option>
-                <option value="Dr. Christopher Lewis">Dr. Christopher Lewis</option>
-                <option value="Dr. Sarah Wilson">Dr. Sarah Wilson</option>
-                <option value="Dr. Michael Lee">Dr. Michael Lee</option>
-                <option value="Dr. Emily Chen">Dr. Emily Chen</option>
-                <option value="Dr. Robert Johnson">Dr. Robert Johnson</option>
-                <option value="Dr. Maria Garcia">Dr. Maria Garcia</option>
-                <option value="Dr. James Wilson">Dr. James Wilson</option>
-              </select>
-              {errors.doctor && <p className="text-red-500 text-xs mt-1">{errors.doctor}</p>}
-            </div>
-          </div>
+        <Select label="Preferred Mode of Consultation" name="mode" options={modes} value={form.mode} onChange={handleChange} />
 
-          {/* Consultation Mode */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Preferred Mode of Consultation *
-            </label>
-            <select
-              name="mode"
-              value={form.mode}
-              onChange={handleChange}
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option>In Person</option>
-              <option>Video</option>
-              <option>Phone</option>
-            </select>
-          </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Input label="Date" name="date" type="date" value={form.date} onChange={handleChange} error={errors.date} required />
+          <Input label="Start Time" name="startTime" type="time" value={form.startTime} onChange={handleChange} error={errors.startTime} required />
+          <Input label="End Time" name="endTime" type="time" value={form.endTime} onChange={handleChange} error={errors.endTime} required />
+        </div>
 
-          {/* Date + Time */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Date *
-              </label>
-              <input
-                type="date"
-                name="date"
-                value={form.date}
-                onChange={handleChange}
-                className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.date ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Start Time *
-              </label>
-              <input
-                type="time"
-                name="startTime"
-                value={form.startTime}
-                onChange={handleChange}
-                className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.startTime ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {errors.startTime && <p className="text-red-500 text-xs mt-1">{errors.startTime}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                End Time *
-              </label>
-              <input
-                type="time"
-                name="endTime"
-                value={form.endTime}
-                onChange={handleChange}
-                className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.endTime ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {errors.endTime && <p className="text-red-500 text-xs mt-1">{errors.endTime}</p>}
-            </div>
-          </div>
+        <Input label="Reason" name="reason" value={form.reason} onChange={handleChange} placeholder="Enter reason for appointment" error={errors.reason} required />
+        <Textarea label="Quick Notes" name="notes" rows={3} value={form.notes} onChange={handleChange} placeholder="Provide detailed instructions..." />
+        <Select label="Mode of Payment" name="payment" options={paymentMethods} value={form.payment} onChange={handleChange} />
 
-          {/* Reason */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Reason *
-            </label>
-            <input
-              type="text"
-              name="reason"
-              value={form.reason}
-              onChange={handleChange}
-              className={`w-full mt-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.reason ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter reason for appointment"
-            />
-            {errors.reason && <p className="text-red-500 text-xs mt-1">{errors.reason}</p>}
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Quick Notes
-            </label>
-            <textarea
-              name="notes"
-              rows="3"
-              value={form.notes}
-              onChange={handleChange}
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Provide detailed instructions on how to use prescribed medications..."
-            />
-          </div>
-
-          {/* Payment */}
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Mode of Payment
-            </label>
-            <select
-              name="payment"
-              value={form.payment}
-              onChange={handleChange}
-              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option>Card</option>
-              <option>Cash</option>
-              <option>Insurance</option>
-              <option>Online</option>
-            </select>
-          </div>
-
-          {/* Footer Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154d82] transition"
-            >
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="primary">Save Changes</Button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 

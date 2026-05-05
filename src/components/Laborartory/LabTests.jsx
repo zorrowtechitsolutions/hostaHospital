@@ -1,19 +1,10 @@
-// LabTests.jsx
+// src/components/Laboratory/LabTests.jsx - CORRECTED
 import React, { useState } from 'react';
 import { 
-  Search, 
-  RefreshCcw, 
-  Download, 
-  Upload,
-  ChevronRight,
-  Edit,
-  Trash2,
-  FileText,
-  MoreVertical,
-  Package,
-  IndianRupee,
-  Plus
+  RefreshCcw, Download, Upload,
+  Edit, Trash2, FileText, MoreVertical, Plus
 } from 'lucide-react';
+import { Button, SearchBar } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import AddEditLabTestModal from './AddEditLabTestModal';
 
@@ -28,172 +19,35 @@ const LabTests = () => {
   const [selectedTest, setSelectedTest] = useState(null);
   const itemsPerPage = 10;
 
-  // Lab Tests Data
   const [labTests, setLabTests] = useState([
-    {
-      id: "LT001",
-      testId: "BLD001",
-      testName: "Blood Sugar (Glucose)",
-      type: "Test",
-      price: 120,
-      category: "Biochemistry",
-      sampleType: "Blood",
-      preparation: "Fasting required for 8-10 hours",
-      turnaroundTime: "2-4 hours",
-      status: "Active"
-    },
-    {
-      id: "LT002",
-      testId: "BLD002",
-      testName: "Hemoglobin (Hb)",
-      type: "Test",
-      price: 120,
-      category: "Hematology",
-      sampleType: "Blood",
-      preparation: "No special preparation required",
-      turnaroundTime: "1-2 hours",
-      status: "Active"
-    },
-    {
-      id: "LT003",
-      testId: "BLD003",
-      testName: "Cholesterol",
-      type: "Test",
-      price: 220,
-      category: "Biochemistry",
-      sampleType: "Blood",
-      preparation: "Fasting required for 10-12 hours",
-      turnaroundTime: "4-6 hours",
-      status: "Active"
-    },
-    {
-      id: "LT004",
-      testId: "PNL001",
-      testName: "CBC (Complete Blood Count)",
-      type: "Group",
-      price: 350,
-      category: "Hematology",
-      sampleType: "Blood",
-      preparation: "No special preparation required",
-      turnaroundTime: "4-6 hours",
-      status: "Active"
-    },
-    {
-      id: "LT005",
-      testId: "PNL002",
-      testName: "KFT (Kidney Function Test)",
-      type: "Group",
-      price: 600,
-      category: "Biochemistry",
-      sampleType: "Blood/Urine",
-      preparation: "Fasting required for 8-10 hours",
-      turnaroundTime: "6-8 hours",
-      status: "Active"
-    },
-    {
-      id: "LT006",
-      testId: "PNL003",
-      testName: "LFT (Liver Function Test)",
-      type: "Group",
-      price: 600,
-      category: "Biochemistry",
-      sampleType: "Blood",
-      preparation: "Fasting required for 8-10 hours",
-      turnaroundTime: "6-8 hours",
-      status: "Active"
-    },
-    {
-      id: "LT007",
-      testId: "PNL004",
-      testName: "Electrolyte Panel",
-      type: "Group",
-      price: 500,
-      category: "Biochemistry",
-      sampleType: "Blood/Urine",
-      preparation: "No special preparation required",
-      turnaroundTime: "4-6 hours",
-      status: "Active"
-    },
-    {
-      id: "LT008",
-      testId: "PNL005",
-      testName: "Full Body Checkup",
-      type: "Group",
-      price: 3000,
-      category: "Wellness",
-      sampleType: "Blood/Urine",
-      preparation: "Fasting required for 10-12 hours",
-      turnaroundTime: "24-48 hours",
-      status: "Active"
-    },
-    {
-      id: "LT009",
-      testId: "BLD004",
-      testName: "Thyroid Profile (T3, T4, TSH)",
-      type: "Group",
-      price: 600,
-      category: "Endocrinology",
-      sampleType: "Blood",
-      preparation: "No special preparation required",
-      turnaroundTime: "6-8 hours",
-      status: "Active"
-    },
-    {
-      id: "LT010",
-      testId: "BLD005",
-      testName: "Vitamin B12",
-      type: "Test",
-      price: 800,
-      category: "Nutrition",
-      sampleType: "Blood",
-      preparation: "Fasting required for 8 hours",
-      turnaroundTime: "24 hours",
-      status: "Active"
-    },
-    {
-      id: "LT011",
-      testId: "BLD006",
-      testName: "Vitamin D (25-Hydroxy)",
-      type: "Test",
-      price: 1100,
-      category: "Nutrition",
-      sampleType: "Blood",
-      preparation: "No special preparation required",
-      turnaroundTime: "24-48 hours",
-      status: "Active"
-    },
-    {
-      id: "LT012",
-      testId: "PNL006",
-      testName: "Lipid Profile",
-      type: "Group",
-      price: 600,
-      category: "Biochemistry",
-      sampleType: "Blood",
-      preparation: "Fasting required for 10-12 hours",
-      turnaroundTime: "4-6 hours",
-      status: "Active"
-    }
+    { id: "LT001", testId: "BLD001", testName: "Blood Sugar (Glucose)", type: "Test", price: 120, category: "Biochemistry", sampleType: "Blood", preparation: "Fasting required for 8-10 hours", turnaroundTime: "2-4 hours", status: "Active" },
+    { id: "LT002", testId: "BLD002", testName: "Hemoglobin (Hb)", type: "Test", price: 120, category: "Hematology", sampleType: "Blood", preparation: "No special preparation required", turnaroundTime: "1-2 hours", status: "Active" },
+    { id: "LT003", testId: "BLD003", testName: "Cholesterol", type: "Test", price: 220, category: "Biochemistry", sampleType: "Blood", preparation: "Fasting required for 10-12 hours", turnaroundTime: "4-6 hours", status: "Active" },
+    { id: "LT004", testId: "PNL001", testName: "CBC (Complete Blood Count)", type: "Group", price: 350, category: "Hematology", sampleType: "Blood", preparation: "No special preparation required", turnaroundTime: "4-6 hours", status: "Active" },
+    { id: "LT005", testId: "PNL002", testName: "KFT (Kidney Function Test)", type: "Group", price: 600, category: "Biochemistry", sampleType: "Blood/Urine", preparation: "Fasting required for 8-10 hours", turnaroundTime: "6-8 hours", status: "Active" },
+    { id: "LT006", testId: "PNL003", testName: "LFT (Liver Function Test)", type: "Group", price: 600, category: "Biochemistry", sampleType: "Blood", preparation: "Fasting required for 8-10 hours", turnaroundTime: "6-8 hours", status: "Active" },
+    { id: "LT007", testId: "PNL004", testName: "Electrolyte Panel", type: "Group", price: 500, category: "Biochemistry", sampleType: "Blood/Urine", preparation: "No special preparation required", turnaroundTime: "4-6 hours", status: "Active" },
+    { id: "LT008", testId: "PNL005", testName: "Full Body Checkup", type: "Group", price: 3000, category: "Wellness", sampleType: "Blood/Urine", preparation: "Fasting required for 10-12 hours", turnaroundTime: "24-48 hours", status: "Active" },
+    { id: "LT009", testId: "BLD004", testName: "Thyroid Profile (T3, T4, TSH)", type: "Group", price: 600, category: "Endocrinology", sampleType: "Blood", preparation: "No special preparation required", turnaroundTime: "6-8 hours", status: "Active" },
+    { id: "LT010", testId: "BLD005", testName: "Vitamin B12", type: "Test", price: 800, category: "Nutrition", sampleType: "Blood", preparation: "Fasting required for 8 hours", turnaroundTime: "24 hours", status: "Active" },
+    { id: "LT011", testId: "BLD006", testName: "Vitamin D (25-Hydroxy)", type: "Test", price: 1100, category: "Nutrition", sampleType: "Blood", preparation: "No special preparation required", turnaroundTime: "24-48 hours", status: "Active" },
+    { id: "LT012", testId: "PNL006", testName: "Lipid Profile", type: "Group", price: 600, category: "Biochemistry", sampleType: "Blood", preparation: "Fasting required for 10-12 hours", turnaroundTime: "4-6 hours", status: "Active" }
   ]);
 
-  const getTypeBadge = (type) => {
-    return type === "Test" 
-      ? "bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
-      : "bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs";
-  };
+  const getTypeBadge = (type) => type === "Test" ? "info" : "purple";
 
-  const handleEditTest = (test) => {
-    setSelectedTest(test);
-    setShowAddEditModal(true);
-    setOpenMenu(null);
+  const handleEditTest = (test) => { 
+    setSelectedTest(test); 
+    setShowAddEditModal(true); 
+    setOpenMenu(null); 
   };
-
-  const handleDeleteClick = (test) => {
-    setItemToDelete(test);
-    setShowDeleteModal(true);
-    setOpenMenu(null);
+  
+  const handleDeleteClick = (test) => { 
+    setItemToDelete(test); 
+    setShowDeleteModal(true); 
+    setOpenMenu(null); 
   };
-
+  
   const handleConfirmDelete = () => {
     if (itemToDelete) {
       setLabTests(labTests.filter(t => t.id !== itemToDelete.id));
@@ -201,29 +55,23 @@ const LabTests = () => {
       setItemToDelete(null);
     }
   };
-
-  const handleCloseDeleteModal = () => {
-    setShowDeleteModal(false);
-    setItemToDelete(null);
+  
+  const handleAddNewTest = () => { 
+    setSelectedTest(null); 
+    setShowAddEditModal(true); 
   };
-
-  const handleAddNewTest = () => {
-    setSelectedTest(null);
-    setShowAddEditModal(true);
-  };
-
+  
   const handleSaveTest = (testData) => {
     if (selectedTest) {
       setLabTests(labTests.map(t => t.id === selectedTest.id ? { ...testData, id: t.id } : t));
     } else {
       const newId = `LT${String(labTests.length + 1).padStart(3, '0')}`;
       const newTestId = testData.type === "Test" ? "BLD" : "PNL";
-      const newTest = {
-        ...testData,
-        id: newId,
-        testId: `${newTestId}${String(labTests.length + 1).padStart(3, '0')}`
-      };
-      setLabTests([...labTests, newTest]);
+      setLabTests([...labTests, { 
+        ...testData, 
+        id: newId, 
+        testId: `${newTestId}${String(labTests.length + 1).padStart(3, '0')}` 
+      }]);
     }
     setShowAddEditModal(false);
     setSelectedTest(null);
@@ -231,7 +79,6 @@ const LabTests = () => {
 
   const getFilteredTests = () => {
     let filtered = [...labTests];
-    
     if (searchTerm) {
       filtered = filtered.filter(item => 
         item.testId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,11 +86,9 @@ const LabTests = () => {
         item.category.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
     if (typeFilter) {
       filtered = filtered.filter(item => item.type === typeFilter);
     }
-    
     return filtered;
   };
 
@@ -252,78 +97,53 @@ const LabTests = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTests = filteredTests.slice(startIndex, startIndex + itemsPerPage);
 
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
+  const handleRefresh = () => { 
+    setSearchTerm(""); 
+    setTypeFilter(""); 
+    setCurrentPage(1); 
   };
-
-  const handleRefresh = () => {
-    setSearchTerm("");
-    setTypeFilter("");
-    setCurrentPage(1);
-  };
-
+  
   const handleExport = () => {
-    const filtered = getFilteredTests();
-    const exportData = filtered.map(test => ({
-      'Test ID': test.testId,
-      'Test Name': test.testName,
-      'Type': test.type,
-      'Price (₹)': test.price,
-      'Category': test.category,
-      'Sample Type': test.sampleType,
-      'Turnaround Time': test.turnaroundTime,
-      'Status': test.status
+    const exportData = getFilteredTests().map(test => ({ 
+      'Test ID': test.testId, 
+      'Test Name': test.testName, 
+      'Type': test.type, 
+      'Price (₹)': test.price, 
+      'Category': test.category, 
+      'Sample Type': test.sampleType, 
+      'Turnaround Time': test.turnaroundTime, 
+      'Status': test.status 
     }));
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `lab_tests_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    const link = document.createElement('a');
+    link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    link.download = `lab_tests_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
   };
-
+  
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
         alert(`Successfully imported ${importedData.length} lab tests!`);
-        console.log('Imported data:', importedData);
-      } catch (error) {
-        alert('Error parsing JSON file. Please make sure it\'s a valid JSON file.');
+      } catch (error) { 
+        alert('Error parsing JSON file.'); 
       }
     };
-    
     reader.readAsText(file);
     event.target.value = '';
   };
-
-  const clearAllFilters = () => {
-    setTypeFilter('');
-    setSearchTerm('');
+  
+  const clearAllFilters = () => { 
+    setTypeFilter(''); 
+    setSearchTerm(''); 
   };
 
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (typeFilter) count++;
-    if (searchTerm) count++;
-    return count;
-  };
-
-  const activeFilterCount = getActiveFilterCount();
-
-  // Row Action Menu Component for List View
+  // Row Action Menu Component
   const RowActionMenu = ({ test }) => {
     const [showMenu, setShowMenu] = useState(false);
-
     return (
       <div className="relative">
         <button
@@ -332,29 +152,26 @@ const LabTests = () => {
         >
           <MoreVertical size={18} />
         </button>
-        
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button
-              onClick={() => {
-                handleEditTest(test);
-                setShowMenu(false);
-              }}
+            <button 
+              onClick={() => { 
+                handleEditTest(test); 
+                setShowMenu(false); 
+              }} 
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
             >
-              <Edit size={16} />
-              Edit
+              <Edit size={16} /> Edit
             </button>
             <div className="border-t border-gray-100 my-1"></div>
-            <button
-              onClick={() => {
-                handleDeleteClick(test);
-                setShowMenu(false);
-              }}
+            <button 
+              onClick={() => { 
+                handleDeleteClick(test); 
+                setShowMenu(false); 
+              }} 
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
             >
-              <Trash2 size={16} />
-              Delete
+              <Trash2 size={16} /> Delete
             </button>
           </div>
         )}
@@ -393,38 +210,24 @@ const LabTests = () => {
         {/* Search Bar and Action Buttons */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 max-w-sm">
-              <input
-                type="text"
-                placeholder="Search by Test ID, Test Name, Category..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              )}
-              <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
-                <Search size={14} className="text-white" />
-              </button>
-            </div>
-
+            <SearchBar 
+              placeholder="Search by Test ID, Test Name, Category..." 
+              value={searchTerm} 
+              onChange={setSearchTerm} 
+              onClear={() => setSearchTerm('')} 
+              className="flex-1 max-w-sm" 
+            />
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white"
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
             >
               <option value="">All Types</option>
               <option value="Test">Test</option>
               <option value="Group">Group</option>
             </select>
           </div>
-
+          
           <div className="flex gap-2 flex-wrap items-center">
             <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
               <RefreshCcw size={16} />
@@ -504,12 +307,13 @@ const LabTests = () => {
                         <span className="font-medium text-gray-800">{test.testName}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={getTypeBadge(test.type)}>{test.type}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs ${test.type === "Test" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}`}>
+                          {test.type}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1 text-gray-700 font-semibold">
-                          <IndianRupee size={14} className="text-gray-400" />
-                          {test.price}
+                          ₹{test.price}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{test.category}</td>
@@ -533,12 +337,14 @@ const LabTests = () => {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handlePageChange(currentPage - 1)}
+                    onClick={() => {
+                      if (currentPage > 1) setCurrentPage(currentPage - 1);
+                    }}
                     disabled={currentPage === 1}
                     className={`px-3 py-1 border rounded-md text-sm transition-all ${
                       currentPage === 1
                         ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
+                        : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                     }`}
                   >
                     Previous
@@ -547,12 +353,14 @@ const LabTests = () => {
                     {currentPage}
                   </span>
                   <button
-                    onClick={() => handlePageChange(currentPage + 1)}
+                    onClick={() => {
+                      if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                    }}
                     disabled={currentPage === totalPages || totalPages === 0}
                     className={`px-3 py-1 border rounded-md text-sm transition-all ${
                       currentPage === totalPages || totalPages === 0
                         ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
+                        : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                     }`}
                   >
                     Next
@@ -567,7 +375,7 @@ const LabTests = () => {
       {/* Delete Confirmation Modal */}
       <DeleteModal
         isOpen={showDeleteModal}
-        onClose={handleCloseDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
         onConfirm={handleConfirmDelete}
         title="Delete Lab Test"
         message="Are you sure you want to delete this lab test?"

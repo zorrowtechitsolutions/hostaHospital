@@ -1,38 +1,36 @@
+// src/components/patients/Patients.jsx - Complete with buttons aligned at same position
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
   Calendar, 
-  MapPin, 
   Activity,
-  ChevronRight,
   Plus,
-  Filter,
   Download,
   Mail,
   Phone,
   MoreVertical,
   Eye,
   Edit,
-  X,
   Users as UsersIcon,
-  BedDouble,
   Stethoscope,
   LayoutGrid,
   List,
   RefreshCcw,
   Upload,
-  Search,
-  Clock,
-  FileText,
-  Video,
-  MessageSquare,
-  ChevronUp,
-  ChevronDown,
   Trash2
 } from 'lucide-react';
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
+import { 
+  Button, 
+  Badge, 
+  Loader, 
+  Pagination, 
+  SearchBar,
+  FilterBar,
+  Card
+} from '../ui';
 
 const Patients = () => {
   const navigate = useNavigate();
@@ -400,19 +398,11 @@ const Patients = () => {
     return count;
   };
 
-  // PatientCard for Grid View with FIXED button positioning (buttons align at bottom)
+  // PatientCard for Grid View - ALL BUTTONS AT SAME POSITION
   const PatientCard = ({ patient, type }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
     const isOutpatient = type === 'outpatient';
-    const statusColors = {
-      'Stable': 'bg-green-100 text-green-700',
-      'Improving': 'bg-blue-100 text-blue-700',
-      'Controlled': 'bg-green-100 text-green-700',
-      'Critical': 'bg-red-100 text-red-700',
-      'Serious': 'bg-orange-100 text-orange-700',
-      'Active': 'bg-green-100 text-green-700'
-    };
 
     useEffect(() => {
       const handleClickOutside = (e) => {
@@ -420,117 +410,86 @@ const Patients = () => {
           setShowMenu(false);
         }
       };
-
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-300 overflow-hidden h-full flex flex-col">
-        <div className="p-5 flex flex-col h-full">
-          {/* Header section - This stays at top */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <img 
-                src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
-                alt={patient.name}
-                className="w-12 h-12 rounded-full object-cover border-2 border-blue-100"
-                onError={(e) => {
-                  e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
-                }}
-              />
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                    {patient.id}
-                  </span>
-                  {!isOutpatient && (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                      Room {patient.roomNumber}
-                    </span>
-                  )}
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[patient.status] || 'bg-gray-100 text-gray-700'}`}>
-                    {patient.status || 'Active'}
-                  </span>
+      <Card hover className="overflow-hidden">
+        {/* Fixed height container - ensures all cards are identical height */}
+        <div className="p-5" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
+          
+          {/* Header Section - Fixed at top */}
+          <div style={{ flexShrink: 0 }}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <img 
+                  src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
+                  alt={patient.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-100"
+                  onError={(e) => {
+                    e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
+                  }}
+                />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="default" className="text-xs font-mono">
+                      {patient.id}
+                    </Badge>
+                    {!isOutpatient && (
+                      <Badge variant="danger" className="text-xs">
+                        Room {patient.roomNumber}
+                      </Badge>
+                    )}
+                    <Badge variant={patient.status === 'Critical' ? 'danger' : 'success'} className="text-xs">
+                      {patient.status || 'Active'}
+                    </Badge>
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
+                  <p className="text-xs text-gray-500">{patient.age} years • {patient.gender}</p>
                 </div>
-                <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
-                <p className="text-xs text-gray-500">{patient.age} years • {patient.gender}</p>
               </div>
-            </div>
-            
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <MoreVertical className="w-4 h-4 text-gray-500" />
-              </button>
               
-              {showMenu && (
-                <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                  <button
-                    onClick={() => {
-                      handleViewDetails(patient);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-                  >
-                    <Eye size={16} />
-                    View Details
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleEditPatient(patient);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Edit size={16} />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleAddAppointmentModal(patient);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
-                  >
-                    <Calendar size={16} />
-                    Appointment
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleDeleteClick(patient);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-                  >
-                    <Trash2 size={16} />
-                    Delete
-                  </button>
-                </div>
-              )}
+              <div className="relative" ref={menuRef}>
+                <button onClick={() => setShowMenu(!showMenu)} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+                  <MoreVertical className="w-4 h-4 text-gray-500" />
+                </button>
+                {showMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                    <button onClick={() => { handleViewDetails(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
+                      <Eye size={16} /> View Details
+                    </button>
+                    <button onClick={() => { handleEditPatient(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      <Edit size={16} /> Edit
+                    </button>
+                    <button onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100">
+                      <Calendar size={16} /> Appointment
+                    </button>
+                    <button onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
+                      <Trash2 size={16} /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* Info rows - This grows to push button down */}
-          <div className="flex-grow space-y-3 mb-4">
+          {/* Content Section - Takes remaining space but scrollable if needed */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} className="space-y-3">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Stethoscope className="w-4 h-4" />
                 <span>Department</span>
               </div>
-              <span className="font-medium text-gray-900">{patient.department || 'General'}</span>
+              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.department || 'General'}</span>
             </div>
-            
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <User className="w-4 h-4" />
                 <span>Doctor</span>
               </div>
-              <span className="font-medium text-gray-900">{patient.doctor || 'Not Assigned'}</span>
+              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.doctor || 'Not Assigned'}</span>
             </div>
-            
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Calendar className="w-4 h-4" />
@@ -538,15 +497,13 @@ const Patients = () => {
               </div>
               <span className="font-medium text-gray-900">{patient.lastVisitDisplay || 'N/A'}</span>
             </div>
-
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Phone className="w-4 h-4" />
                 <span>Phone</span>
               </div>
-              <span className="font-medium text-gray-900">{patient.phone || patient.mobileNumber}</span>
+              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.phone || patient.mobileNumber}</span>
             </div>
-
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Activity className="w-4 h-4" />
@@ -556,18 +513,20 @@ const Patients = () => {
             </div>
           </div>
           
-          {/* Button section - This sticks to bottom of card */}
-          <div className="flex gap-2 pt-3 border-t border-gray-100 mt-auto">
-            <button 
-              onClick={() => handleAddAppointmentModal(patient)}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-            >
-              <Calendar className="w-4 h-4" />
-              Add Appointment
-            </button>
+          {/* Button Section - ALWAYS AT BOTTOM */}
+          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: '1rem' }}>
+            <div className="flex gap-2 border-t border-gray-100 pt-4">
+              <button 
+                onClick={() => handleAddAppointmentModal(patient)} 
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+              >
+                <Calendar className="w-4 h-4" /> 
+                Add Appointment
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
     );
   };
 
@@ -582,62 +541,29 @@ const Patients = () => {
           setShowMenu(false);
         }
       };
-
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
     return (
       <div className="relative" ref={menuRef}>
-        <button
-          onClick={() => setShowMenu(!showMenu)}
-          className="p-2 rounded hover:bg-gray-100 transition-colors"
-        >
+        <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded hover:bg-gray-100 transition-colors">
           <MoreVertical size={18} />
         </button>
-        
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button
-              onClick={() => {
-                handleViewDetails(patient);
-                setShowMenu(false);
-              }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-            >
-              <Eye size={16} />
-              View Details
+            <button onClick={() => { handleViewDetails(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
+              <Eye size={16} /> View Details
             </button>
-            <button
-              onClick={() => {
-                handleEditPatient(patient);
-                setShowMenu(false);
-              }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <Edit size={16} />
-              Edit
+            <button onClick={() => { handleEditPatient(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+              <Edit size={16} /> Edit
             </button>
-            <button
-              onClick={() => {
-                handleAddAppointmentModal(patient);
-                setShowMenu(false);
-              }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
-            >
-              <Calendar size={16} />
-              Appointment
+            <button onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100">
+              <Calendar size={16} /> Appointment
             </button>
             <div className="border-t border-gray-100 my-1"></div>
-            <button
-              onClick={() => {
-                handleDeleteClick(patient);
-                setShowMenu(false);
-              }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-            >
-              <Trash2 size={16} />
-              Delete
+            <button onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
+              <Trash2 size={16} /> Delete
             </button>
           </div>
         )}
@@ -652,15 +578,11 @@ const Patients = () => {
       {/* Breadcrumb Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            title="Go back"
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="p-1">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-          </button>
+          </Button>
           <div className="text-xs text-gray-500">
             <span className="text-gray-700">Patients</span>
             <span className="mx-1 text-gray-400">»</span>
@@ -675,33 +597,17 @@ const Patients = () => {
       {/* Search Bar and Action Buttons */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by name, ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
-          </div>
-
+          <SearchBar
+            placeholder="Search by name, ID..."
+            value={searchTerm}
+            onChange={setSearchTerm}
+            onClear={() => setSearchTerm('')}
+            className="flex-1 max-w-sm"
+          />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white"
+            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
           >
             <option value="all">All Status</option>
             <option value="outpatient">Out Patient</option>
@@ -719,118 +625,71 @@ const Patients = () => {
             </button>
           </div>
 
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+          <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
             <RefreshCcw size={16} />
-          </button>
+          </Button>
 
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImport}
-            accept=".json"
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current.click()}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
-            title="Import Patients"
-          >
+          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current.click()} title="Import Patients">
             <Upload size={16} />
-          </button>
+          </Button>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Patients">
+          <Button variant="outline" size="sm" onClick={handleExport} title="Export Patients">
             <Download size={16} />
-          </button>
+          </Button>
 
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-blue-600' : 'text-gray-500'
-            } hover:bg-gray-50`}
-            title="Toggle Filters"
+          <FilterBar
+            isOpen={showFilters}
+            onToggle={() => setShowFilters(!showFilters)}
+            activeFilterCount={activeFilterCount}
+            onClearAll={clearAllFilters}
           >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Departments</option>
+                  {getAllDepartments().map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Genders</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Last Visit Date</label>
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </FilterBar>
 
-          <button
-            onClick={handleAddPatient}
-            className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2"
-          >
+          <Button onClick={handleAddPatient} className="flex items-center gap-2">
             <Plus size={16} /> New Patient
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Collapsible Filter Section */}
-      {showFilters && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Filter className="w-5 h-5 text-gray-500" />
-              <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-              {activeFilterCount > 0 && (
-                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
-              Clear All Filters
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Departments</option>
-                {getAllDepartments().map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
-              <select
-                value={genderFilter}
-                onChange={(e) => setGenderFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Genders</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Last Visit Date</label>
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1C62A0]"></div>
-        </div>
-      )}
+      {loading && <Loader centered />}
 
       {/* Patients View */}
       {!loading && filteredPatients.length === 0 ? (
@@ -838,12 +697,7 @@ const Patients = () => {
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
           <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-          <button
-            onClick={clearAllFilters}
-            className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-blue-700"
-          >
-            Clear All Filters
-          </button>
+          <Button onClick={clearAllFilters}>Clear All Filters</Button>
         </div>
       ) : !loading && viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -857,9 +711,7 @@ const Patients = () => {
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Patients
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {filteredPatients.length}
-              </span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredPatients.length}</span>
             </h2>
           </div>
 
@@ -889,12 +741,12 @@ const Patients = () => {
                             src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
                             alt={patient.name} 
                             className="w-8 h-8 rounded-full object-cover"
-                            onError={(e) => {
+                            onError={(e) => { 
                               e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
                             }}
                           />
-                          <span
-                            onClick={() => handleViewDetails(patient)}
+                          <span 
+                            onClick={() => handleViewDetails(patient)} 
                             className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
                           >
                             {patient.name}
@@ -906,9 +758,9 @@ const Patients = () => {
                       <td className="px-6 py-4 text-gray-600">{patient.doctor || 'Not Assigned'}</td>
                       <td className="px-6 py-4 text-gray-600">{patient.lastVisitDisplay || 'N/A'}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs rounded-full ${isInPatient ? "bg-purple-100 text-purple-600" : "bg-orange-100 text-orange-600"}`}>
+                        <Badge variant={isInPatient ? 'warning' : 'info'} className="text-xs">
                           {isInPatient ? "In Patient" : "Out Patient"}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <RowActionMenu patient={patient} />
@@ -934,7 +786,7 @@ const Patients = () => {
                   className={`px-3 py-1 border rounded-md text-sm transition-all ${
                     currentPage === 1
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                   }`}
                 >
                   Previous
@@ -948,7 +800,7 @@ const Patients = () => {
                   className={`px-3 py-1 border rounded-md text-sm transition-all ${
                     currentPage === totalPages || totalPages === 0
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
                   }`}
                 >
                   Next

@@ -1,10 +1,14 @@
+// src/components/Laboratory/LaboratoryRegistrationForm.jsx - Complete with UI components and S3 upload
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Building, Phone, Mail, MapPin, Lock, AlertCircle, 
-  ArrowLeft, Globe, Clock, FileText, PhoneCall, MapPinned, 
-  ChevronDown, CheckCircle 
+  ArrowLeft, Globe, Clock, FileText, PhoneCall, MapPinned,
+  Upload, X
 } from 'lucide-react';
+import { 
+  Button, Input, Select, Textarea, Card, Alert, Tabs, Checkbox 
+} from '../ui';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -13,13 +17,7 @@ const LaboratoryRegistrationForm = () => {
   
   const [formData, setFormData] = useState({
     name: '',
-    address: {
-      country: '',
-      state: '',
-      district: '',
-      place: '',
-      pincode: '',
-    },
+    address: { country: '', state: '', district: '', place: '', pincode: '' },
     phone: '',
     emergencyContact: '',
     email: '',
@@ -29,12 +27,7 @@ const LaboratoryRegistrationForm = () => {
     longitude: '',
     about: '',
     web: '',
-    working_hours: daysOfWeek.map(day => ({
-      day,
-      open: '09:00',
-      close: '17:00',
-      is_holiday: false,
-    })),
+    working_hours: daysOfWeek.map(day => ({ day, open: '09:00', close: '17:00', is_holiday: false })),
   });
 
   const [profileImage, setProfileImage] = useState(null);
@@ -43,8 +36,24 @@ const LaboratoryRegistrationForm = () => {
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Validation functions
+  // Mock S3 upload function - replace with actual AWS SDK implementation
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          const mockS3Url = `https://your-bucket.s3.amazonaws.com/lab-images/${Date.now()}-${file.name}`;
+          resolve(mockS3Url);
+        }
+      }, 200);
+    });
+  };
+
   const validateField = (name, value) => {
     switch (name) {
       case 'name':
@@ -52,26 +61,21 @@ const LaboratoryRegistrationForm = () => {
         if (value.length < 3) return 'Name must be at least 3 characters';
         if (value.length > 100) return 'Name must be less than 100 characters';
         return '';
-
       case 'phone':
         if (!value) return 'Phone number is required';
         const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,4}[-\s\.]?[0-9]{3,4}$/;
         if (!phoneRegex.test(value)) return 'Please enter a valid phone number';
         return '';
-
       case 'emergencyContact':
         if (!value) return 'Emergency contact is required';
         if (!phoneRegex.test(value)) return 'Please enter a valid emergency contact number';
         return '';
-
       case 'email':
         if (value) {
           const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
           if (!emailRegex.test(value)) return 'Please enter a valid email address';
-          if (value.length > 100) return 'Email must be less than 100 characters';
         }
         return '';
-
       case 'password':
         if (value) {
           if (value.length < 8) return 'Password must be at least 8 characters';
@@ -80,40 +84,33 @@ const LaboratoryRegistrationForm = () => {
           if (!/[0-9]/.test(value)) return 'Password must contain at least one number';
         }
         return '';
-
       case 'confirmPassword':
         if (formData.password && value !== formData.password) return 'Passwords do not match';
         if (formData.password && !value) return 'Please confirm your password';
         return '';
-
       case 'address.place':
         if (!value) return 'Address is required';
         if (value.length < 5) return 'Please enter a complete address';
         return '';
-
       case 'address.pincode':
         if (!value) return 'Pincode is required';
         if (!/^\d{5,6}$/.test(String(value))) return 'Pincode must be 5 or 6 digits';
         return '';
-
       case 'latitude':
         if (!value && value !== 0) return 'Latitude is required';
         if (isNaN(value)) return 'Latitude must be a number';
         if (parseFloat(value) < -90 || parseFloat(value) > 90) return 'Latitude must be between -90 and 90';
         return '';
-
       case 'longitude':
         if (!value && value !== 0) return 'Longitude is required';
         if (isNaN(value)) return 'Longitude must be a number';
         if (parseFloat(value) < -180 || parseFloat(value) > 180) return 'Longitude must be between -180 and 180';
         return '';
-
       case 'about':
         if (!value) return 'About section is required';
         if (value.length < 50) return 'Please provide at least 50 characters describing the laboratory';
         if (value.length > 2000) return 'About section must be less than 2000 characters';
         return '';
-
       default:
         return '';
     }
@@ -121,39 +118,32 @@ const LaboratoryRegistrationForm = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
-    // Required fields
     const requiredFields = ['name', 'phone', 'emergencyContact', 'about'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
 
-    // Address fields
     const addressPlaceError = validateField('address.place', formData.address.place);
     if (addressPlaceError) newErrors['address.place'] = addressPlaceError;
     
     const pincodeError = validateField('address.pincode', formData.address.pincode);
     if (pincodeError) newErrors['address.pincode'] = pincodeError;
 
-    // Location fields
     const latError = validateField('latitude', formData.latitude);
     if (latError) newErrors.latitude = latError;
     
     const lngError = validateField('longitude', formData.longitude);
     if (lngError) newErrors.longitude = lngError;
 
-    // Email if provided
     if (formData.email) {
       const emailError = validateField('email', formData.email);
       if (emailError) newErrors.email = emailError;
     }
 
-    // Password if provided
     if (formData.password) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
-      
       const confirmError = validateField('confirmPassword', formData.confirmPassword);
       if (confirmError) newErrors.confirmPassword = confirmError;
     }
@@ -164,20 +154,12 @@ const LaboratoryRegistrationForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
-      }));
+      setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [child]: value } }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-    
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -192,43 +174,62 @@ const LaboratoryRegistrationForm = () => {
   };
 
   const handleWorkingHoursChange = (index, field, value) => {
-    const updatedHours = [...(formData.working_hours || [])];
+    const updatedHours = [...formData.working_hours];
     updatedHours[index] = { ...updatedHours[index], [field]: value };
     setFormData(prev => ({ ...prev, working_hours: updatedHours }));
   };
 
-  const handleImageChange = (e) => {
+  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      return false;
+    }
+    
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setUploadProgress(0);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+    
+    try {
+      const s3Url = await uploadToS3(file);
+      setProfileImage(s3Url);
+      setUploadProgress(100);
+      return true;
+    } catch (error) {
+      console.error('S3 upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      setPreviewImage(null);
+      return false;
+    }
+  };
+
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-        return;
-      }
-      
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, and GIF files are allowed' }));
-        return;
-      }
-      
-      setErrors(prev => ({ ...prev, profileImage: '' }));
-      setProfileImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setPreviewImage(reader.result);
-      reader.readAsDataURL(file);
+      handleImageUpload(file);
     }
   };
 
   const removeImage = () => {
     setProfileImage(null);
     setPreviewImage(null);
+    setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Mark all fields as touched
     const allFields = ['name', 'phone', 'emergencyContact', 'about', 'address.place', 'address.pincode', 'latitude', 'longitude'];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
@@ -236,15 +237,8 @@ const LaboratoryRegistrationForm = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
-      
-      // Simulate API call
       setTimeout(() => {
-        console.log('Form submitted successfully:', formData);
-        
-        // Get existing labs from localStorage
         const existingLabs = JSON.parse(localStorage.getItem('laboratories') || '[]');
-        
-        // Create new lab object
         const newLab = {
           id: Date.now(),
           name: formData.name,
@@ -257,22 +251,14 @@ const LaboratoryRegistrationForm = () => {
           tests: 0,
           createdAt: new Date().toISOString(),
         };
-        
-        // Save to localStorage
-        const updatedLabs = [...existingLabs, newLab];
-        localStorage.setItem('laboratories', JSON.stringify(updatedLabs));
-        
+        localStorage.setItem('laboratories', JSON.stringify([...existingLabs, newLab]));
         alert('Laboratory registered successfully!');
         setIsSubmitting(false);
-        
-        // Navigate back to labs list
         navigate('/laboratories');
       }, 1000);
     } else {
       const firstError = document.querySelector('.error-message');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -282,148 +268,16 @@ const LaboratoryRegistrationForm = () => {
     }
   };
 
-  // Helper function to get nested value
-  const getNestedValue = (obj, path) => {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
-  };
-
-  // Reusable Input Component
-  const InputField = ({ label, name, type = "text", required = true, icon: Icon, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    const value = name.includes('.') 
-      ? getNestedValue(formData, name)
-      : formData[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="relative">
-          {Icon && (
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Icon className={`h-4 w-4 ${hasError ? 'text-red-400' : 'text-gray-400'}`} />
-            </div>
-          )}
-          <input
-            type={type}
-            name={name}
-            value={value || ''}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-3 py-2 ${Icon ? 'pl-9' : 'pl-3'} pr-3 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm
-              ${hasError 
-                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                : touched[name] && !errors[name] && value
-                  ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
-                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-              }`}
-            placeholder={placeholder}
-          />
-          {hasError && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            </div>
-          )}
-        </div>
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-        {touched[name] && !errors[name] && value && (
-          <p className="text-xs text-green-500 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" /> Valid
-          </p>
-        )}
-      </div>
-    );
-  };
-
-  const SelectField = ({ label, name, required = true, options, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    const value = name.includes('.') 
-      ? getNestedValue(formData, name)
-      : formData[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="relative">
-          <select
-            name={name}
-            value={value || ''}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm appearance-none
-              ${hasError 
-                ? 'border-red-500 focus:ring-red-500' 
-                : touched[name] && !errors[name] && value
-                  ? 'border-green-500 focus:ring-green-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
-          >
-            <option value="">{placeholder || `Select ${label}`}</option>
-            {options.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-        </div>
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-      </div>
-    );
-  };
-
-  const TextAreaField = ({ label, name, required = false, rows = 3, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    const value = formData[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <textarea
-          name={name}
-          value={value || ''}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          rows={rows}
-          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm resize-vertical
-            ${hasError 
-              ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 focus:ring-blue-500'
-            }`}
-          placeholder={placeholder}
-        />
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-        {touched[name] && !errors[name] && value && value.length > 0 && (
-          <p className="text-xs text-green-500 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" /> {value.length} characters
-          </p>
-        )}
-      </div>
-    );
-  };
+  const getNestedValue = (obj, path) => path.split('.').reduce((current, key) => current?.[key], obj);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
-        {/* Header with Back Button */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <button
-              onClick={handleGoBack}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              title="Go back to Laboratories List"
-            >
+            <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
               <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </button>
+            </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Add New Laboratory</h1>
               <p className="text-sm text-gray-500 mt-1">Register a new diagnostic lab in the system</p>
@@ -432,99 +286,129 @@ const LaboratoryRegistrationForm = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Tabs */}
-          <div className="border-b border-gray-200 bg-white rounded-t-xl px-6 pt-4">
-            <nav className="-mb-px flex space-x-8">
-              {[
-                { id: 'basic', label: 'Basic Information', icon: Building },
-                { id: 'address', label: 'Address & Location', icon: MapPin },
-                { id: 'hours', label: 'Working Hours', icon: Clock },
-                { id: 'about', label: 'About', icon: FileText },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors
-                    ${activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }
-                  `}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
+          <Tabs 
+            tabs={[
+              { id: 'basic', label: 'Basic Information', icon: Building },
+              { id: 'address', label: 'Address & Location', icon: MapPin },
+              { id: 'hours', label: 'Working Hours', icon: Clock },
+              { id: 'about', label: 'About', icon: FileText },
+            ]}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
 
-          {/* Profile Image Section - Shown on all tabs */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Profile Image Section with S3 Upload */}
+          <Card>
             <div className="p-6">
-              <div className="flex items-start gap-6 flex-wrap md:flex-nowrap">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                 <div className="flex-shrink-0">
-                  <div className="w-28 h-28 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-gray-200">
-                    {previewImage ? (
-                      <img src={previewImage} alt="Lab logo" className="w-full h-full object-cover" />
-                    ) : (
-                      <Building className="w-10 h-10 text-gray-400" />
-                    )}
-                  </div>
-                  <div className="mt-3 text-center">
-                    <label className="text-sm text-[#1C62A0] cursor-pointer hover:text-[#1C62A0]">
-                      Upload Logo
-                      <input type="file" accept="image/jpeg,image/png,image/gif" className="hidden" onChange={handleImageChange} />
-                    </label>
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img src={previewImage} alt="Lab logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Building className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
                     {previewImage && (
-                      <button type="button" onClick={removeImage} className="text-sm text-red-500 ml-2 hover:text-red-600">
-                        Remove
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 text-center">JPEG, PNG, GIF. Max 5MB</p>
-                  {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-1 text-center">{errors.profileImage}</p>
-                  )}
                 </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Laboratory Logo</label>
+                  <div>
+                    <input
+                      id="logoImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('logoImageInput').click()}
+                      className="inline-flex items-center gap-2"
+                      disabled={isSubmitting}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Logo
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  
+                  {/* Upload Progress Bar */}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
+                  )}
+                  
+                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                </div>
+
                 <div className="flex-1">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 gap-5">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-500">Lab ID:</span>
                       <span className="text-sm font-medium text-gray-900">Auto-generated</span>
                     </div>
-                    <InputField 
-                      label="Laboratory Name" 
-                      name="name" 
-                      icon={Building} 
-                      placeholder="e.g., City Diagnostic Centre" 
-                    />
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Tab Content */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input 
+                    label="Laboratory Name" 
+                    name="name" 
+                    icon={Building} 
+                    placeholder="e.g., City Diagnostic Centre" 
+                    value={formData.name}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.name}
+                    touched={touched.name}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
             <div className="p-6">
               {/* Basic Information Tab */}
               {activeTab === 'basic' && (
                 <div className="space-y-5">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <InputField label="Phone Number" name="phone" icon={Phone} placeholder="+1 234 567 8900" />
-                    <InputField label="Emergency Contact" name="emergencyContact" icon={PhoneCall} placeholder="+1 234 567 8900" />
-                    <InputField label="Email Address" name="email" type="email" icon={Mail} placeholder="lab@example.com" required={false} />
-                    <InputField label="Website" name="web" icon={Globe} placeholder="https://www.labwebsite.com" required={false} />
+                    <Input label="Phone Number" name="phone" icon={Phone} placeholder="+1 234 567 8900" value={formData.phone} onChange={handleChange} onBlur={handleBlur} error={errors.phone} touched={touched.phone} required />
+                    <Input label="Emergency Contact" name="emergencyContact" icon={PhoneCall} placeholder="+1 234 567 8900" value={formData.emergencyContact} onChange={handleChange} onBlur={handleBlur} error={errors.emergencyContact} touched={touched.emergencyContact} required />
+                    <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="lab@example.com" required={false} value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} />
+                    <Input label="Website" name="web" icon={Globe} placeholder="https://www.labwebsite.com" required={false} value={formData.web} onChange={handleChange} onBlur={handleBlur} error={errors.web} touched={touched.web} />
                   </div>
-                  
                   <div className="border-t pt-5 mt-5">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Credentials (Optional)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <InputField label="Password" name="password" type="password" icon={Lock} placeholder="Create password" required={false} />
-                      <InputField label="Confirm Password" name="confirmPassword" type="password" icon={Lock} placeholder="Confirm password" required={false} />
+                      <Input label="Password" name="password" type="password" icon={Lock} placeholder="Create password" required={false} value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
+                      <Input label="Confirm Password" name="confirmPassword" type="password" icon={Lock} placeholder="Confirm password" required={false} value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
                     </div>
                   </div>
                 </div>
@@ -535,24 +419,17 @@ const LaboratoryRegistrationForm = () => {
                 <div className="space-y-5">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <SelectField 
-                      label="Country" 
-                      name="address.country" 
-                      required={false}
-                      options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']}
-                      placeholder="Select Country"
-                    />
-                    <InputField label="State" name="address.state" required={false} placeholder="State" />
-                    <InputField label="District" name="address.district" required={false} placeholder="District" />
-                    <InputField label="Place / Area" name="address.place" icon={MapPin} placeholder="Street, area, locality" />
-                    <InputField label="Pincode" name="address.pincode" type="text" placeholder="123456" />
+                    <Select label="Country" name="address.country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.address.country} onChange={handleChange} onBlur={handleBlur} error={errors['address.country']} touched={touched['address.country']} />
+                    <Input label="State" name="address.state" required={false} placeholder="State" value={formData.address.state} onChange={handleChange} onBlur={handleBlur} error={errors['address.state']} touched={touched['address.state']} />
+                    <Input label="District" name="address.district" required={false} placeholder="District" value={formData.address.district} onChange={handleChange} onBlur={handleBlur} error={errors['address.district']} touched={touched['address.district']} />
+                    <Input label="Place / Area" name="address.place" icon={MapPin} placeholder="Street, area, locality" value={formData.address.place} onChange={handleChange} onBlur={handleBlur} error={errors['address.place']} touched={touched['address.place']} required />
+                    <Input label="Pincode" name="address.pincode" placeholder="123456" value={formData.address.pincode} onChange={handleChange} onBlur={handleBlur} error={errors['address.pincode']} touched={touched['address.pincode']} required />
                   </div>
-
                   <div className="border-t pt-5 mt-5">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">GPS Coordinates</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <InputField label="Latitude" name="latitude" type="number" step="any" icon={MapPinned} placeholder="40.7128" />
-                      <InputField label="Longitude" name="longitude" type="number" step="any" icon={MapPinned} placeholder="-74.0060" />
+                      <Input label="Latitude" name="latitude" type="number" step="any" icon={MapPinned} placeholder="40.7128" value={formData.latitude} onChange={handleChange} onBlur={handleBlur} error={errors.latitude} touched={touched.latitude} required />
+                      <Input label="Longitude" name="longitude" type="number" step="any" icon={MapPinned} placeholder="-74.0060" value={formData.longitude} onChange={handleChange} onBlur={handleBlur} error={errors.longitude} touched={touched.longitude} required />
                     </div>
                     <p className="text-xs text-gray-500 mt-2">Coordinates help display the laboratory location on maps</p>
                   </div>
@@ -567,30 +444,12 @@ const LaboratoryRegistrationForm = () => {
                     {formData.working_hours.map((session, index) => (
                       <div key={session.day} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg flex-wrap">
                         <div className="w-28 font-medium text-gray-700 text-sm">{session.day}</div>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={session.is_holiday}
-                            onChange={(e) => handleWorkingHoursChange(index, 'is_holiday', e.target.checked)}
-                            className="w-4 h-4 text-[#1C62A0] rounded focus:ring-[#1C62A0]"
-                          />
-                          <span className="text-sm text-gray-600">Holiday</span>
-                        </label>
+                        <Checkbox label="Holiday" checked={session.is_holiday} onChange={(e) => handleWorkingHoursChange(index, 'is_holiday', e.target.checked)} />
                         {!session.is_holiday && (
                           <div className="flex items-center gap-2">
-                            <input
-                              type="time"
-                              value={session.open}
-                              onChange={(e) => handleWorkingHoursChange(index, 'open', e.target.value)}
-                              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0]"
-                            />
+                            <input type="time" value={session.open} onChange={(e) => handleWorkingHoursChange(index, 'open', e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1C62A0]" />
                             <span className="text-gray-500">to</span>
-                            <input
-                              type="time"
-                              value={session.close}
-                              onChange={(e) => handleWorkingHoursChange(index, 'close', e.target.value)}
-                              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0]"
-                            />
+                            <input type="time" value={session.close} onChange={(e) => handleWorkingHoursChange(index, 'close', e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1C62A0]" />
                           </div>
                         )}
                       </div>
@@ -603,47 +462,18 @@ const LaboratoryRegistrationForm = () => {
               {activeTab === 'about' && (
                 <div className="space-y-5">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Laboratory Information</h3>
-                  <TextAreaField 
-                    label="About the Laboratory" 
-                    name="about" 
-                    required={true}
-                    rows={6}
-                    placeholder="Write a detailed description about the laboratory including:"
-                  />
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-[#1C62A0] flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                      <span>Provide comprehensive information about your laboratory including types of tests offered, accreditations, equipment, sample collection services, home collection availability, and reporting time.</span>
-                    </p>
-                  </div>
+                  <Textarea label="About the Laboratory" name="about" required rows={6} placeholder="Write a detailed description about the laboratory including:" value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
+                  <Alert type="info" message="Provide comprehensive information about your laboratory including types of tests offered, accreditations, equipment, sample collection services, home collection availability, and reporting time." />
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-2">
-            <button 
-              type="button" 
-              className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={handleGoBack}
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-[#1C62A0] hover:bg-[#154a7d] text-white text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Registering...
-                </>
-              ) : (
-                'Register Laboratory'
-              )}
-            </button>
+            <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+              {isSubmitting ? 'Registering...' : 'Register Laboratory'}
+            </Button>
           </div>
         </form>
       </div>

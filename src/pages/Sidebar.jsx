@@ -1,3 +1,4 @@
+// src/components/Sidebar.jsx - With proper parent/child active states
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,20 +12,16 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
-  Activity,
-  CreditCard,
   Microscope,
   PlusCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const menu = [
   {
     title: "MAIN",
     items: [
       { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-      { label: "Applications", icon: Users, path: "/applications" },
-      { label: "Layouts", icon: Users, path: "/layouts" },
     ],
   },
   {
@@ -36,22 +33,23 @@ const menu = [
       {
         label: "Appointments",
         icon: CalendarDays,
-        children: [
-          { label: "Consultation", path: "/appointments/consultation" },
+        hasDropdown: true,
+        dropdownItems: [
+          { label: "Appointments List", icon: CalendarDays, path: "/appointments" },
+          { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation" },
         ],
       },
       { label: "Visits", icon: CalendarDays, path: "/visits" },
-      { 
-        label: "Laboratory", 
+      {
+        label: "Laboratory",
         icon: FlaskConical,
         hasDropdown: true,
         dropdownItems: [
           { label: "Register Lab", icon: PlusCircle, path: "/laboratory" },
           { label: "Lab Tests", icon: Microscope, path: "/lab/tests" },
           { label: "Lab Results", icon: FileText, path: "/lab/results" },
-        ]
+        ],
       },
-      { label: "Pharmacy", icon: Pill, path: "/pharmacy" },
     ],
   },
   {
@@ -71,23 +69,40 @@ export default function Sidebar({ sidebarOpen }) {
 
   const toggleDropdown = (label) => {
     setOpenDropdowns((prev) => ({
-      ...prev,
       [label]: !prev[label],
     }));
   };
 
+  // FIXED: Exact match for highlighting active items
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  const isDropdownItemActive = (dropdownItems) => {
-    return dropdownItems?.some(item => location.pathname === item.path);
+  // FIXED: Keep dropdown open if any child path matches (including nested routes)
+  const shouldKeepOpen = (dropdownItems) => {
+    return dropdownItems?.some(
+      (item) => location.pathname.startsWith(item.path)
+    );
   };
 
-  // Check if any dropdown item is active to keep dropdown open
-  const shouldKeepOpen = (dropdownItems) => {
-    return dropdownItems?.some(item => location.pathname === item.path);
+  // Check if any dropdown item is active for parent styling
+  const isDropdownItemActive = (dropdownItems) => {
+    return dropdownItems?.some(
+      (item) => location.pathname === item.path
+    );
   };
+
+  useEffect(() => {
+    const newOpenState = {};
+    menu.forEach((section) => {
+      section.items.forEach((item) => {
+        if (item.hasDropdown && shouldKeepOpen(item.dropdownItems)) {
+          newOpenState[item.label] = true;
+        }
+      });
+    });
+    setOpenDropdowns((prev) => ({ ...prev, ...newOpenState }));
+  }, [location.pathname]);
 
   return (
     <div
@@ -104,8 +119,8 @@ export default function Sidebar({ sidebarOpen }) {
         )}
       </div>
 
-      {/* Menu */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-6">
+      {/* Menu with custom scrollbar */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-slate-700">
         {menu.map((section) => (
           <div key={section.title}>
             {sidebarOpen && (
@@ -114,39 +129,39 @@ export default function Sidebar({ sidebarOpen }) {
 
             <div className="space-y-1">
               {section.items.map((item) => {
-                // For items with dropdown (Laboratory)
+                // For items with dropdown (Appointments, Laboratory)
                 if (item.hasDropdown) {
                   const dropdownActive = isDropdownItemActive(item.dropdownItems);
-                  // Keep dropdown open if any child is active
-                  const isOpen = openDropdowns[item.label] || dropdownActive;
-                  
+                  const isOpen = openDropdowns[item.label] || shouldKeepOpen(item.dropdownItems);
+
                   return (
                     <div key={item.label}>
+                      {/* Dropdown Button */}
                       <button
                         onClick={() => {
                           if (sidebarOpen) {
                             toggleDropdown(item.label);
+                          } else if (!sidebarOpen && item.dropdownItems?.[0]) {
+                            navigate(item.dropdownItems[0].path);
                           }
                         }}
-                        className={`w-full flex items-center justify-between ${
-                          sidebarOpen ? "px-3" : "justify-center"
-                        } py-2 rounded-md text-sm transition
+                        className={`
+                          w-full h-12 flex items-center justify-between
+                          ${sidebarOpen ? "px-3" : "justify-center"}
+                          rounded-md text-sm transition
                           ${
                             dropdownActive
-                              ? "bg-blue-600 text-white"
+                              ? "bg-slate-700 text-white"  // Softer active state when child is active
                               : "text-gray-300 hover:bg-slate-700"
-                          }`}
+                          }
+                        `}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className={`flex items-center ${sidebarOpen ? "gap-3" : "justify-center w-full"}`}>
                           <item.icon size={18} />
                           {sidebarOpen && item.label}
                         </div>
                         {sidebarOpen && (
-                          isOpen ? (
-                            <ChevronDown size={16} />
-                          ) : (
-                            <ChevronRight size={16} />
-                          )
+                          isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                         )}
                       </button>
 
@@ -160,18 +175,21 @@ export default function Sidebar({ sidebarOpen }) {
                                 key={dropdownItem.path}
                                 to={dropdownItem.path}
                                 onClick={() => {
-                                  // Keep dropdown open when navigating
-                                  setOpenDropdowns(prev => ({
+                                  setOpenDropdowns((prev) => ({
                                     ...prev,
-                                    [item.label]: true
+                                    [item.label]: true,
                                   }));
                                 }}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition
+                                className={`
+                                  w-full h-12 flex items-center
+                                  ${sidebarOpen ? "px-3 gap-3 justify-start" : "justify-center"}
+                                  rounded-md text-sm transition relative group
                                   ${
                                     dropdownItemActive
-                                      ? "bg-blue-600/50 text-white"
+                                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md" // Bright blue for exact match
                                       : "text-gray-400 hover:bg-slate-700 hover:text-gray-200"
-                                  }`}
+                                  }
+                                `}
                               >
                                 <dropdownItem.icon size={16} />
                                 {dropdownItem.label}
@@ -184,7 +202,7 @@ export default function Sidebar({ sidebarOpen }) {
                       {/* Collapsed sidebar tooltip */}
                       {!sidebarOpen && (
                         <div className="relative group">
-                          <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50">
+                          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50 shadow-lg">
                             {item.label}
                           </div>
                         </div>
@@ -193,79 +211,30 @@ export default function Sidebar({ sidebarOpen }) {
                   );
                 }
 
-                // For items with children (Appointments)
-                if (item.children) {
-                  const isOpen = openDropdowns[item.label];
-                  
-                  return (
-                    <div key={item.label}>
-                      <button
-                        onClick={() => sidebarOpen && toggleDropdown(item.label)}
-                        className={`w-full flex items-center justify-between ${
-                          sidebarOpen ? "px-3" : "justify-center"
-                        } py-2 rounded-md text-sm transition text-gray-300 hover:bg-slate-700`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <item.icon size={18} />
-                          {sidebarOpen && item.label}
-                        </div>
-                        {sidebarOpen && (
-                          isOpen ? (
-                            <ChevronDown size={16} />
-                          ) : (
-                            <ChevronRight size={16} />
-                          )
-                        )}
-                      </button>
-
-                      {/* Dropdown Items */}
-                      {sidebarOpen && isOpen && (
-                        <div className="ml-6 mt-1 space-y-1">
-                          {item.children.map((child) => {
-                            const active = isActive(child.path);
-                            return (
-                              <Link
-                                key={child.path}
-                                to={child.path}
-                                className={`block px-3 py-2 rounded-md text-sm transition
-                                  ${
-                                    active
-                                      ? "bg-blue-600 text-white"
-                                      : "text-gray-400 hover:bg-slate-700 hover:text-gray-200"
-                                  }`}
-                              >
-                                {child.label}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
                 // Regular items without dropdown
                 const active = isActive(item.path);
-                
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center ${
-                      sidebarOpen ? "gap-3 px-3" : "justify-center"
-                    } py-2 rounded-md text-sm transition relative group
-                    ${
-                      active
-                        ? "bg-blue-600 text-white"
-                        : "text-gray-300 hover:bg-slate-700"
-                    }`}
+                    className={`
+                      w-full h-12 flex items-center
+                      ${sidebarOpen ? "px-3 gap-3 justify-start" : "justify-center"}
+                      rounded-md text-sm transition relative group
+                      ${
+                        active
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+                          : "text-gray-300 hover:bg-slate-700"
+                      }
+                    `}
                   >
                     <item.icon size={18} />
                     {sidebarOpen && item.label}
-                    
+
                     {/* Tooltip for collapsed sidebar */}
                     {!sidebarOpen && (
-                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50">
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50 shadow-lg">
                         {item.label}
                       </div>
                     )}

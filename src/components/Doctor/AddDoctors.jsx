@@ -1,6 +1,13 @@
+// src/components/Doctor/AddDoctor.jsx - Complete with all UI components
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Calendar, MapPin, Lock, Image, DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X } from 'lucide-react';
+import { 
+  User, Mail, Phone, Calendar, MapPin, Lock, Image, 
+  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X 
+} from 'lucide-react';
+import { 
+  Button, Input, Select, Textarea, Card, Alert, Loader 
+} from '../ui';
 
 const AddDoctor = () => {
   const navigate = useNavigate();
@@ -151,7 +158,6 @@ const AddDoctor = () => {
     if (formData.password) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
-      
       const confirmError = validateField('confirmPassword', formData.confirmPassword);
       if (confirmError) newErrors.confirmPassword = confirmError;
     }
@@ -163,7 +169,6 @@ const AddDoctor = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -177,38 +182,28 @@ const AddDoctor = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  // Standard image upload handler
   const handleImageUpload = (file) => {
     if (!file) return;
-    
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
       return false;
     }
-    
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
       return false;
     }
-    
     setErrors(prev => ({ ...prev, profileImage: '' }));
     setFormData(prev => ({ ...prev, profileImage: file }));
-    
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
     return true;
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      handleImageUpload(file);
-    }
+    if (file) handleImageUpload(file);
   };
 
   const removeImage = () => {
@@ -219,7 +214,6 @@ const AddDoctor = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     const allFields = [
       'firstName', 'lastName', 'department', 'specialist', 'fees', 
       'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 
@@ -231,12 +225,8 @@ const AddDoctor = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
-      
       setTimeout(() => {
-        console.log('Form submitted successfully:', formData);
-        
         const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
-        
         const newDoctor = {
           id: existingDoctors.length + 1,
           name: `Dr. ${formData.firstName} ${formData.lastName}`,
@@ -247,19 +237,15 @@ const AddDoctor = () => {
           phone: formData.phoneNumber,
           photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`
         };
-        
         const updatedDoctors = [...existingDoctors, newDoctor];
         localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
-        
         alert('Doctor added successfully!');
         setIsSubmitting(false);
         navigate('/doctors');
       }, 1000);
     } else {
       const firstError = document.querySelector('.error-message');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -269,9 +255,7 @@ const AddDoctor = () => {
     const today = new Date();
     let experience = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      experience--;
-    }
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) experience--;
     const experienceYears = Math.max(0, experience - 25);
     return `${experienceYears}+ Years`;
   };
@@ -282,125 +266,14 @@ const AddDoctor = () => {
     }
   };
 
-  const InputField = ({ label, name, type = "text", required = true, icon: Icon, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="relative">
-          {Icon && (
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Icon className={`h-4 w-4 ${hasError ? 'text-red-400' : 'text-gray-400'}`} />
-            </div>
-          )}
-          <input
-            type={type}
-            name={name}
-            value={formData[name]}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-3 py-2 ${Icon ? 'pl-9' : 'pl-3'} pr-3 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm
-              ${hasError 
-                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                : touched[name] && !errors[name]
-                  ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
-                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-              }`}
-            placeholder={placeholder}
-          />
-          {hasError && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            </div>
-          )}
-        </div>
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-        {touched[name] && !errors[name] && formData[name] && (
-          <p className="text-xs text-green-500">✓ Valid</p>
-        )}
-      </div>
-    );
-  };
-
-  const SelectField = ({ label, name, required = true, options, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <select
-          name={name}
-          value={formData[name]}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm
-            ${hasError 
-              ? 'border-red-500 focus:ring-red-500' 
-              : touched[name] && !errors[name] && formData[name]
-                ? 'border-green-500 focus:ring-green-500'
-                : 'border-gray-300 focus:ring-blue-500'
-            }`}
-        >
-          <option value="">{placeholder || `Select ${label}`}</option>
-          {options.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-      </div>
-    );
-  };
-
-  const TextAreaField = ({ label, name, required = false, rows = 3, placeholder }) => {
-    const hasError = errors[name] && touched[name];
-    
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <textarea
-          name={name}
-          value={formData[name]}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          rows={rows}
-          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:outline-none transition-all duration-200 text-sm
-            ${hasError 
-              ? 'border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 focus:ring-blue-500'
-            }`}
-          placeholder={placeholder}
-        />
-        {hasError && (
-          <p className="text-xs text-red-500 error-message">{errors[name]}</p>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
-        {/* Header with Back Button */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <button
-              onClick={handleGoBack}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              title="Go back to Doctors List"
-            >
+            <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
               <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </button>
+            </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Add New Doctor</h1>
               <p className="text-sm text-gray-500 mt-1">Create a new doctor profile in the system</p>
@@ -410,14 +283,14 @@ const AddDoctor = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information Card */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <Card>
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
               <p className="text-sm text-gray-500 mt-0.5">Doctor's personal and professional details</p>
             </div>
             
             <div className="p-6 space-y-6">
-              {/* STANDARD BUTTON IMAGE UPLOAD SECTION - CHANGED */}
+              {/* Image Upload Section */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="relative">
@@ -429,47 +302,22 @@ const AddDoctor = () => {
                       )}
                     </div>
                     {previewImage && (
-                      <button
-                        type="button"
-                        onClick={removeImage}
-                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
-                      >
+                      <button type="button" onClick={removeImage} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm">
                         <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
                 </div>
-                
                 <div className="flex-1 w-full">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Profile Image
-                  </label>
-                  
-                  {/* STANDARD BUTTON - NO DRAG & DROP ZONE */}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
                   <div>
-                    <input
-                      id="profileImageInput"
-                      type="file"
-                      accept="image/jpeg,image/png,image/gif,image/webp"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('profileImageInput').click()}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload Image
-                    </button>
-                    <p className="text-xs text-gray-400 mt-2">
-                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
-                    </p>
+                    <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
+                    <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2">
+                      <Upload className="h-4 w-4" /> Upload Image
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                   </div>
-                  
-                  {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-2">{errors.profileImage}</p>
-                  )}
+                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                 </div>
               </div>
 
@@ -481,103 +329,74 @@ const AddDoctor = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <InputField label="First Name" name="firstName" icon={User} placeholder="Enter first name" />
-                <InputField label="Last Name" name="lastName" icon={User} placeholder="Enter last name" />
+                <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
+                <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <SelectField 
-                  label="Department" 
-                  name="department" 
-                  options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']}
-                  placeholder="Select Department"
-                />
-                <InputField label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" />
+                <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']} placeholder="Select Department" value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
+                <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <InputField label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" />
-                <InputField label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" />
-                <InputField label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" />
+                <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
+                <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
+                <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <InputField label="Date of Birth" name="dob" type="date" icon={Calendar} />
-                <SelectField label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" />
-                <InputField label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" />
+                <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
+                <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
+                <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <SelectField 
-                  label="Known Languages" 
-                  name="knownLanguages" 
-                  options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']}
-                  placeholder="Select Language"
-                />
+                <Select label="Known Languages" name="knownLanguages" options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']} placeholder="Select Language" value={formData.knownLanguages} onChange={handleChange} onBlur={handleBlur} error={errors.knownLanguages} touched={touched.knownLanguages} required />
               </div>
 
-              <TextAreaField label="About" name="about" rows="3" placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." />
+              <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
             </div>
-          </div>
+          </Card>
 
           {/* Address Information Card */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <Card>
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h2 className="text-lg font-semibold text-gray-900">Address Information</h2>
               <p className="text-sm text-gray-500 mt-0.5">Clinic or hospital address details</p>
             </div>
-            
             <div className="p-6 space-y-5">
-              <InputField label="Address" name="address" icon={MapPin} required={true} placeholder="Street address" />
-              
+              <Input label="Address" name="address" icon={MapPin} placeholder="Street address" value={formData.address} onChange={handleChange} onBlur={handleBlur} error={errors.address} touched={touched.address} required />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <SelectField 
-                  label="Country" 
-                  name="country" 
-                  required={false}
-                  options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']}
-                  placeholder="Select Country"
-                />
-                <InputField label="State" name="state" required={false} placeholder="State" />
-                <InputField label="City" name="city" required={false} placeholder="City" />
-                <InputField label="Pin Code" name="pinCode" required={false} placeholder="Postal code" />
+                <Select label="Country" name="country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
+                <Input label="State" name="state" required={false} placeholder="State" value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
+                <Input label="City" name="city" required={false} placeholder="City" value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
+                <Input label="Pin Code" name="pinCode" required={false} placeholder="Postal code" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} />
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Account Details Card */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <Card>
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h2 className="text-lg font-semibold text-gray-900">Account Details</h2>
               <p className="text-sm text-gray-500 mt-0.5">Login credentials for the doctor portal</p>
             </div>
-            
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <InputField label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" />
-                <InputField label="Username" name="userName" required={false} icon={User} placeholder="Unique username" />
-                <InputField label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" />
-                <InputField label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" />
+                <Input label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} />
+                <Input label="Username" name="userName" required={false} icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} />
+                <Input label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
+                <Input label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-2">
-            <button 
-              type="button" 
-              className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={handleGoBack}
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-[#1C62A0] hover:bg-[#154a7d] text-white text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
               {isSubmitting ? 'Saving...' : 'Save Doctor'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
