@@ -4,7 +4,7 @@ import {
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   AlertCircle, ArrowLeft, Heart, Users, 
   FileText, Briefcase, Clock, ChevronRight, Home,
-  Activity, Shield, Baby, AlertTriangle, Save
+  Activity, Shield, Baby, AlertTriangle, Save, Upload, X
 } from 'lucide-react';
 
 const EditPatient = () => {
@@ -50,6 +50,30 @@ const EditPatient = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [originalPatientId, setOriginalPatientId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Mock S3 upload function - replace with actual AWS SDK implementation
+  const uploadToS3 = async (file) => {
+    // This is a mock implementation. Replace with actual S3 upload logic.
+    // For production, you would typically:
+    // 1. Get a pre-signed URL from your backend
+    // 2. Upload directly to S3 using that URL
+    
+    return new Promise((resolve, reject) => {
+      // Simulate upload progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          // Return a mock S3 URL
+          const mockS3Url = `https://your-bucket.s3.amazonaws.com/patient-images/${Date.now()}-${file.name}`;
+          resolve(mockS3Url);
+        }
+      }, 200);
+    });
+  };
 
   // Populate form data when patient prop changes
   useEffect(() => {
@@ -204,29 +228,56 @@ const EditPatient = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  const handleImageChange = (e) => {
+  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      return false;
+    }
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setUploadProgress(0);
+    
+    // Create preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+    
+    // Upload to S3
+    try {
+      const s3Url = await uploadToS3(file);
+      setFormData(prev => ({ ...prev, profileImage: s3Url }));
+      setUploadProgress(100);
+      return true;
+    } catch (error) {
+      console.error('S3 upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      setPreviewImage(patientFromState?.imageUrl || null);
+      return false;
+    }
+  };
+
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-        return;
-      }
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, and GIF files are allowed' }));
-        return;
-      }
-      setErrors(prev => ({ ...prev, profileImage: '' }));
-      setFormData(prev => ({ ...prev, profileImage: file }));
-      const reader = new FileReader();
-      reader.onloadend = () => setPreviewImage(reader.result);
-      reader.readAsDataURL(file);
+      handleImageUpload(file);
     }
   };
 
   const removeImage = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
+    setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
@@ -282,7 +333,8 @@ const EditPatient = () => {
           chronicConditions: formData.chronicConditions,
           occupation: formData.occupation,
           email: formData.email,
-          imageUrl: previewImage || patientFromState.imageUrl
+          // Use S3 URL if new image uploaded, otherwise keep existing
+          imageUrl: formData.profileImage || previewImage || patientFromState.imageUrl
         };
         
         // Get existing patients from localStorage
@@ -455,33 +507,72 @@ const EditPatient = () => {
             </div>
             
             <div className="p-6 space-y-6">
-              {/* Profile Image */}
-              <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-lg">
+              {/* STANDARD BUTTON IMAGE UPLOAD SECTION - LIKE ADD DOCTOR */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
-                  <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden">
-                    {previewImage ? (
-                      <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <User className="h-8 w-8 text-gray-400" />
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Profile Image</label>
-                  <div className="flex gap-3">
-                    <label className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
-                      Upload Image
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                    </label>
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <Image className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
                     {previewImage && (
-                      <button type="button" onClick={removeImage} className="px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
-                        Remove
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF accepted. Max 5MB</p>
+                </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Profile Image
+                  </label>
+                  
+                  {/* STANDARD BUTTON - NO DRAG & DROP ZONE */}
+                  <div>
+                    <input
+                      id="profileImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('profileImageInput').click()}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
+                      disabled={isSubmitting}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload New Image
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  
+                  {/* Upload Progress Bar */}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
+                  )}
+                  
                   {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-1">{errors.profileImage}</p>
+                    <p className="text-xs text-red-500 mt-2">{errors.profileImage}</p>
                   )}
                 </div>
               </div>
@@ -633,6 +724,7 @@ const EditPatient = () => {
               type="button" 
               className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               onClick={handleGoBack}
+              disabled={isSubmitting}
             >
               Cancel
             </button>

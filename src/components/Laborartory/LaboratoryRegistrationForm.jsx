@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Building, Phone, Mail, MapPin, Lock, AlertCircle, 
   ArrowLeft, Globe, Clock, FileText, PhoneCall, MapPinned, 
-  ChevronDown, CheckCircle 
+  ChevronDown, CheckCircle, Upload, X
 } from 'lucide-react';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -43,6 +43,30 @@ const LaboratoryRegistrationForm = () => {
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Mock S3 upload function - replace with actual AWS SDK implementation
+  const uploadToS3 = async (file) => {
+    // This is a mock implementation. Replace with actual S3 upload logic.
+    // For production, you would typically:
+    // 1. Get a pre-signed URL from your backend
+    // 2. Upload directly to S3 using that URL
+    
+    return new Promise((resolve, reject) => {
+      // Simulate upload progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          // Return a mock S3 URL
+          const mockS3Url = `https://your-bucket.s3.amazonaws.com/lab-images/${Date.now()}-${file.name}`;
+          resolve(mockS3Url);
+        }
+      }, 200);
+    });
+  };
 
   // Validation functions
   const validateField = (name, value) => {
@@ -197,31 +221,56 @@ const LaboratoryRegistrationForm = () => {
     setFormData(prev => ({ ...prev, working_hours: updatedHours }));
   };
 
-  const handleImageChange = (e) => {
+  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      return false;
+    }
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setUploadProgress(0);
+    
+    // Create preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+    
+    // Upload to S3
+    try {
+      const s3Url = await uploadToS3(file);
+      setProfileImage(s3Url);
+      setUploadProgress(100);
+      return true;
+    } catch (error) {
+      console.error('S3 upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      setPreviewImage(null);
+      return false;
+    }
+  };
+
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-        return;
-      }
-      
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, and GIF files are allowed' }));
-        return;
-      }
-      
-      setErrors(prev => ({ ...prev, profileImage: '' }));
-      setProfileImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setPreviewImage(reader.result);
-      reader.readAsDataURL(file);
+      handleImageUpload(file);
     }
   };
 
   const removeImage = () => {
     setProfileImage(null);
     setPreviewImage(null);
+    setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
@@ -460,47 +509,95 @@ const LaboratoryRegistrationForm = () => {
             </nav>
           </div>
 
-          {/* Profile Image Section - Shown on all tabs */}
+          {/* Profile Image Section - Updated with S3 upload button style */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6">
-              <div className="flex items-start gap-6 flex-wrap md:flex-nowrap">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                 <div className="flex-shrink-0">
-                  <div className="w-28 h-28 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-gray-200">
-                    {previewImage ? (
-                      <img src={previewImage} alt="Lab logo" className="w-full h-full object-cover" />
-                    ) : (
-                      <Building className="w-10 h-10 text-gray-400" />
-                    )}
-                  </div>
-                  <div className="mt-3 text-center">
-                    <label className="text-sm text-[#1C62A0] cursor-pointer hover:text-[#1C62A0]">
-                      Upload Logo
-                      <input type="file" accept="image/jpeg,image/png,image/gif" className="hidden" onChange={handleImageChange} />
-                    </label>
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img src={previewImage} alt="Lab logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Building className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
                     {previewImage && (
-                      <button type="button" onClick={removeImage} className="text-sm text-red-500 ml-2 hover:text-red-600">
-                        Remove
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 text-center">JPEG, PNG, GIF. Max 5MB</p>
+                </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Laboratory Logo
+                  </label>
+                  
+                  {/* STANDARD BUTTON - NO DRAG & DROP ZONE */}
+                  <div>
+                    <input
+                      id="logoImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('logoImageInput').click()}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
+                      disabled={isSubmitting}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Logo
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  
+                  {/* Upload Progress Bar */}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
+                  )}
+                  
                   {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-1 text-center">{errors.profileImage}</p>
+                    <p className="text-xs text-red-500 mt-2">{errors.profileImage}</p>
                   )}
                 </div>
+
                 <div className="flex-1">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 gap-5">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-500">Lab ID:</span>
                       <span className="text-sm font-medium text-gray-900">Auto-generated</span>
                     </div>
-                    <InputField 
-                      label="Laboratory Name" 
-                      name="name" 
-                      icon={Building} 
-                      placeholder="e.g., City Diagnostic Centre" 
-                    />
                   </div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputField 
+                    label="Laboratory Name" 
+                    name="name" 
+                    icon={Building} 
+                    placeholder="e.g., City Diagnostic Centre" 
+                  />
                 </div>
               </div>
             </div>

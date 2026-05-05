@@ -51,7 +51,7 @@ const menu = [
           { label: "Lab Results", icon: FileText, path: "/lab/results" },
         ]
       },
-      { label: "Pharmacy", icon: Pill, path: "/pharmacy" },
+      // { label: "Pharmacy", icon: Pill, path: "/pharmacy" },
     ],
   },
   {

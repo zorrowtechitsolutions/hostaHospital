@@ -1,7 +1,7 @@
 // EditStaff.jsx - Fixed to handle encoded IDs with # symbol
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ChevronRight, Save, X, Trash2, AlertCircle } from 'lucide-react';
+import { ChevronRight, Save, X, Trash2, AlertCircle, Upload, Image as ImageIcon } from 'lucide-react';
 
 const EditStaff = () => {
   const navigate = useNavigate();
@@ -14,6 +14,8 @@ const EditStaff = () => {
   const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewImage, setPreviewImage] = useState(null);
   
   const [formData, setFormData] = useState({
     // Basic Info
@@ -34,7 +36,7 @@ const EditStaff = () => {
     country: '',
     pinCode: '',
     status: true,
-    profileImage: 'https://i.pravatar.cc/80',
+    profileImage: null,
     
     // Salary Info
     netSalary: '',
@@ -53,10 +55,25 @@ const EditStaff = () => {
     otherDeductions: ''
   });
 
+  // Mock S3 upload function - replace with actual AWS SDK implementation
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          const mockS3Url = `https://your-bucket.s3.amazonaws.com/staff-images/${Date.now()}-${file.name}`;
+          resolve(mockS3Url);
+        }
+      }, 200);
+    });
+  };
+
   // Load staff data
   useEffect(() => {
     const loadStaff = () => {
-      // Decode the ID from URL
       let decodedId = id;
       try {
         decodedId = decodeURIComponent(id);
@@ -64,7 +81,6 @@ const EditStaff = () => {
         decodedId = id;
       }
       
-      // First try to get from location state
       if (location.state?.staff) {
         const staff = location.state.staff;
         populateFormData(staff);
@@ -72,7 +88,6 @@ const EditStaff = () => {
         return;
       }
 
-      // Otherwise load from localStorage
       const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
       const staff = storedStaffs.find(s => s.id === decodedId);
       if (staff) {
@@ -106,9 +121,8 @@ const EditStaff = () => {
       country: staff.country || '',
       pinCode: staff.pinCode || '',
       status: staff.status === 'Active',
-      profileImage: staff.imageUrl || 'https://i.pravatar.cc/80',
+      profileImage: staff.imageUrl || null,
       
-      // Salary Info
       netSalary: staff.salary?.replace('$', '') || '',
       basic: staff.salaryDetails?.earnings?.basic || '',
       da: staff.salaryDetails?.earnings?.da || '',
@@ -124,6 +138,62 @@ const EditStaff = () => {
       labourWelfare: staff.salaryDetails?.deductions?.labourWelfare || '',
       otherDeductions: staff.salaryDetails?.deductions?.others || ''
     });
+    setPreviewImage(staff.imageUrl || null);
+  };
+
+  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD (LIKE EDIT DOCTOR)
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      return false;
+    }
+    
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setUploadProgress(0);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+    
+    try {
+      const s3Url = await uploadToS3(file);
+      setFormData(prev => ({ ...prev, profileImage: s3Url }));
+      setUploadProgress(100);
+      return true;
+    } catch (error) {
+      console.error('S3 upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
+      const staff = storedStaffs.find(s => s.id === formData.id);
+      if (staff?.imageUrl) {
+        setPreviewImage(staff.imageUrl);
+      } else {
+        setPreviewImage(null);
+      }
+      return false;
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleImageUpload(file);
+    }
+  };
+
+  const removeImage = () => {
+    setFormData(prev => ({ ...prev, profileImage: null }));
+    setPreviewImage(null);
+    setUploadProgress(0);
+    setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
   // Validation functions
@@ -206,32 +276,6 @@ const EditStaff = () => {
     }));
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, profileImage: 'Image size must be less than 2MB' }));
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          profileImage: reader.result
-        }));
-        setErrors(prev => ({ ...prev, profileImage: '' }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setFormData(prev => ({
-      ...prev,
-      profileImage: 'https://i.pravatar.cc/80'
-    }));
-  };
-
   const validateForm = () => {
     const newErrors = {};
     const requiredFields = ['name', 'mobile', 'email', 'designation'];
@@ -285,7 +329,7 @@ const EditStaff = () => {
       email: formData.email,
       appointmentDate: formData.appointmentDate,
       appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      imageUrl: formData.profileImage,
+      imageUrl: formData.profileImage || previewImage,
       status: formData.status ? 'Active' : 'Inactive',
       jobType: formData.jobType,
       dob: formData.dob || 'N/A',
@@ -477,42 +521,74 @@ const EditStaff = () => {
 
           {activeTab === 'basic' && (
             <div className="p-6">
-              <div className="flex gap-4 mb-6 pb-6 border-b border-gray-200">
-                <img 
-                  src={formData.profileImage} 
-                  alt="Profile"
-                  className="w-20 h-20 rounded-lg object-cover"
-                />
-                <div>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif"
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
-                    id="imageUpload"
-                  />
-                  <button
-                    onClick={() => document.getElementById('imageUpload').click()}
-                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 mr-2"
-                  >
-                    Change Image
-                  </button>
-                  <button
-                    onClick={handleRemoveImage}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    Remove
-                  </button>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Use JPEG, PNG, or GIF. Best size: 200×200 pixels. Max 2MB.
-                  </p>
+              {/* CIRCULAR IMAGE UPLOAD SECTION - LIKE EDIT DOCTOR */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
+                    {previewImage && (
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Profile Image
+                  </label>
+                  
+                  <div>
+                    <input
+                      id="profileImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('profileImageInput').click()}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload New Image
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
+                  )}
+                  
                   {errors.profileImage && (
-                    <p className="text-xs text-red-500 mt-1">{errors.profileImage}</p>
+                    <p className="text-xs text-red-500 mt-2">{errors.profileImage}</p>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
                   <input
@@ -628,18 +704,18 @@ const EditStaff = () => {
           )}
 
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-  <button
-    onClick={() => navigate('/staffs')}
-    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2">
-    Cancel
-  </button>
-  <button
-    onClick={handleSubmit}
-    className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors flex items-center gap-2">
-          <Save size={16} />
-          Save Changes
-        </button>
-        </div>
+            <button
+              onClick={() => navigate('/staffs')}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2">
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154a7d] transition-colors flex items-center gap-2">
+              <Save size={16} />
+              Save Changes
+            </button>
+          </div>
         </div>
       </div>
     </div>
