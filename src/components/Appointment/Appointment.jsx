@@ -1,4 +1,4 @@
-// src/components/Appointments/Appointments.jsx - Complete working version
+// src/components/Appointment/Appointment.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -15,7 +15,7 @@ import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
 import AddAppointmentModal from './AddAppointmentModal';
 
-const Appointments = () => {
+const Appointments = ({ doctorId = null, doctorName = null }) => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -31,6 +31,7 @@ const Appointments = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [appointmentsData, setAppointmentsData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showAllData, setShowAllData] = useState(false);
   const itemsPerPage = 10;
 
   const defaultAppointmentsData = [
@@ -38,6 +39,7 @@ const Appointments = () => {
       id: 'APT001', 
       patientId: 'PT0025',
       patientName: 'James Carter', 
+      doctorId: 2,
       doctorName: 'Dr. Andrew Clark', 
       department: 'Cardiology',
       appointmentDate: '2025-06-17',
@@ -59,6 +61,7 @@ const Appointments = () => {
       id: 'APT002', 
       patientId: 'PT0026',
       patientName: 'Emily Rodriguez', 
+      doctorId: 1,
       doctorName: 'Dr. Katherine Brooks', 
       department: 'Dental Surgery',
       appointmentDate: '2025-06-10',
@@ -80,6 +83,7 @@ const Appointments = () => {
       id: 'APT003', 
       patientId: 'PT0027',
       patientName: 'Michael Chen', 
+      doctorId: 3,
       doctorName: 'Dr. Benjamin Harris', 
       department: 'Dermatology',
       appointmentDate: '2025-05-22',
@@ -101,8 +105,9 @@ const Appointments = () => {
       id: 'APT004', 
       patientId: 'PT0028',
       patientName: 'Lisa Wong', 
-      doctorName: 'Dr. Laura Mitchell', 
-      department: 'ENT Surgery',
+      doctorId: 1,
+      doctorName: 'Dr. Katherine Brooks', 
+      department: 'Dental Surgery',
       appointmentDate: '2025-05-15',
       appointmentDateDisplay: '15 May 2025',
       startTime: '11:30 AM',
@@ -122,6 +127,7 @@ const Appointments = () => {
       id: 'APT005', 
       patientId: 'PT0029',
       patientName: 'Sophia Martinez', 
+      doctorId: 4,
       doctorName: 'Dr. Christopher Lewis', 
       department: 'General Medicine',
       appointmentDate: '2025-04-30',
@@ -147,7 +153,7 @@ const Appointments = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter]);
+  }, [searchTerm, statusFilter, departmentFilter, showAllData]);
 
   const loadAppointmentsFromStorage = () => {
     setLoading(true);
@@ -162,7 +168,13 @@ const Appointments = () => {
   };
 
   const getAllDepartments = () => {
-    const departments = [...new Set(appointmentsData.map(a => a.department).filter(Boolean))];
+    let sourceData;
+    if (doctorId && !showAllData) {
+      sourceData = appointmentsData.filter(apt => apt.doctorId === doctorId || apt.doctorName === doctorName);
+    } else {
+      sourceData = appointmentsData;
+    }
+    const departments = [...new Set(sourceData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
 
@@ -181,7 +193,16 @@ const Appointments = () => {
   };
 
   const getFilteredAppointments = () => {
-    let filtered = [...appointmentsData];
+    let filtered;
+    
+    if (doctorId && !showAllData) {
+      filtered = appointmentsData.filter(apt => 
+        apt.doctorId === doctorId || apt.doctorName === doctorName
+      );
+    } else {
+      filtered = [...appointmentsData];
+    }
+    
     if (searchTerm) {
       filtered = filtered.filter(apt => 
         apt.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -251,7 +272,6 @@ const Appointments = () => {
     event.target.value = '';
   };
 
-  // Navigate to Consultation page
   const handleStartConsultation = (appointment) => {
     navigate('/appointments/consultation', { 
       state: { 
@@ -334,7 +354,16 @@ const Appointments = () => {
     return (statusFilter !== 'all' ? 1 : 0) + (departmentFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
 
-  // Appointment Details Modal
+  const toggleShowAllData = () => {
+    setShowAllData(!showAllData);
+    setCurrentPage(1);
+    setStatusFilter('all');
+    setDepartmentFilter('');
+    setSearchTerm('');
+  };
+
+  const showDoctorBanner = doctorId && !showAllData;
+
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
     
@@ -441,7 +470,6 @@ const Appointments = () => {
   return (
     <>
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-        {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="p-1">
@@ -460,7 +488,44 @@ const Appointments = () => {
           <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
         </div>
 
-        {/* Search Bar and Action Buttons */}
+        {showDoctorBanner && (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <p className="text-sm font-medium text-blue-800">
+                  Showing appointments for: <span className="font-semibold">{doctorName}</span>
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Total appointments: {filteredAppointments.length}
+                </p>
+              </div>
+              <button
+                onClick={toggleShowAllData}
+                className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 transition-colors"
+              >
+                Show All Doctors' Appointments
+              </button>
+            </div>
+          </div>
+        )}
+
+        {doctorId && showAllData && (
+          <div className="mb-4 p-3 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-sm text-gray-700">
+                <span className="font-medium">Showing all doctors' appointments</span>
+                <span className="text-gray-500 ml-2">Total: {filteredAppointments.length} appointments</span>
+              </p>
+            </div>
+            <button
+              onClick={toggleShowAllData}
+              className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              ← Back to {doctorName}'s Appointments
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
             <SearchBar placeholder="Search by Appointment ID, Patient ID, Patient Name, Doctor..." value={searchTerm} onChange={setSearchTerm} onClear={() => setSearchTerm('')} />
@@ -494,7 +559,6 @@ const Appointments = () => {
           </div>
         </div>
 
-        {/* Appointments Table */}
         {filteredAppointments.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -552,7 +616,6 @@ const Appointments = () => {
         )}
       </div>
 
-      {/* Appointment Details Modal */}
       {showDetailsModal && selectedAppointment && (
         <AppointmentDetailsModal 
           appointment={selectedAppointment} 
@@ -560,7 +623,6 @@ const Appointments = () => {
         />
       )}
 
-      {/* Edit Appointment Modal - Data is auto-populated from appointment prop */}
       <EditAppointmentModal
         isOpen={showEditModal}
         onClose={() => {
@@ -573,14 +635,12 @@ const Appointments = () => {
         allPatients={[]}
       />
 
-      {/* Add Appointment Modal */}
       <AddAppointmentModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSave={handleAddAppointment}
       />
 
-      {/* Delete Confirmation Modal */}
       <DeleteModal 
         isOpen={showDeleteModal} 
         onClose={() => setShowDeleteModal(false)} 

@@ -1,7 +1,8 @@
-// src/components/Doctor/Doctors.jsx - Corrected version
+// src/components/Doctor/Doctors.jsx - With Appointment Management Modal
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
+import AppointmentManagement from "./AppointmentManagment";
 import { 
   Button, 
   Badge, 
@@ -37,6 +38,8 @@ const Doctors = () => {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const [showAppointmentManagement, setShowAppointmentManagement] = useState(false);
+  const [selectedDoctorForManagement, setSelectedDoctorForManagement] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -198,6 +201,26 @@ const Doctors = () => {
     navigate(`/edit-doctor/${cleanId}`);
   };
 
+  const handleViewAppointments = (doctor) => {
+    navigate(`/doctor/${doctor.id}?tab=appointments`);
+    setActiveMenu(null);
+  };
+
+  const handleAppointmentManagement = (doctor) => {
+    setSelectedDoctorForManagement(doctor);
+    setShowAppointmentManagement(true);
+    setActiveMenu(null);
+  };
+
+  const handleSaveAppointmentSettings = (settings) => {
+    console.log("Saved appointment settings:", settings);
+    // Save to localStorage
+    const existingSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
+    existingSettings[settings.doctorId] = settings;
+    localStorage.setItem('appointmentSettings', JSON.stringify(existingSettings));
+    alert(`Settings saved for ${settings.doctorName}!`);
+  };
+
   const toggleMenu = (id, e) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === id ? null : id);
@@ -315,15 +338,20 @@ const Doctors = () => {
                     ⋮
                   </button>
                   {activeMenu === doctor.id && (
-                    <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                       <button onClick={() => handleViewDetails(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         View Details
+                      </button>
+                      <button onClick={() => handleAppointmentManagement(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Appointment Settings
                       </button>
                       <button onClick={() => handleEdit(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         Edit
                       </button>
+                      <div className="border-t border-gray-100 my-1"></div>
                       <button onClick={() => { setDeleteId(doctor.id); setShowDelete(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         Delete
@@ -346,7 +374,7 @@ const Doctors = () => {
                   <p className="text-xs font-bold text-gray-700">{doctor.experience}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-[9px] text-gray-400 uppercase font-bold">Appointments</p>
+                  <p className="text-[9px] text-gray-400 uppercase font-bold">Appointments </p>
                   <p className="text-xs font-bold text-gray-700">{doctor.appointments}</p>
                 </div>
               </div>
@@ -406,15 +434,20 @@ const Doctors = () => {
                         ⋮
                       </button>
                       {activeMenu === doctor.id && (
-                        <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                           <button onClick={() => handleViewDetails(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                             View Details
+                          </button>
+                          <button onClick={() => handleAppointmentManagement(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            Appointment Settings
                           </button>
                           <button onClick={() => handleEdit(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             Edit
                           </button>
+                          <div className="border-t border-gray-100 my-1"></div>
                           <button onClick={() => { setDeleteId(doctor.id); setShowDelete(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             Delete
@@ -484,6 +517,16 @@ const Doctors = () => {
       </Modal>
 
       <DeleteDoctor isOpen={showDelete} onClose={() => setShowDelete(false)} doctorId={deleteId} onDelete={() => { const updated = doctors.filter(d => d.id !== deleteId); setDoctors(updated); localStorage.setItem("doctors", JSON.stringify(updated)); }} />
+
+      <AppointmentManagement
+        isOpen={showAppointmentManagement}
+        onClose={() => {
+          setShowAppointmentManagement(false);
+          setSelectedDoctorForManagement(null);
+        }}
+        onSave={handleSaveAppointmentSettings}
+        doctor={selectedDoctorForManagement}
+      />
     </div>
   );
 };

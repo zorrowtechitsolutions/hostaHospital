@@ -1,8 +1,10 @@
 // src/components/Settings/Security.jsx - Refactored
 import React, { useState } from 'react';
-import { Button, Card, Modal, Input, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Alert } from '../ui';
+import { useNavigate } from 'react-router-dom';
+import { Button, Card, Modal, Input, Badge, Alert } from '../ui';
 
 const Security = () => {
+  const navigate = useNavigate();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showConfigureModal, setShowConfigureModal] = useState(false);
@@ -23,11 +25,44 @@ const Security = () => {
     { device: 'Safari - Macos', date: '15 Jan 2025', ip: '333.555.10.54', location: 'New York / USA' },
   ];
 
-  const handleDeleteAccount = () => { alert('Account deletion process initiated. You have 10 days to recover your account.'); setShowDeleteModal(false); };
+  const performLogout = () => {
+    // Clear all localStorage items
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear any cookies if needed
+    document.cookie.split(";").forEach(function(c) { 
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    });
+    
+    // Force a hard reload to /sign-in
+    window.location.href = '/sign-in';
+  };
+
+  const handleDeleteAccount = () => { 
+    // Delete the account from localStorage
+    const hospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
+    const currentHospital = JSON.parse(localStorage.getItem('hospitalData') || '{}');
+    
+    // Remove current hospital from the list
+    const updatedHospitals = hospitals.filter(h => h.email !== currentHospital.email);
+    localStorage.setItem('hospitals', JSON.stringify(updatedHospitals));
+    
+    alert('Account deletion process initiated. You have 10 days to recover your account.');
+    setShowDeleteModal(false);
+    
+    // Perform logout and redirect
+    performLogout();
+  };
+  
   const handleConfigure = () => { alert(`Configured: ${modalData.title}`); setShowConfigureModal(false); };
   const handleEditItem = () => { alert(`Edited: ${modalData.title}`); setShowEditModal(false); };
   const handleDeleteItem = () => { alert(`Deleted: ${modalData.title}`); setShowDeleteItemModal(false); };
-  const handleDeactivateAccount = () => { alert('Account has been deactivated. You can reactivate by signing in again.'); setShowDeactivateModal(false); };
+  const handleDeactivateAccount = () => { 
+    alert('Account has been deactivated. You can reactivate by signing in again.');
+    setShowDeactivateModal(false);
+    performLogout();
+  };
   const handleKeepActive = () => setShowDeactivateModal(false);
   const openModal = (type, title, description) => {
     setModalData({ title, description, itemId: title });
@@ -91,7 +126,7 @@ const Security = () => {
       <Alert type="error" message="Warning: This action cannot be undone after the 10-day grace period. Please make sure you have exported any important data before proceeding." className="mb-6" />
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
-        <Button variant="danger" onClick={handleDeleteAccount}>Delete My Account</Button>
+        <Button onClick={handleDeleteAccount} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Delete My Account</Button>
       </div>
     </Modal>
   );
@@ -141,8 +176,24 @@ const Security = () => {
         {isDevices && (
           <div className="overflow-x-auto mb-4 max-h-80 overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0"><tr><th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Device</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500">IP Address</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Location</th></tr></thead>
-              <tbody>{devices.map((device, idx) => (<tr key={idx}><td className="px-3 py-2 text-sm text-gray-900">{device.device}</td><td className="px-3 py-2 text-sm text-gray-500">{device.date}</td><td className="px-3 py-2 text-sm text-gray-500">{device.ip}</td><td className="px-3 py-2 text-sm text-gray-500">{device.location}</td></tr>))}</tbody>
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Device</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">IP Address</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                {devices.map((device, idx) => (
+                  <tr key={idx}>
+                    <td className="px-3 py-2 text-sm text-gray-900">{device.device}</td>
+                    <td className="px-3 py-2 text-sm text-gray-500">{device.date}</td>
+                    <td className="px-3 py-2 text-sm text-gray-500">{device.ip}</td>
+                    <td className="px-3 py-2 text-sm text-gray-500">{device.location}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         )}
@@ -160,7 +211,7 @@ const Security = () => {
       <Alert type="warning" message="This action cannot be undone. You will need to add it again if needed." className="mb-6" />
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => setShowDeleteItemModal(false)}>Cancel</Button>
-        <Button variant="danger" onClick={handleDeleteItem}>Delete</Button>
+        <Button onClick={handleDeleteItem} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Delete</Button>
       </div>
     </Modal>
   );
@@ -171,7 +222,7 @@ const Security = () => {
       <Alert type="warning" message="Your account will be shutdown. It will be reactive when you sign in again." className="mb-6" />
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={handleKeepActive}>Keep Active</Button>
-        <Button variant="danger" onClick={handleDeactivateAccount}>Yes, Deactivate</Button>
+        <Button onClick={handleDeactivateAccount} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Yes, Deactivate</Button>
       </div>
     </Modal>
   );
@@ -186,6 +237,9 @@ const Security = () => {
     { id: 'deactivate', title: 'Deactivate Account', description: 'This will shutdown your account. Your account will be reactive when you sign in again', actions: [{ label: 'Deactivate', onClick: () => openModal('deactivate', 'Deactivate Account', 'Deactivate your account') }] },
     { id: 'delete', title: 'Delete Account', description: 'Your account will be permanently deleted', actions: [{ label: 'Delete', onClick: () => setShowDeleteModal(true) }] },
   ];
+
+  // Custom button styles for delete/deactivate buttons
+  const deleteButtonStyle = "bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors text-sm font-medium";
 
   return (
     <Card>
@@ -205,11 +259,21 @@ const Security = () => {
                 <p className="text-sm text-gray-500 mt-1">{item.description}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {item.actions.map((action, idx) => (
-                  <Button key={idx} variant={action.label === 'Delete' || action.label === 'Deactivate' ? 'danger' : 'ghost'} size="sm" onClick={action.onClick}>
-                    {action.label}
-                  </Button>
-                ))}
+                {item.actions.map((action, idx) => {
+                  // Check if this is a delete or deactivate button
+                  const isDeleteOrDeactivate = action.label === 'Delete' || action.label === 'Deactivate';
+                  return (
+                    <Button 
+                      key={idx} 
+                      variant={!isDeleteOrDeactivate ? 'ghost' : undefined}
+                      size="sm" 
+                      onClick={action.onClick}
+                      className={isDeleteOrDeactivate ? deleteButtonStyle : ''}
+                    >
+                      {action.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           </div>

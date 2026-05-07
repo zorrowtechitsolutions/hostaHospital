@@ -1,3 +1,5 @@
+// firebase.js - Updated version
+
 // 🔥 Firebase setup
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
@@ -48,7 +50,7 @@ export const generateToken = async () => {
   }
 };
 
-// 🔔 Foreground listener (FIXED ✅)
+// 🔔 Foreground listener (FIXED ✅ - removed Chrome notification)
 export const listenMessages = (callback) => {
   const unsubscribe = onMessage(messaging, (payload) => {
     console.log("📩 Foreground message:", payload);
@@ -59,16 +61,17 @@ export const listenMessages = (callback) => {
     const body =
       payload?.notification?.body || payload?.data?.body;
 
-    // 🔔 SHOW CHROME NOTIFICATION
-    if (Notification.permission === "granted") {
-      new Notification(title, {
-        body,
-        icon: "/favicon.ico",
-        requireInteraction: true,
-      });
-    }
+    // ❌ REMOVED the Chrome notification from foreground
+    // Only play sound and trigger the custom modal
+    // if (Notification.permission === "granted") {
+    //   new Notification(title, {
+    //     body,
+    //     icon: "/favicon.ico",
+    //     requireInteraction: true,
+    //   });
+    // }
 
-    // 🔊 Play sound
+    // 🔊 Play sound only
     try {
       notificationSound.pause();
       notificationSound.currentTime = 0;
@@ -77,6 +80,7 @@ export const listenMessages = (callback) => {
       console.log("Sound error:", err);
     }
 
+    // This will still show your custom modal in App.jsx
     if (callback) callback(payload);
   });
 

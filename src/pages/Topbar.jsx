@@ -51,6 +51,16 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     navigate("/sign-in");
   };
 
+  const handleSettings = () => {
+    setShowProfileMenu(false);
+    navigate("/settings");
+  };
+
+  const handleProfile = () => {
+    setShowProfileMenu(false);
+    navigate("/profile");
+  };
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -149,11 +159,17 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">sarah.smith@dreamsemr.com</p>
               </div>
               <div className="py-2">
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3">
+                <button 
+                  onClick={handleProfile}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
+                >
                   <UserCheck size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>My Profile</span>
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3">
+                <button 
+                  onClick={handleSettings}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
+                >
                   <Settings size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>Settings</span>
                 </button>

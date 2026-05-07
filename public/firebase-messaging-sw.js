@@ -1,3 +1,7 @@
+
+
+// firebase-messaging-sw.js
+
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
@@ -14,7 +18,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 🔔 Background notification (WhatsApp style)
+// 🔔 Background notification
 self.addEventListener("push", (event) => {
   const payload = event.data.json();
 
@@ -25,31 +29,66 @@ self.addEventListener("push", (event) => {
     body: payload.notification?.body || payload.data?.body || "",
     icon: "/favicon.ico",
     badge: "/badge.png",
-
-    requireInteraction: true, // 🔥 stays until click
-
+    requireInteraction: true,
     actions: [
-      { action: "accept", title: "Accept Booking" },
-      { action: "cancel", title: "Cancel" },
+      { action: "accept", title: "✅ Accept Booking" },
+      { action: "reject", title: "❌ Cancel" },
     ],
-
     data: payload.data,
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// 🔘 Handle click
+// 🔘 Handle notification clicks
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  let url = "/";
-
   if (event.action === "accept") {
-    url = "/?action=accept";
-  } else if (event.action === "cancel") {
-    url = "/?action=cancel";
+    // Open the ApproveRequestModal
+    event.waitUntil(
+      clients.matchAll({ type: "window", includeUncontrolled: true })
+        .then(windowClients => {
+          // Check if there's already a tab open with our app
+          for (let client of windowClients) {
+            if (client.url.includes(self.location.origin) && "focus" in client) {
+              // Found existing tab, focus it and send message to open ApproveRequestModal
+              client.focus();
+              client.postMessage({
+                action: "openApproveModal",
+                bookingData: event.notification.data
+              });
+              return;
+            }
+          }
+          // No existing tab, open a new one with a special query param
+          if (clients.openWindow) {
+            return clients.openWindow("/?action=approve&modal=approve");
+          }
+        })
+    );
+  } else if (event.action === "reject") {
+    // Open the RejectRequestModal
+    event.waitUntil(
+      clients.matchAll({ type: "window", includeUncontrolled: true })
+        .then(windowClients => {
+          // Check if there's already a tab open with our app
+          for (let client of windowClients) {
+            if (client.url.includes(self.location.origin) && "focus" in client) {
+              // Found existing tab, focus it and send message to open RejectRequestModal
+              client.focus();
+              client.postMessage({
+                action: "openRejectModal",
+                bookingData: event.notification.data
+              });
+              return;
+            }
+          }
+          // No existing tab, open a new one with a special query param
+          if (clients.openWindow) {
+            return clients.openWindow("/?action=reject&modal=reject");
+          }
+        })
+    );
   }
-
-  event.waitUntil(clients.openWindow(url));
 });
