@@ -1,4 +1,4 @@
-// src/components/Doctor/AddDoctor.jsx - Complete with all UI components
+// src/components/Doctor/AddDoctor.jsx - With toast notifications
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -8,6 +8,7 @@ import {
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
 } from '../ui';
+import { showSuccessToast, showErrorToast, showWarningToast, showAddToast } from '../ui/Toast';
 
 const AddDoctor = () => {
   const navigate = useNavigate();
@@ -186,11 +187,13 @@ const AddDoctor = () => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      showWarningToast('Image size must be less than 5MB', 3000);
       return false;
     }
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return false;
     }
     setErrors(prev => ({ ...prev, profileImage: '' }));
@@ -198,6 +201,7 @@ const AddDoctor = () => {
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
+    showSuccessToast('Image uploaded successfully!', 2000);
     return true;
   };
 
@@ -210,6 +214,7 @@ const AddDoctor = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
     setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Image removed', 2000);
   };
 
   const handleSubmit = async (e) => {
@@ -225,25 +230,71 @@ const AddDoctor = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
+      
       setTimeout(() => {
         const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
+        
+        // Check if email already exists
+        const emailExists = existingDoctors.some(doc => doc.email === formData.email);
+        if (emailExists) {
+          showErrorToast('Email already exists! Please use a different email address.', 4000);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        const newDoctorId = existingDoctors.length + 1;
         const newDoctor = {
-          id: existingDoctors.length + 1,
+          id: newDoctorId,
           name: `Dr. ${formData.firstName} ${formData.lastName}`,
           specialty: formData.specialist,
           experience: calculateExperience(formData.dob),
           appointments: 0,
           email: formData.email,
           phone: formData.phoneNumber,
-          photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`
+          photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
+          department: formData.department,
+          registrationNumber: formData.registrationNumber,
+          gender: formData.gender,
+          dob: formData.dob,
+          knownLanguages: formData.knownLanguages,
+          about: formData.about,
+          address: formData.address,
+          country: formData.country,
+          state: formData.state,
+          city: formData.city,
+          pinCode: formData.pinCode,
+          displayName: formData.displayName,
+          userName: formData.userName
         };
+        
         const updatedDoctors = [...existingDoctors, newDoctor];
         localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
-        alert('Doctor added successfully!');
+        
+        showAddToast(
+          `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`,
+          4000,
+          {
+            'Name': `Dr. ${formData.firstName} ${formData.lastName}`,
+            'Specialty': formData.specialist,
+            'Department': formData.department,
+            'ID': `#DR${String(newDoctorId).padStart(4, '0')}`
+          }
+        );
+        
         setIsSubmitting(false);
-        navigate('/doctors');
+        
+        // Navigate after toast
+        setTimeout(() => {
+          navigate('/doctors');
+        }, 1500);
       }, 1000);
     } else {
+      // Show validation error toast
+      const firstErrorField = Object.keys(errors)[0];
+      if (firstErrorField) {
+        showWarningToast(`Please fix the ${firstErrorField} field`, 3000);
+      }
+      
       const firstError = document.querySelector('.error-message');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -261,7 +312,14 @@ const AddDoctor = () => {
   };
 
   const handleGoBack = () => {
-    if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+    if (formData.firstName || formData.lastName || formData.email || previewImage) {
+      showWarningToast('Any unsaved data will be lost. Are you sure you want to leave?', 4000);
+      setTimeout(() => {
+        if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+          navigate('/doctors');
+        }
+      }, 100);
+    } else {
       navigate('/doctors');
     }
   };

@@ -1,4 +1,4 @@
-// src/components/Laboratory/LaboratoryRegistrationForm.jsx - Complete with UI components and S3 upload
+// src/components/Laboratory/LaboratoryRegistrationForm.jsx - With toast notifications
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -9,6 +9,7 @@ import {
 import { 
   Button, Input, Select, Textarea, Card, Alert, Tabs, Checkbox 
 } from '../ui';
+import { showAddToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -38,7 +39,7 @@ const LaboratoryRegistrationForm = () => {
   const [activeTab, setActiveTab] = useState('basic');
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Mock S3 upload function - replace with actual AWS SDK implementation
+  // Mock S3 upload function
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       let progress = 0;
@@ -179,18 +180,20 @@ const LaboratoryRegistrationForm = () => {
     setFormData(prev => ({ ...prev, working_hours: updatedHours }));
   };
 
-  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  // Image upload handler
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      showWarningToast('File size must be less than 5MB', 3000);
       return false;
     }
     
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return false;
     }
     
@@ -205,10 +208,12 @@ const LaboratoryRegistrationForm = () => {
       const s3Url = await uploadToS3(file);
       setProfileImage(s3Url);
       setUploadProgress(100);
+      showSuccessToast('Logo uploaded successfully!', 2000);
       return true;
     } catch (error) {
       console.error('S3 upload error:', error);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      showErrorToast('Failed to upload image. Please try again.', 3000);
       setPreviewImage(null);
       return false;
     }
@@ -226,6 +231,7 @@ const LaboratoryRegistrationForm = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Logo removed', 2000);
   };
 
   const handleSubmit = async (e) => {
@@ -238,32 +244,77 @@ const LaboratoryRegistrationForm = () => {
     if (validateForm()) {
       setIsSubmitting(true);
       setTimeout(() => {
-        const existingLabs = JSON.parse(localStorage.getItem('laboratories') || '[]');
-        const newLab = {
-          id: Date.now(),
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          address: formData.address,
-          about: formData.about,
-          logo: previewImage || null,
-          status: 'Active',
-          tests: 0,
-          createdAt: new Date().toISOString(),
-        };
-        localStorage.setItem('laboratories', JSON.stringify([...existingLabs, newLab]));
-        alert('Laboratory registered successfully!');
-        setIsSubmitting(false);
-        navigate('/laboratories');
+        try {
+          const existingLabs = JSON.parse(localStorage.getItem('laboratories') || '[]');
+          
+          // Check if lab name already exists
+          const nameExists = existingLabs.some(lab => lab.name.toLowerCase() === formData.name.toLowerCase());
+          if (nameExists) {
+            showErrorToast('Laboratory name already exists! Please use a different name.', 4000);
+            setIsSubmitting(false);
+            return;
+          }
+          
+          const newLabId = Date.now();
+          const newLab = {
+            id: newLabId,
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
+            emergencyContact: formData.emergencyContact,
+            address: formData.address,
+            about: formData.about,
+            web: formData.web,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+            working_hours: formData.working_hours,
+            logo: previewImage || null,
+            status: 'Active',
+            tests: 0,
+            createdAt: new Date().toISOString(),
+          };
+          
+          localStorage.setItem('laboratories', JSON.stringify([...existingLabs, newLab]));
+          
+          showAddToast(
+            `${formData.name} has been registered successfully!`,
+            4000,
+            {
+              'Laboratory': formData.name,
+              'Phone': formData.phone,
+              'ID': `#LAB${String(newLabId).slice(-6)}`
+            }
+          );
+          
+          setIsSubmitting(false);
+          
+          setTimeout(() => {
+            navigate('/laboratories');
+          }, 1500);
+        } catch (error) {
+          showErrorToast('Failed to register laboratory. Please try again.', 3000);
+          setIsSubmitting(false);
+        }
       }, 1000);
     } else {
+      const firstErrorField = Object.keys(errors)[0];
+      if (firstErrorField) {
+        showWarningToast(`Please fix the ${firstErrorField} field`, 3000);
+      }
       const firstError = document.querySelector('.error-message');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
   const handleGoBack = () => {
-    if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+    if (formData.name || formData.phone || formData.about || previewImage) {
+      showWarningToast('Any unsaved data will be lost. Are you sure you want to leave?', 4000);
+      setTimeout(() => {
+        if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+          navigate('/laboratories');
+        }
+      }, 100);
+    } else {
       navigate('/laboratories');
     }
   };

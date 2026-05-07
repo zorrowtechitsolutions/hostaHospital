@@ -1,6 +1,7 @@
-// src/components/patients/EditAppointmentModal.jsx - With useEffect for better reactivity
+// src/components/patients/EditAppointmentModal.jsx - With toast notifications
 import React, { useState, useEffect } from "react";
 import { Modal, Input, Select, Textarea, Button } from "../ui";
+import { showUpdateToast, showWarningToast } from "../ui/Toast";
 
 const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, allPatients = [] }) => {
   const [form, setForm] = useState({
@@ -19,8 +20,8 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
   });
 
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Populate form when appointment changes
   useEffect(() => {
     if (appointment) {
       setForm({
@@ -73,21 +74,42 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      onSave({
-        patientId: form.patientId,
-        patientName: form.patientName,
-        patientType: form.patientType,
-        department: form.department,
-        doctor: form.doctor,
-        consultationMode: form.mode,
-        date: form.date,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        reason: form.reason,
-        notes: form.notes,
-        paymentMethod: form.payment
-      });
-      onClose();
+      setIsSubmitting(true);
+      
+      setTimeout(() => {
+        const updatedData = {
+          patientId: form.patientId,
+          patientName: form.patientName,
+          patientType: form.patientType,
+          department: form.department,
+          doctor: form.doctor,
+          consultationMode: form.mode,
+          date: form.date,
+          startTime: form.startTime,
+          endTime: form.endTime,
+          reason: form.reason,
+          notes: form.notes,
+          paymentMethod: form.payment
+        };
+        
+        onSave(updatedData);
+        
+        showUpdateToast(
+          `Appointment has been updated successfully!`,
+          4000,
+          {
+            'Patient': form.patientName,
+            'Date': form.date,
+            'Time': `${form.startTime} - ${form.endTime}`,
+            'Doctor': form.doctor
+          }
+        );
+        
+        setIsSubmitting(false);
+        onClose();
+      }, 500);
+    } else {
+      showWarningToast('Please fill in all required fields', 3000);
     }
   };
 
@@ -137,7 +159,9 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
 
         <div className="flex justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary">Save Changes</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </form>
     </Modal>

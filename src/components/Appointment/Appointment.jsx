@@ -1,4 +1,4 @@
-// src/components/Appointments/Appointments.jsx - Complete working version
+// src/components/Appointments/Appointments.jsx - With same filter UI
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -9,7 +9,7 @@ import {
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, 
   TableHeader, TableCell, Avatar, SearchBar, 
-  FilterBar, Pagination, Loader 
+  Pagination, Loader 
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
@@ -28,6 +28,7 @@ const Appointments = () => {
   const [appointmentToDelete, setAppointmentToDelete] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [appointmentsData, setAppointmentsData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -147,7 +148,7 @@ const Appointments = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter]);
+  }, [searchTerm, statusFilter, departmentFilter, dateFilter]);
 
   const loadAppointmentsFromStorage = () => {
     setLoading(true);
@@ -197,6 +198,9 @@ const Appointments = () => {
     if (departmentFilter) {
       filtered = filtered.filter(apt => apt.department === departmentFilter);
     }
+    if (dateFilter) {
+      filtered = filtered.filter(apt => apt.appointmentDate === dateFilter);
+    }
     return filtered;
   };
 
@@ -209,6 +213,7 @@ const Appointments = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setDepartmentFilter("");
+    setDateFilter("");
     setCurrentPage(1);
     loadAppointmentsFromStorage();
   };
@@ -327,11 +332,12 @@ const Appointments = () => {
   const clearAllFilters = () => {
     setStatusFilter('all');
     setDepartmentFilter('');
+    setDateFilter('');
     setSearchTerm('');
   };
 
   const getActiveFilterCount = () => {
-    return (statusFilter !== 'all' ? 1 : 0) + (departmentFilter ? 1 : 0) + (searchTerm ? 1 : 0);
+    return (statusFilter !== 'all' ? 1 : 0) + (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
 
   // Appointment Details Modal
@@ -460,39 +466,117 @@ const Appointments = () => {
           <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
         </div>
 
-        {/* Search Bar and Action Buttons */}
+        {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
-            <SearchBar placeholder="Search by Appointment ID, Patient ID, Patient Name, Doctor..." value={searchTerm} onChange={setSearchTerm} onClear={() => setSearchTerm('')} />
+            <SearchBar 
+              placeholder="Search by Appointment ID, Patient ID, Patient Name, Doctor..." 
+              value={searchTerm} 
+              onChange={setSearchTerm} 
+              onClear={() => setSearchTerm('')} 
+            />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <Button variant="outline" size="sm" onClick={handleRefresh}><RefreshCcw size={16} /></Button>
+            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
+              <RefreshCcw size={16} />
+            </Button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer"><Upload size={16} /></label>
-            <Button variant="outline" size="sm" onClick={handleExport}><Download size={16} /></Button>
-            <FilterBar isOpen={showFilters} onToggle={() => setShowFilters(!showFilters)} activeFilterCount={activeFilterCount} onClearAll={clearAllFilters}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white">
-                    <option value="all">All Status</option>
-                    {getAllStatuses().map(status => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                  <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white">
-                    <option value="">All Departments</option>
-                    {getAllDepartments().map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                  </select>
-                </div>
-              </div>
-            </FilterBar>
+            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
+              <Upload size={16} />
+            </label>
+            <Button variant="outline" size="sm" onClick={handleExport} title="Export">
+              <Download size={16} />
+            </Button>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+                showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+              } hover:bg-gray-50`}
+              title="Toggle Filters"
+            >
+              <Filter size={16} />
+              {activeFilterCount > 0 && !showFilters && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
             <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-2">
               <Plus size={16} /> New Appointment
             </Button>
           </div>
         </div>
+
+        {/* FILTER SECTION - Same as Patients and RequestTable */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+            
+            {/* HEADER */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                  <Filter size={18} className="text-[#1C62A0]" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-gray-800">
+                    Filters
+                  </h2>
+                  {activeFilterCount > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                      {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={clearAllFilters}
+                className="text-sm font-medium text-red-500 hover:text-red-600"
+              >
+                Clear All Filters
+              </button>
+            </div>
+
+            {/* FILTER GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+              {/* STATUS */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="all">All Status</option>
+                {getAllStatuses().map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+
+              {/* DEPARTMENT */}
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="">All Departments</option>
+                {getAllDepartments().map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+
+              {/* DATE */}
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Appointments Table */}
         {filteredAppointments.length === 0 ? (
@@ -514,40 +598,74 @@ const Appointments = () => {
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
-                    <TableHeader>Patient ID</TableHeader>
-                    <TableHeader>Patient Name</TableHeader>
-                    <TableHeader>Doctor Name</TableHeader>
-                    <TableHeader>Department</TableHeader>
-                    <TableHeader>Appointment Date</TableHeader>
-                    <TableHeader>Status</TableHeader>
-                    <TableHeader className="text-right w-16">Action</TableHeader>
+                    <th className="px-6 py-3">Patient ID</th>
+                    <th className="px-6 py-3">Patient Name</th>
+                    <th className="px-6 py-3">Doctor Name</th>
+                    <th className="px-6 py-3">Department</th>
+                    <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right w-16">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedAppointments.map((apt, index) => (
-                    <TableRow key={apt.id || index} hover>
-                      <TableCell className="text-[#1C62A0] font-medium">#{apt.patientId}</TableCell>
-                      <TableCell>
+                    <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">#{apt.patientId}</td>
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <Avatar src={apt.patientAvatar || 'https://randomuser.me/api/portraits/lego/1.jpg'} alt={apt.patientName} size="sm" rounded="full" />
+                          <img src={apt.patientAvatar || 'https://randomuser.me/api/portraits/lego/1.jpg'} alt={apt.patientName} className="w-8 h-8 rounded-full object-cover" />
                           <span className="font-medium text-gray-800">{apt.patientName}</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-gray-800">{apt.doctorName}</TableCell>
-                      <TableCell className="text-gray-600">{apt.department}</TableCell>
-                      <TableCell className="text-gray-600">{apt.appointmentDateDisplay}</TableCell>
-                      <TableCell><span className={getStatusBadgeClass(apt.status)}>{apt.status}</span></TableCell>
-                      <TableCell className="text-right">
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
+                      <td className="px-6 py-4 text-gray-600">{apt.department}</td>
+                      <td className="px-6 py-4 text-gray-600">{apt.appointmentDateDisplay}</td>
+                      <td className="px-6 py-4">
+                        <span className={getStatusBadgeClass(apt.status)}>{apt.status}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
                         <div className="flex justify-end">
                           <RowActionMenu appointment={apt} />
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredAppointments.length} itemsPerPage={itemsPerPage} />
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
+                {Math.min(currentPage * itemsPerPage, filteredAppointments.length)} of {filteredAppointments.length} appointments
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === 1
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+                  {currentPage}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === totalPages || totalPages === 0
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </Card>
         )}
       </div>

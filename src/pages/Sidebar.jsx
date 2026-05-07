@@ -29,6 +29,7 @@ const menu = [
     items: [
       { label: "Patients", icon: Users, path: "/patients" },
       { label: "Doctors", icon: Stethoscope, path: "/doctors" },
+      {label: "Specialities", icon: Pill, path: "/specialities"},
       { label: "Requests", icon: CalendarDays, path: "/requests" },
       {
         label: "Appointments",

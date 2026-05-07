@@ -1,9 +1,16 @@
 // src/components/Appointments/AddAppointmentModal.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Calendar, Clock, DollarSign, FileText, User, Stethoscope } from "lucide-react";
 import { Modal, Input, Select, Textarea, Button, Avatar, Badge } from "../ui";
+import { 
+  showAddToast, 
+  showUpdateToast, 
+  showWarningToast, 
+  showErrorToast,
+  showSuccessToast
+} from "../ui/Toast";
 
-const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
+const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = false, appointment = null }) => {
   const [formData, setFormData] = useState({
     patientId: "",
     patientName: "",
@@ -19,6 +26,28 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
     paymentMethod: ""
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (isEditing && appointment) {
+      setFormData({
+        patientId: appointment.patientId || "",
+        patientName: appointment.patientName || "",
+        patientType: appointment.patientType || "",
+        preferredMode: appointment.preferredMode || "",
+        department: appointment.department || "",
+        doctorName: appointment.doctorName || "",
+        appointmentDate: appointment.appointmentDate || "",
+        startTime: appointment.startTime || "",
+        endTime: appointment.endTime || "",
+        reason: appointment.reason || "",
+        quickNotes: appointment.notes || "",
+        paymentMethod: appointment.paymentMethod || ""
+      });
+    }
+  }, [isEditing, appointment]);
+
   if (!isOpen) return null;
 
   const handleChange = (e) => {
@@ -26,34 +55,112 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const validateForm = () => {
+    if (!formData.patientId) {
+      showWarningToast('Please select a patient', 3000);
+      return false;
+    }
+    if (!formData.patientType) {
+      showWarningToast('Please select patient type', 3000);
+      return false;
+    }
+    if (!formData.department) {
+      showWarningToast('Please select department', 3000);
+      return false;
+    }
+    if (!formData.doctorName) {
+      showWarningToast('Please select doctor', 3000);
+      return false;
+    }
+    if (!formData.preferredMode) {
+      showWarningToast('Please select consultation mode', 3000);
+      return false;
+    }
+    if (!formData.appointmentDate) {
+      showWarningToast('Please select appointment date', 3000);
+      return false;
+    }
+    if (!formData.startTime) {
+      showWarningToast('Please select start time', 3000);
+      return false;
+    }
+    if (!formData.endTime) {
+      showWarningToast('Please select end time', 3000);
+      return false;
+    }
+    if (!formData.reason) {
+      showWarningToast('Please enter reason for visit', 3000);
+      return false;
+    }
+    if (!formData.paymentMethod) {
+      showWarningToast('Please select payment method', 3000);
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const appointmentData = {
-      id: `APT${Math.floor(Math.random() * 10000)}`,
-      patientId: formData.patientId || "PT0025",
-      patientName: formData.patientName || "James Carter",
-      doctorName: formData.doctorName,
-      department: formData.department,
-      appointmentDate: formData.appointmentDate,
-      appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : "",
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      status: "Upcoming",
-      fee: "$350",
-      duration: "1 hour",
-      reason: formData.reason,
-      notes: formData.quickNotes,
-      paymentMethod: formData.paymentMethod,
-      patientType: formData.patientType,
-      preferredMode: formData.preferredMode,
-      patientAvatar: "https://randomuser.me/api/portraits/men/32.jpg"
-    };
     
-    if (onSave) {
-      onSave(appointmentData);
-    }
-    onClose();
-    resetForm();
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    
+    setTimeout(() => {
+      const appointmentData = {
+        id: isEditing ? appointment.id : `APT${Math.floor(Math.random() * 10000)}`,
+        patientId: formData.patientId,
+        patientName: formData.patientName,
+        doctorName: formData.doctorName,
+        department: formData.department,
+        appointmentDate: formData.appointmentDate,
+        appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : "",
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        status: "Upcoming",
+        fee: "$350",
+        duration: "1 hour",
+        reason: formData.reason,
+        notes: formData.quickNotes,
+        paymentMethod: formData.paymentMethod,
+        patientType: formData.patientType,
+        preferredMode: formData.preferredMode,
+        patientAvatar: "https://randomuser.me/api/portraits/men/32.jpg"
+      };
+      
+      if (onSave) {
+        onSave(appointmentData);
+      }
+      
+      if (isEditing) {
+        showUpdateToast(
+          `Appointment #${appointmentData.id} has been updated successfully!`,
+          4000,
+          {
+            'Patient': appointmentData.patientName,
+            'Date': appointmentData.appointmentDateDisplay,
+            'Time': `${appointmentData.startTime} - ${appointmentData.endTime}`,
+            'Doctor': appointmentData.doctorName
+          }
+        );
+      } else {
+        showAddToast(
+          `New appointment scheduled for ${appointmentData.patientName}!`,
+          4000,
+          {
+            'Patient': appointmentData.patientName,
+            'Date': appointmentData.appointmentDateDisplay,
+            'Time': `${appointmentData.startTime} - ${appointmentData.endTime}`,
+            'Doctor': appointmentData.doctorName,
+            'Payment': appointmentData.paymentMethod
+          }
+        );
+      }
+      
+      setIsSubmitting(false);
+      resetForm();
+      onClose();
+    }, 500);
   };
 
   const resetForm = () => {
@@ -119,7 +226,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Schedule New Appointment" size="xl" showCloseButton={false}>
+    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? "Edit Appointment" : "Schedule New Appointment"} size="xl" showCloseButton={false}>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Select Patient */}
@@ -253,8 +360,8 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
           <Button variant="outline" onClick={onClose} type="button">
             Cancel
           </Button>
-          <Button variant="primary" type="submit">
-            Schedule Appointment
+          <Button variant="primary" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (isEditing ? 'Updating...' : 'Scheduling...') : (isEditing ? 'Update Appointment' : 'Schedule Appointment')}
           </Button>
         </div>
       </form>

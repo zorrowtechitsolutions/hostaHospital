@@ -1,8 +1,8 @@
-// src/components/staffs/AddStaff.jsx - Complete with UI components and S3 upload
+// src/components/staffs/AddStaff.jsx - Complete with avatar upload like AddDoctor
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Save, AlertCircle, Upload, X } from 'lucide-react';
-import { Button, Input, Select, Card, Tabs, Avatar, Alert, Switch } from '../ui';
+import { ChevronRight, Save, AlertCircle, Upload, X, Image } from 'lucide-react';
+import { Button, Input, Select, Card, Tabs, Alert, Switch } from '../ui';
 
 const AddStaff = () => {
   const navigate = useNavigate();
@@ -12,7 +12,6 @@ const AddStaff = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [formData, setFormData] = useState({
     id: '', name: '', gender: 'Male', dob: '', mobile: '', email: '',
@@ -24,20 +23,19 @@ const AddStaff = () => {
     profTax: '', labourWelfare: '', otherDeductions: ''
   });
 
-  // Mock S3 upload function - replace with actual AWS SDK implementation
-  const uploadToS3 = async (file) => {
-    return new Promise((resolve, reject) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          const mockS3Url = `https://your-bucket.s3.amazonaws.com/staff-images/${Date.now()}-${file.name}`;
-          resolve(mockS3Url);
-        }
-      }, 200);
-    });
+  // Image validation
+  const validateImage = (file) => {
+    if (!file) return true;
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      return false;
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      return false;
+    }
+    return true;
   };
 
   const validateName = (name) => {
@@ -118,52 +116,28 @@ const AddStaff = () => {
     setFormData(prev => ({ ...prev, status: !prev.status }));
   };
 
-  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
-  const handleImageUpload = async (file) => {
-    if (!file) return false;
+  // Image upload handler
+  const handleImageUpload = (file) => {
+    if (!file) return;
     
-    if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, profileImage: 'Image size must be less than 2MB' }));
-      return false;
-    }
-    
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
-      return false;
-    }
+    if (!validateImage(file)) return;
     
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setUploadProgress(0);
     
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
-    try {
-      const s3Url = await uploadToS3(file);
-      setFormData(prev => ({ ...prev, profileImage: s3Url }));
-      setUploadProgress(100);
-      return true;
-    } catch (error) {
-      console.error('S3 upload error:', error);
-      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
-      setPreviewImage(null);
-      return false;
-    }
+    setFormData(prev => ({ ...prev, profileImage: file }));
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      handleImageUpload(file);
-    }
+    if (file) handleImageUpload(file);
   };
 
-  const handleRemoveImage = () => {
+  const removeImage = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
-    setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
   };
 
@@ -205,7 +179,8 @@ const AddStaff = () => {
       appointmentDate: formData.appointmentDate || isoDate,
       appointmentDateDisplay: formattedDate,
       patientsCount: 0,
-      imageUrl: formData.profileImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
+      profileImage: previewImage,
+      imageUrl: previewImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
       status: formData.status ? 'Active' : 'Inactive',
       jobType: formData.jobType,
       dob: formData.dob || 'N/A',
@@ -270,11 +245,11 @@ const AddStaff = () => {
 
           {activeTab === 'basic' && (
             <div className="p-6">
-              {/* Profile Image Upload with S3 Support */}
+              {/* Profile Image Upload Section - Like AddDoctor */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6 pb-6 border-b border-gray-200">
                 <div className="flex-shrink-0">
                   <div className="relative">
-                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                       {previewImage ? (
                         <img 
                           src={previewImage} 
@@ -282,18 +257,13 @@ const AddStaff = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Avatar 
-                          src={formData.profileImage || 'https://i.pravatar.cc/80'} 
-                          alt="Profile" 
-                          size="lg" 
-                          rounded="lg" 
-                        />
+                        <Image className="h-8 w-8 text-gray-400" />
                       )}
                     </div>
                     {previewImage && (
                       <button
                         type="button"
-                        onClick={handleRemoveImage}
+                        onClick={removeImage}
                         className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
                       >
                         <X className="h-3 w-3" />
@@ -322,23 +292,9 @@ const AddStaff = () => {
                       Upload Image
                     </Button>
                     <p className="text-xs text-gray-400 mt-2">
-                      JPEG, PNG, GIF, WEBP accepted. Max 2MB
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
                     </p>
                   </div>
-                  
-                  {/* Upload Progress Bar */}
-                  {uploadProgress > 0 && uploadProgress < 100 && (
-                    <div className="mt-2">
-                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
-                    </div>
-                  )}
-                  
                   {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                 </div>
               </div>

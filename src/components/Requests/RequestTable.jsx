@@ -1,23 +1,57 @@
-// src/components/Requests/RequestTable.jsx - With spans instead of Badge
+// src/components/Requests/RequestTable.jsx - Only shows pending requests
 import React, { useState } from "react";
 import { 
   Check, X, Search, Calendar, Stethoscope, Filter, 
-  RefreshCcw, Download, Upload, Users as UsersIcon
+  RefreshCcw, Download, Upload, Users as UsersIcon, Phone, Clock
 } from "lucide-react";
 import { 
-  Button, Input, Select, Card, 
-  SearchBar, FilterBar, Pagination, Avatar 
+  Button, Card, Pagination, SearchBar
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
+import AutoDeclineModal from "./AutoDeclineModal";
 
+// Configuration
+const DEFAULT_AUTO_DECLINE_MINUTES = 5;
+
+// Updated dummy data with patient ages and contact numbers - ONLY PENDING STATUS
 const dummyRequests = [
-  { id: "REQ003", patientId: "PT0025", patientName: "James Carter", doctorName: "Dr. Michael Brown", doctorSpecialty: "Neurologist", department: "Neurology", appointmentDate: "2025-01-25", time: "11:00 AM", reason: "Migraine follow-up", status: "pending", avatar: "https://randomuser.me/api/portraits/men/32.jpg", email: "james.carter@example.com" },
-  { id: "REQ004", patientId: "PT0026", patientName: "Emily Rodriguez", doctorName: "Dr. Emily Wilson", doctorSpecialty: "Orthopedic", department: "Orthopedics", appointmentDate: "2025-01-28", time: "09:15 AM", reason: "Knee pain assessment", status: "pending", avatar: "https://randomuser.me/api/portraits/women/44.jpg", email: "emily.r@example.com" },
-  { id: "REQ005", patientId: "PT0027", patientName: "Michael Chen", doctorName: "Dr. Robert Taylor", doctorSpecialty: "Ophthalmologist", department: "Ophthalmology", appointmentDate: "2025-01-30", time: "03:45 PM", reason: "Vision checkup", status: "pending", avatar: "https://randomuser.me/api/portraits/men/45.jpg", email: "michael.chen@example.com" },
-  { id: "REQ006", patientId: "PT0028", patientName: "Lisa Wong", doctorName: "Dr. Lisa Anderson", doctorSpecialty: "Pediatrician", department: "Pediatrics", appointmentDate: "2025-02-01", time: "01:00 PM", reason: "Child vaccination", status: "approved", avatar: "https://randomuser.me/api/portraits/women/55.jpg", email: "lisa.wong@example.com" },
-  { id: "REQ007", patientId: "PT0029", patientName: "Sophia Martinez", doctorName: "Dr. David Martinez", doctorSpecialty: "ENT Specialist", department: "ENT", appointmentDate: "2025-02-03", time: "11:30 AM", reason: "Ear infection treatment", status: "rejected", avatar: "https://randomuser.me/api/portraits/women/68.jpg", email: "sophia.m@example.com" },
-  { id: "REQ008", patientId: "PT0030", patientName: "David Thompson", doctorName: "Dr. James Wilson", doctorSpecialty: "Cardiologist", department: "Cardiology", appointmentDate: "2025-02-05", time: "10:00 AM", reason: "Heart checkup", status: "pending", avatar: "https://randomuser.me/api/portraits/men/28.jpg", email: "david.t@example.com" }
+  { 
+    id: "REQ003", patientId: "PT0025", patientName: "James Carter", 
+    age: 34, contact: "+1 123 456 7890",
+    doctorName: "Dr. Michael Brown", doctorSpecialty: "Neurologist", 
+    department: "Neurology", appointmentDate: "2025-01-25", time: "11:00 AM", 
+    reason: "Migraine follow-up", status: "pending", 
+    avatar: "https://randomuser.me/api/portraits/men/32.jpg", 
+    email: "james.carter@example.com" 
+  },
+  { 
+    id: "REQ004", patientId: "PT0026", patientName: "Emily Rodriguez", 
+    age: 28, contact: "+1 234 567 8901",
+    doctorName: "Dr. Emily Wilson", doctorSpecialty: "Orthopedic", 
+    department: "Orthopedics", appointmentDate: "2025-01-28", time: "09:15 AM", 
+    reason: "Knee pain assessment", status: "pending", 
+    avatar: "https://randomuser.me/api/portraits/women/44.jpg", 
+    email: "emily.r@example.com" 
+  },
+  { 
+    id: "REQ005", patientId: "PT0027", patientName: "Michael Chen", 
+    age: 45, contact: "+1 345 678 9012",
+    doctorName: "Dr. Robert Taylor", doctorSpecialty: "Ophthalmologist", 
+    department: "Ophthalmology", appointmentDate: "2025-01-30", time: "03:45 PM", 
+    reason: "Vision checkup", status: "pending", 
+    avatar: "https://randomuser.me/api/portraits/men/45.jpg", 
+    email: "michael.chen@example.com" 
+  },
+  { 
+    id: "REQ008", patientId: "PT0030", patientName: "David Thompson", 
+    age: 41, contact: "+1 678 901 2345",
+    doctorName: "Dr. James Wilson", doctorSpecialty: "Cardiologist", 
+    department: "Cardiology", appointmentDate: "2025-02-05", time: "10:00 AM", 
+    reason: "Heart checkup", status: "pending", 
+    avatar: "https://randomuser.me/api/portraits/men/28.jpg", 
+    email: "david.t@example.com" 
+  }
 ];
 
 const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
@@ -32,24 +66,33 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  
+  // Auto Decline Modal State
+  const [showAutoDeclineModal, setShowAutoDeclineModal] = useState(false);
+  const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(DEFAULT_AUTO_DECLINE_MINUTES);
 
-  const safeData = Array.isArray(data) ? data : [];
+  // Filter to ONLY show pending requests
+  const safeData = Array.isArray(data) ? data.filter(item => item.status === "pending") : [];
 
   const getAllDepartments = () => [...new Set(safeData.map(r => r.department))].sort();
 
   const getFilteredRequests = () => {
+    // Start with ONLY pending requests (already filtered in safeData)
     let filtered = [...safeData];
+    
     if (searchTerm) {
       filtered = filtered.filter(item => 
         item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.department.toLowerCase().includes(searchTerm.toLowerCase())
+        item.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.contact && item.contact.includes(searchTerm))
       );
     }
     if (departmentFilter) filtered = filtered.filter(item => item.department === departmentFilter);
     if (dateFilter) filtered = filtered.filter(item => item.appointmentDate === dateFilter);
+    
     return filtered;
   };
 
@@ -67,29 +110,61 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
 
-  const handleRefresh = () => { setSearchTerm(""); setDepartmentFilter(""); setDateFilter(""); setCurrentPage(1); };
+  const handleRefresh = () => { 
+    setSearchTerm(""); 
+    setDepartmentFilter(""); 
+    setDateFilter(""); 
+    setCurrentPage(1); 
+  };
+  
   const handleExport = () => {
-    const exportData = getFilteredRequests().map(req => ({ 'Request ID': req.id, 'Patient ID': req.patientId, 'Patient Name': req.patientName, 'Doctor Name': req.doctorName, 'Department': req.department, 'Appointment Date': `${req.appointmentDate} at ${req.time}`, 'Status': req.status, 'Reason': req.reason }));
+    const exportData = getFilteredRequests().map(req => ({ 
+      'Request ID': req.id, 
+      'Patient ID': req.patientId, 
+      'Patient Name': req.patientName,
+      'Age': req.age,
+      'Contact Number': req.contact,
+      'Doctor Name': req.doctorName, 
+      'Department': req.department, 
+      'Appointment Date': `${req.appointmentDate} at ${req.time}`, 
+      'Status': req.status, 
+      'Reason': req.reason 
+    }));
     const link = document.createElement('a');
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
   };
+  
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-      try { const importedData = JSON.parse(e.target.result); alert(`Successfully imported ${importedData.length} requests!`); } 
-      catch (error) { alert('Error parsing JSON file.'); }
+      try { 
+        const importedData = JSON.parse(e.target.result);
+        // Only keep pending requests from imported data
+        const pendingImports = importedData.filter(item => item.status === "pending");
+        alert(`Successfully imported ${pendingImports.length} pending requests!`); 
+      } 
+      catch (error) { 
+        alert('Error parsing JSON file.'); 
+      }
     };
     reader.readAsText(file);
     event.target.value = '';
   };
-  const clearAllFilters = () => { setDepartmentFilter(''); setDateFilter(''); setSearchTerm(''); };
+  
+  const clearAllFilters = () => { 
+    setDepartmentFilter(''); 
+    setDateFilter(''); 
+    setSearchTerm('');
+  };
+  
   const activeFilterCount = (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
 
   const handleApproveClick = (request) => { setSelectedRequest(request); setShowApproveModal(true); };
+  
   const handleConfirmApprove = (appointmentData) => {
     if (selectedRequest) {
       if (onApprove) onApprove(selectedRequest, appointmentData);
@@ -98,7 +173,9 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
     setShowApproveModal(false);
     setSelectedRequest(null);
   };
+  
   const handleRejectClick = (request) => { setSelectedRequest(request); setRejectReason(""); setShowRejectModal(true); };
+  
   const handleConfirmReject = () => {
     if (selectedRequest) {
       if (onReject) onReject(selectedRequest, rejectReason);
@@ -109,19 +186,25 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
     setRejectReason("");
   };
 
+  const handleSaveAutoDecline = (minutes) => {
+    setAutoDeclineMinutes(minutes);
+    localStorage.setItem('autoDeclineMinutes', minutes);
+    alert(`Auto decline time has been set to ${minutes} minutes.`);
+  };
+
   if (safeData.length === 0) {
     return (
       <Card>
         <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">
-            Total Requests 
+            Total Pending Requests 
             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">0</span>
           </h2>
         </div>
         <div className="p-12 text-center">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-sm font-medium text-gray-500">No requests found</p>
-          <p className="text-xs text-gray-400 mt-1">Requests will appear here once available</p>
+          <p className="text-sm font-medium text-gray-500">No pending requests found</p>
+          <p className="text-xs text-gray-400 mt-1">Pending requests will appear here once available</p>
         </div>
       </Card>
     );
@@ -134,59 +217,123 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
         <p className="text-sm text-gray-500">Home / Requests</p>
       </div>
 
+      {/* Auto-Decline Banner with Change Button */}
+      <div className="mb-4 w-full bg-blue-50 border border-blue-200 rounded-lg px-6 py-3 overflow-hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Clock size={16} className="text-blue-600 flex-shrink-0" />
+            <span className="text-sm text-blue-800">
+              <strong>Auto-Decline: {autoDeclineMinutes} minutes</strong> — Pending bookings will be automatically declined after {autoDeclineMinutes} minutes if not approved by staff.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowAutoDeclineModal(true)}
+            className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+          >
+            <Clock size={14} />
+            Change
+          </button>
+        </div>
+      </div>
+
+      {/* Search and Action Buttons Row */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <div className="flex-1 max-w-md">
+          <SearchBar 
+            placeholder="Search by Patient ID, Name, or Contact..." 
+            value={searchTerm} 
+            onChange={setSearchTerm} 
+            onClear={() => setSearchTerm('')} 
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+            <RefreshCcw size={16} />
+          </button>
+          <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import Requests">
+            <Upload size={16} />
+          </label>
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Pending Requests">
+            <Download size={16} />
+          </button>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+            } hover:bg-gray-50`}
+            title="Toggle Filters"
+          >
+            <Filter size={16} />
+            {activeFilterCount > 0 && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Collapsible Filter Section */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Filter className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+              {activeFilterCount > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
+              Clear All Filters
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Departments</option>
+                {getAllDepartments().map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b bg-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">
-            Total Requests 
+            Total Pending Requests 
             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
               {filteredRequests.length}
             </span>
           </h2>
-          <div className="flex items-center gap-2">
-            <SearchBar placeholder="Search by Patient ID, Name or Doctor..." value={searchTerm} onChange={setSearchTerm} className="w-64" />
-            <FilterBar isOpen={showFilters} onToggle={() => setShowFilters(!showFilters)} activeFilterCount={activeFilterCount} onClearAll={clearAllFilters}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                  <select 
-                    value={departmentFilter} 
-                    onChange={(e) => setDepartmentFilter(e.target.value)} 
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">All Departments</option>
-                    {getAllDepartments().map(dept => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
-                  <input 
-                    type="date" 
-                    value={dateFilter} 
-                    onChange={(e) => setDateFilter(e.target.value)} 
-                    className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </FilterBar>
-            <button onClick={handleRefresh} className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200">
-              <RefreshCcw size={16} />
-            </button>
-            <label className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer">
-              <Upload size={16} />
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
-            <button onClick={handleExport} className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200">
-              <Download size={16} />
-            </button>
-          </div>
         </div>
 
         {filteredRequests.length === 0 ? (
           <div className="text-center py-12">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No pending requests found</h3>
             <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
             <button onClick={clearAllFilters} className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154A7D] transition-colors text-sm">
               Clear All Filters
@@ -200,6 +347,8 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                   <tr>
                     <th className="px-6 py-3">Patient ID</th>
                     <th className="px-6 py-3">Patient Name</th>
+                    <th className="px-6 py-3">Age</th>
+                    <th className="px-6 py-3">Contact</th>
                     <th className="px-6 py-3">Doctor Name</th>
                     <th className="px-6 py-3">Department</th>
                     <th className="px-6 py-3">Appointment Date</th>
@@ -210,9 +359,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                   {paginatedRequests.map((item, index) => (
                     <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
-                        <span className="font-mono text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                          {item.patientId}
-                        </span>
+                        <span className="text-[#1C62A0] font-medium">#{item.patientId}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -220,11 +367,23 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                             src={item.avatar} 
                             alt={item.patientName} 
                             className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => {
+                              e.target.src = `https://randomuser.me/api/portraits/${item.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
+                            }}
                           />
-                          <span className="font-medium text-gray-900">{item.patientName}</span>
+                          <span className="font-medium text-gray-800">{item.patientName}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-gray-700">{item.age || 'N/A'} yrs</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <Phone size={14} className="text-gray-400" />
+                          <span className="text-gray-700">{item.contact || 'N/A'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                             <Stethoscope size={12} className="text-blue-600" />
@@ -232,8 +391,8 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
                           <span className="text-gray-700">{item.doctorName}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{item.department}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 text-gray-600">
                           <Calendar size={14} className="text-gray-400" />
                           {item.appointmentDate} at {item.time}
@@ -295,6 +454,14 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
           setReason={setRejectReason} 
         />
       )}
+
+      {/* Auto Decline Modal */}
+      <AutoDeclineModal
+        isOpen={showAutoDeclineModal}
+        onClose={() => setShowAutoDeclineModal(false)}
+        currentMinutes={autoDeclineMinutes}
+        onSave={handleSaveAutoDecline}
+      />
     </div>
   );
 };

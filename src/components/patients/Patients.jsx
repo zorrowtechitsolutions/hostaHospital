@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - Complete with buttons aligned at same position
+// src/components/patients/Patients.jsx - With filter search bar removed
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -18,7 +18,9 @@ import {
   List,
   RefreshCcw,
   Upload,
-  Trash2
+  Trash2,
+  Filter,
+  Search
 } from 'lucide-react';
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
@@ -28,7 +30,6 @@ import {
   Loader, 
   Pagination, 
   SearchBar,
-  FilterBar,
   Card
 } from '../ui';
 
@@ -594,27 +595,16 @@ const Patients = () => {
         <h1 className="text-xl font-bold text-gray-800">Patients</h1>
       </div>
 
-      {/* Search Bar and Action Buttons */}
+      {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <SearchBar
-            placeholder="Search by name, ID..."
-            value={searchTerm}
-            onChange={setSearchTerm}
-            onClear={() => setSearchTerm('')}
-            className="flex-1 max-w-sm"
+        <div className="flex-1 max-w-md">
+          <SearchBar 
+            placeholder="Search by name, ID..." 
+            value={searchTerm} 
+            onChange={setSearchTerm} 
+            onClear={() => setSearchTerm('')} 
           />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            <option value="all">All Status</option>
-            <option value="outpatient">Out Patient</option>
-            <option value="inpatient">In Patient</option>
-          </select>
         </div>
-
         <div className="flex gap-2 flex-wrap items-center">
           <div className="flex border border-gray-200 rounded-md bg-white mr-2">
             <button onClick={() => setViewMode('grid')} className={`p-2 ${viewMode === 'grid' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
@@ -625,68 +615,118 @@ const Patients = () => {
             </button>
           </div>
 
-          <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
+          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
             <RefreshCcw size={16} />
-          </Button>
+          </button>
 
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" />
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current.click()} title="Import Patients">
+          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import Patients">
             <Upload size={16} />
-          </Button>
+          </label>
 
-          <Button variant="outline" size="sm" onClick={handleExport} title="Export Patients">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Patients">
             <Download size={16} />
-          </Button>
+          </button>
 
-          <FilterBar
-            isOpen={showFilters}
-            onToggle={() => setShowFilters(!showFilters)}
-            activeFilterCount={activeFilterCount}
-            onClearAll={clearAllFilters}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+            } hover:bg-gray-50`}
+            title="Toggle Filters"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Departments</option>
-                  {getAllDepartments().map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
-                <select
-                  value={genderFilter}
-                  onChange={(e) => setGenderFilter(e.target.value)}
-                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Genders</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Last Visit Date</label>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </FilterBar>
+            <Filter size={16} />
+            {activeFilterCount > 0 && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
 
           <Button onClick={handleAddPatient} className="flex items-center gap-2">
             <Plus size={16} /> New Patient
           </Button>
         </div>
       </div>
+
+      {/* FILTER SECTION - Without Search Bar */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+          
+          {/* HEADER */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                <Filter size={18} className="text-[#1C62A0]" />
+              </div>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-semibold text-gray-800">
+                  Filters
+                </h2>
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
+              Clear All Filters
+            </button>
+          </div>
+
+          {/* FILTER GRID - Without Search */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+
+            {/* STATUS */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+            >
+              <option value="all">All Status</option>
+              <option value="outpatient">Out Patient</option>
+              <option value="inpatient">In Patient</option>
+            </select>
+
+            {/* GENDER */}
+            <select
+              value={genderFilter}
+              onChange={(e) => setGenderFilter(e.target.value)}
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+            >
+              <option value="">All Genders</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+
+            {/* DEPARTMENT */}
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+            >
+              <option value="">All Departments</option>
+              {getAllDepartments().map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+
+            {/* LAST VISIT DATE */}
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Loading State */}
       {loading && <Loader centered />}

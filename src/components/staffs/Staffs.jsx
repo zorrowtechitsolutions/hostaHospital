@@ -1,4 +1,4 @@
-// src/components/staffs/Staffs.jsx - Refactored with global UI components
+// src/components/staffs/Staffs.jsx - With new filter UI
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -8,7 +8,7 @@ import {
 import { 
   Button, Input, Select, Card, Table, TableHead, TableBody, 
   TableRow, TableHeader, TableCell, Badge, Avatar, 
-  SearchBar, FilterBar, Pagination, Modal, Loader
+  SearchBar, Pagination, Modal, Loader
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 
@@ -24,6 +24,7 @@ const Staffs = () => {
   
   const [designationFilter, setDesignationFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -47,7 +48,7 @@ const Staffs = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter]);
+  }, [searchTerm, designationFilter, genderFilter, dateFilter]);
 
   const loadStaffsFromStorage = () => {
     setLoading(true);
@@ -83,6 +84,9 @@ const Staffs = () => {
     if (genderFilter !== 'all') {
       filtered = filtered.filter(staff => staff.gender === genderFilter);
     }
+    if (dateFilter) {
+      filtered = filtered.filter(staff => staff.appointmentDate === dateFilter);
+    }
     return filtered;
   };
 
@@ -95,6 +99,7 @@ const Staffs = () => {
     setSearchTerm("");
     setDesignationFilter("all");
     setGenderFilter("all");
+    setDateFilter("");
     setCurrentPage(1);
     loadStaffsFromStorage();
   };
@@ -159,8 +164,15 @@ const Staffs = () => {
   };
 
   const handleAddStaff = () => navigate('/add-staff');
-  const clearAllFilters = () => { setDesignationFilter('all'); setGenderFilter('all'); setSearchTerm(''); };
-  const getActiveFilterCount = () => (designationFilter !== 'all' ? 1 : 0) + (genderFilter !== 'all' ? 1 : 0) + (searchTerm ? 1 : 0);
+  
+  const clearAllFilters = () => { 
+    setDesignationFilter('all'); 
+    setGenderFilter('all'); 
+    setDateFilter('');
+    setSearchTerm(''); 
+  };
+  
+  const getActiveFilterCount = () => (designationFilter !== 'all' ? 1 : 0) + (genderFilter !== 'all' ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
 
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
@@ -244,36 +256,112 @@ const Staffs = () => {
           <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
         </div>
 
-        {/* Search Bar and Action Buttons */}
+        {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
-            <SearchBar placeholder="Search by name, staff ID, designation or phone..." value={searchTerm} onChange={setSearchTerm} onClear={() => setSearchTerm('')} />
+            <SearchBar 
+              placeholder="Search by name, staff ID, designation or phone..." 
+              value={searchTerm} 
+              onChange={setSearchTerm} 
+              onClear={() => setSearchTerm('')} 
+            />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <Button variant="outline" size="sm" onClick={handleRefresh}><RefreshCcw size={16} /></Button>
+            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
+              <RefreshCcw size={16} />
+            </Button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer"><Upload size={16} /></label>
-            <Button variant="outline" size="sm" onClick={handleExport}><Download size={16} /></Button>
-            <FilterBar isOpen={showFilters} onToggle={() => setShowFilters(!showFilters)} activeFilterCount={activeFilterCount} onClearAll={clearAllFilters}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Designation</label>
-                  <select value={designationFilter} onChange={(e) => setDesignationFilter(e.target.value)} className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white">
-                    <option value="all">All Designations</option>
-                    {getAllDesignations().map(des => <option key={des} value={des}>{des}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
-                  <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white">
-                    <option value="all">All Genders</option><option value="Male">Male</option><option value="Female">Female</option>
-                  </select>
-                </div>
-              </div>
-            </FilterBar>
-            <Button onClick={handleAddStaff} className="flex items-center gap-2"><Plus size={16} /> New Staff</Button>
+            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
+              <Upload size={16} />
+            </label>
+            <Button variant="outline" size="sm" onClick={handleExport} title="Export">
+              <Download size={16} />
+            </Button>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+                showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+              } hover:bg-gray-50`}
+              title="Toggle Filters"
+            >
+              <Filter size={16} />
+              {activeFilterCount > 0 && !showFilters && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <Button onClick={handleAddStaff} className="flex items-center gap-2">
+              <Plus size={16} /> New Staff
+            </Button>
           </div>
         </div>
+
+        {/* FILTER SECTION - New UI */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+            
+            {/* HEADER */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                  <Filter size={18} className="text-[#1C62A0]" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-gray-800">
+                    Filters
+                  </h2>
+                  {activeFilterCount > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                      {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={clearAllFilters}
+                className="text-sm font-medium text-red-500 hover:text-red-600"
+              >
+                Clear All Filters
+              </button>
+            </div>
+
+            {/* FILTER GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+              {/* DESIGNATION */}
+              <select
+                value={designationFilter}
+                onChange={(e) => setDesignationFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="all">All Designations</option>
+                {getAllDesignations().map((des) => (
+                  <option key={des} value={des}>{des}</option>
+                ))}
+              </select>
+
+              {/* GENDER */}
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="all">All Genders</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+
+              {/* DATE */}
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Staff Table */}
         {filteredStaffs.length === 0 ? (
@@ -285,39 +373,79 @@ const Staffs = () => {
         ) : (
           <Card>
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-              <h2 className="text-sm font-semibold text-gray-700">Total Staffs <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredStaffs.length}</span>
-                 </h2>
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Staffs 
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredStaffs.length}</span>
+              </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
-                    <TableHeader>Staff ID</TableHeader><TableHeader>Staff Name</TableHeader><TableHeader>Gender</TableHeader>
-                    <TableHeader>Designation</TableHeader><TableHeader>Phone Number</TableHeader><TableHeader>Appointment Date</TableHeader>
-                    <TableHeader className="text-right">Actions</TableHeader>
+                    <th className="px-6 py-3">Staff ID</th>
+                    <th className="px-6 py-3">Staff Name</th>
+                    <th className="px-6 py-3">Gender</th>
+                    <th className="px-6 py-3">Designation</th>
+                    <th className="px-6 py-3">Phone Number</th>
+                    <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedStaffs.map((staff, index) => (
-                    <TableRow key={staff.id || index} hover>
-                      <TableCell className="text-[#1C62A0] font-medium">{staff.id}</TableCell>
-                      <TableCell>
+                    <tr key={staff.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.id}</td>
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar src={staff.imageUrl || 'https://i.pravatar.cc/80'} alt={staff.name} size="sm" rounded="full" />
                           <span className="font-medium text-gray-800">{staff.name}</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-gray-600">{staff.gender}</TableCell>
-                      <TableCell className="text-gray-600">{staff.designation}</TableCell>
-                      <TableCell className="text-gray-600">{staff.phone}</TableCell>
-                      <TableCell className="text-gray-600">{staff.appointmentDateDisplay}</TableCell>
-                      <TableCell className="flex justify-end"><RowActionMenu staff={staff} /></TableCell>
-                    </TableRow>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{staff.gender}</td>
+                      <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
+                      <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
+                      <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
+                      <td className="px-6 py-4 text-right">
+                        <RowActionMenu staff={staff} />
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredStaffs.length} itemsPerPage={itemsPerPage} />
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
+                {Math.min(currentPage * itemsPerPage, filteredStaffs.length)} of {filteredStaffs.length} staffs
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === 1
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+                  {currentPage}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === totalPages || totalPages === 0
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </Card>
         )}
       </div>

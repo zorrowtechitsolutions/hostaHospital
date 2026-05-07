@@ -1,6 +1,6 @@
-// src/components/Doctor/Doctors.jsx - Corrected version
+// src/components/Doctor/Doctors.jsx - With matching specialties
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import { 
   Button, 
@@ -18,13 +18,21 @@ import {
 
 const Doctors = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const initialDoctors = [
-    { id: 2, name: "Dr. Katherine Brooks", specialty: "Periodontist", experience: "3+ Years", appointments: 350, email: "katherine@example.com", phone: "+1 75964 25493", photo: "https://randomuser.me/api/portraits/women/44.jpg", dob: "1975-08-22", gender: "Female", registrationNumber: "REG12346", knownLanguages: "English, Spanish", about: "Specialized in periodontics", address: "456 Dental Ave", country: "USA", state: "NY", city: "New York", pinCode: "10001", displayName: "Dr. Katherine Brooks", userName: "katherine.brooks" },
-    { id: 3, name: "Dr. Benjamin Harris", specialty: "Dermatopathologist", experience: "6+ Years", appointments: 400, email: "benjamin@example.com", phone: "+1 83217 65984", photo: "https://randomuser.me/api/portraits/men/45.jpg", dob: "1968-03-10", gender: "Male", registrationNumber: "REG12347", knownLanguages: "English", about: "Skin specialist", address: "789 Medical Blvd", country: "USA", state: "TX", city: "Houston", pinCode: "77001", displayName: "Dr. Benjamin Harris", userName: "benjamin.harris" },
-    { id: 4, name: "Dr. Laura Mitchell", specialty: "ENT Surgeon", experience: "2+ Years", appointments: 150, email: "laura@example.com", phone: "+1 91745 36289", photo: "https://randomuser.me/api/portraits/women/68.jpg", dob: "1980-11-30", gender: "Female", registrationNumber: "REG12348", knownLanguages: "English, French", about: "Ear, Nose, Throat specialist", address: "321 Healthcare Dr", country: "USA", state: "FL", city: "Miami", pinCode: "33101", displayName: "Dr. Laura Mitchell", userName: "laura.mitchell" },
-    { id: 5, name: "Dr. Christopher Lewis", specialty: "Medicine Physician", experience: "6+ Years", appointments: 200, email: "christopher@example.com", phone: "+1 75894 25721", photo: "https://randomuser.me/api/portraits/men/52.jpg", dob: "1965-07-19", gender: "Male", registrationNumber: "REG12349", knownLanguages: "English", about: "Internal medicine specialist", address: "654 Wellness Way", country: "USA", state: "WA", city: "Seattle", pinCode: "98101", displayName: "Dr. Christopher Lewis", userName: "christopher.lewis" },
-    { id: 6, name: "Dr. Emily Clark", specialty: "Pediatrician", experience: "4+ Years", appointments: 300, email: "emily@example.com", phone: "+1 75894 25721", photo: "https://randomuser.me/api/portraits/women/55.jpg", dob: "1985-02-18", gender: "Female", registrationNumber: "REG12350", knownLanguages: "English, Spanish", about: "Child healthcare specialist", address: "258 Children's Way", country: "USA", state: "MA", city: "Boston", pinCode: "02101", displayName: "Dr. Emily Clark", userName: "emily.clark" }
+    { id: 1, name: "Dr. Michael Brown", specialty: "Cardiology", experience: "8+ Years", appointments: 500, email: "michael.brown@example.com", phone: "+1 12345 67890", photo: "https://randomuser.me/api/portraits/men/32.jpg", dob: "1970-05-15", gender: "Male", registrationNumber: "REG12351", knownLanguages: "English", about: "Heart specialist", address: "123 Heart Lane", country: "USA", state: "CA", city: "Los Angeles", pinCode: "90001", displayName: "Dr. Michael Brown", userName: "michael.brown" },
+    { id: 2, name: "Dr. Sarah Wilson", specialty: "Neurology", experience: "7+ Years", appointments: 420, email: "sarah.wilson@example.com", phone: "+1 23456 78901", photo: "https://randomuser.me/api/portraits/women/33.jpg", dob: "1972-08-22", gender: "Female", registrationNumber: "REG12352", knownLanguages: "English, French", about: "Brain and nervous system specialist", address: "456 Brain Ave", country: "USA", state: "IL", city: "Chicago", pinCode: "60601", displayName: "Dr. Sarah Wilson", userName: "sarah.wilson" },
+    { id: 3, name: "Dr. Robert Taylor", specialty: "Orthopedics", experience: "10+ Years", appointments: 600, email: "robert.taylor@example.com", phone: "+1 34567 89012", photo: "https://randomuser.me/api/portraits/men/41.jpg", dob: "1965-03-10", gender: "Male", registrationNumber: "REG12353", knownLanguages: "English", about: "Bone and joint specialist", address: "789 Bone Street", country: "USA", state: "TX", city: "Houston", pinCode: "77001", displayName: "Dr. Robert Taylor", userName: "robert.taylor" },
+    { id: 4, name: "Dr. Emily Clark", specialty: "Ophthalmology", experience: "5+ Years", appointments: 280, email: "emily.clark@example.com", phone: "+1 45678 90123", photo: "https://randomuser.me/api/portraits/women/55.jpg", dob: "1978-06-20", gender: "Female", registrationNumber: "REG12354", knownLanguages: "English, Spanish", about: "Eye care specialist", address: "12 Vision Way", country: "USA", state: "FL", city: "Miami", pinCode: "33101", displayName: "Dr. Emily Clark", userName: "emily.clark" },
+    { id: 5, name: "Dr. James Wilson", specialty: "Pediatrics", experience: "6+ Years", appointments: 350, email: "james.wilson@example.com", phone: "+1 56789 01234", photo: "https://randomuser.me/api/portraits/men/28.jpg", dob: "1980-03-15", gender: "Male", registrationNumber: "REG12355", knownLanguages: "English", about: "Child healthcare specialist", address: "789 Children's Way", country: "USA", state: "MA", city: "Boston", pinCode: "02101", displayName: "Dr. James Wilson", userName: "james.wilson" },
+    { id: 6, name: "Dr. Lisa Anderson", specialty: "Dermatology", experience: "4+ Years", appointments: 220, email: "lisa.anderson@example.com", phone: "+1 67890 12345", photo: "https://randomuser.me/api/portraits/women/44.jpg", dob: "1982-11-10", gender: "Female", registrationNumber: "REG12356", knownLanguages: "English", about: "Skin care specialist", address: "456 Skin Care Blvd", country: "USA", state: "CA", city: "San Diego", pinCode: "92101", displayName: "Dr. Lisa Anderson", userName: "lisa.anderson" },
+    { id: 7, name: "Dr. David Martinez", specialty: "ENT", experience: "9+ Years", appointments: 480, email: "david.martinez@example.com", phone: "+1 78901 23456", photo: "https://randomuser.me/api/portraits/men/36.jpg", dob: "1968-09-22", gender: "Male", registrationNumber: "REG12357", knownLanguages: "English, Spanish", about: "Ear, Nose, Throat specialist", address: "321 ENT Plaza", country: "USA", state: "TX", city: "Dallas", pinCode: "75201", displayName: "Dr. David Martinez", userName: "david.martinez" },
+    { id: 8, name: "Dr. Jennifer Lee", specialty: "Radiology", experience: "7+ Years", appointments: 310, email: "jennifer.lee@example.com", phone: "+1 89012 34567", photo: "https://randomuser.me/api/portraits/women/68.jpg", dob: "1975-12-05", gender: "Female", registrationNumber: "REG12358", knownLanguages: "English, Korean", about: "Medical imaging specialist", address: "789 Radiology Way", country: "USA", state: "WA", city: "Seattle", pinCode: "98101", displayName: "Dr. Jennifer Lee", userName: "jennifer.lee" },
+    { id: 9, name: "Dr. Mark Thompson", specialty: "General Medicine", experience: "11+ Years", appointments: 750, email: "mark.thompson@example.com", phone: "+1 90123 45678", photo: "https://randomuser.me/api/portraits/men/52.jpg", dob: "1962-07-30", gender: "Male", registrationNumber: "REG12359", knownLanguages: "English", about: "General healthcare specialist", address: "123 General Medicine Ave", country: "USA", state: "NY", city: "New York", pinCode: "10001", displayName: "Dr. Mark Thompson", userName: "mark.thompson" },
+    { id: 10, name: "Dr. Rachel Green", specialty: "Psychiatry", experience: "6+ Years", appointments: 195, email: "rachel.green@example.com", phone: "+1 01234 56789", photo: "https://randomuser.me/api/portraits/women/29.jpg", dob: "1979-04-18", gender: "Female", registrationNumber: "REG12360", knownLanguages: "English", about: "Mental health specialist", address: "456 Mental Health Blvd", country: "USA", state: "CO", city: "Denver", pinCode: "80201", displayName: "Dr. Rachel Green", userName: "rachel.green" },
+    { id: 11, name: "Dr. Peter Parker", specialty: "Urology", experience: "5+ Years", appointments: 210, email: "peter.parker@example.com", phone: "+1 12345 00001", photo: "https://randomuser.me/api/portraits/men/25.jpg", dob: "1983-08-25", gender: "Male", registrationNumber: "REG12361", knownLanguages: "English", about: "Urinary tract specialist", address: "789 Urology Center", country: "USA", state: "IL", city: "Chicago", pinCode: "60601", displayName: "Dr. Peter Parker", userName: "peter.parker" },
+    { id: 12, name: "Dr. Tony Stark", specialty: "Gastroenterology", experience: "12+ Years", appointments: 680, email: "tony.stark@example.com", phone: "+1 23456 00002", photo: "https://randomuser.me/api/portraits/men/45.jpg", dob: "1965-05-29", gender: "Male", registrationNumber: "REG12362", knownLanguages: "English", about: "Digestive system specialist", address: "321 Gastro Way", country: "USA", state: "NY", city: "New York", pinCode: "10001", displayName: "Dr. Tony Stark", userName: "tony.stark" }
   ];
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,14 +46,29 @@ const Doctors = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   
+  // Speciality filter from navigation state
+  const [specialityFilter, setSpecialityFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const fileInputRef = useRef(null);
 
+  // Handle speciality filter from navigation
+  useEffect(() => {
+    if (location.state?.speciality) {
+      setSpecialityFilter(location.state.speciality);
+      setFilterSpecialty(location.state.speciality);
+      setShowFilters(true);
+      // Clear the location state to prevent re-filtering on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterSpecialty]);
+  }, [searchTerm, filterSpecialty, specialityFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -86,7 +109,14 @@ const Doctors = () => {
   const filteredDoctors = doctors.filter(doctor => {
     const matchesSearch = doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doctor.specialty.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterSpecialty === 'All' || doctor.specialty === filterSpecialty;
+    
+    let matchesFilter = filterSpecialty === 'All' || doctor.specialty === filterSpecialty;
+    
+    // Apply speciality filter from navigation state
+    if (specialityFilter) {
+      matchesFilter = doctor.specialty?.toLowerCase() === specialityFilter.toLowerCase();
+    }
+    
     return matchesSearch && matchesFilter;
   });
 
@@ -178,6 +208,7 @@ const Doctors = () => {
     setLoading(true);
     setSearchTerm('');
     setFilterSpecialty('All');
+    setSpecialityFilter('');
     setActiveMenu(null);
     setCurrentPage(1);
 
@@ -203,6 +234,11 @@ const Doctors = () => {
     setActiveMenu(activeMenu === id ? null : id);
   };
 
+  const clearSpecialityFilter = () => {
+    setSpecialityFilter('');
+    setFilterSpecialty('All');
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Breadcrumb */}
@@ -225,6 +261,12 @@ const Doctors = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
+        {specialityFilter && (
+          <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">
+            <span>Filtering by: <strong>{specialityFilter}</strong></span>
+            <button onClick={clearSpecialityFilter} className="hover:text-blue-900">✕</button>
+          </div>
+        )}
       </div>
 
       {/* Search and Filter */}
@@ -455,7 +497,7 @@ const Doctors = () => {
           </svg>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
           <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-          <button onClick={() => { setSearchTerm(''); setFilterSpecialty('All'); }} className="px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D]">
+          <button onClick={() => { setSearchTerm(''); setFilterSpecialty('All'); setSpecialityFilter(''); }} className="px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D]">
             Clear Filters
           </button>
         </div>
