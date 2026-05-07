@@ -1,8 +1,9 @@
-// src/components/staffs/EditStaff.jsx - Complete with UI components and S3 upload
+// src/components/staffs/EditStaff.jsx - With toast notifications
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ChevronRight, Save, AlertCircle, Upload, X } from 'lucide-react';
 import { Button, Input, Select, Card, Tabs, Avatar, Alert, Loader, Switch } from '../ui';
+import { showUpdateToast, showDeleteToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 
 const EditStaff = () => {
   const navigate = useNavigate();
@@ -17,6 +18,8 @@ const EditStaff = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewImage, setPreviewImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [formData, setFormData] = useState({
     id: '', name: '', gender: 'Male', dob: '', mobile: '', email: '',
@@ -28,7 +31,7 @@ const EditStaff = () => {
     profTax: '', labourWelfare: '', otherDeductions: ''
   });
 
-  // Mock S3 upload function - replace with actual AWS SDK implementation
+  // Mock S3 upload function
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       let progress = 0;
@@ -58,7 +61,11 @@ const EditStaff = () => {
       const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
       const staff = storedStaffs.find(s => s.id === decodedId);
       if (staff) populateFormData(staff);
-      else { setSubmitError('Staff not found!'); setTimeout(() => navigate('/staffs'), 2000); }
+      else { 
+        setSubmitError('Staff not found!'); 
+        showErrorToast('Staff not found! Redirecting...', 3000);
+        setTimeout(() => navigate('/staffs'), 2000); 
+      }
       setLoading(false);
     };
     loadStaff();
@@ -84,18 +91,20 @@ const EditStaff = () => {
     setPreviewImage(staff.imageUrl || null);
   };
 
-  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
+  // Image upload handler
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      showWarningToast('File size must be less than 5MB', 3000);
       return false;
     }
     
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return false;
     }
     
@@ -110,10 +119,12 @@ const EditStaff = () => {
       const s3Url = await uploadToS3(file);
       setFormData(prev => ({ ...prev, profileImage: s3Url }));
       setUploadProgress(100);
+      showSuccessToast('Image uploaded successfully!', 2000);
       return true;
     } catch (error) {
       console.error('S3 upload error:', error);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      showErrorToast('Failed to upload image. Please try again.', 3000);
       const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
       const staff = storedStaffs.find(s => s.id === formData.id);
       if (staff?.imageUrl) {
@@ -137,6 +148,7 @@ const EditStaff = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Image removed', 2000);
   };
 
   const validateName = (name) => {
@@ -220,44 +232,78 @@ const EditStaff = () => {
   };
 
   const handleDelete = () => {
-    const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-    localStorage.setItem('staffs', JSON.stringify(storedStaffs.filter(s => s.id !== formData.id)));
-    setSubmitSuccess(true);
-    setTimeout(() => navigate('/staffs'), 1500);
+    setIsDeleting(true);
+    setTimeout(() => {
+      const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
+      const staffToDelete = storedStaffs.find(s => s.id === formData.id);
+      localStorage.setItem('staffs', JSON.stringify(storedStaffs.filter(s => s.id !== formData.id)));
+      
+      showDeleteToast(
+        `${staffToDelete?.name || formData.name} has been deleted successfully!`,
+        4000,
+        {
+          'Name': staffToDelete?.name || formData.name,
+          'ID': formData.id,
+          'Designation': staffToDelete?.designation || formData.designation
+        }
+      );
+      
+      setIsDeleting(false);
+      setSubmitSuccess(true);
+      setTimeout(() => navigate('/staffs'), 1500);
+    }, 500);
   };
 
   const handleSubmit = () => {
     if (!validateForm()) {
       if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
+      showWarningToast('Please fix the validation errors before submitting', 3000);
       return;
     }
 
-    const updatedStaff = {
-      ...formData, id: formData.id, name: formData.name,
-      firstName: formData.name.split(' ')[0] || formData.name,
-      lastName: formData.name.split(' ')[1] || '',
-      gender: formData.gender, designation: formData.designation, phone: formData.mobile,
-      email: formData.email, appointmentDate: formData.appointmentDate,
-      appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      imageUrl: formData.profileImage || previewImage,
-      status: formData.status ? 'Active' : 'Inactive',
-      jobType: formData.jobType, dob: formData.dob || 'N/A',
-      address: `${formData.addressLine1} ${formData.addressLine2} ${formData.city} ${formData.state} ${formData.country} ${formData.pinCode}`.trim() || 'N/A',
-      salary: formData.netSalary ? `$${formData.netSalary}` : '$0',
-      department: formData.designation, staffType: formData.staffType,
-      addressLine1: formData.addressLine1, addressLine2: formData.addressLine2,
-      city: formData.city, state: formData.state, country: formData.country, pinCode: formData.pinCode,
-      salaryDetails: {
-        netSalary: formData.netSalary,
-        earnings: { basic: formData.basic, da: formData.da, hra: formData.hra, conveyance: formData.conveyance, allowance: formData.allowance, medicalAllowance: formData.medicalAllowance, others: formData.otherEarnings },
-        deductions: { tds: formData.tds, pf: formData.pf, leave: formData.leave, profTax: formData.profTax, labourWelfare: formData.labourWelfare, others: formData.otherDeductions }
-      }
-    };
+    setIsSubmitting(true);
 
-    const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-    localStorage.setItem('staffs', JSON.stringify(storedStaffs.map(staff => staff.id === formData.id ? updatedStaff : staff)));
-    setSubmitSuccess(true);
-    setTimeout(() => navigate('/staffs'), 1500);
+    setTimeout(() => {
+      const updatedStaff = {
+        ...formData, id: formData.id, name: formData.name,
+        firstName: formData.name.split(' ')[0] || formData.name,
+        lastName: formData.name.split(' ')[1] || '',
+        gender: formData.gender, designation: formData.designation, phone: formData.mobile,
+        email: formData.email, appointmentDate: formData.appointmentDate,
+        appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        imageUrl: formData.profileImage || previewImage,
+        status: formData.status ? 'Active' : 'Inactive',
+        jobType: formData.jobType, dob: formData.dob || 'N/A',
+        address: `${formData.addressLine1} ${formData.addressLine2} ${formData.city} ${formData.state} ${formData.country} ${formData.pinCode}`.trim() || 'N/A',
+        salary: formData.netSalary ? `$${formData.netSalary}` : '$0',
+        department: formData.designation, staffType: formData.staffType,
+        addressLine1: formData.addressLine1, addressLine2: formData.addressLine2,
+        city: formData.city, state: formData.state, country: formData.country, pinCode: formData.pinCode,
+        salaryDetails: {
+          netSalary: formData.netSalary,
+          earnings: { basic: formData.basic, da: formData.da, hra: formData.hra, conveyance: formData.conveyance, allowance: formData.allowance, medicalAllowance: formData.medicalAllowance, others: formData.otherEarnings },
+          deductions: { tds: formData.tds, pf: formData.pf, leave: formData.leave, profTax: formData.profTax, labourWelfare: formData.labourWelfare, others: formData.otherDeductions }
+        }
+      };
+
+      const storedStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
+      localStorage.setItem('staffs', JSON.stringify(storedStaffs.map(staff => staff.id === formData.id ? updatedStaff : staff)));
+      
+      showUpdateToast(
+        `${formData.name}'s information has been updated successfully!`,
+        4000,
+        {
+          'Name': formData.name,
+          'ID': formData.id,
+          'Designation': formData.designation,
+          'Status': formData.status ? 'Active' : 'Inactive'
+        }
+      );
+      
+      setIsSubmitting(false);
+      setSubmitSuccess(true);
+      setTimeout(() => navigate('/staffs'), 1500);
+    }, 500);
   };
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
@@ -287,8 +333,10 @@ const EditStaff = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
             <p className="text-gray-600 mb-4">Are you sure you want to delete <span className="font-semibold">{formData.name}</span>? This action cannot be undone.</p>
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
-              <Button variant="danger" onClick={handleDelete}>Delete</Button>
+              <Button variant="outline" onClick={() => setDeleteConfirm(false)} disabled={isDeleting}>Cancel</Button>
+              <Button variant="danger" onClick={handleDelete} disabled={isDeleting} loading={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </Button>
             </div>
           </div>
         </div>
@@ -341,6 +389,7 @@ const EditStaff = () => {
                       variant="outline"
                       onClick={() => document.getElementById('profileImageInput').click()}
                       className="inline-flex items-center gap-2"
+                      disabled={isSubmitting}
                     >
                       <Upload className="h-4 w-4" />
                       Upload New Image
@@ -424,11 +473,13 @@ const EditStaff = () => {
 
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
             <div className="flex gap-3">
-              <Button variant="danger" onClick={() => setDeleteConfirm(true)}>Delete</Button>
+              <Button variant="danger" onClick={() => setDeleteConfirm(true)} disabled={isSubmitting}>Delete</Button>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => navigate('/staffs')}>Cancel</Button>
-              <Button variant="primary" onClick={handleSubmit} icon={Save}>Save Changes</Button>
+              <Button variant="primary" onClick={handleSubmit} icon={Save} disabled={isSubmitting} loading={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              </Button>
             </div>
           </div>
         </Card>

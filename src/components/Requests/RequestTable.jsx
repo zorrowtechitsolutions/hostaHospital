@@ -1,4 +1,3 @@
-// src/components/Requests/RequestTable.jsx - Only shows pending requests
 import React, { useState } from "react";
 import { 
   Check, X, Search, Calendar, Stethoscope, Filter, 
@@ -10,6 +9,7 @@ import {
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
 import AutoDeclineModal from "./AutoDeclineModal";
+import { showSuccessToast, showWarningToast, showErrorToast, showAddToast } from "../ui/Toast";
 
 // Configuration
 const DEFAULT_AUTO_DECLINE_MINUTES = 5;
@@ -18,7 +18,7 @@ const DEFAULT_AUTO_DECLINE_MINUTES = 5;
 const dummyRequests = [
   { 
     id: "REQ003", patientId: "PT0025", patientName: "James Carter", 
-    age: 34, contact: "+1 123 456 7890",
+    age: 34, contact: "+1 123 456 7890", gender: "Male",
     doctorName: "Dr. Michael Brown", doctorSpecialty: "Neurologist", 
     department: "Neurology", appointmentDate: "2025-01-25", time: "11:00 AM", 
     reason: "Migraine follow-up", status: "pending", 
@@ -27,7 +27,7 @@ const dummyRequests = [
   },
   { 
     id: "REQ004", patientId: "PT0026", patientName: "Emily Rodriguez", 
-    age: 28, contact: "+1 234 567 8901",
+    age: 28, contact: "+1 234 567 8901", gender: "Female",
     doctorName: "Dr. Emily Wilson", doctorSpecialty: "Orthopedic", 
     department: "Orthopedics", appointmentDate: "2025-01-28", time: "09:15 AM", 
     reason: "Knee pain assessment", status: "pending", 
@@ -36,7 +36,7 @@ const dummyRequests = [
   },
   { 
     id: "REQ005", patientId: "PT0027", patientName: "Michael Chen", 
-    age: 45, contact: "+1 345 678 9012",
+    age: 45, contact: "+1 345 678 9012", gender: "Male",
     doctorName: "Dr. Robert Taylor", doctorSpecialty: "Ophthalmologist", 
     department: "Ophthalmology", appointmentDate: "2025-01-30", time: "03:45 PM", 
     reason: "Vision checkup", status: "pending", 
@@ -45,7 +45,7 @@ const dummyRequests = [
   },
   { 
     id: "REQ008", patientId: "PT0030", patientName: "David Thompson", 
-    age: 41, contact: "+1 678 901 2345",
+    age: 41, contact: "+1 678 901 2345", gender: "Male",
     doctorName: "Dr. James Wilson", doctorSpecialty: "Cardiologist", 
     department: "Cardiology", appointmentDate: "2025-02-05", time: "10:00 AM", 
     reason: "Heart checkup", status: "pending", 
@@ -54,11 +54,12 @@ const dummyRequests = [
   }
 ];
 
-const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
+const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null, onApprove, onReject }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [showAllData, setShowAllData] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
@@ -74,19 +75,34 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
   // Filter to ONLY show pending requests
   const safeData = Array.isArray(data) ? data.filter(item => item.status === "pending") : [];
 
-  const getAllDepartments = () => [...new Set(safeData.map(r => r.department))].sort();
+  const getAllDepartments = () => {
+    let sourceData;
+    if (doctorId && !showAllData) {
+      sourceData = safeData.filter(item => item.doctorId === doctorId || item.doctorName === doctorName);
+    } else {
+      sourceData = safeData;
+    }
+    return [...new Set(sourceData.map(r => r.department))].sort();
+  };
 
   const getFilteredRequests = () => {
-    // Start with ONLY pending requests (already filtered in safeData)
-    let filtered = [...safeData];
+    let filtered;
+    
+    if (doctorId && !showAllData) {
+      filtered = safeData.filter(item => 
+        item.doctorId === doctorId || item.doctorName === doctorName
+      );
+    } else {
+      filtered = [...safeData];
+    }
     
     if (searchTerm) {
       filtered = filtered.filter(item => 
-        item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.id && item.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.patientId && item.patientId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.patientName && item.patientName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.doctorName && item.doctorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.department && item.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.contact && item.contact.includes(searchTerm))
       );
     }
@@ -134,6 +150,7 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
+    showSuccessToast(`Exported ${exportData.length} pending requests`, 3000);
   };
   
   const handleImport = (event) => {
@@ -143,43 +160,74 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
     reader.onload = (e) => {
       try { 
         const importedData = JSON.parse(e.target.result);
-        // Only keep pending requests from imported data
         const pendingImports = importedData.filter(item => item.status === "pending");
-        alert(`Successfully imported ${pendingImports.length} pending requests!`); 
+        showAddToast(`Successfully imported ${pendingImports.length} pending requests!`, 4000, {
+          'Total': importedData.length,
+          'Pending': pendingImports.length,
+          'Other': importedData.length - pendingImports.length
+        });
       } 
       catch (error) { 
-        alert('Error parsing JSON file.'); 
+        showErrorToast('Error parsing JSON file. Please check file format.', 3000);
       }
     };
     reader.readAsText(file);
     event.target.value = '';
   };
-  
+ 
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
     setDateFilter(''); 
     setSearchTerm('');
   };
-  
+
   const activeFilterCount = (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
 
-  const handleApproveClick = (request) => { setSelectedRequest(request); setShowApproveModal(true); };
+  const handleApproveClick = (request) => { 
+    setSelectedRequest(request); 
+    setShowApproveModal(true); 
+  };
   
   const handleConfirmApprove = (appointmentData) => {
     if (selectedRequest) {
       if (onApprove) onApprove(selectedRequest, appointmentData);
-      else alert(`Request ${selectedRequest.id} approved successfully!\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}`);
+      else {
+        showSuccessToast(
+          `Request ${selectedRequest.id} approved successfully!`,
+          4000,
+          {
+            'Patient': selectedRequest.patientName,
+            'Date': appointmentData.date,
+            'Time': appointmentData.time,
+            'Token': `#${appointmentData.token}`
+          }
+        );
+      }
     }
     setShowApproveModal(false);
     setSelectedRequest(null);
   };
   
-  const handleRejectClick = (request) => { setSelectedRequest(request); setRejectReason(""); setShowRejectModal(true); };
+  const handleRejectClick = (request) => { 
+    setSelectedRequest(request); 
+    setRejectReason(""); 
+    setShowRejectModal(true); 
+  };
   
   const handleConfirmReject = () => {
     if (selectedRequest) {
       if (onReject) onReject(selectedRequest, rejectReason);
-      else alert(`Request ${selectedRequest.id} rejected successfully!\nReason: ${rejectReason || "No reason provided"}`);
+      else {
+        showErrorToast(
+          `Request ${selectedRequest.id} rejected successfully!`,
+          4000,
+          {
+            'Patient': selectedRequest.patientName,
+            'Doctor': selectedRequest.doctorName,
+            'Reason': rejectReason || "No reason provided"
+          }
+        );
+      }
     }
     setShowRejectModal(false);
     setSelectedRequest(null);
@@ -189,8 +237,23 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
   const handleSaveAutoDecline = (minutes) => {
     setAutoDeclineMinutes(minutes);
     localStorage.setItem('autoDeclineMinutes', minutes);
-    alert(`Auto decline time has been set to ${minutes} minutes.`);
+    showSuccessToast(`Auto decline time has been set to ${minutes} minutes.`, 3000);
   };
+
+  const toggleShowAllData = () => {
+    setShowAllData(!showAllData);
+    setCurrentPage(1);
+    setDepartmentFilter('');
+    setDateFilter('');
+    setSearchTerm('');
+    if (!showAllData) {
+      showSuccessToast(`Now showing all doctors' requests`, 2000);
+    } else {
+      showSuccessToast(`Now showing requests for ${doctorName}`, 2000);
+    }
+  };
+
+  const showDoctorBanner = doctorId && !showAllData;
 
   if (safeData.length === 0) {
     return (
@@ -235,6 +298,44 @@ const RequestTable = ({ data = dummyRequests, onApprove, onReject }) => {
           </button>
         </div>
       </div>
+
+      {showDoctorBanner && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <p className="text-sm font-medium text-blue-800">
+                Showing requests for: <span className="font-semibold">{doctorName}</span>
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Total requests: {filteredRequests.length}
+              </p>
+            </div>
+            <button
+              onClick={toggleShowAllData}
+              className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 transition-colors"
+            >
+              Show All Doctors' Requests
+            </button>
+          </div>
+        </div>
+      )}
+
+      {doctorId && showAllData && (
+        <div className="mb-4 p-3 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-sm text-gray-700">
+              <span className="font-medium">Showing all doctors' requests</span>
+              <span className="text-gray-500 ml-2">Total: {filteredRequests.length} requests</span>
+            </p>
+          </div>
+          <button
+            onClick={toggleShowAllData}
+            className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            ← Back to {doctorName}'s Requests
+          </button>
+        </div>
+      )}
 
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">

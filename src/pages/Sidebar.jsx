@@ -41,16 +41,16 @@ const menu = [
         ],
       },
       { label: "Visits", icon: CalendarDays, path: "/visits" },
-      {
-        label: "Laboratory",
-        icon: FlaskConical,
-        hasDropdown: true,
-        dropdownItems: [
-          { label: "Register Lab", icon: PlusCircle, path: "/laboratory" },
-          { label: "Lab Tests", icon: Microscope, path: "/lab/tests" },
-          { label: "Lab Results", icon: FileText, path: "/lab/results" },
-        ],
-      },
+      // {
+      //   label: "Laboratory",
+      //   icon: FlaskConical,
+      //   hasDropdown: true,
+      //   dropdownItems: [
+      //     { label: "Register Lab", icon: PlusCircle, path: "/laboratory" },
+      //     { label: "Lab Tests", icon: Microscope, path: "/lab/tests" },
+      //     { label: "Lab Results", icon: FileText, path: "/lab/results" },
+      //   ],
+      // },
     ],
   },
   {

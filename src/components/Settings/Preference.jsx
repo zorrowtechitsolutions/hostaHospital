@@ -1,6 +1,7 @@
-// src/components/Settings/Preference.jsx - Refactored
+// src/components/Settings/Preference.jsx - With toast notifications
 import React, { useState } from 'react';
 import { Button, Card, Switch } from '../ui';
+import { showSuccessToast, showWarningToast, showInfoToast } from '../ui/Toast';
 
 const Preference = () => {
   const [preferences, setPreferences] = useState({
@@ -14,15 +15,35 @@ const Preference = () => {
     pharmacy: true,
     staffs: false,
   });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleToggle = (key) => setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
-  const handleSaveChanges = () => {
-    console.log('Saved preferences:', preferences);
-    alert('Preferences saved successfully!');
+  const handleToggle = (key) => {
+    setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
+    showInfoToast(`${key} module ${!preferences[key] ? 'enabled' : 'disabled'}`, 2000);
   };
+  
+  const handleSaveChanges = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      console.log('Saved preferences:', preferences);
+      const enabledCount = Object.values(preferences).filter(v => v === true).length;
+      const totalCount = Object.keys(preferences).length;
+      
+      showSuccessToast(
+        'Preferences saved successfully!',
+        4000,
+        {
+          'Enabled Modules': `${enabledCount}/${totalCount}`,
+          'Updated': new Date().toLocaleTimeString()
+        }
+      );
+      setIsSaving(false);
+    }, 500);
+  };
+  
   const handleCancel = () => {
     console.log('Changes cancelled');
-    alert('Changes cancelled');
+    showWarningToast('Changes cancelled. Original preferences restored.', 3000);
   };
 
   const preferenceItems = [
@@ -54,7 +75,9 @@ const Preference = () => {
         </div>
         <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
+          <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving} loading={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </div>
     </Card>

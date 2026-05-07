@@ -44,7 +44,9 @@ import Appointments from "./components/Appointment/Appointment";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
 import Specialities from "./components/specialities/Specialities";
-import { ToastProvider } from "./components/ui/Toast"; // Import ToastProvider
+import { ToastProvider } from "./components/ui/Toast";
+import EmailTemplates from "./components/Settings/Email";
+import Profile from "./components/MyProfile/Profile";
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -156,11 +158,10 @@ function App() {
   // If not authenticated, show login/register pages
   if (!isAuthenticated) {
     console.log("Rendering PUBLIC routes");
-    return (
+    return (  
       <Routes>
         <Route path="/register" element={<Register />} />
         <Route path="/sign-in" element={<Login />} />
-        <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/sign-in" replace />} />
       </Routes>
     );
@@ -169,7 +170,7 @@ function App() {
   // If authenticated, show main app
   console.log("Rendering PROTECTED routes");
   return (
-    <ToastProvider> {/* Wrap with ToastProvider */}
+    <ToastProvider>
       <div className="flex h-screen bg-gray-50 font-sans">
         <Sidebar sidebarOpen={sidebarOpen} />
         
@@ -275,13 +276,14 @@ function App() {
               <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
-              <Route path="/settings" element={<Settings />} />
               <Route path="/roles" element={<UserPermissions />} />
               <Route path="/permissions/:roleName" element={<PermissionList />} /> 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
               <Route path="/visits" element={<Visits/>} />
               <Route path="/appointments" element={<Appointments/>} />
               <Route path="/specialities" element={<Specialities />} />
+              <Route path="/email" element={<EmailTemplates/>} />
+              <Route path="/profile" element={<Profile/>} />
             </Routes>
           </div>
         </div>

@@ -1,6 +1,7 @@
-// src/components/Settings/Notification.jsx - Refactored
+// src/components/Settings/Notification.jsx - With toast notifications
 import React, { useState } from 'react';
 import { Button, Card, Switch } from '../ui';
+import { showSuccessToast, showWarningToast, showInfoToast } from '../ui/Toast';
 
 const Notification = () => {
   const [notifications, setNotifications] = useState({
@@ -12,16 +13,36 @@ const Notification = () => {
   });
 
   const [notificationMethod, setNotificationMethod] = useState('push');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleToggle = (key) => {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+    showInfoToast(`${key} ${!notifications[key] ? 'enabled' : 'disabled'}`, 2000);
   };
 
-  const handleMethodChange = (method) => setNotificationMethod(method);
-  const handleSaveChanges = () => {
-    console.log('Saved notification preferences:', { notifications, notificationMethod });
-    alert('Notification preferences saved successfully!');
+  const handleMethodChange = (method) => {
+    setNotificationMethod(method);
+    showInfoToast(`Notification method changed to ${method}`, 2000);
   };
+  
+  const handleSaveChanges = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      console.log('Saved notification preferences:', { notifications, notificationMethod });
+      showSuccessToast(
+        'Notification preferences saved successfully!',
+        4000,
+        {
+          'Email': notifications.emailNotifications ? 'On' : 'Off',
+          'Appointments': notifications.appointmentAlerts ? 'On' : 'Off',
+          'Security': notifications.securityAlerts ? 'On' : 'Off',
+          'Delivery Method': notificationMethod
+        }
+      );
+      setIsSaving(false);
+    }, 500);
+  };
+  
   const handleCancel = () => {
     setNotifications({
       emailNotifications: true,
@@ -31,7 +52,7 @@ const Notification = () => {
       deviceLoginAlerts: false,
     });
     setNotificationMethod('push');
-    alert('Changes cancelled');
+    showWarningToast('Changes cancelled. Original settings restored.', 3000);
   };
 
   const notificationItems = [
@@ -82,7 +103,9 @@ const Notification = () => {
 
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
+          <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving} loading={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </div>
     </Card>

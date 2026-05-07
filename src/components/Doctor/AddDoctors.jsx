@@ -1,4 +1,3 @@
-// src/components/Doctor/AddDoctor.jsx - With toast notifications
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -35,13 +34,29 @@ const AddDoctor = () => {
     displayName: '',
     userName: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    // Salary fields
+    netSalary: '',
+    basic: '',
+    da: '',
+    hra: '',
+    conveyance: '',
+    allowance: '',
+    medicalAllowance: '',
+    otherEarnings: '',
+    tds: '',
+    pf: '',
+    leave: '',
+    profTax: '',
+    labourWelfare: '',
+    otherDeductions: ''
   });
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic'); // Tab state for Basic Info / Salary Info
 
   // Validation functions
   const validateField = (name, value) => {
@@ -244,28 +259,50 @@ const AddDoctor = () => {
         
         const newDoctorId = existingDoctors.length + 1;
         const newDoctor = {
-          id: newDoctorId,
-          name: `Dr. ${formData.firstName} ${formData.lastName}`,
-          specialty: formData.specialist,
-          experience: calculateExperience(formData.dob),
-          appointments: 0,
-          email: formData.email,
-          phone: formData.phoneNumber,
-          photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
-          department: formData.department,
-          registrationNumber: formData.registrationNumber,
-          gender: formData.gender,
-          dob: formData.dob,
-          knownLanguages: formData.knownLanguages,
-          about: formData.about,
-          address: formData.address,
-          country: formData.country,
-          state: formData.state,
-          city: formData.city,
-          pinCode: formData.pinCode,
-          displayName: formData.displayName,
-          userName: formData.userName
-        };
+  id: newDoctorId,
+  name: `Dr. ${formData.firstName} ${formData.lastName}`,
+  specialty: formData.specialist,
+  experience: calculateExperience(formData.dob),
+  appointments: 0,
+  email: formData.email,
+  phone: formData.phoneNumber,
+  photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
+  department: formData.department,
+  registrationNumber: formData.registrationNumber,
+  gender: formData.gender,
+  dob: formData.dob,
+  knownLanguages: formData.knownLanguages,
+  about: formData.about,
+  address: formData.address,
+  country: formData.country,
+  state: formData.state,
+  city: formData.city,
+  pinCode: formData.pinCode,
+  displayName: formData.displayName,
+  userName: formData.userName,  // <-- Add comma here
+  
+  // Include salary details
+  salaryDetails: {
+    netSalary: formData.netSalary,
+    earnings: {
+      basic: formData.basic,
+      da: formData.da,
+      hra: formData.hra,
+      conveyance: formData.conveyance,
+      allowance: formData.allowance,
+      medicalAllowance: formData.medicalAllowance,
+      others: formData.otherEarnings
+    },
+    deductions: {
+      tds: formData.tds,
+      pf: formData.pf,
+      leave: formData.leave,
+      profTax: formData.profTax,
+      labourWelfare: formData.labourWelfare,
+      others: formData.otherDeductions
+    }
+  }
+};
         
         const updatedDoctors = [...existingDoctors, newDoctor];
         localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
@@ -324,6 +361,12 @@ const AddDoctor = () => {
     }
   };
 
+  // Tabs configuration
+  const tabs = [
+    { id: 'basic', label: 'Basic Info' },
+    { id: 'salary', label: 'Salary Info' }
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
@@ -339,123 +382,168 @@ const AddDoctor = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information Card */}
+        <form onSubmit={handleSubmit}>
           <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Doctor's personal and professional details</p>
+            {/* Tabs Header */}
+            <div className="border-b border-gray-200 px-6">
+              <nav className="-mb-px flex space-x-8">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
             </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Image Upload Section */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
-                <div className="flex-shrink-0">
-                  <div className="relative">
-                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
-                      {previewImage ? (
-                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
-                      ) : (
-                        <Image className="h-8 w-8 text-gray-400" />
+
+            {/* Basic Information Tab */}
+            {activeTab === 'basic' && (
+              <div className="p-6 space-y-6">
+                {/* Image Upload Section */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-shrink-0">
+                    <div className="relative">
+                      <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                        {previewImage ? (
+                          <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <Image className="h-8 w-8 text-gray-400" />
+                        )}
+                      </div>
+                      {previewImage && (
+                        <button type="button" onClick={removeImage} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm">
+                          <X className="h-3 w-3" />
+                        </button>
                       )}
                     </div>
-                    {previewImage && (
-                      <button type="button" onClick={removeImage} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm">
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
+                  </div>
+                  <div className="flex-1 w-full">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
+                    <div>
+                      <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
+                      <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2">
+                        <Upload className="h-4 w-4" /> Upload Image
+                      </Button>
+                      <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
+                    </div>
+                    {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                   </div>
                 </div>
-                <div className="flex-1 w-full">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
-                  <div>
-                    <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
-                    <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2">
-                      <Upload className="h-4 w-4" /> Upload Image
-                    </Button>
-                    <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">Doctor ID:</span>
+                    <span className="text-sm font-medium text-gray-900">Auto-generated</span>
                   </div>
-                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
+                  <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']} placeholder="Select Department" value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
+                  <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
+                  <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
+                  <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
+                  <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
+                  <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Select label="Known Languages" name="knownLanguages" options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']} placeholder="Select Language" value={formData.knownLanguages} onChange={handleChange} onBlur={handleBlur} error={errors.knownLanguages} touched={touched.knownLanguages} required />
+                </div>
+
+                <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
+
+                {/* Address Information Card */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
+                  <div className="space-y-5">
+                    <Input label="Address" name="address" icon={MapPin} placeholder="Street address" value={formData.address} onChange={handleChange} onBlur={handleBlur} error={errors.address} touched={touched.address} required />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      <Select label="Country" name="country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
+                      <Input label="State" name="state" required={false} placeholder="State" value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
+                      <Input label="City" name="city" required={false} placeholder="City" value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
+                      <Input label="Pin Code" name="pinCode" required={false} placeholder="Postal code" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account Details Card */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} />
+                    <Input label="Username" name="userName" required={false} icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} />
+                    <Input label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
+                    <Input label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Doctor ID:</span>
-                  <span className="text-sm font-medium text-gray-900">Auto-generated</span>
+            {/* Salary Information Tab */}
+            {activeTab === 'salary' && (
+              <div className="p-6">
+              <h4 className="text-md font-semibold text-gray-800 mb-4">Net Salary</h4>
+
+                <Input 
+                  name="netSalary" 
+                  value={formData.netSalary} 
+                  onChange={handleChange} 
+                  placeholder="Enter net salary" 
+                  className="mb-6 md:w-1/2" 
+                />
+                
+                <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                  <Input name="basic" value={formData.basic} onChange={handleChange} placeholder="Basic" />
+                  <Input name="da" value={formData.da} onChange={handleChange} placeholder="DA" />
+                  <Input name="hra" value={formData.hra} onChange={handleChange} placeholder="HRA" />
+                  <Input name="conveyance" value={formData.conveyance} onChange={handleChange} placeholder="Conveyance" />
+                  <Input name="allowance" value={formData.allowance} onChange={handleChange} placeholder="Allowance" />
+                  <Input name="medicalAllowance" value={formData.medicalAllowance} onChange={handleChange} placeholder="Medical Allowance" />
+                  <Input name="otherEarnings" value={formData.otherEarnings} onChange={handleChange} placeholder="Others" />
+                </div>
+
+                <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input name="tds" value={formData.tds} onChange={handleChange} placeholder="TDS" />
+                  <Input name="pf" value={formData.pf} onChange={handleChange} placeholder="PF" />
+                  <Input name="leave" value={formData.leave} onChange={handleChange} placeholder="Leave" />
+                  <Input name="profTax" value={formData.profTax} onChange={handleChange} placeholder="Prof. Tax" />
+                  <Input name="labourWelfare" value={formData.labourWelfare} onChange={handleChange} placeholder="Labour Welfare" />
+                  <Input name="otherDeductions" value={formData.otherDeductions} onChange={handleChange} placeholder="Others" />
                 </div>
               </div>
+            )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
-                <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']} placeholder="Select Department" value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
-                <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
-                <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
-                <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
-                <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Select label="Known Languages" name="knownLanguages" options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']} placeholder="Select Language" value={formData.knownLanguages} onChange={handleChange} onBlur={handleBlur} error={errors.knownLanguages} touched={touched.knownLanguages} required />
-              </div>
-
-              <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
+            {/* Action Buttons */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+              <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Doctor'}
+              </Button>
             </div>
           </Card>
-
-          {/* Address Information Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Address Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Clinic or hospital address details</p>
-            </div>
-            <div className="p-6 space-y-5">
-              <Input label="Address" name="address" icon={MapPin} placeholder="Street address" value={formData.address} onChange={handleChange} onBlur={handleBlur} error={errors.address} touched={touched.address} required />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <Select label="Country" name="country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
-                <Input label="State" name="state" required={false} placeholder="State" value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
-                <Input label="City" name="city" required={false} placeholder="City" value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
-                <Input label="Pin Code" name="pinCode" required={false} placeholder="Postal code" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} />
-              </div>
-            </div>
-          </Card>
-
-          {/* Account Details Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Account Details</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Login credentials for the doctor portal</p>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} />
-                <Input label="Username" name="userName" required={false} icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} />
-                <Input label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
-                <Input label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
-              </div>
-            </div>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Doctor'}
-            </Button>
-          </div>
         </form>
       </div>
     </div>

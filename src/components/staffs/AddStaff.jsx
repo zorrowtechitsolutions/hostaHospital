@@ -1,8 +1,9 @@
-// src/components/staffs/AddStaff.jsx - Complete with avatar upload like AddDoctor
+// src/components/staffs/AddStaff.jsx - With toast notifications
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Save, AlertCircle, Upload, X, Image } from 'lucide-react';
 import { Button, Input, Select, Card, Tabs, Alert, Switch } from '../ui';
+import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 
 const AddStaff = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const AddStaff = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState({
     id: '', name: '', gender: 'Male', dob: '', mobile: '', email: '',
@@ -28,11 +30,13 @@ const AddStaff = () => {
     if (!file) return true;
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      showWarningToast('File size must be less than 5MB', 3000);
       return false;
     }
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return false;
     }
     return true;
@@ -128,6 +132,7 @@ const AddStaff = () => {
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     setFormData(prev => ({ ...prev, profileImage: file }));
+    showSuccessToast('Image uploaded successfully!', 2000);
   };
 
   const handleFileSelect = (e) => {
@@ -139,6 +144,7 @@ const AddStaff = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
     setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Image removed', 2000);
   };
 
   const validateForm = () => {
@@ -160,62 +166,81 @@ const AddStaff = () => {
       if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) {
         setActiveTab('basic');
       }
+      showWarningToast('Please fix the validation errors before submitting', 3000);
       return;
     }
 
-    const today = new Date();
-    const formattedDate = `${today.getDate().toString().padStart(2, ' ')} ${today.toLocaleString('default', { month: 'short' })} ${today.getFullYear()}`;
-    const isoDate = today.toISOString().split('T')[0];
+    setIsSubmitting(true);
 
-    const newStaff = {
-      id: formData.id || generateStaffId(),
-      name: formData.name,
-      firstName: formData.name.split(' ')[0] || formData.name,
-      lastName: formData.name.split(' ')[1] || '',
-      gender: formData.gender,
-      designation: formData.designation,
-      phone: formData.mobile,
-      email: formData.email,
-      appointmentDate: formData.appointmentDate || isoDate,
-      appointmentDateDisplay: formattedDate,
-      patientsCount: 0,
-      profileImage: previewImage,
-      imageUrl: previewImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
-      status: formData.status ? 'Active' : 'Inactive',
-      jobType: formData.jobType,
-      dob: formData.dob || 'N/A',
-      address: `${formData.addressLine1} ${formData.addressLine2} ${formData.city} ${formData.state} ${formData.country} ${formData.pinCode}`.trim() || 'N/A',
-      salary: formData.netSalary ? `$${formData.netSalary}` : '$0',
-      joiningDate: formattedDate,
-      department: formData.designation,
-      staffType: formData.staffType,
-      salaryTransactions: [],
-      salaryDetails: {
-        netSalary: formData.netSalary,
-        earnings: {
-          basic: formData.basic,
-          da: formData.da,
-          hra: formData.hra,
-          conveyance: formData.conveyance,
-          allowance: formData.allowance,
-          medicalAllowance: formData.medicalAllowance,
-          others: formData.otherEarnings
-        },
-        deductions: {
-          tds: formData.tds,
-          pf: formData.pf,
-          leave: formData.leave,
-          profTax: formData.profTax,
-          labourWelfare: formData.labourWelfare,
-          others: formData.otherDeductions
+    setTimeout(() => {
+      const today = new Date();
+      const formattedDate = `${today.getDate().toString().padStart(2, ' ')} ${today.toLocaleString('default', { month: 'short' })} ${today.getFullYear()}`;
+      const isoDate = today.toISOString().split('T')[0];
+
+      const newStaffId = formData.id || generateStaffId();
+      const newStaff = {
+        id: newStaffId,
+        name: formData.name,
+        firstName: formData.name.split(' ')[0] || formData.name,
+        lastName: formData.name.split(' ')[1] || '',
+        gender: formData.gender,
+        designation: formData.designation,
+        phone: formData.mobile,
+        email: formData.email,
+        appointmentDate: formData.appointmentDate || isoDate,
+        appointmentDateDisplay: formattedDate,
+        patientsCount: 0,
+        profileImage: previewImage,
+        imageUrl: previewImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
+        status: formData.status ? 'Active' : 'Inactive',
+        jobType: formData.jobType,
+        dob: formData.dob || 'N/A',
+        address: `${formData.addressLine1} ${formData.addressLine2} ${formData.city} ${formData.state} ${formData.country} ${formData.pinCode}`.trim() || 'N/A',
+        salary: formData.netSalary ? `$${formData.netSalary}` : '$0',
+        joiningDate: formattedDate,
+        department: formData.designation,
+        staffType: formData.staffType,
+        salaryTransactions: [],
+        salaryDetails: {
+          netSalary: formData.netSalary,
+          earnings: {
+            basic: formData.basic,
+            da: formData.da,
+            hra: formData.hra,
+            conveyance: formData.conveyance,
+            allowance: formData.allowance,
+            medicalAllowance: formData.medicalAllowance,
+            others: formData.otherEarnings
+          },
+          deductions: {
+            tds: formData.tds,
+            pf: formData.pf,
+            leave: formData.leave,
+            profTax: formData.profTax,
+            labourWelfare: formData.labourWelfare,
+            others: formData.otherDeductions
+          }
         }
-      }
-    };
+      };
 
-    const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-    localStorage.setItem('staffs', JSON.stringify([newStaff, ...existingStaffs]));
-    setSubmitSuccess(true);
-    setTimeout(() => navigate('/staffs'), 1500);
+      const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
+      localStorage.setItem('staffs', JSON.stringify([newStaff, ...existingStaffs]));
+      
+      showAddToast(
+        `${formData.name} has been added as staff successfully!`,
+        4000,
+        {
+          'Name': formData.name,
+          'ID': newStaffId,
+          'Designation': formData.designation,
+          'Status': formData.status ? 'Active' : 'Inactive'
+        }
+      );
+      
+      setIsSubmitting(false);
+      setSubmitSuccess(true);
+      setTimeout(() => navigate('/staffs'), 1500);
+    }, 500);
   };
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
@@ -245,7 +270,7 @@ const AddStaff = () => {
 
           {activeTab === 'basic' && (
             <div className="p-6">
-              {/* Profile Image Upload Section - Like AddDoctor */}
+              {/* Profile Image Upload Section */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6 pb-6 border-b border-gray-200">
                 <div className="flex-shrink-0">
                   <div className="relative">
@@ -287,6 +312,7 @@ const AddStaff = () => {
                       variant="outline"
                       onClick={() => document.getElementById('profileImageInput').click()}
                       className="inline-flex items-center gap-2"
+                      disabled={isSubmitting}
                     >
                       <Upload className="h-4 w-4" />
                       Upload Image
@@ -372,7 +398,9 @@ const AddStaff = () => {
 
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
             <Button variant="outline" onClick={() => navigate('/staffs')}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} icon={Save}>Save Staff</Button>
+            <Button variant="primary" onClick={handleSubmit} icon={Save} disabled={isSubmitting} loading={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Staff'}
+            </Button>
           </div>
         </Card>
       </div>

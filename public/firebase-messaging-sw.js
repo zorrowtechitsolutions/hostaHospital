@@ -1,3 +1,5 @@
+
+
 // firebase-messaging-sw.js
 
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");

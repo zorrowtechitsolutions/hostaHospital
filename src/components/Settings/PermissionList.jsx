@@ -1,7 +1,8 @@
-// src/components/Settings/PermissionList.jsx - Refactored
+// src/components/Settings/PermissionList.jsx - With toast notifications
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Input, Card, Checkbox, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SearchBar } from "../ui";
+import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 
 const PermissionList = () => {
   const { roleName } = useParams();
@@ -31,6 +32,7 @@ const PermissionList = () => {
   ]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -55,13 +57,32 @@ const PermissionList = () => {
   const filteredManageModules = manageModules.filter(module => module.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSave = () => {
-    const permissions = { main: mainModules, medical: medicalModules, manage: manageModules };
-    console.log("Saved permissions:", permissions);
-    alert("Permissions saved successfully!");
+    setIsSaving(true);
+    setTimeout(() => {
+      const permissions = { main: mainModules, medical: medicalModules, manage: manageModules };
+      console.log("Saved permissions:", permissions);
+      
+      const totalPermissions = [...mainModules, ...medicalModules, ...manageModules].length;
+      const enabledPermissions = [...mainModules, ...medicalModules, ...manageModules].filter(m => m.create || m.edit || m.delete || m.view).length;
+      
+      showSuccessToast(
+        `Permissions for "${roleName}" saved successfully!`,
+        4000,
+        {
+          'Role': roleName,
+          'Total Modules': totalPermissions,
+          'Enabled Permissions': enabledPermissions
+        }
+      );
+      setIsSaving(false);
+    }, 500);
   };
 
   const handleCancel = () => {
-    if (window.confirm("Are you sure you want to discard your changes?")) window.location.reload();
+    if (window.confirm("Are you sure you want to discard your changes?")) {
+      showWarningToast("Changes discarded. Permissions restored to previous state.", 3000);
+      window.location.reload();
+    }
   };
 
   const PermissionCheckbox = ({ checked, onToggle }) => (
@@ -129,7 +150,9 @@ const PermissionList = () => {
 
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave}>Save Permissions</Button>
+          <Button variant="primary" onClick={handleSave} disabled={isSaving} loading={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Permissions'}
+          </Button>
         </div>
       </div>
     </div>

@@ -1,10 +1,11 @@
-// src/components/Settings/UserPermissions.jsx - Refactored
+// src/components/Settings/UserPermissions.jsx - With toast notifications
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
   TableCell, Modal, Input, Select, Badge, Alert 
 } from '../ui';
+import { showSuccessToast, showWarningToast, showErrorToast, showAddToast, showDeleteToast } from '../ui/Toast';
 
 const UserPermissions = () => {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ const UserPermissions = () => {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
   const dropdownRefs = useRef({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [rolePermissions, setRolePermissions] = useState({
     Owner: ['all_access', 'manage_users', 'manage_roles', 'view_reports', 'edit_settings'],
@@ -53,43 +55,92 @@ const UserPermissions = () => {
   const handleNewRoleSubmit = useCallback((e) => {
     e.preventDefault();
     if (newRole.name.trim()) {
-      const formattedDate = new Date().toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-      setRoles(prev => [...prev, { name: newRole.name, createdDate: formattedDate, status: newRole.status }]);
-      setRolePermissions(prev => ({ ...prev, [newRole.name]: [] }));
-      setNewRole({ name: '', status: 'Active' });
-      setShowNewRoleModal(false);
-      alert(`New role "${newRole.name}" created successfully!`);
+      setIsSubmitting(true);
+      
+      setTimeout(() => {
+        const formattedDate = new Date().toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+        setRoles(prev => [...prev, { name: newRole.name, createdDate: formattedDate, status: newRole.status }]);
+        setRolePermissions(prev => ({ ...prev, [newRole.name]: [] }));
+        
+        showAddToast(
+          `New role "${newRole.name}" created successfully!`,
+          4000,
+          {
+            'Role': newRole.name,
+            'Status': newRole.status,
+            'Created': formattedDate
+          }
+        );
+        
+        setNewRole({ name: '', status: 'Active' });
+        setShowNewRoleModal(false);
+        setIsSubmitting(false);
+      }, 500);
     }
   }, [newRole]);
 
   const handleEditRoleSubmit = useCallback((e) => {
     e.preventDefault();
     if (editRole.name.trim()) {
-      setRoles(prev => prev.map(role => role.name === editRole.originalName ? { ...role, name: editRole.name, status: editRole.status } : role));
-      if (editRole.name !== editRole.originalName) {
-        setRolePermissions(prev => {
-          const newPermissions = { ...prev };
-          newPermissions[editRole.name] = newPermissions[editRole.originalName];
-          delete newPermissions[editRole.originalName];
-          return newPermissions;
-        });
-      }
-      setShowEditRoleModal(false);
-      setSelectedRole(null);
-      setOpenDropdown(null);
-      alert(`Role "${editRole.name}" updated successfully!`);
+      setIsSubmitting(true);
+      
+      setTimeout(() => {
+        setRoles(prev => prev.map(role => 
+          role.name === editRole.originalName 
+            ? { ...role, name: editRole.name, status: editRole.status } 
+            : role
+        ));
+        
+        if (editRole.name !== editRole.originalName) {
+          setRolePermissions(prev => {
+            const newPermissions = { ...prev };
+            newPermissions[editRole.name] = newPermissions[editRole.originalName];
+            delete newPermissions[editRole.originalName];
+            return newPermissions;
+          });
+        }
+        
+        showSuccessToast(
+          `Role "${editRole.name}" updated successfully!`,
+          4000,
+          {
+            'Role': editRole.name,
+            'Status': editRole.status
+          }
+        );
+        
+        setShowEditRoleModal(false);
+        setSelectedRole(null);
+        setOpenDropdown(null);
+        setIsSubmitting(false);
+      }, 500);
     }
   }, [editRole]);
 
   const handleDeleteRole = () => {
-    setRoles(prev => prev.filter(r => r.name !== roleToDelete));
-    setRolePermissions(prev => {
-      const newPermissions = { ...prev };
-      delete newPermissions[roleToDelete];
-      return newPermissions;
-    });
-    setShowDeleteModal(false);
-    setRoleToDelete(null);
+    setIsSubmitting(true);
+    
+    setTimeout(() => {
+      setRoles(prev => prev.filter(r => r.name !== roleToDelete));
+      setRolePermissions(prev => {
+        const newPermissions = { ...prev };
+        delete newPermissions[roleToDelete];
+        return newPermissions;
+      });
+      
+      showDeleteToast(
+        `Role "${roleToDelete}" has been deleted successfully!`,
+        4000,
+        {
+          'Role': roleToDelete,
+          'Status': 'Deleted'
+        }
+      );
+      
+      setShowDeleteModal(false);
+      setRoleToDelete(null);
+      setIsSubmitting(false);
+    }, 500);
   };
 
   const handleOpenEditModal = useCallback((role) => {
@@ -135,11 +186,26 @@ const UserPermissions = () => {
   const NewRoleModal = () => (
     <Modal isOpen={showNewRoleModal} onClose={() => setShowNewRoleModal(false)} title="Create New Role" size="md">
       <form onSubmit={handleNewRoleSubmit}>
-        <Input label="Role Name" value={newRole.name} onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))} placeholder="Enter role name" required autoFocus />
-        <Select label="Default Status" value={newRole.status} onChange={(e) => setNewRole(prev => ({ ...prev, status: e.target.value }))} options={['Active', 'Inactive']} className="mt-4" />
+        <Input 
+          label="Role Name" 
+          value={newRole.name} 
+          onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))} 
+          placeholder="Enter role name" 
+          required 
+          autoFocus 
+        />
+        <Select 
+          label="Default Status" 
+          value={newRole.status} 
+          onChange={(e) => setNewRole(prev => ({ ...prev, status: e.target.value }))} 
+          options={['Active', 'Inactive']} 
+          className="mt-4" 
+        />
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={() => setShowNewRoleModal(false)}>Cancel</Button>
-          <Button type="submit" variant="primary">Create Role</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Creating...' : 'Create Role'}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -148,11 +214,25 @@ const UserPermissions = () => {
   const EditRoleModal = () => (
     <Modal isOpen={showEditRoleModal} onClose={() => setShowEditRoleModal(false)} title="Edit Role" size="md">
       <form onSubmit={handleEditRoleSubmit}>
-        <Input label="Role Name" value={editRole.name} onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))} placeholder="Enter role name" required />
-        <Select label="Status" value={editRole.status} onChange={(e) => setEditRole(prev => ({ ...prev, status: e.target.value }))} options={['Active', 'Inactive']} className="mt-4" />
+        <Input 
+          label="Role Name" 
+          value={editRole.name} 
+          onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))} 
+          placeholder="Enter role name" 
+          required 
+        />
+        <Select 
+          label="Status" 
+          value={editRole.status} 
+          onChange={(e) => setEditRole(prev => ({ ...prev, status: e.target.value }))} 
+          options={['Active', 'Inactive']} 
+          className="mt-4" 
+        />
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={() => setShowEditRoleModal(false)}>Cancel</Button>
-          <Button type="submit" variant="primary">Save Changes</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -167,7 +247,9 @@ const UserPermissions = () => {
         <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete <span className="font-medium">{roleToDelete}</span>?</p>
         <div className="flex justify-center gap-3">
           <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
-          <Button variant="danger" onClick={handleDeleteRole}>Delete</Button>
+          <Button variant="danger" onClick={handleDeleteRole} disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Deleting...' : 'Delete'}
+          </Button>
         </div>
       </div>
     </Modal>
@@ -191,7 +273,12 @@ const UserPermissions = () => {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
-              <tr><TableHeader>Role</TableHeader><TableHeader>Created Date</TableHeader><TableHeader>Status</TableHeader><TableHeader>Actions</TableHeader></tr>
+              <tr>
+                <TableHeader>Role</TableHeader>
+                <TableHeader>Created Date</TableHeader>
+                <TableHeader>Status</TableHeader>
+                <TableHeader>Actions</TableHeader>
+              </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {roles.map((role, idx) => (
