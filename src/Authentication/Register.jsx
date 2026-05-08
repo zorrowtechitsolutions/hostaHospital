@@ -1,8 +1,8 @@
-// src/Authentication/Register.jsx - Fixed Google Maps loading issue
+// src/Authentication/Register.jsx - Fixed Google Maps loading issue (No address lookup)
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Mail, Lock, MapPin, Building, Building2,
+  Mail, Lock, Building, Building2,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
   Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle
 } from 'lucide-react';
@@ -138,71 +138,10 @@ const Register = () => {
     }
   };
 
-  // Function to lookup address from coordinates - FIXED VERSION
-  const lookupAddressFromCoordinates = (lat, lng, callback) => {
-    // SAFER CHECK for Google Maps
-    if (!window.google || !window.google.maps) {
-      console.log("❌ Google Maps not loaded yet");
-      showErrorToast('Google Maps is not ready yet. Please wait.', 3000);
-      if (callback) callback(false);
-      return false;
-    }
-    
-    if (typeof window.google.maps.Geocoder !== 'function') {
-      console.log("❌ Geocoder not available");
-      showErrorToast('Geocoder is not available. Please refresh the page.', 3000);
-      if (callback) callback(false);
-      return false;
-    }
-    
-    console.log("✅ Google Maps is ready, looking up address for:", lat, lng);
-    
-    try {
-      const geocoder = new window.google.maps.Geocoder();
-      const latLng = { lat: parseFloat(lat), lng: parseFloat(lng) };
-      
-      geocoder.geocode({ location: latLng }, (results, status) => {
-        console.log("📡 Geocode status:", status);
-        console.log("📡 Results:", results);
-        
-        if (status === 'OK' && results && results.length > 0) {
-          let formattedAddress = results[0].formatted_address;
-          console.log("✅ Address found:", formattedAddress);
-          setAddress(formattedAddress);
-          showSuccessToast('Address automatically filled!', 3000);
-          if (callback) callback(true);
-          return true;
-        } else {
-          console.warn("⚠️ Geocode failed. Status:", status);
-          let errorMsg = 'Could not get address. ';
-          if (status === 'ZERO_RESULTS') {
-            errorMsg += 'No address found for these coordinates.';
-          } else if (status === 'OVER_QUERY_LIMIT') {
-            errorMsg += 'Too many requests. Please try again.';
-          } else if (status === 'REQUEST_DENIED') {
-            errorMsg += 'Google Maps API key issue. Please check configuration.';
-          } else {
-            errorMsg += 'Please enter manually.';
-          }
-          showWarningToast(errorMsg, 4000);
-          if (callback) callback(false);
-          return false;
-        }
-      });
-    } catch (err) {
-      console.error("❌ Geocoder error:", err);
-      showErrorToast('Error occurred while fetching address. Please try again.', 3000);
-      if (callback) callback(false);
-      return false;
-    }
-    
-    return true;
-  };
-
-  // Enhanced getCurrentLocation with automatic address fill - FIXED VERSION
+  // Simplified getCurrentLocation - Only gets coordinates, NO address lookup
   const getCurrentLocation = () => {
     setLocationStatus('loading');
-    showInfoToast('Getting your current location...', 2000);
+    showInfoToast('Getting your current location coordinates...', 2000);
     
     if (!navigator.geolocation) {
       setLocationStatus('error');
@@ -212,7 +151,7 @@ const Register = () => {
     }
 
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
+      (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         
@@ -221,46 +160,9 @@ const Register = () => {
         setLatitude(lat.toString());
         setLongitude(lng.toString());
         
-        showSuccessToast(`Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 3000);
-
-        // Check if Google Maps is ready before proceeding
-        if (!window.google || !window.google.maps) {
-          console.log("⏳ Google Maps not loaded yet, waiting...");
-          showWarningToast('Google Maps is loading. Please wait a moment and try again.', 3000);
-          setLocationStatus('warning');
-          setTimeout(() => setLocationStatus(''), 3000);
-          return;
-        }
-        
-        try {
-          const geocoder = new window.google.maps.Geocoder();
-          const latLng = { lat: lat, lng: lng };
-          
-          console.log("🔍 Looking up address for coordinates...");
-          
-          geocoder.geocode({ location: latLng }, (results, status) => {
-            console.log("📡 Geocode status:", status);
-            console.log("📡 Results:", results);
-            
-            if (status === 'OK' && results && results.length > 0) {
-              const fullAddress = results[0].formatted_address;
-              console.log("✅ Address found:", fullAddress);
-              setAddress(fullAddress);
-              showSuccessToast('Address automatically filled!', 3000);
-              setLocationStatus('success');
-            } else {
-              console.warn("⚠️ Geocode failed. Status:", status);
-              showWarningToast('Could not get address. Please enter manually.', 3000);
-              setLocationStatus('warning');
-            }
-            setTimeout(() => setLocationStatus(''), 3000);
-          });
-        } catch (err) {
-          console.error("❌ Geocoder error:", err);
-          showErrorToast('Error occurred while fetching address.', 3000);
-          setLocationStatus('error');
-          setTimeout(() => setLocationStatus(''), 3000);
-        }
+        showSuccessToast(`Coordinates captured: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 4000);
+        setLocationStatus('success');
+        setTimeout(() => setLocationStatus(''), 3000);
       },
       (error) => {
         console.error('❌ Geolocation error:', error);
@@ -292,47 +194,14 @@ const Register = () => {
     );
   };
 
-  // Manual address lookup from coordinates - FIXED VERSION
-  const handleManualAddressLookup = () => {
-    if (!latitude || !longitude) {
-      showWarningToast('Please enter or get location coordinates first', 3000);
-      return;
-    }
-    
-    if (!window.google || !window.google.maps) {
-      showErrorToast('Google Maps is not ready yet. Please wait.', 3000);
-      return;
-    }
-    
-    showInfoToast('Looking up address from coordinates...', 2000);
-    lookupAddressFromCoordinates(latitude, longitude, (success) => {
-      if (success) {
-        showSuccessToast('Address found and filled!', 3000);
-      }
-    });
-  };
-
   const handleLocationSelect = (lat, lng, addressText) => {
-    console.log('📍 Map click - Location selected:', lat, lng, addressText);
+    console.log('📍 Map click - Location selected:', lat, lng);
     setLatitude(lat.toString());
     setLongitude(lng.toString());
     
-    if (addressText && addressText.trim() !== '') {
-      setAddress(addressText);
-      showSuccessToast('Location selected successfully!', 3000);
-      setLocationStatus('success');
-    } else if (window.google && window.google.maps) {
-      // Try to get address if not provided
-      lookupAddressFromCoordinates(lat, lng, (success) => {
-        if (success) {
-          setLocationStatus('success');
-        } else {
-          setLocationStatus('warning');
-        }
-      });
-    } else {
-      setLocationStatus('warning');
-    }
+    // Only set coordinates, do NOT auto-fill address
+    showSuccessToast(`Location coordinates set: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 3000);
+    setLocationStatus('success');
     setTimeout(() => setLocationStatus(''), 3000);
   };
 
@@ -425,7 +294,7 @@ const Register = () => {
         
         // Registration Success Toast with detailed information
         showSuccessToast(
-          ` Registration Successful! Welcome to the HMS Family!`,
+          `✅ Registration Successful! Welcome to the HMS Family!`,
           5000,
           {
             '🏥 Hospital ID': hospitalId,
@@ -536,10 +405,10 @@ const Register = () => {
               longitude={longitude}
               onLocationSelect={handleLocationSelect}
             />
-            <p className="text-xs text-gray-500">Click on the map to select your hospital location</p>
+            <p className="text-xs text-gray-500">Click on the map to select your hospital location (coordinates only)</p>
           </div>
 
-          {/* Get Current Location Button */}
+          {/* Get Current Location Button - Coordinates only, no address lookup */}
           <button
             type="button"
             onClick={getCurrentLocation}
@@ -551,47 +420,26 @@ const Register = () => {
             }`}
           >
             <Navigation size={22} className={locationStatus === 'loading' ? 'animate-pulse' : ''} />
-            {locationStatus === 'loading' ? 'Getting your location...' : '📍 Get Current Location & Auto-fill Address'}
-          </button>
-
-          {/* Manual Address Lookup Button */}
-          <button
-            type="button"
-            onClick={handleManualAddressLookup}
-            disabled={!latitude || !longitude || !window.google || !window.google.maps}
-            className={`w-full rounded-xl border py-3 font-medium flex items-center justify-center gap-2 transition-all duration-200 ${
-              !latitude || !longitude || !window.google || !window.google.maps
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                : 'bg-white text-[#154A7D] border-[#D6E2EE] hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D]'
-            }`}
-          >
-            <MapPin size={18} />
-            Get Address from Coordinates
+            {locationStatus === 'loading' ? 'Getting your location...' : '📍 Get Current Location Coordinates'}
           </button>
 
           {/* Location Status Messages */}
           {locationStatus === 'loading' && (
             <div className="flex items-center justify-center gap-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#154A7D]"></div>
-              <p className="text-xs text-blue-600 text-center">📍 Fetching your location and address...</p>
+              <p className="text-xs text-blue-600 text-center">📍 Fetching your location coordinates...</p>
             </div>
           )}
           {locationStatus === 'success' && (
             <div className="flex items-center justify-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
-              <p className="text-xs text-green-600 text-center">✓ Location and address acquired successfully!</p>
-            </div>
-          )}
-          {locationStatus === 'warning' && (
-            <div className="flex items-center justify-center gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-500" />
-              <p className="text-xs text-yellow-600 text-center">⚠️ Coordinates captured but address not found. Please enter manually.</p>
+              <p className="text-xs text-green-600 text-center">✓ Location coordinates captured successfully!</p>
             </div>
           )}
           {locationStatus === 'error' && (
             <div className="flex items-center justify-center gap-2">
               <XCircle className="h-4 w-4 text-red-500" />
-              <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter manually or use the map.</p>
+              <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter coordinates manually or use the map.</p>
             </div>
           )}
 
