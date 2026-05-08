@@ -1,13 +1,14 @@
-// src/Authentication/Register.jsx - Refactored with global UI components
+// src/Authentication/Register.jsx - Fixed Google Maps loading issue
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Mail, Lock, MapPin, Building, Building2,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
-  Clock, Sun, Briefcase, ChevronDown
+  Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle
 } from 'lucide-react';
 import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
 import { Input, Select, Textarea, Button, Alert, Card } from '../components/ui';
+import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   
   // Form state
   const [hospitalName, setHospitalName] = useState("");
@@ -52,17 +54,22 @@ const Register = () => {
 
   const [locationStatus, setLocationStatus] = useState('');
   const [registerError, setRegisterError] = useState('');
-  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // Check if Google Maps is loaded - MORE RELIABLE CHECK
   useEffect(() => {
     const checkGoogleMaps = setInterval(() => {
-      if (window.google && window.google.maps && window.google.maps.Geocoder) {
-        setIsGoogleMapsLoaded(true);
+      // Safer check for Google Maps
+      if (window.google && window.google.maps && typeof window.google.maps.Geocoder === 'function') {
+        setIsGoogleMapsReady(true);
+        console.log('✅ Google Maps is fully loaded and ready');
         clearInterval(checkGoogleMaps);
+      } else {
+        console.log('⏳ Waiting for Google Maps to load...');
       }
-    }, 100);
+    }, 500);
+    
     return () => clearInterval(checkGoogleMaps);
   }, []);
 
@@ -104,6 +111,7 @@ const Register = () => {
         setNormalHours(newHours);
       }
       setIs24x7(true);
+      showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
     } else {
       const defaultNormalHours = {
         monday: { start: "09:00", end: "18:00", isHoliday: false },
@@ -126,61 +134,254 @@ const Register = () => {
       setNormalHours(defaultNormalHours);
       setClinicHours(defaultClinicHours);
       setIs24x7(false);
+      showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
     }
   };
 
+  // Function to lookup address from coordinates - FIXED VERSION
+  const lookupAddressFromCoordinates = (lat, lng, callback) => {
+    // SAFER CHECK for Google Maps
+    if (!window.google || !window.google.maps) {
+      console.log("❌ Google Maps not loaded yet");
+      showErrorToast('Google Maps is not ready yet. Please wait.', 3000);
+      if (callback) callback(false);
+      return false;
+    }
+    
+    if (typeof window.google.maps.Geocoder !== 'function') {
+      console.log("❌ Geocoder not available");
+      showErrorToast('Geocoder is not available. Please refresh the page.', 3000);
+      if (callback) callback(false);
+      return false;
+    }
+    
+    console.log("✅ Google Maps is ready, looking up address for:", lat, lng);
+    
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const latLng = { lat: parseFloat(lat), lng: parseFloat(lng) };
+      
+      geocoder.geocode({ location: latLng }, (results, status) => {
+        console.log("📡 Geocode status:", status);
+        console.log("📡 Results:", results);
+        
+        if (status === 'OK' && results && results.length > 0) {
+          let formattedAddress = results[0].formatted_address;
+          console.log("✅ Address found:", formattedAddress);
+          setAddress(formattedAddress);
+          showSuccessToast('Address automatically filled!', 3000);
+          if (callback) callback(true);
+          return true;
+        } else {
+          console.warn("⚠️ Geocode failed. Status:", status);
+          let errorMsg = 'Could not get address. ';
+          if (status === 'ZERO_RESULTS') {
+            errorMsg += 'No address found for these coordinates.';
+          } else if (status === 'OVER_QUERY_LIMIT') {
+            errorMsg += 'Too many requests. Please try again.';
+          } else if (status === 'REQUEST_DENIED') {
+            errorMsg += 'Google Maps API key issue. Please check configuration.';
+          } else {
+            errorMsg += 'Please enter manually.';
+          }
+          showWarningToast(errorMsg, 4000);
+          if (callback) callback(false);
+          return false;
+        }
+      });
+    } catch (err) {
+      console.error("❌ Geocoder error:", err);
+      showErrorToast('Error occurred while fetching address. Please try again.', 3000);
+      if (callback) callback(false);
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Enhanced getCurrentLocation with automatic address fill - FIXED VERSION
   const getCurrentLocation = () => {
     setLocationStatus('loading');
+    showInfoToast('Getting your current location...', 2000);
+    
     if (!navigator.geolocation) {
       setLocationStatus('error');
+      showErrorToast('Geolocation is not supported by your browser', 4000);
       setTimeout(() => setLocationStatus(''), 3000);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
+        
+        console.log("📍 Got coordinates:", lat, lng);
+        
         setLatitude(lat.toString());
         setLongitude(lng.toString());
+        
+        showSuccessToast(`Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 3000);
 
-        if (window.google && window.google.maps && window.google.maps.Geocoder) {
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-            if (status === 'OK' && results && results[0]) {
-              setAddress(results[0].formatted_address);
-            }
-          });
+        // Check if Google Maps is ready before proceeding
+        if (!window.google || !window.google.maps) {
+          console.log("⏳ Google Maps not loaded yet, waiting...");
+          showWarningToast('Google Maps is loading. Please wait a moment and try again.', 3000);
+          setLocationStatus('warning');
+          setTimeout(() => setLocationStatus(''), 3000);
+          return;
         }
-        setLocationStatus('success');
-        setTimeout(() => setLocationStatus(''), 3000);
+        
+        try {
+          const geocoder = new window.google.maps.Geocoder();
+          const latLng = { lat: lat, lng: lng };
+          
+          console.log("🔍 Looking up address for coordinates...");
+          
+          geocoder.geocode({ location: latLng }, (results, status) => {
+            console.log("📡 Geocode status:", status);
+            console.log("📡 Results:", results);
+            
+            if (status === 'OK' && results && results.length > 0) {
+              const fullAddress = results[0].formatted_address;
+              console.log("✅ Address found:", fullAddress);
+              setAddress(fullAddress);
+              showSuccessToast('Address automatically filled!', 3000);
+              setLocationStatus('success');
+            } else {
+              console.warn("⚠️ Geocode failed. Status:", status);
+              showWarningToast('Could not get address. Please enter manually.', 3000);
+              setLocationStatus('warning');
+            }
+            setTimeout(() => setLocationStatus(''), 3000);
+          });
+        } catch (err) {
+          console.error("❌ Geocoder error:", err);
+          showErrorToast('Error occurred while fetching address.', 3000);
+          setLocationStatus('error');
+          setTimeout(() => setLocationStatus(''), 3000);
+        }
       },
       (error) => {
-        console.error('Geolocation error:', error);
+        console.error('❌ Geolocation error:', error);
         setLocationStatus('error');
+        
+        let errorMessage = '';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please allow location access.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information is unavailable. Please check your GPS.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+          default:
+            errorMessage = 'Failed to get location. Please try again.';
+        }
+        
+        showErrorToast(errorMessage, 4000);
         setTimeout(() => setLocationStatus(''), 3000);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
 
+  // Manual address lookup from coordinates - FIXED VERSION
+  const handleManualAddressLookup = () => {
+    if (!latitude || !longitude) {
+      showWarningToast('Please enter or get location coordinates first', 3000);
+      return;
+    }
+    
+    if (!window.google || !window.google.maps) {
+      showErrorToast('Google Maps is not ready yet. Please wait.', 3000);
+      return;
+    }
+    
+    showInfoToast('Looking up address from coordinates...', 2000);
+    lookupAddressFromCoordinates(latitude, longitude, (success) => {
+      if (success) {
+        showSuccessToast('Address found and filled!', 3000);
+      }
+    });
+  };
+
   const handleLocationSelect = (lat, lng, addressText) => {
+    console.log('📍 Map click - Location selected:', lat, lng, addressText);
     setLatitude(lat.toString());
     setLongitude(lng.toString());
-    if (addressText) setAddress(addressText);
-    setLocationStatus('success');
+    
+    if (addressText && addressText.trim() !== '') {
+      setAddress(addressText);
+      showSuccessToast('Location selected successfully!', 3000);
+      setLocationStatus('success');
+    } else if (window.google && window.google.maps) {
+      // Try to get address if not provided
+      lookupAddressFromCoordinates(lat, lng, (success) => {
+        if (success) {
+          setLocationStatus('success');
+        } else {
+          setLocationStatus('warning');
+        }
+      });
+    } else {
+      setLocationStatus('warning');
+    }
     setTimeout(() => setLocationStatus(''), 3000);
   };
 
   const validateForm = () => {
-    if (!hospitalName) { setRegisterError('Hospital name is required'); return false; }
-    if (!email) { setRegisterError('Email is required'); return false; }
-    if (!/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(email)) { setRegisterError('Please enter a valid email address'); return false; }
-    if (!phone) { setRegisterError('Phone number is required'); return false; }
-    if (!address) { setRegisterError('Address is required'); return false; }
-    if (!hospitalType) { setRegisterError('Please select hospital type'); return false; }
-    if (!password) { setRegisterError('Password is required'); return false; }
-    if (password.length < 8) { setRegisterError('Password must be at least 8 characters'); return false; }
-    if (password !== confirmPassword) { setRegisterError('Passwords do not match'); return false; }
+    if (!hospitalName) { 
+      setRegisterError('Hospital name is required'); 
+      showWarningToast('Hospital name is required', 3000); 
+      return false; 
+    }
+    if (!email) { 
+      setRegisterError('Email is required'); 
+      showWarningToast('Email is required', 3000); 
+      return false; 
+    }
+    if (!/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(email)) { 
+      setRegisterError('Please enter a valid email address'); 
+      showWarningToast('Please enter a valid email address', 3000); 
+      return false; 
+    }
+    if (!phone) { 
+      setRegisterError('Phone number is required'); 
+      showWarningToast('Phone number is required', 3000); 
+      return false; 
+    }
+    if (!address) { 
+      setRegisterError('Address is required'); 
+      showWarningToast('Address is required', 3000); 
+      return false; 
+    }
+    if (!hospitalType) { 
+      setRegisterError('Please select hospital type'); 
+      showWarningToast('Please select hospital type', 3000); 
+      return false; 
+    }
+    if (!password) { 
+      setRegisterError('Password is required'); 
+      showWarningToast('Password is required', 3000); 
+      return false; 
+    }
+    if (password.length < 8) { 
+      setRegisterError('Password must be at least 8 characters'); 
+      showWarningToast('Password must be at least 8 characters', 3000); 
+      return false; 
+    }
+    if (password !== confirmPassword) { 
+      setRegisterError('Passwords do not match'); 
+      showWarningToast('Passwords do not match', 3000); 
+      return false; 
+    }
     return true;
   };
 
@@ -189,28 +390,60 @@ const Register = () => {
     if (validateForm()) {
       setIsSubmitting(true);
       setRegisterError('');
+      showInfoToast('Creating hospital account...', 2000);
       
       setTimeout(() => {
         const existingHospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
         if (existingHospitals.some(h => h.email === email)) {
           setRegisterError('Email already registered. Please use a different email.');
+          showErrorToast('❌ Email already registered. Please use a different email.', 4000);
           setIsSubmitting(false);
           return;
         }
         
         const finalWorkingHours = activeTab === "clinic" ? clinicHours : normalHours;
+        const hospitalId = `HSP${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
         const hospitalData = {
-          id: `HSP${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
-          hospitalName, email, address, phone, longitude, latitude, hospitalType,
-          normalHours, clinicHours, workingHours: finalWorkingHours,
-          selectedTab: activeTab, is24x7, password,
+          id: hospitalId,
+          hospitalName, 
+          email, 
+          address, 
+          phone, 
+          longitude, 
+          latitude, 
+          hospitalType,
+          normalHours, 
+          clinicHours, 
+          workingHours: finalWorkingHours,
+          selectedTab: activeTab, 
+          is24x7, 
+          password,
           createdAt: new Date().toISOString()
         };
         
         localStorage.setItem('hospitals', JSON.stringify([...existingHospitals, hospitalData]));
-        alert('Hospital account created successfully! Please login.');
+        
+        // Registration Success Toast with detailed information
+        showSuccessToast(
+          ` Registration Successful! Welcome to the HMS Family!`,
+          5000,
+          {
+            '🏥 Hospital ID': hospitalId,
+            '🏥 Hospital Name': hospitalName,
+            '📧 Email': email,
+            '⚕️ Type': hospitalType,
+            '⏰ Working Hours': is24x7 ? '24/7 Available' : (activeTab === 'clinic' ? 'Clinic Schedule' : 'Normal Schedule'),
+            '📞 Contact': phone,
+            '📍 Address': address.substring(0, 50) + (address.length > 50 ? '...' : '')
+          }
+        );
+        
         setIsSubmitting(false);
-        navigate('/sign-in');
+        
+        setTimeout(() => {
+          showSuccessToast('✨ Redirecting you to login page...', 2000);
+          navigate('/sign-in');
+        }, 2000);
       }, 1000);
     }
   };
@@ -267,10 +500,31 @@ const Register = () => {
           </div>
 
           <div className="grid md:grid-cols-2 gap-5">
-            <Textarea label="Address" placeholder="Enter hospital address" value={address} onChange={(e) => setAddress(e.target.value)} />
-            <div className="space-y-5">
-              <Input label="Latitude" placeholder="Enter latitude" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
-              <Input label="Longitude" placeholder="Enter longitude" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Address <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Enter hospital address"
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium resize-none"
+              />
+            </div>
+            <div className="space-y-4">
+              <Input 
+                label="Latitude" 
+                placeholder="Enter latitude" 
+                value={latitude} 
+                onChange={(e) => setLatitude(e.target.value)} 
+              />
+              <Input 
+                label="Longitude" 
+                placeholder="Enter longitude" 
+                value={longitude} 
+                onChange={(e) => setLongitude(e.target.value)} 
+              />
             </div>
           </div>
 
@@ -289,15 +543,57 @@ const Register = () => {
           <button
             type="button"
             onClick={getCurrentLocation}
-            className="w-full rounded-xl border border-[#D6E2EE] bg-[#F5FAFF] text-[#154A7D] py-4 font-medium text-lg flex items-center justify-center gap-3 transition-all duration-200 hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D] hover:shadow-md"
+            disabled={locationStatus === 'loading'}
+            className={`w-full rounded-xl border py-4 font-medium text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
+              locationStatus === 'loading'
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                : 'bg-[#F5FAFF] text-[#154A7D] border-[#D6E2EE] hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D] hover:shadow-md'
+            }`}
           >
-            <Navigation size={22} />
-            Get Current Location
+            <Navigation size={22} className={locationStatus === 'loading' ? 'animate-pulse' : ''} />
+            {locationStatus === 'loading' ? 'Getting your location...' : '📍 Get Current Location & Auto-fill Address'}
           </button>
 
-          {locationStatus === 'loading' && <p className="text-xs text-blue-600 text-center">📍 Getting your location...</p>}
-          {locationStatus === 'success' && <p className="text-xs text-green-600 text-center">✓ Location acquired successfully!</p>}
-          {locationStatus === 'error' && <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter manually.</p>}
+          {/* Manual Address Lookup Button */}
+          <button
+            type="button"
+            onClick={handleManualAddressLookup}
+            disabled={!latitude || !longitude || !window.google || !window.google.maps}
+            className={`w-full rounded-xl border py-3 font-medium flex items-center justify-center gap-2 transition-all duration-200 ${
+              !latitude || !longitude || !window.google || !window.google.maps
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                : 'bg-white text-[#154A7D] border-[#D6E2EE] hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D]'
+            }`}
+          >
+            <MapPin size={18} />
+            Get Address from Coordinates
+          </button>
+
+          {/* Location Status Messages */}
+          {locationStatus === 'loading' && (
+            <div className="flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#154A7D]"></div>
+              <p className="text-xs text-blue-600 text-center">📍 Fetching your location and address...</p>
+            </div>
+          )}
+          {locationStatus === 'success' && (
+            <div className="flex items-center justify-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <p className="text-xs text-green-600 text-center">✓ Location and address acquired successfully!</p>
+            </div>
+          )}
+          {locationStatus === 'warning' && (
+            <div className="flex items-center justify-center gap-2">
+              <AlertCircle className="h-4 w-4 text-yellow-500" />
+              <p className="text-xs text-yellow-600 text-center">⚠️ Coordinates captured but address not found. Please enter manually.</p>
+            </div>
+          )}
+          {locationStatus === 'error' && (
+            <div className="flex items-center justify-center gap-2">
+              <XCircle className="h-4 w-4 text-red-500" />
+              <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter manually or use the map.</p>
+            </div>
+          )}
 
           {/* Working Hours Section */}
           <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
@@ -435,7 +731,7 @@ const Register = () => {
                 <label className="text-sm font-medium text-gray-700">Password <span className="text-red-500">*</span></label>
                 <div className="relative mt-2">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50 text-black font-medium" />
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password (min 8 characters)" className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#154A7D] bg-gray-50 text-black font-medium" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -452,6 +748,7 @@ const Register = () => {
                 </div>
               </div>
             </div>
+            <p className="text-xs text-gray-500">Password must be at least 8 characters with uppercase, lowercase, and numbers</p>
           </div>
 
           <Button type="submit" variant="primary" size="lg" fullWidth disabled={isSubmitting} loading={isSubmitting}>
