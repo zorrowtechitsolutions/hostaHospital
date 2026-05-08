@@ -303,7 +303,7 @@ const AddDoctor = () => {
     }
   }
 };
-        
+  
         const updatedDoctors = [...existingDoctors, newDoctor];
         localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
         
