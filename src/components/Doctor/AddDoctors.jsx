@@ -1,4 +1,4 @@
-// src/components/Doctor/AddDoctor.jsx - Complete with all UI components and Salary Info (labels removed)
+// src/components/Doctor/AddDoctor.jsx - With toast notifications and Salary Info
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -243,8 +243,18 @@ const AddDoctor = () => {
       setIsSubmitting(true);
       setTimeout(() => {
         const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
+        
+        // Check if email already exists
+        const emailExists = existingDoctors.some(doc => doc.email === formData.email);
+        if (emailExists) {
+          showErrorToast('❌ Email already exists! Please use a different email address.', 4000);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        const newDoctorId = existingDoctors.length + 1;
         const newDoctor = {
-          id: existingDoctors.length + 1,
+          id: newDoctorId,
           name: `Dr. ${formData.firstName} ${formData.lastName}`,
           specialty: formData.specialist,
           experience: calculateExperience(formData.dob),
@@ -252,6 +262,19 @@ const AddDoctor = () => {
           email: formData.email,
           phone: formData.phoneNumber,
           photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
+          department: formData.department,
+          registrationNumber: formData.registrationNumber,
+          gender: formData.gender,
+          dob: formData.dob,
+          knownLanguages: formData.knownLanguages,
+          about: formData.about,
+          address: formData.address,
+          country: formData.country,
+          state: formData.state,
+          city: formData.city,
+          pinCode: formData.pinCode,
+          displayName: formData.displayName,
+          userName: formData.userName,
           // Include salary details
           salaryDetails: {
             netSalary: formData.netSalary,
@@ -274,13 +297,38 @@ const AddDoctor = () => {
             }
           }
         };
+        
         const updatedDoctors = [...existingDoctors, newDoctor];
         localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
-        alert('Doctor added successfully!');
+        
+        showAddToast(
+          `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`,
+          5000,
+          {
+            '👨‍⚕️ Name': `Dr. ${formData.firstName} ${formData.lastName}`,
+            '🔬 Specialty': formData.specialist,
+            '🏥 Department': formData.department,
+            '🆔 ID': `#DR${String(newDoctorId).padStart(4, '0')}`,
+            '💰 Fees': `$${formData.fees}`,
+            '📧 Email': formData.email,
+            '📞 Phone': formData.phoneNumber
+          }
+        );
+        
         setIsSubmitting(false);
-        navigate('/doctors');
+        
+        // Navigate after toast
+        setTimeout(() => {
+          navigate('/doctors');
+        }, 2000);
       }, 1000);
     } else {
+      // Show validation error toast
+      const firstErrorField = Object.keys(errors)[0];
+      if (firstErrorField) {
+        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`, 3000);
+      }
+      
       const firstError = document.querySelector('.error-message');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -290,15 +338,22 @@ const AddDoctor = () => {
     if (!dob) return '0+ Years';
     const birthDate = new Date(dob);
     const today = new Date();
-    let experience = today.getFullYear() - birthDate.getFullYear();
+    let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) experience--;
-    const experienceYears = Math.max(0, experience - 25);
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+    const experienceYears = Math.max(0, age - 25);
     return `${experienceYears}+ Years`;
   };
 
   const handleGoBack = () => {
-    if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+    if (formData.firstName || formData.lastName || formData.email || previewImage) {
+      showWarningToast('⚠️ Any unsaved data will be lost. Confirm to continue.', 3000);
+      setTimeout(() => {
+        if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
+          navigate('/doctors');
+        }
+      }, 100);
+    } else {
       navigate('/doctors');
     }
   };
@@ -415,7 +470,7 @@ const AddDoctor = () => {
 
                 <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
 
-                {/* Address Information Card */}
+                {/* Address Information */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
@@ -429,7 +484,7 @@ const AddDoctor = () => {
                   </div>
                 </div>
 
-                {/* Account Details Card */}
+                {/* Account Details */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -447,31 +502,32 @@ const AddDoctor = () => {
               <div className="p-6">
                 <Input 
                   name="netSalary" 
+                  label="Net Salary"
                   value={formData.netSalary} 
                   onChange={handleChange} 
                   placeholder="Enter net salary" 
-                  className="mb-6 md:w-1/2" 
+                  className="mb-6" 
                 />
                 
                 <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                  <Input name="basic" value={formData.basic} onChange={handleChange} placeholder="Basic" />
-                  <Input name="da" value={formData.da} onChange={handleChange} placeholder="DA" />
-                  <Input name="hra" value={formData.hra} onChange={handleChange} placeholder="HRA" />
-                  <Input name="conveyance" value={formData.conveyance} onChange={handleChange} placeholder="Conveyance" />
-                  <Input name="allowance" value={formData.allowance} onChange={handleChange} placeholder="Allowance" />
-                  <Input name="medicalAllowance" value={formData.medicalAllowance} onChange={handleChange} placeholder="Medical Allowance" />
-                  <Input name="otherEarnings" value={formData.otherEarnings} onChange={handleChange} placeholder="Others" />
+                  <Input name="basic" label="Basic" value={formData.basic} onChange={handleChange} placeholder="Basic" />
+                  <Input name="da" label="DA" value={formData.da} onChange={handleChange} placeholder="DA" />
+                  <Input name="hra" label="HRA" value={formData.hra} onChange={handleChange} placeholder="HRA" />
+                  <Input name="conveyance" label="Conveyance" value={formData.conveyance} onChange={handleChange} placeholder="Conveyance" />
+                  <Input name="allowance" label="Allowance" value={formData.allowance} onChange={handleChange} placeholder="Allowance" />
+                  <Input name="medicalAllowance" label="Medical Allowance" value={formData.medicalAllowance} onChange={handleChange} placeholder="Medical Allowance" />
+                  <Input name="otherEarnings" label="Others" value={formData.otherEarnings} onChange={handleChange} placeholder="Others" />
                 </div>
 
                 <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input name="tds" value={formData.tds} onChange={handleChange} placeholder="TDS" />
-                  <Input name="pf" value={formData.pf} onChange={handleChange} placeholder="PF" />
-                  <Input name="leave" value={formData.leave} onChange={handleChange} placeholder="Leave" />
-                  <Input name="profTax" value={formData.profTax} onChange={handleChange} placeholder="Prof. Tax" />
-                  <Input name="labourWelfare" value={formData.labourWelfare} onChange={handleChange} placeholder="Labour Welfare" />
-                  <Input name="otherDeductions" value={formData.otherDeductions} onChange={handleChange} placeholder="Others" />
+                  <Input name="tds" label="TDS" value={formData.tds} onChange={handleChange} placeholder="TDS" />
+                  <Input name="pf" label="PF" value={formData.pf} onChange={handleChange} placeholder="PF" />
+                  <Input name="leave" label="Leave" value={formData.leave} onChange={handleChange} placeholder="Leave" />
+                  <Input name="profTax" label="Prof. Tax" value={formData.profTax} onChange={handleChange} placeholder="Prof. Tax" />
+                  <Input name="labourWelfare" label="Labour Welfare" value={formData.labourWelfare} onChange={handleChange} placeholder="Labour Welfare" />
+                  <Input name="otherDeductions" label="Others" value={formData.otherDeductions} onChange={handleChange} placeholder="Others" />
                 </div>
               </div>
             )}

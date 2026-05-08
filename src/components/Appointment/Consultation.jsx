@@ -241,6 +241,10 @@ const Consultation = () => {
   
   const cancelVitalsEdit = () => setIsEditingVitals(false);
 
+  const handleBackToAppointments = () => {
+    navigate("/appointments");
+  };
+
   const handleEndConsultation = async () => {
     const isComplaintValid = validateComplaint();
     const isMedicationsValid = validateAllMedications();
@@ -285,9 +289,9 @@ const Consultation = () => {
       
       setIsSubmitting(false);
       
-      // Navigate back after 2 seconds
+      // Navigate back to appointments after 2 seconds
       setTimeout(() => {
-        navigate(-1);
+        navigate("/appointments");
       }, 2000);
     }, 1000);
   };
@@ -295,8 +299,25 @@ const Consultation = () => {
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-sans">
       <div className="max-w-6xl mx-auto">
-        {/* HEADER */}
+        {/* HEADER WITH BACK BUTTON */}
         <div className="mb-4">
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              onClick={handleBackToAppointments}
+              className="flex items-center gap-1 text-gray-600  transition-colors group"
+              title="Back to Appointments"
+            >
+              <svg 
+                className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span className="text-sm font-medium">Back to Appointments</span>
+            </button>
+          </div>
           <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
           <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
         </div>
@@ -514,7 +535,7 @@ const Consultation = () => {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
-              <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
+              <Button variant="outline" size="sm" onClick={handleBackToAppointments}>
                 Cancel
               </Button>
               <Button 
