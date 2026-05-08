@@ -1,62 +1,60 @@
+// src/components/patients/AddPatient.jsx - Updated with Doctor-like UI structure
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
-  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X 
+  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X,
+  Activity, Heart, Droplet, Ruler, Weight, Stethoscope,
+  Users, FileText, Briefcase, Clock
 } from 'lucide-react';
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
 } from '../ui';
 import { showSuccessToast, showErrorToast, showWarningToast, showAddToast } from '../ui/Toast';
 
-const AddDoctor = () => {
+const AddPatient = () => {
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     profileImage: null,
     firstName: '',
+    middleName: '',
     lastName: '',
-    department: '',
-    specialist: '',
-    fees: '',
-    phoneNumber: '',
     email: '',
+    mobileNumber: '',
+    emergencyNumber: '',
     dob: '',
+    age: '',
     gender: '',
-    registrationNumber: '',
-    knownLanguages: '',
-    about: '',
-    address: '',
+    bloodGroup: '',
+    maritalStatus: '',
+    occupation: '',
+    guardianName: '',
+    guardianRelation: '',
+    addressLine1: '',
+    addressLine2: '',
     country: '',
     state: '',
     city: '',
     pinCode: '',
-    displayName: '',
-    userName: '',
+    height: '',
+    weight: '',
+    bloodPressure: '',
+    allergies: '',
+    chronicConditions: '',
+    referredBy: '',
+    referredOn: '',
+    department: '',
+    notes: '',
     password: '',
-    confirmPassword: '',
-    // Salary fields
-    netSalary: '',
-    basic: '',
-    da: '',
-    hra: '',
-    conveyance: '',
-    allowance: '',
-    medicalAllowance: '',
-    otherEarnings: '',
-    tds: '',
-    pf: '',
-    leave: '',
-    profTax: '',
-    labourWelfare: '',
-    otherDeductions: ''
+    confirmPassword: ''
   });
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('basic'); // Tab state for Basic Info / Salary Info
+  const [activeTab, setActiveTab] = useState('basic');
 
   // Validation functions
   const validateField = (name, value) => {
@@ -75,67 +73,51 @@ const AddDoctor = () => {
         if (!/^[a-zA-Z\s\-']+$/.test(value)) return 'Last name can only contain letters, spaces, hyphens, and apostrophes';
         return '';
 
-      case 'department':
-        if (!value) return 'Department is required';
-        return '';
-
-      case 'specialist':
-        if (!value) return 'Specialist field is required';
-        if (value.length < 3) return 'Specialist must be at least 3 characters';
-        return '';
-
-      case 'fees':
-        if (!value) return 'Fees are required';
-        if (isNaN(value) || value <= 0) return 'Fees must be a positive number';
-        if (value > 10000) return 'Fees cannot exceed $10,000';
-        return '';
-
-      case 'phoneNumber':
-        if (!value) return 'Phone number is required';
+      case 'mobileNumber':
+        if (!value) return 'Mobile number is required';
         const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,4}[-\s\.]?[0-9]{3,4}$/;
-        if (!phoneRegex.test(value)) return 'Please enter a valid phone number';
+        if (!phoneRegex.test(value)) return 'Please enter a valid mobile number';
         return '';
 
       case 'email':
-        if (!value) return 'Email address is required';
-        const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
-        if (!emailRegex.test(value)) return 'Please enter a valid email address';
-        if (value.length > 100) return 'Email must be less than 100 characters';
+        if (value && !/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value)) return 'Please enter a valid email address';
+        if (value && value.length > 100) return 'Email must be less than 100 characters';
         return '';
 
       case 'dob':
         if (!value) return 'Date of birth is required';
-        const age = new Date().getFullYear() - new Date(value).getFullYear();
-        if (age < 25) return 'Doctor must be at least 25 years old';
-        if (age > 80) return 'Doctor must be less than 80 years old';
+        const today = new Date();
+        const birthDate = new Date(value);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+        if (age < 0) return 'Date of birth cannot be in the future';
+        if (age > 120) return 'Age cannot exceed 120 years';
         return '';
 
       case 'gender':
         if (!value) return 'Gender is required';
         return '';
 
-      case 'registrationNumber':
-        if (!value) return 'Registration number is required';
-        if (value.length < 5) return 'Registration number must be at least 5 characters';
-        if (!/^[A-Z0-9\-]+$/.test(value)) return 'Registration number can only contain uppercase letters, numbers, and hyphens';
+      case 'bloodGroup':
+        if (!value) return 'Blood group is required';
         return '';
 
-      case 'knownLanguages':
-        if (!value) return 'At least one language is required';
-        return '';
-
-      case 'address':
+      case 'addressLine1':
         if (!value) return 'Address is required';
-        if (value.length < 10) return 'Please enter a complete address';
+        if (value.length < 5) return 'Please enter a complete address';
         return '';
 
       case 'pinCode':
         if (value && !/^\d{5,6}$/.test(value)) return 'Pin code must be 5 or 6 digits';
         return '';
 
-      case 'userName':
-        if (value && value.length < 4) return 'Username must be at least 4 characters';
-        if (value && !/^[a-zA-Z0-9_]+$/.test(value)) return 'Username can only contain letters, numbers, and underscores';
+      case 'height':
+        if (value && (isNaN(value) || value <= 0 || value > 300)) return 'Height must be between 1-300 cm';
+        return '';
+
+      case 'weight':
+        if (value && (isNaN(value) || value <= 0 || value > 500)) return 'Weight must be between 1-500 kg';
         return '';
 
       case 'password':
@@ -161,9 +143,7 @@ const AddDoctor = () => {
   const validateForm = () => {
     const newErrors = {};
     const fieldsToValidate = [
-      'firstName', 'lastName', 'department', 'specialist', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 
-      'knownLanguages', 'address'
+      'firstName', 'lastName', 'mobileNumber', 'dob', 'gender', 'bloodGroup', 'addressLine1'
     ];
     
     fieldsToValidate.forEach(field => {
@@ -185,6 +165,18 @@ const AddDoctor = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    if (name === 'dob' && value) {
+      const today = new Date();
+      const birthDate = new Date(value);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+      if (age >= 0 && age <= 120) {
+        setFormData(prev => ({ ...prev, age: age.toString() }));
+      }
+    }
+    
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -235,9 +227,7 @@ const AddDoctor = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const allFields = [
-      'firstName', 'lastName', 'department', 'specialist', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 
-      'knownLanguages', 'address'
+      'firstName', 'lastName', 'mobileNumber', 'dob', 'gender', 'bloodGroup', 'addressLine1'
     ];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
@@ -247,89 +237,86 @@ const AddDoctor = () => {
       setIsSubmitting(true);
       
       setTimeout(() => {
-        const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
-        
-        // Check if email already exists
-        const emailExists = existingDoctors.some(doc => doc.email === formData.email);
-        if (emailExists) {
-          showErrorToast('Email already exists! Please use a different email address.', 4000);
-          setIsSubmitting(false);
-          return;
-        }
-        
-        const newDoctorId = existingDoctors.length + 1;
-        const newDoctor = {
-  id: newDoctorId,
-  name: `Dr. ${formData.firstName} ${formData.lastName}`,
-  specialty: formData.specialist,
-  experience: calculateExperience(formData.dob),
-  appointments: 0,
-  email: formData.email,
-  phone: formData.phoneNumber,
-  photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
-  department: formData.department,
-  registrationNumber: formData.registrationNumber,
-  gender: formData.gender,
-  dob: formData.dob,
-  knownLanguages: formData.knownLanguages,
-  about: formData.about,
-  address: formData.address,
-  country: formData.country,
-  state: formData.state,
-  city: formData.city,
-  pinCode: formData.pinCode,
-  displayName: formData.displayName,
-  userName: formData.userName,  // <-- Add comma here
-  
-  // Include salary details
-  salaryDetails: {
-    netSalary: formData.netSalary,
-    earnings: {
-      basic: formData.basic,
-      da: formData.da,
-      hra: formData.hra,
-      conveyance: formData.conveyance,
-      allowance: formData.allowance,
-      medicalAllowance: formData.medicalAllowance,
-      others: formData.otherEarnings
-    },
-    deductions: {
-      tds: formData.tds,
-      pf: formData.pf,
-      leave: formData.leave,
-      profTax: formData.profTax,
-      labourWelfare: formData.labourWelfare,
-      others: formData.otherDeductions
-    }
-  }
-};
-        
-        const updatedDoctors = [...existingDoctors, newDoctor];
-        localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
-        
-        showAddToast(
-          `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`,
-          4000,
-          {
-            'Name': `Dr. ${formData.firstName} ${formData.lastName}`,
-            'Specialty': formData.specialist,
-            'Department': formData.department,
-            'ID': `#DR${String(newDoctorId).padStart(4, '0')}`
+        try {
+          const existingPatients = JSON.parse(localStorage.getItem('patients') || '[]');
+          
+          // Check if mobile number already exists
+          const mobileExists = existingPatients.some(p => p.phone === formData.mobileNumber);
+          if (mobileExists) {
+            showErrorToast('Mobile number already exists! Please use a different number.', 4000);
+            setIsSubmitting(false);
+            return;
           }
-        );
-        
-        setIsSubmitting(false);
-        
-        // Navigate after toast
-        setTimeout(() => {
-          navigate('/doctors');
-        }, 1500);
+          
+          const patientId = `PT${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+          const fullName = `${formData.firstName} ${formData.middleName ? formData.middleName + ' ' : ''}${formData.lastName}`;
+          
+          const newPatient = {
+            id: patientId,
+            name: fullName,
+            firstName: formData.firstName,
+            middleName: formData.middleName,
+            lastName: formData.lastName,
+            age: formData.age,
+            dob: formData.dob,
+            gender: formData.gender,
+            bloodGroup: formData.bloodGroup,
+            maritalStatus: formData.maritalStatus,
+            phone: formData.mobileNumber,
+            emergencyNumber: formData.emergencyNumber,
+            guardianName: formData.guardianName,
+            guardianRelation: formData.guardianRelation,
+            address: `${formData.addressLine1} ${formData.addressLine2}`,
+            city: formData.city,
+            state: formData.state,
+            country: formData.country,
+            pinCode: formData.pinCode,
+            referredBy: formData.referredBy,
+            referredOn: formData.referredOn,
+            department: formData.department,
+            notes: formData.notes,
+            height: formData.height,
+            weight: formData.weight,
+            bloodPressure: formData.bloodPressure,
+            allergies: formData.allergies,
+            chronicConditions: formData.chronicConditions,
+            occupation: formData.occupation,
+            email: formData.email,
+            lastVisit: new Date().toISOString().split('T')[0],
+            lastVisitDisplay: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+            condition: 'Initial Consultation',
+            status: 'Active',
+            imageUrl: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`
+          };
+          
+          localStorage.setItem('patients', JSON.stringify([...existingPatients, newPatient]));
+          
+          showAddToast(
+            `${newPatient.name} has been added successfully!`,
+            4000,
+            {
+              'Patient ID': patientId,
+              'Patient Name': newPatient.name,
+              'Age': `${newPatient.age} years`,
+              'Blood Group': newPatient.bloodGroup,
+              'Department': newPatient.department || 'Not Assigned'
+            }
+          );
+          
+          setIsSubmitting(false);
+          
+          setTimeout(() => {
+            navigate('/patients');
+          }, 1500);
+        } catch (error) {
+          showErrorToast('Failed to add patient. Please try again.', 3000);
+          setIsSubmitting(false);
+        }
       }, 1000);
     } else {
-      // Show validation error toast
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        showWarningToast(`Please fix the ${firstErrorField} field`, 3000);
+        showWarningToast(`Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`, 3000);
       }
       
       const firstError = document.querySelector('.error-message');
@@ -337,34 +324,24 @@ const AddDoctor = () => {
     }
   };
 
-  const calculateExperience = (dob) => {
-    if (!dob) return '0+ Years';
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let experience = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) experience--;
-    const experienceYears = Math.max(0, experience - 25);
-    return `${experienceYears}+ Years`;
-  };
-
   const handleGoBack = () => {
-    if (formData.firstName || formData.lastName || formData.email || previewImage) {
+    if (formData.firstName || formData.lastName || formData.mobileNumber || previewImage) {
       showWarningToast('Any unsaved data will be lost. Are you sure you want to leave?', 4000);
       setTimeout(() => {
         if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
-          navigate('/doctors');
+          navigate('/patients');
         }
       }, 100);
     } else {
-      navigate('/doctors');
+      navigate('/patients');
     }
   };
 
   // Tabs configuration
   const tabs = [
     { id: 'basic', label: 'Basic Info' },
-    { id: 'salary', label: 'Salary Info' }
+    { id: 'medical', label: 'Medical Info' },
+    { id: 'guardian', label: 'Guardian & Referral' }
   ];
 
   return (
@@ -376,8 +353,8 @@ const AddDoctor = () => {
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Add New Doctor</h1>
-              <p className="text-sm text-gray-500 mt-1">Create a new doctor profile in the system</p>
+              <h1 className="text-2xl font-bold text-gray-900">Add New Patient</h1>
+              <p className="text-sm text-gray-500 mt-1">Create a new patient profile in the system</p>
             </div>
           </div>
         </div>
@@ -440,98 +417,424 @@ const AddDoctor = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">Doctor ID:</span>
+                    <span className="text-sm text-gray-500">Patient ID:</span>
                     <span className="text-sm font-medium text-gray-900">Auto-generated</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
-                  <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']} placeholder="Select Department" value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
-                  <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <Input 
+                    label="First Name" 
+                    name="firstName" 
+                    icon={User} 
+                    placeholder="Enter first name" 
+                    value={formData.firstName} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.firstName} 
+                    touched={touched.firstName} 
+                    required 
+                  />
+                  <Input 
+                    label="Middle Name" 
+                    name="middleName" 
+                    icon={User} 
+                    placeholder="Enter middle name" 
+                    value={formData.middleName} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.middleName} 
+                    touched={touched.middleName} 
+                  />
+                  <Input 
+                    label="Last Name" 
+                    name="lastName" 
+                    icon={User} 
+                    placeholder="Enter last name" 
+                    value={formData.lastName} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.lastName} 
+                    touched={touched.lastName} 
+                    required 
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
-                  <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
-                  <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
+                  <Input 
+                    label="Date of Birth" 
+                    name="dob" 
+                    type="date" 
+                    icon={Calendar} 
+                    value={formData.dob} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.dob} 
+                    touched={touched.dob} 
+                    required 
+                  />
+                  <Input 
+                    label="Age" 
+                    name="age" 
+                    type="number" 
+                    icon={Clock} 
+                    value={formData.age} 
+                    readOnly 
+                    className="bg-gray-50"
+                  />
+                  <Select 
+                    label="Gender" 
+                    name="gender" 
+                    options={['Male', 'Female', 'Other']} 
+                    placeholder="Select Gender" 
+                    value={formData.gender} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.gender} 
+                    touched={touched.gender} 
+                    required 
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                  <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
-                  <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
+                  <Select 
+                    label="Blood Group" 
+                    name="bloodGroup" 
+                    options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} 
+                    placeholder="Select Blood Group" 
+                    value={formData.bloodGroup} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.bloodGroup} 
+                    touched={touched.bloodGroup} 
+                    required 
+                  />
+                  <Select 
+                    label="Marital Status" 
+                    name="maritalStatus" 
+                    options={['Single', 'Married', 'Divorced', 'Widowed']} 
+                    placeholder="Select Status" 
+                    value={formData.maritalStatus} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.maritalStatus} 
+                    touched={touched.maritalStatus} 
+                  />
+                  <Input 
+                    label="Occupation" 
+                    name="occupation" 
+                    icon={Briefcase} 
+                    placeholder="e.g., Software Engineer" 
+                    value={formData.occupation} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.occupation} 
+                    touched={touched.occupation} 
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select label="Known Languages" name="knownLanguages" options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']} placeholder="Select Language" value={formData.knownLanguages} onChange={handleChange} onBlur={handleBlur} error={errors.knownLanguages} touched={touched.knownLanguages} required />
+                  <Input 
+                    label="Mobile Number" 
+                    name="mobileNumber" 
+                    icon={Phone} 
+                    placeholder="+1 234 567 8900" 
+                    value={formData.mobileNumber} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.mobileNumber} 
+                    touched={touched.mobileNumber} 
+                    required 
+                  />
+                  <Input 
+                    label="Email Address" 
+                    name="email" 
+                    type="email" 
+                    icon={Mail} 
+                    placeholder="patient@example.com" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.email} 
+                    touched={touched.email} 
+                  />
                 </div>
 
-                <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
-
-                {/* Address Information Card */}
+                {/* Address Information */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
-                    <Input label="Address" name="address" icon={MapPin} placeholder="Street address" value={formData.address} onChange={handleChange} onBlur={handleBlur} error={errors.address} touched={touched.address} required />
+                    <Input 
+                      label="Address Line 1" 
+                      name="addressLine1" 
+                      icon={MapPin} 
+                      placeholder="Street address" 
+                      value={formData.addressLine1} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.addressLine1} 
+                      touched={touched.addressLine1} 
+                      required 
+                    />
+                    <Input 
+                      label="Address Line 2" 
+                      name="addressLine2" 
+                      icon={MapPin} 
+                      placeholder="Apartment, suite, unit, building, floor" 
+                      value={formData.addressLine2} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.addressLine2} 
+                      touched={touched.addressLine2} 
+                    />
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                      <Select label="Country" name="country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
-                      <Input label="State" name="state" required={false} placeholder="State" value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
-                      <Input label="City" name="city" required={false} placeholder="City" value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
-                      <Input label="Pin Code" name="pinCode" required={false} placeholder="Postal code" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} />
+                      <Select 
+                        label="Country" 
+                        name="country" 
+                        required={false} 
+                        options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} 
+                        placeholder="Select Country" 
+                        value={formData.country} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        error={errors.country} 
+                        touched={touched.country} 
+                      />
+                      <Input 
+                        label="State" 
+                        name="state" 
+                        required={false} 
+                        placeholder="State" 
+                        value={formData.state} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        error={errors.state} 
+                        touched={touched.state} 
+                      />
+                      <Input 
+                        label="City" 
+                        name="city" 
+                        required={false} 
+                        placeholder="City" 
+                        value={formData.city} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        error={errors.city} 
+                        touched={touched.city} 
+                      />
+                      <Input 
+                        label="Pin Code" 
+                        name="pinCode" 
+                        required={false} 
+                        placeholder="Postal code" 
+                        value={formData.pinCode} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        error={errors.pinCode} 
+                        touched={touched.pinCode} 
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Account Details Card */}
+                {/* Portal Access */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Portal Access (Optional)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} />
-                    <Input label="Username" name="userName" required={false} icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} />
-                    <Input label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
-                    <Input label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
+                    <Input 
+                      label="Password" 
+                      name="password" 
+                      type="password" 
+                      icon={Lock} 
+                      placeholder="Create password" 
+                      value={formData.password} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.password} 
+                      touched={touched.password} 
+                    />
+                    <Input 
+                      label="Confirm Password" 
+                      name="confirmPassword" 
+                      type="password" 
+                      icon={Lock} 
+                      placeholder="Confirm password" 
+                      value={formData.confirmPassword} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.confirmPassword} 
+                      touched={touched.confirmPassword} 
+                    />
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">Setting a password allows the patient to access the patient portal.</p>
                 </div>
               </div>
             )}
 
-            {/* Salary Information Tab */}
-            {activeTab === 'salary' && (
-              <div className="p-6">
-              <h4 className="text-md font-semibold text-gray-800 mb-4">Net Salary</h4>
-
-                <Input 
-                  name="netSalary" 
-                  value={formData.netSalary} 
-                  onChange={handleChange} 
-                  placeholder="Enter net salary" 
-                  className="mb-6 md:w-1/2" 
-                />
-                
-                <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                  <Input name="basic" value={formData.basic} onChange={handleChange} placeholder="Basic" />
-                  <Input name="da" value={formData.da} onChange={handleChange} placeholder="DA" />
-                  <Input name="hra" value={formData.hra} onChange={handleChange} placeholder="HRA" />
-                  <Input name="conveyance" value={formData.conveyance} onChange={handleChange} placeholder="Conveyance" />
-                  <Input name="allowance" value={formData.allowance} onChange={handleChange} placeholder="Allowance" />
-                  <Input name="medicalAllowance" value={formData.medicalAllowance} onChange={handleChange} placeholder="Medical Allowance" />
-                  <Input name="otherEarnings" value={formData.otherEarnings} onChange={handleChange} placeholder="Others" />
+            {/* Medical Information Tab */}
+            {activeTab === 'medical' && (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <Input 
+                    label="Height (cm)" 
+                    name="height" 
+                    type="number" 
+                    icon={Ruler} 
+                    placeholder="Height in cm" 
+                    value={formData.height} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.height} 
+                    touched={touched.height} 
+                  />
+                  <Input 
+                    label="Weight (kg)" 
+                    name="weight" 
+                    type="number" 
+                    icon={Weight} 
+                    placeholder="Weight in kg" 
+                    value={formData.weight} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.weight} 
+                    touched={touched.weight} 
+                  />
+                  <Input 
+                    label="Blood Pressure" 
+                    name="bloodPressure" 
+                    icon={Activity} 
+                    placeholder="e.g., 120/80" 
+                    value={formData.bloodPressure} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.bloodPressure} 
+                    touched={touched.bloodPressure} 
+                  />
                 </div>
 
-                <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input name="tds" value={formData.tds} onChange={handleChange} placeholder="TDS" />
-                  <Input name="pf" value={formData.pf} onChange={handleChange} placeholder="PF" />
-                  <Input name="leave" value={formData.leave} onChange={handleChange} placeholder="Leave" />
-                  <Input name="profTax" value={formData.profTax} onChange={handleChange} placeholder="Prof. Tax" />
-                  <Input name="labourWelfare" value={formData.labourWelfare} onChange={handleChange} placeholder="Labour Welfare" />
-                  <Input name="otherDeductions" value={formData.otherDeductions} onChange={handleChange} placeholder="Others" />
+                  <Textarea 
+                    label="Allergies" 
+                    name="allergies" 
+                    rows={3} 
+                    placeholder="List any allergies (medications, food, environmental)" 
+                    value={formData.allergies} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.allergies} 
+                    touched={touched.allergies} 
+                  />
+                  <Textarea 
+                    label="Chronic Conditions" 
+                    name="chronicConditions" 
+                    rows={3} 
+                    placeholder="List any chronic diseases or conditions" 
+                    value={formData.chronicConditions} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.chronicConditions} 
+                    touched={touched.chronicConditions} 
+                  />
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Emergency Contact</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Emergency Number" 
+                      name="emergencyNumber" 
+                      icon={Phone} 
+                      placeholder="Emergency contact number" 
+                      value={formData.emergencyNumber} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.emergencyNumber} 
+                      touched={touched.emergencyNumber} 
+                    />
+                  </div>
+                </div>
+
+                <Textarea 
+                  label="Additional Notes" 
+                  name="notes" 
+                  rows={4} 
+                  placeholder="Any additional information about the patient..." 
+                  value={formData.notes} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.notes} 
+                  touched={touched.notes} 
+                />
+              </div>
+            )}
+
+            {/* Guardian & Referral Tab */}
+            {activeTab === 'guardian' && (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input 
+                    label="Guardian Name" 
+                    name="guardianName" 
+                    icon={User} 
+                    placeholder="Parent or guardian name" 
+                    value={formData.guardianName} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.guardianName} 
+                    touched={touched.guardianName} 
+                  />
+                  <Input 
+                    label="Guardian Relation" 
+                    name="guardianRelation" 
+                    icon={Users} 
+                    placeholder="e.g., Father, Mother, Spouse" 
+                    value={formData.guardianRelation} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.guardianRelation} 
+                    touched={touched.guardianRelation} 
+                  />
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Referral Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Referred By" 
+                      name="referredBy" 
+                      icon={Users} 
+                      placeholder="Doctor name or source" 
+                      value={formData.referredBy} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.referredBy} 
+                      touched={touched.referredBy} 
+                    />
+                    <Input 
+                      label="Referred On" 
+                      name="referredOn" 
+                      type="date" 
+                      icon={Calendar} 
+                      value={formData.referredOn} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.referredOn} 
+                      touched={touched.referredOn} 
+                    />
+                  </div>
+                  <div className="mt-5">
+                    <Select 
+                      label="Department Assigned To" 
+                      name="department" 
+                      options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'General Medicine', 'Dermatology', 'Ophthalmology', 'ENT']} 
+                      placeholder="Select Department" 
+                      value={formData.department} 
+                      onChange={handleChange} 
+                      onBlur={handleBlur} 
+                      error={errors.department} 
+                      touched={touched.department} 
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -540,7 +843,7 @@ const AddDoctor = () => {
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
               <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save Doctor'}
+                {isSubmitting ? 'Saving...' : 'Save Patient'}
               </Button>
             </div>
           </Card>
@@ -550,4 +853,4 @@ const AddDoctor = () => {
   );
 };
 
-export default AddDoctor;
+export default AddPatient;

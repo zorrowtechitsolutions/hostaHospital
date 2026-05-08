@@ -1,9 +1,10 @@
-// src/Authentication/Login.jsx - Refactored with global UI components
+// src/Authentication/Login.jsx - With toast notifications
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Input, Button, Alert, Card } from '../components/ui';
+import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -78,13 +79,29 @@ const Login = () => {
         const hospital = hospitals.find(h => h.email === formData.email);
         
         if (hospital && hospital.password === formData.password) {
+          // Success toast message for login
+          showSuccessToast(
+            ` Login successful! Welcome back, ${hospital.hospitalName}!`,
+            4000,
+            {
+              'Hospital': hospital.hospitalName,
+              'Email': hospital.email,
+              'Type': hospital.hospitalType
+            }
+          );
+          
           login(hospital);
-          navigate('/dashboard');
+          
+          // Navigate after a short delay to show the toast
+          setTimeout(() => navigate('/dashboard'), 500);
         } else {
           setLoginError('Invalid email or password. Please try again.');
+          showErrorToast('❌ Invalid email or password. Please try again.', 4000);
         }
         setIsSubmitting(false);
       }, 500);
+    } else {
+      showWarningToast('⚠️ Please fill in all required fields correctly', 3000);
     }
   };
 

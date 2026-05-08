@@ -47,6 +47,7 @@ import Specialities from "./components/specialities/Specialities";
 import { ToastProvider } from "./components/ui/Toast";
 import EmailTemplates from "./components/Settings/Email";
 import Profile from "./components/MyProfile/Profile";
+import AddPatient from "./components/patients/AddPatientModal";
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -155,15 +156,17 @@ function App() {
     );
   }
 
-  // If not authenticated, show login/register pages
+  // If not authenticated, show login/register pages with ToastProvider
   if (!isAuthenticated) {
     console.log("Rendering PUBLIC routes");
     return (  
-      <Routes>
-        <Route path="/register" element={<Register />} />
-        <Route path="/sign-in" element={<Login />} />
-        <Route path="*" element={<Navigate to="/sign-in" replace />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/register" element={<Register />} />
+          <Route path="/sign-in" element={<Login />} />
+          <Route path="*" element={<Navigate to="/sign-in" replace />} />
+        </Routes>
+      </ToastProvider>
     );
   }
 
@@ -254,7 +257,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/patients" element={<Patients />} />
-              <Route path="/add-patient" element={<AddPatientModal />} />
+              <Route path="/add-patient" element={<AddPatient />} />
               <Route path="/edit-patient/:id" element={<EditPatientModal />} />
               <Route path="/patients/:id" element={<PatientDetails />} />
               <Route path="/requests" element={<RequestsTable />} />

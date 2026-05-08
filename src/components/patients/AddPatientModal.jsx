@@ -1,4 +1,4 @@
-// src/components/patients/AddPatient.jsx - With toast notifications
+// src/components/patients/AddPatient.jsx - Complete with toast notifications
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -10,7 +10,9 @@ import {
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
 } from '../ui';
-import { showAddToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
+import { 
+  showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast 
+} from '../ui/Toast';
 
 const AddPatient = () => {
   const navigate = useNavigate();
@@ -32,7 +34,7 @@ const AddPatient = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Mock S3 upload function
+  // Mock S3 upload function - replace with actual AWS SDK implementation
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       let progress = 0;
@@ -141,7 +143,10 @@ const AddPatient = () => {
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age > 0 && age <= 120) setFormData(prev => ({ ...prev, age: age.toString() }));
+      if (age > 0 && age <= 120) {
+        setFormData(prev => ({ ...prev, age: age.toString() }));
+        showInfoToast(`Patient age calculated: ${age} years`, 2000);
+      }
     }
   };
 
@@ -175,16 +180,18 @@ const AddPatient = () => {
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
+    showInfoToast('Uploading image to cloud storage...', 2000);
+    
     try {
       const s3Url = await uploadToS3(file);
       setFormData(prev => ({ ...prev, profileImage: s3Url }));
       setUploadProgress(100);
-      showSuccessToast('Image uploaded successfully!', 2000);
+      showSuccessToast('Image uploaded successfully!', 3000);
       return true;
     } catch (error) {
       console.error('S3 upload error:', error);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
-      showErrorToast('Failed to upload image. Please try again.', 3000);
+      showErrorToast('Failed to upload image. Please try again.', 4000);
       setPreviewImage(null);
       return false;
     }
@@ -214,6 +221,8 @@ const AddPatient = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
+      showInfoToast('Creating patient profile...', 2000);
+      
       setTimeout(() => {
         try {
           const existingPatients = JSON.parse(localStorage.getItem('patients') || '[]');
@@ -226,10 +235,22 @@ const AddPatient = () => {
             return;
           }
           
+          // Check if email already exists (if provided)
+          if (formData.email) {
+            const emailExists = existingPatients.some(p => p.email === formData.email);
+            if (emailExists) {
+              showWarningToast('Email already exists in the system. Please use a different email.', 4000);
+              setIsSubmitting(false);
+              return;
+            }
+          }
+          
           const patientId = `PT${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+          const fullName = `${formData.firstName} ${formData.middleName ? formData.middleName + ' ' : ''}${formData.lastName}`;
+          
           const newPatient = {
             id: patientId,
-            name: `${formData.firstName} ${formData.lastName}`,
+            name: fullName,
             firstName: formData.firstName,
             middleName: formData.middleName,
             lastName: formData.lastName,
@@ -267,38 +288,58 @@ const AddPatient = () => {
           
           localStorage.setItem('patients', JSON.stringify([...existingPatients, newPatient]));
           
+          // Show success toast with patient details
           showAddToast(
             `${newPatient.name} has been added successfully!`,
-            4000,
+            5000,
             {
-              'Patient': newPatient.name,
-              'ID': patientId,
+              'Patient ID': patientId,
+              'Patient Name': fullName,
               'Age': `${newPatient.age} years`,
-              'Blood Group': newPatient.bloodGroup
+              'Blood Group': newPatient.bloodGroup,
+              'Department': newPatient.department || 'Not Assigned',
+              'Mobile': newPatient.phone
             }
           );
           
           setIsSubmitting(false);
           
+          // Navigate after a short delay to show the toast
           setTimeout(() => {
             navigate('/patients');
-          }, 1500);
+            showSuccessToast('Redirecting to patients list...', 2000);
+          }, 2000);
         } catch (error) {
-          showErrorToast('Failed to add patient. Please try again.', 3000);
+          console.error('Error saving patient:', error);
+          showErrorToast('Failed to add patient. Please try again.', 4000);
           setIsSubmitting(false);
         }
       }, 1000);
     } else {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        showWarningToast(`Please fix the ${firstErrorField} field`, 3000);
+        const fieldLabel = firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase();
+        showWarningToast(`Please fix the ${fieldLabel} field before submitting.`, 4000);
       }
       const firstError = document.querySelector('.error-message');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
-  const handleGoBack = () => navigate('/patients');
+  const handleGoBack = () => {
+    // Check if any data has been entered
+    const hasData = formData.firstName || formData.lastName || formData.mobileNumber || previewImage;
+    if (hasData) {
+      showWarningToast('You have unsaved changes. Are you sure you want to leave?', 4000);
+      setTimeout(() => {
+        if (window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+          navigate('/patients');
+        }
+      }, 100);
+    } else {
+      navigate('/patients');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -316,11 +357,542 @@ const AddPatient = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Rest of the form remains the same */}
-          {/* ... (all the Card components remain unchanged) ... */}
-          
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
+          {/* Basic Information Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Patient's personal and medical details</p>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Profile Image Upload with S3 Support */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
+                    {previewImage && (
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
+                  <div>
+                    <input
+                      id="profileImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('profileImageInput').click()}
+                      className="inline-flex items-center gap-2"
+                      disabled={isSubmitting}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Image
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  
+                  {/* Upload Progress Bar */}
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-2">
+                      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                    </div>
+                  )}
+                  
+                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="First Name" 
+                  name="firstName" 
+                  icon={User} 
+                  placeholder="Enter first name" 
+                  value={formData.firstName} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.firstName} 
+                  touched={touched.firstName} 
+                  required 
+                />
+                <Input 
+                  label="Middle Name" 
+                  name="middleName" 
+                  required={false} 
+                  icon={User} 
+                  placeholder="Enter middle name" 
+                  value={formData.middleName} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.middleName} 
+                  touched={touched.middleName} 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Last Name" 
+                  name="lastName" 
+                  icon={User} 
+                  placeholder="Enter last name" 
+                  value={formData.lastName} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.lastName} 
+                  touched={touched.lastName} 
+                  required 
+                />
+                <Select 
+                  label="Blood Group" 
+                  name="bloodGroup" 
+                  options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} 
+                  placeholder="Select Blood Group" 
+                  value={formData.bloodGroup} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.bloodGroup} 
+                  touched={touched.bloodGroup} 
+                  required 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <Input 
+                  label="Age" 
+                  name="age" 
+                  type="number" 
+                  icon={Clock} 
+                  placeholder="Age in years" 
+                  value={formData.age} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.age} 
+                  touched={touched.age} 
+                  required 
+                />
+                <Input 
+                  label="Date of Birth" 
+                  name="dob" 
+                  type="date" 
+                  icon={Calendar} 
+                  value={formData.dob} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.dob} 
+                  touched={touched.dob} 
+                  required 
+                />
+                <Select 
+                  label="Gender" 
+                  name="gender" 
+                  options={['Male', 'Female', 'Other']} 
+                  placeholder="Select Gender" 
+                  value={formData.gender} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.gender} 
+                  touched={touched.gender} 
+                  required 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Select 
+                  label="Marital Status" 
+                  name="maritalStatus" 
+                  required={false} 
+                  options={['Single', 'Married', 'Divorced', 'Widowed']} 
+                  placeholder="Select Marital Status" 
+                  value={formData.maritalStatus} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.maritalStatus} 
+                  touched={touched.maritalStatus} 
+                />
+                <Input 
+                  label="Occupation" 
+                  name="occupation" 
+                  required={false} 
+                  icon={Briefcase} 
+                  placeholder="Occupation" 
+                  value={formData.occupation} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.occupation} 
+                  touched={touched.occupation} 
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Contact Information Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Phone numbers and guardian details</p>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Mobile Number" 
+                  name="mobileNumber" 
+                  icon={Phone} 
+                  placeholder="+1 234 567 8900" 
+                  value={formData.mobileNumber} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.mobileNumber} 
+                  touched={touched.mobileNumber} 
+                  required 
+                />
+                <Input 
+                  label="Emergency Number" 
+                  name="emergencyNumber" 
+                  required={false} 
+                  icon={AlertTriangle} 
+                  placeholder="Emergency contact" 
+                  value={formData.emergencyNumber} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.emergencyNumber} 
+                  touched={touched.emergencyNumber} 
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Guardian Name" 
+                  name="guardianName" 
+                  required={false} 
+                  icon={Users} 
+                  placeholder="Parent or guardian name" 
+                  value={formData.guardianName} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.guardianName} 
+                  touched={touched.guardianName} 
+                />
+                <Select 
+                  label="Guardian Relation" 
+                  name="guardianRelation" 
+                  required={false} 
+                  options={['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Other']} 
+                  placeholder="Relationship" 
+                  value={formData.guardianRelation} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.guardianRelation} 
+                  touched={touched.guardianRelation} 
+                />
+              </div>
+              <Input 
+                label="Email Address" 
+                name="email" 
+                type="email" 
+                required={false} 
+                icon={Mail} 
+                placeholder="patient@example.com" 
+                value={formData.email} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.email} 
+                touched={touched.email} 
+              />
+            </div>
+          </Card>
+
+          {/* Address Information Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Address Information</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Residential address details</p>
+            </div>
+            <div className="p-6 space-y-5">
+              <Input 
+                label="Address Line 1" 
+                name="addressLine1" 
+                icon={MapPin} 
+                placeholder="Street address" 
+                value={formData.addressLine1} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.addressLine1} 
+                touched={touched.addressLine1} 
+                required 
+              />
+              <Input 
+                label="Address Line 2" 
+                name="addressLine2" 
+                required={false} 
+                placeholder="Apartment, suite, unit, etc." 
+                value={formData.addressLine2} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.addressLine2} 
+                touched={touched.addressLine2} 
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <Select 
+                  label="Country" 
+                  name="country" 
+                  required={false} 
+                  options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} 
+                  placeholder="Select Country" 
+                  value={formData.country} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.country} 
+                  touched={touched.country} 
+                />
+                <Input 
+                  label="City" 
+                  name="city" 
+                  required={false} 
+                  placeholder="City" 
+                  value={formData.city} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.city} 
+                  touched={touched.city} 
+                />
+                <Input 
+                  label="State" 
+                  name="state" 
+                  required={false} 
+                  placeholder="State" 
+                  value={formData.state} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.state} 
+                  touched={touched.state} 
+                />
+                <Input 
+                  label="Pin Code" 
+                  name="pinCode" 
+                  required={false} 
+                  placeholder="Postal code" 
+                  value={formData.pinCode} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.pinCode} 
+                  touched={touched.pinCode} 
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Medical Information Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Medical Information</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Health metrics and clinical notes</p>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <Input 
+                  label="Height (cm)" 
+                  name="height" 
+                  type="number" 
+                  required={false} 
+                  icon={Activity} 
+                  placeholder="cm" 
+                  value={formData.height} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.height} 
+                  touched={touched.height} 
+                />
+                <Input 
+                  label="Weight (kg)" 
+                  name="weight" 
+                  type="number" 
+                  required={false} 
+                  icon={Activity} 
+                  placeholder="kg" 
+                  value={formData.weight} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.weight} 
+                  touched={touched.weight} 
+                />
+                <Input 
+                  label="Blood Pressure" 
+                  name="bloodPressure" 
+                  required={false} 
+                  icon={Heart} 
+                  placeholder="e.g., 120/80" 
+                  value={formData.bloodPressure} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.bloodPressure} 
+                  touched={touched.bloodPressure} 
+                />
+              </div>
+              <Textarea 
+                label="Allergies" 
+                name="allergies" 
+                rows={2} 
+                placeholder="List any allergies (medications, food, etc.)" 
+                value={formData.allergies} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.allergies} 
+                touched={touched.allergies} 
+              />
+              <Textarea 
+                label="Chronic Conditions" 
+                name="chronicConditions" 
+                rows={2} 
+                placeholder="Diabetes, hypertension, asthma, etc." 
+                value={formData.chronicConditions} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.chronicConditions} 
+                touched={touched.chronicConditions} 
+              />
+            </div>
+          </Card>
+
+          {/* Referral Information Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Referral Information</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Referring doctor and department details</p>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <Input 
+                  label="Referred By" 
+                  name="referredBy" 
+                  required={false} 
+                  icon={User} 
+                  placeholder="Doctor name" 
+                  value={formData.referredBy} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.referredBy} 
+                  touched={touched.referredBy} 
+                />
+                <Input 
+                  label="Referred On" 
+                  name="referredOn" 
+                  type="date" 
+                  required={false} 
+                  icon={Calendar} 
+                  value={formData.referredOn} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.referredOn} 
+                  touched={touched.referredOn} 
+                />
+                <Select 
+                  label="Department" 
+                  name="department" 
+                  required={false} 
+                  options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'Pulmonology']} 
+                  placeholder="Select Department" 
+                  value={formData.department} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.department} 
+                  touched={touched.department} 
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Additional Notes Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Additional Notes</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Clinical observations and remarks</p>
+            </div>
+            <div className="p-6">
+              <Textarea 
+                label="Notes" 
+                name="notes" 
+                rows={4} 
+                placeholder="Any additional information about the patient..." 
+                value={formData.notes} 
+                onChange={handleChange} 
+                onBlur={handleBlur} 
+                error={errors.notes} 
+                touched={touched.notes} 
+              />
+            </div>
+          </Card>
+
+          {/* Account Details Card */}
+          <Card>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-lg font-semibold text-gray-900">Account Details</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Login credentials for patient portal (optional)</p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Password" 
+                  name="password" 
+                  type="password" 
+                  required={false} 
+                  icon={Lock} 
+                  placeholder="Create password" 
+                  value={formData.password} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.password} 
+                  touched={touched.password} 
+                />
+                <Input 
+                  label="Confirm Password" 
+                  name="confirmPassword" 
+                  type="password" 
+                  required={false} 
+                  icon={Lock} 
+                  placeholder="Confirm password" 
+                  value={formData.confirmPassword} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.confirmPassword} 
+                  touched={touched.confirmPassword} 
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                Setting a password allows the patient to access the patient portal and view their medical records online.
+              </p>
+            </div>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 pt-2 pb-8">
+            <Button variant="outline" onClick={handleGoBack} type="button">
+              Cancel
+            </Button>
             <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
               {isSubmitting ? 'Saving...' : 'Save Patient'}
             </Button>
