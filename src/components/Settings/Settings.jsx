@@ -1,5 +1,5 @@
-// src/components/Settings/Settings.jsx - With toast notifications
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+// src/components/Settings/Settings.jsx - With address information like Register page
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button, Card, Input, Tabs } from '../ui';
 import Security from './Security';
@@ -10,15 +10,127 @@ import Billing from './Billing';
 import Map from './Map';
 import EmailTemplates from './Email';
 import { showSuccessToast, showWarningToast, showInfoToast } from '../ui/Toast';
+import { Country, State, City } from 'country-state-city';
+import { MapPin, ChevronDown } from 'lucide-react'; // Add MapPin here
+
+// Custom Searchable Dropdown Component
+const SearchableDropdown = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  icon: Icon,
+  disabled = false,
+  required = false,
+  getOptionLabel = (option) => option.name || option,
+  getOptionValue = (option) => option.isoCode || option,
+  optionKey = (option, index) => option.isoCode || index
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option => {
+    const label = getOptionLabel(option).toLowerCase();
+    return label.includes(searchTerm.toLowerCase());
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getOptionValue(option), getOptionLabel(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const displayValue = () => {
+    if (!value) return "";
+    const selected = options.find(opt => getOptionValue(opt) === value);
+    return selected ? getOptionLabel(selected) : "";
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <input
+          type="text"
+          value={isOpen ? searchTerm : displayValue()}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={optionKey(option, index)}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getOptionLabel(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
+  // Address fields using country-state-city
+  const [countryCode, setCountryCode] = useState("");
+  const [countryName, setCountryName] = useState("");
+  const [stateCode, setStateCode] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [cityName, setCityName] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [pincode, setPincode] = useState("");
+
   const [hospitalInfo, setHospitalInfo] = useState({
     name: 'AL ABEER HOSPITAL KIZHISSERI',
     email: 'alabeerh@gmail.com',
-    address: 'Kizhisseri, Kerala, India',
     hospitalType: 'Multi-Specialty',
     mobileNumber: '+91 9876543210',
     createdDate: 'N/A',
@@ -41,14 +153,40 @@ const Settings = () => {
   const [editForm, setEditForm] = useState({
     name: hospitalInfo.name,
     email: hospitalInfo.email,
-    address: hospitalInfo.address,
     hospitalType: hospitalInfo.hospitalType,
     mobileNumber: hospitalInfo.mobileNumber,
+    streetAddress: streetAddress,
+    countryCode: countryCode,
+    countryName: countryName,
+    stateCode: stateCode,
+    stateName: stateName,
+    cityName: cityName,
+    pincode: pincode,
   });
+
+  // Get dropdown options
+  const countries = Country.getAllCountries();
+  const states = State.getStatesOfCountry(editForm.countryCode);
+  const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
 
   useEffect(() => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
+
+  // Load saved address data from localStorage on component mount
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem('hospitals') || '[]');
+    const currentHospital = userData[0]; // Assuming first hospital is current
+    if (currentHospital?.address) {
+      setStreetAddress(currentHospital.address.street || '');
+      setCountryCode(currentHospital.address.countryCode || '');
+      setCountryName(currentHospital.address.country || '');
+      setStateCode(currentHospital.address.stateCode || '');
+      setStateName(currentHospital.address.state || '');
+      setCityName(currentHospital.address.city || '');
+      setPincode(currentHospital.address.pincode || '');
+    }
+  }, []);
 
   const handleEditSubmit = useCallback((e) => {
     e.preventDefault();
@@ -59,15 +197,24 @@ const Settings = () => {
       const formattedDate = now.toLocaleString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
       });
+      
       setHospitalInfo(prev => ({ 
         ...prev, 
         name: editForm.name,
         email: editForm.email,
-        address: editForm.address,
         hospitalType: editForm.hospitalType,
         mobileNumber: editForm.mobileNumber,
         lastUpdated: formattedDate 
       }));
+      
+      // Save address changes
+      setStreetAddress(editForm.streetAddress);
+      setCountryCode(editForm.countryCode);
+      setCountryName(editForm.countryName);
+      setStateCode(editForm.stateCode);
+      setStateName(editForm.stateName);
+      setCityName(editForm.cityName);
+      setPincode(editForm.pincode);
       
       showSuccessToast(
         'Hospital information updated successfully!',
@@ -75,7 +222,8 @@ const Settings = () => {
         {
           'Hospital Name': editForm.name,
           'Email': editForm.email,
-          'Type': editForm.hospitalType
+          'Type': editForm.hospitalType,
+          'Address': `${editForm.streetAddress}, ${editForm.cityName}, ${editForm.stateName}, ${editForm.countryName} - ${editForm.pincode}`
         }
       );
       
@@ -88,16 +236,46 @@ const Settings = () => {
     setEditForm({
       name: hospitalInfo.name,
       email: hospitalInfo.email,
-      address: hospitalInfo.address,
       hospitalType: hospitalInfo.hospitalType,
       mobileNumber: hospitalInfo.mobileNumber,
+      streetAddress: streetAddress,
+      countryCode: countryCode,
+      countryName: countryName,
+      stateCode: stateCode,
+      stateName: stateName,
+      cityName: cityName,
+      pincode: pincode,
     });
     setIsEditing(true);
-  }, [hospitalInfo]);
+  }, [hospitalInfo, streetAddress, countryCode, countryName, stateCode, stateName, cityName, pincode]);
 
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setEditForm(prev => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleCountryChange = useCallback((code, name) => {
+    setEditForm(prev => ({
+      ...prev,
+      countryCode: code,
+      countryName: name,
+      stateCode: '',
+      stateName: '',
+      cityName: ''
+    }));
+  }, []);
+
+  const handleStateChange = useCallback((code, name) => {
+    setEditForm(prev => ({
+      ...prev,
+      stateCode: code,
+      stateName: name,
+      cityName: ''
+    }));
+  }, []);
+
+  const handleCityChange = useCallback((name) => {
+    setEditForm(prev => ({ ...prev, cityName: name }));
   }, []);
 
   const handleWorkingHourChange = useCallback((day, field, value) => {
@@ -168,41 +346,114 @@ const Settings = () => {
         <div className="p-6">
           {!isEditing ? (
             <div className="space-y-4">
-              <div><label className="block text-sm font-medium text-gray-700">Hospital Name</label><p className="mt-1 text-gray-900 font-medium">{hospitalInfo.name}</p></div>
-              <div><label className="block text-sm font-medium text-gray-700">Email Address</label><p className="mt-1 text-gray-900">{hospitalInfo.email}</p></div>
-              <div><label className="block text-sm font-medium text-gray-700">Address</label><p className="mt-1 text-gray-900">{hospitalInfo.address}</p></div>
-              <div><label className="block text-sm font-medium text-gray-700">Hospital Type</label><p className="mt-1 text-gray-900">{hospitalInfo.hospitalType}</p></div>
-              <div><label className="block text-sm font-medium text-gray-700">Mobile Number</label><p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p></div>
-              <Button variant="primary" onClick={handleEditClick}>Edit Settings</Button>
-            </div>
-          ) : (
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <Input label="Hospital Name" name="name" value={editForm.name} onChange={handleInputChange} required />
-              <Input label="Email Address" name="email" type="email" value={editForm.email} onChange={handleInputChange} required />
-              <Input label="Address" name="address" value={editForm.address} onChange={handleInputChange} required />
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Type *</label>
-                <select
-                  name="hospitalType"
-                  value={editForm.hospitalType}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                  required
-                >
-                  <option value="">Select hospital type</option>
-                  <option value="General Hospital">General Hospital</option>
-                  <option value="Multi-Specialty">Multi-Specialty</option>
-                  <option value="Super Specialty">Super Specialty</option>
-                  <option value="Teaching Hospital">Teaching Hospital</option>
-                  <option value="Clinic">Clinic</option>
-                  <option value="Nursing Home">Nursing Home</option>
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700">Hospital Name</label><p className="mt-1 text-gray-900 font-medium">{hospitalInfo.name}</p></div>
+                <div><label className="block text-sm font-medium text-gray-700">Email Address</label><p className="mt-1 text-gray-900">{hospitalInfo.email}</p></div>
+                <div><label className="block text-sm font-medium text-gray-700">Hospital Type</label><p className="mt-1 text-gray-900">{hospitalInfo.hospitalType}</p></div>
+                <div><label className="block text-sm font-medium text-gray-700">Mobile Number</label><p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p></div>
               </div>
               
-              <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />
+              {/* Address Display */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <div><label className="block text-sm font-medium text-gray-700">Street Address</label><p className="mt-1 text-gray-900">{streetAddress || 'Not provided'}</p></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className="block text-sm font-medium text-gray-700">Country</label><p className="mt-1 text-gray-900">{countryName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">State</label><p className="mt-1 text-gray-900">{stateName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">City</label><p className="mt-1 text-gray-900">{cityName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Pincode</label><p className="mt-1 text-gray-900">{pincode || 'Not provided'}</p></div>
+                  </div>
+                </div>
+              </div>
               
-              <div className="flex space-x-3">
+              <Button variant="primary" onClick={handleEditClick} className="mt-4">Edit Settings</Button>
+            </div>
+          ) : (
+            <form onSubmit={handleEditSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input label="Hospital Name" name="name" value={editForm.name} onChange={handleInputChange} required />
+                <Input label="Email Address" name="email" type="email" value={editForm.email} onChange={handleInputChange} required />
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Type *</label>
+                  <select
+                    name="hospitalType"
+                    value={editForm.hospitalType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                    required
+                  >
+                    <option value="">Select hospital type</option>
+                    <option value="General Hospital">General Hospital</option>
+                    <option value="Multi-Specialty">Multi-Specialty</option>
+                    <option value="Super Specialty">Super Specialty</option>
+                    <option value="Teaching Hospital">Teaching Hospital</option>
+                    <option value="Clinic">Clinic</option>
+                    <option value="Nursing Home">Nursing Home</option>
+                  </select>
+                </div>
+                
+                <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />
+              </div>
+
+              {/* Address Edit Section */}
+              <div className="border-t border-gray-200 pt-4 mt-2">
+                <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
+                
+                <div className="space-y-4">
+
+                  <SearchableDropdown
+                    label="Country"
+                    options={countries}
+                    value={editForm.countryCode}
+                    onChange={handleCountryChange}
+                    placeholder="Search for a country..."
+                    icon={MapPin}
+                  />
+
+                  <SearchableDropdown
+                    label="State"
+                    options={states}
+                    value={editForm.stateCode}
+                    onChange={handleStateChange}
+                    placeholder="Search for a state..."
+                    icon={MapPin}
+                    disabled={!editForm.countryCode}
+                  />
+
+                  <SearchableDropdown
+                    label="District"
+                    options={cities}
+                    value={editForm.cityName}
+                    onChange={handleCityChange}
+                    placeholder="Search for a District..."
+                    icon={MapPin}
+                    disabled={!editForm.stateCode}
+                    getOptionLabel={(option) => option.name}
+                    getOptionValue={(option) => option.name}
+                    optionKey={(option, index) => index}
+                  />
+                   <Input 
+                    label="Street Address" 
+                    name="streetAddress" 
+                    value={editForm.streetAddress} 
+                    onChange={handleInputChange} 
+                    placeholder="Enter street address"
+                  />
+
+                  <Input 
+                    label="Pincode" 
+                    name="pincode" 
+                    value={editForm.pincode} 
+                    onChange={handleInputChange} 
+                    placeholder="Enter pincode (5-6 digits)"
+                    maxLength={6}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex space-x-3 pt-4">
                 <Button type="submit" variant="primary" disabled={isSaving} loading={isSaving}>
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -304,7 +555,7 @@ const Settings = () => {
         </div>
       </Card>
     </div>
-  ), [isEditing, hospitalInfo, editForm, workingHours, is24HourMode, isSaving, handleEditClick, handleEditSubmit, handleInputChange, handleCancelEdit, handleWorkingHourChange, handleToggleClosed, handleSet24HourMode]);
+  ), [isEditing, hospitalInfo, editForm, workingHours, is24HourMode, isSaving, streetAddress, countryName, stateName, cityName, pincode, countries, states, cities, handleEditClick, handleEditSubmit, handleInputChange, handleCancelEdit, handleWorkingHourChange, handleToggleClosed, handleSet24HourMode, handleCountryChange, handleStateChange, handleCityChange]);
 
   const renderTabContent = useCallback(() => {
     switch (activeTab) {

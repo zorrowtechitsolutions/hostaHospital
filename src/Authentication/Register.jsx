@@ -1,14 +1,214 @@
-// src/Authentication/Register.jsx - Fixed Google Maps loading issue (No address lookup)
-import React, { useState, useEffect } from 'react';
+// src/Authentication/Register.jsx - With searchable dropdowns (typing to filter)
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Mail, Lock, Building, Building2,
+  Mail, Lock, Building, Building2, MapPin, Globe, Landmark, Home, CreditCard,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
-  Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle
+  Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle, Search
 } from 'lucide-react';
 import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
 import { Input, Select, Textarea, Button, Alert, Card } from '../components/ui';
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
+import { Country, State, City } from 'country-state-city';
+
+// Custom Searchable Dropdown Component
+const SearchableDropdown = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  icon: Icon,
+  disabled = false,
+  required = false,
+  getOptionLabel = (option) => option.name || option,
+  getOptionValue = (option) => option.isoCode || option,
+  optionKey = (option, index) => option.isoCode || index
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Filter options based on search term
+  const filteredOptions = options.filter(option => {
+    const label = getOptionLabel(option).toLowerCase();
+    return label.includes(searchTerm.toLowerCase());
+  });
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getOptionValue(option), getOptionLabel(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const displayValue = () => {
+    if (!value) return "";
+    const selected = options.find(opt => getOptionValue(opt) === value);
+    return selected ? getOptionLabel(selected) : "";
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <input
+          ref={inputRef}
+          type="text"
+          value={isOpen ? searchTerm : displayValue()}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={optionKey(option, index)}
+              className="px-4 py-2 hover:bg-[#F5FAFF] cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getOptionLabel(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Simple Searchable Dropdown for Cities (no icon needed)
+const SearchableCityDropdown = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  disabled = false,
+  required = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  // Filter options based on search term
+  const filteredOptions = options.filter(option => 
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : value}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={index}
+              className="px-4 py-2 hover:bg-[#F5FAFF] cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500">
+          No cities found
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Register = () => {
   const navigate = useNavigate();
@@ -22,13 +222,26 @@ const Register = () => {
   // Form state
   const [hospitalName, setHospitalName] = useState("");
   const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [longitude, setLongitude] = useState("");
   const [latitude, setLatitude] = useState("");
   const [hospitalType, setHospitalType] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  
+  // Location fields using country-state-city
+  const [countryCode, setCountryCode] = useState("");
+  const [countryName, setCountryName] = useState("");
+  const [stateCode, setStateCode] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [cityName, setCityName] = useState("");
+  const [pincode, setPincode] = useState("");
+  
+  // Get dropdown options
+  const countries = Country.getAllCountries();
+  const states = State.getStatesOfCountry(countryCode);
+  const cities = City.getCitiesOfState(countryCode, stateCode);
   
   // Normal Hospital Hours (Single session)
   const [normalHours, setNormalHours] = useState({
@@ -57,10 +270,9 @@ const Register = () => {
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  // Check if Google Maps is loaded - MORE RELIABLE CHECK
+  // Check if Google Maps is loaded
   useEffect(() => {
     const checkGoogleMaps = setInterval(() => {
-      // Safer check for Google Maps
       if (window.google && window.google.maps && typeof window.google.maps.Geocoder === 'function') {
         setIsGoogleMapsReady(true);
         console.log('✅ Google Maps is fully loaded and ready');
@@ -138,7 +350,7 @@ const Register = () => {
     }
   };
 
-  // Simplified getCurrentLocation - Only gets coordinates, NO address lookup
+  // Get current location coordinates
   const getCurrentLocation = () => {
     setLocationStatus('loading');
     showInfoToast('Getting your current location coordinates...', 2000);
@@ -199,7 +411,6 @@ const Register = () => {
     setLatitude(lat.toString());
     setLongitude(lng.toString());
     
-    // Only set coordinates, do NOT auto-fill address
     showSuccessToast(`Location coordinates set: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 3000);
     setLocationStatus('success');
     setTimeout(() => setLocationStatus(''), 3000);
@@ -226,9 +437,34 @@ const Register = () => {
       showWarningToast('Phone number is required', 3000); 
       return false; 
     }
-    if (!address) { 
-      setRegisterError('Address is required'); 
-      showWarningToast('Address is required', 3000); 
+    if (!streetAddress) { 
+      setRegisterError('Street address is required'); 
+      showWarningToast('Street address is required', 3000); 
+      return false; 
+    }
+    if (!countryCode) { 
+      setRegisterError('Country is required'); 
+      showWarningToast('Country is required', 3000); 
+      return false; 
+    }
+    if (!stateCode) { 
+      setRegisterError('State is required'); 
+      showWarningToast('State is required', 3000); 
+      return false; 
+    }
+    if (!cityName) { 
+      setRegisterError('City is required'); 
+      showWarningToast('City is required', 3000); 
+      return false; 
+    }
+    if (!pincode) { 
+      setRegisterError('Pincode is required'); 
+      showWarningToast('Pincode is required', 3000); 
+      return false; 
+    }
+    if (!/^\d{5,6}$/.test(pincode)) { 
+      setRegisterError('Please enter a valid pincode (5-6 digits)'); 
+      showWarningToast('Please enter a valid pincode (5-6 digits)', 3000); 
       return false; 
     }
     if (!hospitalType) { 
@@ -254,6 +490,24 @@ const Register = () => {
     return true;
   };
 
+  const handleCountryChange = (code, name) => {
+    setCountryCode(code);
+    setCountryName(name);
+    setStateCode("");
+    setStateName("");
+    setCityName("");
+  };
+
+  const handleStateChange = (code, name) => {
+    setStateCode(code);
+    setStateName(name);
+    setCityName("");
+  };
+
+  const handleCityChange = (name) => {
+    setCityName(name);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
@@ -276,7 +530,15 @@ const Register = () => {
           id: hospitalId,
           hospitalName, 
           email, 
-          address, 
+          address: {
+            street: streetAddress,
+            country: countryName,
+            countryCode: countryCode,
+            state: stateName,
+            stateCode: stateCode,
+            city: cityName,
+            pincode
+          },
           phone, 
           longitude, 
           latitude, 
@@ -303,7 +565,7 @@ const Register = () => {
             '⚕️ Type': hospitalType,
             '⏰ Working Hours': is24x7 ? '24/7 Available' : (activeTab === 'clinic' ? 'Clinic Schedule' : 'Normal Schedule'),
             '📞 Contact': phone,
-            '📍 Address': address.substring(0, 50) + (address.length > 50 ? '...' : '')
+            '📍 Address': `${cityName}, ${stateName}, ${countryName} - ${pincode}`
           }
         );
         
@@ -368,20 +630,86 @@ const Register = () => {
             <Input label="Mobile Number" placeholder="Enter mobile number" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-5">
-            <div className="space-y-2">
+          {/* Address Section with Searchable Dropdowns */}
+          <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-[#154A7D]" />
+              Address Information
+            </h2>
+
+            {/* Searchable Country Dropdown */}
+            <SearchableDropdown
+              label="Country"
+              options={countries}
+              value={countryCode}
+              onChange={handleCountryChange}
+              placeholder="Search for a country..."
+              icon={Globe}
+              required={true}
+              getOptionLabel={(option) => option.name}
+              getOptionValue={(option) => option.isoCode}
+              optionKey={(option) => option.isoCode}
+            />
+
+            {/* Searchable State Dropdown */}
+            <SearchableDropdown
+              label="State"
+              options={states}
+              value={stateCode}
+              onChange={handleStateChange}
+              placeholder="Search for a state..."
+              icon={Landmark}
+              required={true}
+              disabled={!countryCode}
+              getOptionLabel={(option) => option.name}
+              getOptionValue={(option) => option.isoCode}
+              optionKey={(option) => option.isoCode}
+            />
+
+            {/* Searchable City Dropdown */}
+            <SearchableCityDropdown
+              label="District"
+              options={cities}
+              value={cityName}
+              onChange={handleCityChange}
+              placeholder="Search for a District..."
+              required={true}
+              disabled={!stateCode}
+            />
+             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Address <span className="text-red-500">*</span>
+                Street Address <span className="text-red-500">*</span>
               </label>
               <textarea
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter hospital address"
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder="Enter hospital street address"
                 rows={3}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium resize-none"
               />
             </div>
-            <div className="space-y-4">
+            {/* Pincode */}
+            <div className="relative">
+              <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+              <input
+                type="text"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
+                placeholder="Pincode * (5-6 digits)"
+                maxLength={6}
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Coordinates Section */}
+          <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-[#154A7D]" />
+              Location Coordinates
+            </h2>
+            
+            <div className="grid md:grid-cols-2 gap-5">
               <Input 
                 label="Latitude" 
                 placeholder="Enter latitude" 
@@ -395,53 +723,53 @@ const Register = () => {
                 onChange={(e) => setLongitude(e.target.value)} 
               />
             </div>
+
+            {/* Google Maps Location Picker */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Location Picker</label>
+              <GoogleMapsLocationPicker
+                latitude={latitude}
+                longitude={longitude}
+                onLocationSelect={handleLocationSelect}
+              />
+              <p className="text-xs text-gray-500">Click on the map to select your hospital location (coordinates only)</p>
+            </div>
+
+            {/* Get Current Location Button */}
+            <button
+              type="button"
+              onClick={getCurrentLocation}
+              disabled={locationStatus === 'loading'}
+              className={`w-full rounded-xl border py-4 font-medium text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
+                locationStatus === 'loading'
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                  : 'bg-[#F5FAFF] text-[#154A7D] border-[#D6E2EE] hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D] hover:shadow-md'
+              }`}
+            >
+              <Navigation size={22} className={locationStatus === 'loading' ? 'animate-pulse' : ''} />
+              {locationStatus === 'loading' ? 'Getting your location...' : '📍 Get Current Location Coordinates'}
+            </button>
+
+            {/* Location Status Messages */}
+            {locationStatus === 'loading' && (
+              <div className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#154A7D]"></div>
+                <p className="text-xs text-blue-600 text-center">📍 Fetching your location coordinates...</p>
+              </div>
+            )}
+            {locationStatus === 'success' && (
+              <div className="flex items-center justify-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <p className="text-xs text-green-600 text-center">✓ Location coordinates captured successfully!</p>
+              </div>
+            )}
+            {locationStatus === 'error' && (
+              <div className="flex items-center justify-center gap-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter coordinates manually or use the map.</p>
+              </div>
+            )}
           </div>
-
-          {/* Google Maps Location Picker */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Location Picker</label>
-            <GoogleMapsLocationPicker
-              latitude={latitude}
-              longitude={longitude}
-              onLocationSelect={handleLocationSelect}
-            />
-            <p className="text-xs text-gray-500">Click on the map to select your hospital location (coordinates only)</p>
-          </div>
-
-          {/* Get Current Location Button - Coordinates only, no address lookup */}
-          <button
-            type="button"
-            onClick={getCurrentLocation}
-            disabled={locationStatus === 'loading'}
-            className={`w-full rounded-xl border py-4 font-medium text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
-              locationStatus === 'loading'
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                : 'bg-[#F5FAFF] text-[#154A7D] border-[#D6E2EE] hover:bg-[#154A7D] hover:text-white hover:border-[#154A7D] hover:shadow-md'
-            }`}
-          >
-            <Navigation size={22} className={locationStatus === 'loading' ? 'animate-pulse' : ''} />
-            {locationStatus === 'loading' ? 'Getting your location...' : '📍 Get Current Location Coordinates'}
-          </button>
-
-          {/* Location Status Messages */}
-          {locationStatus === 'loading' && (
-            <div className="flex items-center justify-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#154A7D]"></div>
-              <p className="text-xs text-blue-600 text-center">📍 Fetching your location coordinates...</p>
-            </div>
-          )}
-          {locationStatus === 'success' && (
-            <div className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <p className="text-xs text-green-600 text-center">✓ Location coordinates captured successfully!</p>
-            </div>
-          )}
-          {locationStatus === 'error' && (
-            <div className="flex items-center justify-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <p className="text-xs text-red-600 text-center">❌ Failed to get location. Please enter coordinates manually or use the map.</p>
-            </div>
-          )}
 
           {/* Working Hours Section */}
           <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
