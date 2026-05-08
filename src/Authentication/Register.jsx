@@ -14,7 +14,7 @@ const Register = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("normal");
   const [is24x7, setIs24x7] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);     
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
