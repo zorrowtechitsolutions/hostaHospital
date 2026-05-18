@@ -10,7 +10,7 @@ import ProfileTab from "./tabs/ProfileTab";
 import AppointmentsTab from "./tabs/AppointmentsTab";
 import VitalsTab from "./tabs/VitalsTab";
 import VisitHistoryTab from "./tabs/VisitHistoryTab";
-import LabResultsTab from "./tabs/LabResultsTab";
+// import LabResultsTab from "./tabs/LabResultsTab"; // COMMENTED OUT
 import PrescriptionTab from "./tabs/PrescriptionTab";
 import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
 import DocumentsTab from "./tabs/DocumentsTab";
@@ -117,13 +117,14 @@ const PatientDetails = () => {
       { id: "VIS002", visitId: "VIS002", doctorName: "Dr. Natalie Foster", department: "Neurology", visitDate: "08 Jan 2024", startTime: "09:55 AM", endTime: "10:55 AM", status: "Completed", reason: "Severe headaches", diagnosis: "Chronic migraines", prescription: "Sumatriptan 50mg", notes: "Avoid stress and lack of sleep", followUpDate: "After 12 Days" }
     ],
     
-    labResultsList: [
-      { id: "#TE0025", appointmentDate: "17 Jun 2025", referredBy: "Dr. Andrew Clark", testName: "Blood Test", status: "Received", reportedOn: "17 Jun 2025, 02:00 PM" },
-      { id: "#TE0024", appointmentDate: "10 Jun 2025", referredBy: "Dr. Katherine Brooks", testName: "Urinalysis", status: "In Progress" },
-      { id: "#TE0023", appointmentDate: "22 May 2025", referredBy: "Dr. Benjamin Harris", testName: "Throat Culture", status: "Pending" },
-      { id: "#TE0022", appointmentDate: "15 May 2025", referredBy: "Dr. Laura Mitchell", testName: "Iron Panel", status: "Received", reportedOn: "16 May 2025, 10:30 AM" },
-      { id: "#TE0021", appointmentDate: "30 Apr 2025", referredBy: "Dr. Christopher Lewis", testName: "Vitamin D Test", status: "In Progress" }
-    ],
+    // labResultsList - COMMENTED OUT
+    // labResultsList: [
+    //   { id: "#TE0025", appointmentDate: "17 Jun 2025", referredBy: "Dr. Andrew Clark", testName: "Blood Test", status: "Received", reportedOn: "17 Jun 2025, 02:00 PM" },
+    //   { id: "#TE0024", appointmentDate: "10 Jun 2025", referredBy: "Dr. Katherine Brooks", testName: "Urinalysis", status: "In Progress" },
+    //   { id: "#TE0023", appointmentDate: "22 May 2025", referredBy: "Dr. Benjamin Harris", testName: "Throat Culture", status: "Pending" },
+    //   { id: "#TE0022", appointmentDate: "15 May 2025", referredBy: "Dr. Laura Mitchell", testName: "Iron Panel", status: "Received", reportedOn: "16 May 2025, 10:30 AM" },
+    //   { id: "#TE0021", appointmentDate: "30 Apr 2025", referredBy: "Dr. Christopher Lewis", testName: "Vitamin D Test", status: "In Progress" }
+    // ],
     
     prescriptionsList: [
       { 
@@ -301,23 +302,21 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
-  const handleViewLaboratoryReport = (labResult) => {
-    setSelectedLabResult(labResult);
-    setShowLaboratoryModal(true);
-    setOpenMenu(null);
-  };
+  // COMMENTED OUT - Lab Result handlers
+  // const handleViewLaboratoryReport = (labResult) => {
+  //   setSelectedLabResult(labResult);
+  //   setShowLaboratoryModal(true);
+  //   setOpenMenu(null);
+  // };
 
   // ========== PRESCRIPTION HANDLERS ==========
-  // Handle view prescription details
   const handleViewPrescriptionDetails = (prescription) => {
     setSelectedPrescription(prescription);
     setShowPrescriptionModal(true);
     setOpenMenu(null);
   };
 
-  // Handle save prescription (for viewing only - no add/edit)
   const handleSavePrescription = (prescriptionData) => {
-    // This function is kept for modal functionality but won't be used for adding
     setShowPrescriptionModal(false);
     setSelectedPrescription(null);
   };
@@ -387,11 +386,12 @@ const PatientDetails = () => {
         setPatient({...patient, visitHistoryList: updatedVisits});
         alert("Visit history deleted successfully!");
         break;
-      case 'lab':
-        const updatedLabResults = patient.labResultsList.filter((_, i) => i !== index);
-        setPatient({...patient, labResultsList: updatedLabResults});
-        alert("Lab result deleted successfully!");
-        break;
+      // COMMENTED OUT - Lab result delete case
+      // case 'lab':
+      //   const updatedLabResults = patient.labResultsList.filter((_, i) => i !== index);
+      //   setPatient({...patient, labResultsList: updatedLabResults});
+      //   alert("Lab result deleted successfully!");
+      //   break;
       case 'prescription':
         const updatedPrescriptions = patient.prescriptionsList.filter((_, i) => i !== index);
         setPatient({...patient, prescriptionsList: updatedPrescriptions});
@@ -426,12 +426,13 @@ const PatientDetails = () => {
   const handleEditPatient = () => setShowEditModal(true);
   const handleAddAppointment = () => setShowAppointmentModal(true);
 
+  // COMMENTED OUT - Lab tab from tabs array
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "appointments", label: "Appointments", icon: Calendar },
     { id: "vitals", label: "Vitals", icon: Heart },
     { id: "visits", label: "Visit History", icon: Clock },
-    { id: "lab", label: "Lab Results", icon: Microscope },
+    // { id: "lab", label: "Lab Results", icon: Microscope }, // COMMENTED OUT
     { id: "prescription", label: "Prescription", icon: Pill },
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
@@ -459,7 +460,7 @@ const PatientDetails = () => {
       handleViewVisitDetails,
       handleViewMedicalDetails,
       handleViewVitalDetails,
-      handleViewLaboratoryReport,
+      // handleViewLaboratoryReport, // COMMENTED OUT
       handleEditAppointmentClick,
       handleEditVisitClick,
       handleDeleteClick,
@@ -478,8 +479,8 @@ const PatientDetails = () => {
         return <VitalsTab patient={patient} handleViewVitalDetails={handleViewVitalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "visits": 
         return <VisitHistoryTab patient={patient} handleViewVisitDetails={handleViewVisitDetails} handleEditVisitClick={handleEditVisitClick} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
-      case "lab": 
-        return <LabResultsTab patient={patient} handleViewLaboratoryReport={handleViewLaboratoryReport} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
+      // case "lab": // COMMENTED OUT
+      //   return <LabResultsTab patient={patient} handleViewLaboratoryReport={handleViewLaboratoryReport} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "prescription": 
         return (
           <PrescriptionTab 
@@ -549,9 +550,10 @@ const PatientDetails = () => {
         <MedicalDetailsModal data={selectedMedical} onClose={() => setShowMedicalDetailsModal(false)} />
       )}
       
-      {showLaboratoryModal && selectedLabResult && (
+      {/* COMMENTED OUT - Laboratory Report Modal */}
+      {/* {showLaboratoryModal && selectedLabResult && (
         <LaboratoryReportModal data={selectedLabResult} patient={patient} onClose={() => setShowLaboratoryModal(false)} />
-      )}
+      )} */}
       
       {showPrescriptionModal && (
         <PrescriptionReportModal

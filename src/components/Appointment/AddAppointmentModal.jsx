@@ -9,41 +9,62 @@ import {
   showErrorToast,
   showSuccessToast
 } from "../ui/Toast";
+import { useCreateBookingMutation } from "../../../app/service/request";
+import { useAuth } from "../../context/AuthContext";
+import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 
 const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = false, appointment = null }) => {
+  const { user } = useAuth();
+  const [createBooking, { isLoading: isCreating }] = useCreateBookingMutation();
+  
+  // Form Data with speciality field
   const [formData, setFormData] = useState({
-    patientId: "",
-    patientName: "",
-    patientType: "",
-    preferredMode: "",
-    department: "",
-    doctorName: "",
-    appointmentDate: "",
-    startTime: "",
-    endTime: "",
-    reason: "",
-    quickNotes: "",
-    paymentMethod: ""
+    patient_name: "",
+    patient_dob: "",
+    patient_place: "",
+    patient_phone: "",
+    doctorId: "",
+    displayName: "",
+    speciality: "",  // Changed from 'specialist' to 'speciality' for consistency
+    booking_date: "",
+    consulting_time: "",
+    reason: ""
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Extract hospital ID correctly from user object
+  const hospitalId = user?.hospital?.id || user?.hospitalId || user?.id;
+  const userId = user?.id || user?.userId;
+
+  // Fetch doctors filtered by hospital and speciality
+  const {
+    data: doctorsResponse,
+    isLoading: doctorsLoading,
+  } = useGetDoctorsQuery({
+    hospitalId: hospitalId,
+    speciality: formData.speciality,
+  }, {
+    skip: !hospitalId || !formData.speciality,
+  });
+
+  // Get doctors list from response
+  const doctorsList = doctorsResponse?.data || [];
 
   // Populate form when editing
   useEffect(() => {
     if (isEditing && appointment) {
       setFormData({
-        patientId: appointment.patientId || "",
-        patientName: appointment.patientName || "",
-        patientType: appointment.patientType || "",
-        preferredMode: appointment.preferredMode || "",
-        department: appointment.department || "",
-        doctorName: appointment.doctorName || "",
-        appointmentDate: appointment.appointmentDate || "",
-        startTime: appointment.startTime || "",
-        endTime: appointment.endTime || "",
-        reason: appointment.reason || "",
-        quickNotes: appointment.notes || "",
-        paymentMethod: appointment.paymentMethod || ""
+        patient_name: appointment.patient_name || appointment.patientName || "",
+        patient_dob: appointment.patient_dob || appointment.dob || "",
+        patient_place: appointment.patient_place || appointment.place || "",
+        patient_phone: appointment.patient_phone || appointment.contact || "",
+        doctorId: appointment.doctorId || "",
+        displayName: appointment.displayName || appointment.doctorName || "",
+        speciality: appointment.speciality || appointment.department || "",
+        booking_date: appointment.booking_date || appointment.appointmentDate || "",
+        consulting_time: appointment.consulting_time || appointment.time || "",
+        reason: appointment.reason || ""
       });
     }
   }, [isEditing, appointment]);
@@ -56,171 +77,157 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
   };
 
   const validateForm = () => {
-    if (!formData.patientId) {
-      showWarningToast('Please select a patient', 3000);
+    if (!formData.patient_name.trim()) {
+      showWarningToast('Please enter patient name', 3000);
       return false;
     }
-    if (!formData.patientType) {
-      showWarningToast('Please select patient type', 3000);
+    if (!formData.patient_dob) {
+      showWarningToast('Please enter patient date of birth', 3000);
       return false;
     }
-    if (!formData.department) {
-      showWarningToast('Please select department', 3000);
+    // Validate realistic DOB (not in future)
+    const dobDate = new Date(formData.patient_dob);
+    const today = new Date();
+    if (dobDate > today) {
+      showWarningToast('Date of birth cannot be in the future', 3000);
       return false;
     }
-    if (!formData.doctorName) {
-      showWarningToast('Please select doctor', 3000);
+    if (!formData.patient_phone.trim()) {
+      showWarningToast('Please enter patient phone number', 3000);
       return false;
     }
-    if (!formData.preferredMode) {
-      showWarningToast('Please select consultation mode', 3000);
+    if (!formData.doctorId) {
+      showWarningToast('Please select a doctor', 3000);
       return false;
     }
-    if (!formData.appointmentDate) {
+    if (!formData.speciality) {
+      showWarningToast('Please select speciality', 3000);
+      return false;
+    }
+    if (!formData.booking_date) {
       showWarningToast('Please select appointment date', 3000);
       return false;
     }
-    if (!formData.startTime) {
-      showWarningToast('Please select start time', 3000);
-      return false;
-    }
-    if (!formData.endTime) {
-      showWarningToast('Please select end time', 3000);
-      return false;
-    }
-    if (!formData.reason) {
-      showWarningToast('Please enter reason for visit', 3000);
-      return false;
-    }
-    if (!formData.paymentMethod) {
-      showWarningToast('Please select payment method', 3000);
-      return false;
-    }
+    // consulting_time is now optional (removed from validation)
     return true;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) return;
     
     setIsSubmitting(true);
-    
-    setTimeout(() => {
+
+    try {
+      // EXACT PAYLOAD MATCHING BACKEND EXPECTATIONS
       const appointmentData = {
-        id: isEditing ? appointment.id : `APT${Math.floor(Math.random() * 10000)}`,
-        patientId: formData.patientId,
-        patientName: formData.patientName,
-        doctorName: formData.doctorName,
-        department: formData.department,
-        appointmentDate: formData.appointmentDate,
-        appointmentDateDisplay: formData.appointmentDate ? new Date(formData.appointmentDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : "",
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        status: "Upcoming",
-        fee: "$350",
-        duration: "1 hour",
-        reason: formData.reason,
-        notes: formData.quickNotes,
-        paymentMethod: formData.paymentMethod,
-        patientType: formData.patientType,
-        preferredMode: formData.preferredMode,
-        patientAvatar: "https://randomuser.me/api/portraits/men/32.jpg"
+        // User identification - TEMPORARY HARDCODED FOR TESTING
+        userId: 109,        // temporary hardcoded test
+        hospitalId: 27,     // temporary hardcoded test
+
+        // Patient details
+        patient_dob: formData.patient_dob,
+        patient_name: formData.patient_name,
+        patient_place: formData.patient_place,
+        patient_phone: formData.patient_phone,
+
+        // Doctor details - CONVERT TO NUMBER
+        doctorId: Number(formData.doctorId),
+
+        // Appointment details
+        booking_date: formData.booking_date,
+
+        // Department mapping
+        department: formData.speciality,
+
+        // Doctor display name
+        displayName: formData.displayName,
       };
-      
+
+      console.log( JSON.stringify(appointmentData, null, 2));
+      console.log("✅ doctorId type:", typeof appointmentData.doctorId, "value:", appointmentData.doctorId);
+
+      const response = await createBooking(appointmentData).unwrap();
+
+      console.log("✅ Booking created successfully:", response);
+
       if (onSave) {
-        onSave(appointmentData);
+        onSave(response.data);
       }
+
+      showAddToast(
+        `New appointment scheduled for ${formData.patient_name}!`,
+        4000,
+        {
+          'Patient': formData.patient_name,
+          'Date': new Date(formData.booking_date).toLocaleDateString(),
+          'Doctor': formData.displayName,
+          'Department': formData.speciality
+        }
+      );
       
-      if (isEditing) {
-        showUpdateToast(
-          `Appointment #${appointmentData.id} has been updated successfully!`,
-          4000,
-          {
-            'Patient': appointmentData.patientName,
-            'Date': appointmentData.appointmentDateDisplay,
-            'Time': `${appointmentData.startTime} - ${appointmentData.endTime}`,
-            'Doctor': appointmentData.doctorName
-          }
-        );
-      } else {
-        showAddToast(
-          `New appointment scheduled for ${appointmentData.patientName}!`,
-          4000,
-          {
-            'Patient': appointmentData.patientName,
-            'Date': appointmentData.appointmentDateDisplay,
-            'Time': `${appointmentData.startTime} - ${appointmentData.endTime}`,
-            'Doctor': appointmentData.doctorName,
-            'Payment': appointmentData.paymentMethod
-          }
-        );
-      }
-      
-      setIsSubmitting(false);
       resetForm();
       onClose();
-    }, 500);
+      
+    } catch (error) {
+      console.error('❌ Error creating booking:', error);
+      console.error('Error response:', error?.data);
+      showErrorToast(error?.data?.message || 'Failed to create appointment. Please try again.', 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
     setFormData({
-      patientId: "",
-      patientName: "",
-      patientType: "",
-      preferredMode: "",
-      department: "",
-      doctorName: "",
-      appointmentDate: "",
-      startTime: "",
-      endTime: "",
-      reason: "",
-      quickNotes: "",
-      paymentMethod: ""
+      patient_name: "",
+      patient_dob: "",
+      patient_place: "",
+      patient_phone: "",
+      doctorId: "",
+      displayName: "",
+      speciality: "",
+      booking_date: "",
+      consulting_time: "",
+      reason: ""
     });
   };
 
-  const patientsList = [
-    { id: "PT0025", name: "James Carter" },
-    { id: "PT0026", name: "Emily Rodriguez" },
-    { id: "PT0027", name: "Michael Chen" },
-    { id: "PT0028", name: "Lisa Wong" },
-    { id: "PT0029", name: "Sophia Martinez" },
-    { id: "PT0030", name: "David Thompson" }
+  // Speciality options
+  const specialities = [
+    "Cardiology",
+    "Neurology",
+    "Orthopedics",
+    "Pediatrics",
+    "Dermatology",
+    "ENT",
+    "Ophthalmology",
+    "General Medicine",
+    "Surgery",
+    "Pulmonology"
   ];
 
-  const doctorsList = [
-    "Dr. Andrew Clark (Cardiology)",
-    "Dr. Sarah Wilson (Cardiology)",
-    "Dr. Michael Lee (Neurology)",
-    "Dr. Emily Chen (Pulmonology)",
-    "Dr. Robert Johnson (Surgery)",
-    "Dr. Maria Garcia (Pulmonology)",
-    "Dr. James Wilson (Cardiology)",
-    "Dr. Katherine Brooks (Dental)",
-    "Dr. Benjamin Harris (Dermatology)",
-    "Dr. Laura Mitchell (ENT)"
+  const timeSlots = [
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+    "15:00", "15:30", "16:00", "16:30", "17:00"
   ];
 
-  const departments = [
-    "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Dermatology",
-    "ENT", "Ophthalmology", "General Medicine", "Surgery", "Pulmonology",
-    "Nursing", "Pharmacy", "Radiology", "Pathology"
-  ];
-
-  const patientTypes = ["Out Patient", "In Patient", "Emergency", "New Patient", "Follow-up Patient"];
-  const consultationModes = ["In-person", "Video Call", "Phone Call", "Home Visit"];
-  const paymentMethods = ["Cash", "Card", "Insurance", "Online Transfer", "Check"];
   const today = new Date().toISOString().split('T')[0];
 
-  const handlePatientSelect = (e) => {
+  // Doctor select handler with fallbacks
+  const handleDoctorSelect = (e) => {
     const selectedId = e.target.value;
-    const selectedPatient = patientsList.find(p => p.id === selectedId);
-    if (selectedPatient) {
+    const selectedDoctor = doctorsList.find(
+      (doc) => String(doc._id || doc.id) === selectedId
+    );
+    if (selectedDoctor) {
       setFormData(prev => ({
         ...prev,
-        patientId: selectedPatient.id,
-        patientName: selectedPatient.name
+        doctorId: selectedDoctor._id || selectedDoctor.id,
+        displayName: selectedDoctor.displayName || selectedDoctor.name,
+        speciality: selectedDoctor.speciality || selectedDoctor.department || "",
       }));
     }
   };
@@ -229,138 +236,129 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? "Edit Appointment" : "Schedule New Appointment"} size="xl" showCloseButton={false}>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Select Patient */}
-          <Select
-            label="Select Patient"
-            name="patientId"
-            options={patientsList.map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))}
-            value={formData.patientId}
-            onChange={handlePatientSelect}
-            placeholder="Select Patient"
-            required
-          />
-
-          {/* Patient Type */}
-          <Select
-            label="Patient Type"
-            name="patientType"
-            options={patientTypes}
-            value={formData.patientType}
-            onChange={handleChange}
-            placeholder="Select Patient Type"
-            required
-          />
-
-          {/* Select Department */}
-          <Select
-            label="Department"
-            name="department"
-            options={departments}
-            value={formData.department}
-            onChange={handleChange}
-            placeholder="Select Department"
-            required
-          />
-
-          {/* Select Doctor */}
-          <Select
-            label="Doctor"
-            name="doctorName"
-            options={doctorsList}
-            value={formData.doctorName}
-            onChange={handleChange}
-            placeholder="Select Doctor"
-            required
-          />
-
-          {/* Preferred Mode of Consultation */}
-          <Select
-            label="Preferred Mode of Consultation"
-            name="preferredMode"
-            options={consultationModes}
-            value={formData.preferredMode}
-            onChange={handleChange}
-            placeholder="Select Mode"
-            required
-          />
-
-          {/* Appointment Date */}
+          {/* Patient Name */}
           <Input
-            label="Appointment Date"
-            name="appointmentDate"
+            label="Patient Name"
+            name="patient_name"
+            type="text"
+            value={formData.patient_name}
+            onChange={handleChange}
+            placeholder="Enter patient name"
+            required
+            icon={User}
+          />
+
+          {/* Patient Date of Birth */}
+          <Input
+            label="Date of Birth"
+            name="patient_dob"
             type="date"
-            min={today}
-            value={formData.appointmentDate}
+            max={today}
+            value={formData.patient_dob}
             onChange={handleChange}
             required
             icon={Calendar}
           />
 
-          {/* Start Time */}
+          {/* Patient Place */}
           <Input
-            label="Start Time"
-            name="startTime"
-            type="time"
-            value={formData.startTime}
+            label="Patient Place"
+            name="patient_place"
+            type="text"
+            value={formData.patient_place}
+            onChange={handleChange}
+            placeholder="Enter patient address/place"
+            icon={User}
+          />
+
+          {/* Patient Phone */}
+          <Input
+            label="Phone Number"
+            name="patient_phone"
+            type="tel"
+            value={formData.patient_phone}
+            onChange={handleChange}
+            placeholder="Enter phone number"
+            required
+          />
+
+          {/* Speciality Select */}
+          <Select
+            label="Speciality"
+            name="speciality"
+            options={specialities}
+            value={formData.speciality}
+            onChange={handleChange}
+            placeholder="Select Speciality"
+            required
+          />
+
+          {/* Doctor Dropdown */}
+          <Select
+            label="Doctor"
+            name="doctorId"
+            options={doctorsList.map((doc) => ({
+              value: doc._id || doc.id,
+              label: `${doc.displayName || doc.name} (${
+                doc.speciality || doc.department || "General"
+              })`,
+            }))}
+            value={formData.doctorId}
+            onChange={handleDoctorSelect}
+            placeholder={
+              !formData.speciality
+                ? "Select speciality first"
+                : doctorsLoading
+                ? "Loading doctors..."
+                : doctorsList.length === 0
+                ? "No doctors found"
+                : "Select Doctor"
+            }
+            required
+            disabled={!formData.speciality || doctorsLoading}
+          />
+
+          {/* Appointment Date */}
+          <Input
+            label="Appointment Date"
+            name="booking_date"
+            type="date"
+            min={today}
+            value={formData.booking_date}
             onChange={handleChange}
             required
+            icon={Calendar}
+          />
+
+          {/* Consulting Time - Optional, not sent to backend */}
+          <Select
+            label="Consulting Time (Optional)"
+            name="consulting_time"
+            options={timeSlots}
+            value={formData.consulting_time}
+            onChange={handleChange}
+            placeholder="Select Time (Optional)"
             icon={Clock}
           />
 
-          {/* End Time */}
-          <Input
-            label="End Time"
-            name="endTime"
-            type="time"
-            value={formData.endTime}
-            onChange={handleChange}
-            required
-            icon={Clock}
-          />
-
-          {/* Reason */}
-          <div className="md:col-span-2">
-            <Input
-              label="Reason for Visit"
-              name="reason"
-              type="text"
-              value={formData.reason}
-              onChange={handleChange}
-              placeholder="Enter reason for appointment"
-              required
-              icon={FileText}
-            />
-          </div>
-
-          {/* Quick Notes */}
+          {/* Reason - UI only, not sent to backend */}
           <div className="md:col-span-2">
             <Textarea
-              label="Quick Notes"
-              name="quickNotes"
+              label="Reason for Visit (Optional)"
+              name="reason"
               rows={3}
-              value={formData.quickNotes}
+              value={formData.reason}
               onChange={handleChange}
-              placeholder="Additional information about the appointment..."
+              placeholder="Enter reason for appointment (for your reference only)"
             />
           </div>
-
-          {/* Mode of Payment */}
-          <Select
-            label="Mode of Payment"
-            name="paymentMethod"
-            options={paymentMethods}
-            value={formData.paymentMethod}
-            onChange={handleChange}
-            placeholder="Select Payment Method"
-            required
-          />
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-          <Button variant="outline" onClick={onClose} type="button">
+          <Button variant="outline" onClick={onClose} type="button" disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit" disabled={isSubmitting}>
+          <Button variant="primary" type="submit" disabled={isSubmitting} loading={isSubmitting}>
             {isSubmitting ? (isEditing ? 'Updating...' : 'Scheduling...') : (isEditing ? 'Update Appointment' : 'Schedule Appointment')}
           </Button>
         </div>

@@ -1,12 +1,32 @@
-// src/components/staffs/AddStaff.jsx - With toast notifications
+// src/components/staffs/AddStaff.jsx - WITH hospitalId included
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Save, AlertCircle, Upload, X, Image } from 'lucide-react';
-import { Button, Input, Select, Card, Tabs, Alert, Switch } from '../ui';
+import {
+  ChevronRight,
+  Upload,
+  X,
+  Image,
+  Eye,
+  EyeOff,
+  Lock
+} from 'lucide-react';
+import {
+  Button,
+  Input,
+  Select,
+  Card,
+  Tabs,
+  Alert,
+  Switch
+} from '../ui';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+import { useCreateStaffMutation } from '../../../app/service/staffApi';
+import { useAuth } from '../../context/AuthContext';
 
 const AddStaff = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [createStaff, { isLoading: isApiLoading }] = useCreateStaffMutation();
   const [activeTab, setActiveTab] = useState('basic');
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -14,18 +34,77 @@ const AddStaff = () => {
   const [submitError, setSubmitError] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
-    id: '', name: '', gender: 'Male', dob: '', mobile: '', email: '',
-    designation: '', appointmentDate: '', staffType: 'Permanent', jobType: 'Full Time',
-    addressLine1: '', addressLine2: '', city: '', state: '', country: '', pinCode: '',
-    status: true, profileImage: null,
-    netSalary: '', basic: '', da: '', hra: '', conveyance: '', allowance: '',
-    medicalAllowance: '', otherEarnings: '', tds: '', pf: '', leave: '',
-    profTax: '', labourWelfare: '', otherDeductions: ''
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    designation: '',
+    joiningDate: '',
+    jobType: '',
+    staffType: '',
+    dob: '',
+    gender: 'male',
+    knowLanguages: [],
+    qualification: '',
+    address: {
+      country: '',
+      state: '',
+      district: '',
+      place: '',
+      pincode: ''
+    },
+    addressLine1: '',
+    addressLine2: '',
+    status: 'active',
+    profileImage: null,
   });
 
-  // Image validation
+  const [languagesInput, setLanguagesInput] = useState('');
+
+  // Helper function to remove undefined values from an object
+  const removeUndefined = obj => {
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === undefined) {
+        delete obj[key];
+      }
+    });
+    return obj;
+  };
+
+  // Handle API errors - DON'T redirect on 400 validation errors
+  const handleApiError = (error) => {
+    console.error("API Error Details:", error);
+    
+    if (error?.status === 401 || error?.originalStatus === 401) {
+      showErrorToast('Session expired. Please login again.', 3000);
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
+      return;
+    }
+    
+    const errorMessage = error?.data?.message || error?.message || 'Failed to add staff';
+    
+    if (error?.data?.errors) {
+      const backendErrors = error.data.errors;
+      const formattedErrors = {};
+      Object.keys(backendErrors).forEach(key => {
+        formattedErrors[key] = backendErrors[key];
+      });
+      setErrors(prev => ({ ...prev, ...formattedErrors }));
+      showErrorToast('Please check the form for errors', 4000);
+    } else {
+      showErrorToast(errorMessage, 4000);
+    }
+    
+    setSubmitError(errorMessage);
+    setIsSubmitting(false);
+  };
+
   const validateImage = (file) => {
     if (!file) return true;
     if (file.size > 5 * 1024 * 1024) {
@@ -49,10 +128,10 @@ const AddStaff = () => {
     return '';
   };
 
-  const validateMobile = (mobile) => {
-    if (!mobile || mobile.trim() === '') return 'Mobile number is required';
+  const validatePhone = (phone) => {
+    if (!phone || phone.trim() === '') return 'Phone number is required';
     const mobileRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,5}[-\s\.]?[0-9]{4,6}$/;
-    if (!mobileRegex.test(mobile)) return 'Please enter a valid mobile number';
+    if (!mobileRegex.test(phone)) return 'Please enter a valid phone number';
     return '';
   };
 
@@ -63,10 +142,12 @@ const AddStaff = () => {
     return '';
   };
 
-  const validateDesignation = (designation) => {
-    if (!designation) return 'Designation is required';
-    return '';
+  const validatePassword = password => {
+    if (!password) return 'Password is required';
+    return password.length < 8 ? 'Password must be at least 8 characters' : '';
   };
+
+  const validateDesignation = designation => !designation ? 'Designation is required' : '';
 
   const validateDob = (dob) => {
     if (dob) {
@@ -84,8 +165,9 @@ const AddStaff = () => {
   const validateField = (name, value) => {
     switch (name) {
       case 'name': return validateName(value);
-      case 'mobile': return validateMobile(value);
+      case 'phone': return validatePhone(value);
       case 'email': return validateEmail(value);
+      case 'password': return validatePassword(value);
       case 'designation': return validateDesignation(value);
       case 'dob': return validateDob(value);
       default: return '';
@@ -99,31 +181,71 @@ const AddStaff = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  const generateStaffId = () => {
-    const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-    const maxNum = existingStaffs.reduce((max, s) => {
-      const match = s.id?.match(/#SF(\d+)/);
-      if (match) return Math.max(max, parseInt(match[1], 10));
-      return max;
-    }, 0);
-    return `#SF${String(maxNum + 1).padStart(4, '0')}`;
-  };
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: { ...prev.address, [addressField]: value }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    }
+    
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
     if (submitError) setSubmitError('');
   };
 
-  const handleStatusToggle = () => {
-    setFormData(prev => ({ ...prev, status: !prev.status }));
+  const handleAddressLineChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData(prev => {
+      const updatedData = {
+        ...prev,
+        [name]: value
+      };
+
+      updatedData.address = {
+        ...updatedData.address,
+        place: `
+          ${name === 'addressLine1' ? value : prev.addressLine1}
+          ${name === 'addressLine2' ? value : prev.addressLine2}
+        `.trim()
+      };
+
+      return updatedData;
+    });
   };
 
-  // Image upload handler
-  const handleImageUpload = (file) => {
+  const handleStatusToggle = () => {
+    setFormData(prev => ({
+      ...prev,
+      status: prev.status === 'active' ? 'inactive' : 'active'
+    }));
+  };
+
+  const handleAddLanguage = () => {
+    const language = languagesInput.trim();
+    if (language && !formData.knowLanguages.includes(language)) {
+      setFormData(prev => ({
+        ...prev,
+        knowLanguages: [...prev.knowLanguages, language]
+      }));
+      setLanguagesInput('');
+    }
+  };
+
+  const handleRemoveLanguage = (language) => {
+    setFormData(prev => ({
+      ...prev,
+      knowLanguages: prev.knowLanguages.filter(l => l !== language)
+    }));
+  };
+
+  const handleImageUpload = async (file) => {
     if (!file) return;
-    
     if (!validateImage(file)) return;
     
     setErrors(prev => ({ ...prev, profileImage: '' }));
@@ -141,15 +263,21 @@ const AddStaff = () => {
   };
 
   const removeImage = () => {
-    setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
-    setErrors(prev => ({ ...prev, profileImage: '' }));
+    setFormData(prev => ({
+      ...prev,
+      profileImage: null
+    }));
+    setErrors(prev => ({
+      ...prev,
+      profileImage: ''
+    }));
     showSuccessToast('Image removed', 2000);
   };
 
   const validateForm = () => {
     const newErrors = {};
-    const requiredFields = ['name', 'mobile', 'email', 'designation'];
+    const requiredFields = ['name', 'phone', 'email', 'password', 'designation'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
@@ -161,9 +289,12 @@ const AddStaff = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setErrors({});
+    
     if (!validateForm()) {
-      if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) {
+      if (errors.name || errors.phone || errors.email || errors.password || errors.designation || errors.dob) {
         setActiveTab('basic');
       }
       showWarningToast('Please fix the validation errors before submitting', 3000);
@@ -172,86 +303,77 @@ const AddStaff = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const today = new Date();
-      const formattedDate = `${today.getDate().toString().padStart(2, ' ')} ${today.toLocaleString('default', { month: 'short' })} ${today.getFullYear()}`;
-      const isoDate = today.toISOString().split('T')[0];
-
-      const newStaffId = formData.id || generateStaffId();
-      const newStaff = {
-        id: newStaffId,
+    try {
+      const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
+      
+      const staffData = {
+        hospitalId: user?.id,
         name: formData.name,
-        firstName: formData.name.split(' ')[0] || formData.name,
-        lastName: formData.name.split(' ')[1] || '',
-        gender: formData.gender,
-        designation: formData.designation,
-        phone: formData.mobile,
         email: formData.email,
-        appointmentDate: formData.appointmentDate || isoDate,
-        appointmentDateDisplay: formattedDate,
-        patientsCount: 0,
-        profileImage: previewImage,
-        imageUrl: previewImage || `https://i.pravatar.cc/80?u=${Date.now()}`,
-        status: formData.status ? 'Active' : 'Inactive',
-        jobType: formData.jobType,
-        dob: formData.dob || 'N/A',
-        address: `${formData.addressLine1} ${formData.addressLine2} ${formData.city} ${formData.state} ${formData.country} ${formData.pinCode}`.trim() || 'N/A',
-        salary: formData.netSalary ? `$${formData.netSalary}` : '$0',
-        joiningDate: formattedDate,
-        department: formData.designation,
-        staffType: formData.staffType,
-        salaryTransactions: [],
-        salaryDetails: {
-          netSalary: formData.netSalary,
-          earnings: {
-            basic: formData.basic,
-            da: formData.da,
-            hra: formData.hra,
-            conveyance: formData.conveyance,
-            allowance: formData.allowance,
-            medicalAllowance: formData.medicalAllowance,
-            others: formData.otherEarnings
-          },
-          deductions: {
-            tds: formData.tds,
-            pf: formData.pf,
-            leave: formData.leave,
-            profTax: formData.profTax,
-            labourWelfare: formData.labourWelfare,
-            others: formData.otherDeductions
-          }
-        }
+        password: formData.password,
+        phone: formData.phone,
+        designation: formData.designation,
+        joiningDate: formData.joiningDate || undefined,
+        jobType: formData.jobType || undefined,
+        staffType: formData.staffType || undefined,
+        dob: formData.dob || undefined,
+        gender: formData.gender.toLowerCase(),
+        knowLanguages: formData.knowLanguages || [],
+        qualification: formData.qualification || undefined,
+        address: {
+          country: formData.address.country || undefined,
+          state: formData.address.state || undefined,
+          district: formData.address.district || undefined,
+          place: combinedPlace || formData.address.place || undefined,
+          pincode: formData.address.pincode ? Number(formData.address.pincode) : undefined
+        },
+        status: formData.status
       };
 
-      const existingStaffs = JSON.parse(localStorage.getItem('staffs') || '[]');
-      localStorage.setItem('staffs', JSON.stringify([newStaff, ...existingStaffs]));
+      removeUndefined(staffData);
+      if (staffData.address) {
+        removeUndefined(staffData.address);
+      }
+
+      const response = await createStaff(staffData).unwrap();
+      const staff = response.data;
       
       showAddToast(
         `${formData.name} has been added as staff successfully!`,
         4000,
         {
           'Name': formData.name,
-          'ID': newStaffId,
+          'ID': staff?.id || staff?._id || 'Generated',
+          'Email': formData.email,
           'Designation': formData.designation,
-          'Status': formData.status ? 'Active' : 'Inactive'
+          'Status': formData.status === 'active' ? 'Active' : 'Inactive'
         }
       );
       
       setIsSubmitting(false);
       setSubmitSuccess(true);
-      setTimeout(() => navigate('/staffs'), 1500);
-    }, 500);
+      
+      setTimeout(() => {
+        navigate('/staffs');
+      }, 2000);
+      
+    } catch (error) {
+      handleApiError(error);
+    }
   };
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
-  const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin'];
-  const states = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
-  const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
+  const jobTypes = ['Full Time', 'Part Time', 'Remote', 'Hybrid'];
+  const staffTypes = ['Permanent', 'Contract', 'Temporary', 'Intern'];
+  const genders = ['male', 'female', 'other'];
+  const countries = ['India', 'United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
+  const states = ['Kerala', 'Maharashtra', 'Delhi', 'Karnataka', 'Tamil Nadu', 'California', 'Texas', 'New York', 'Florida', 'Illinois'];
+  const districts = ['Malappuram', 'Kozhikode', 'Ernakulam', 'Thiruvananthapuram', 'Thrissur', 'Kannur', 'Kollam', 'Palakkad', 'Alappuzha', 'Kottayam'];
+  const languages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Arabic', 'Hindi', 'Bengali', 'Portuguese', 'Malayalam', 'Tamil', 'Telugu', 'Kannada'];
 
-  const tabs = [
-    { id: 'basic', label: 'Basic Info' },
-    { id: 'salary', label: 'Salary Info' }
-  ];
+  const tabs = [{ id: 'basic', label: 'Basic Info' }];
+
+  const isFormSubmitting = isSubmitting || isApiLoading;
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
@@ -263,6 +385,7 @@ const AddStaff = () => {
       </div>
 
       {submitSuccess && <Alert type="success" message="Staff added successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
+      {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
       <div className="p-6">
         <Card>
@@ -312,7 +435,7 @@ const AddStaff = () => {
                       variant="outline"
                       onClick={() => document.getElementById('profileImageInput').click()}
                       className="inline-flex items-center gap-2"
-                      disabled={isSubmitting}
+                      disabled={isFormSubmitting}
                     >
                       <Upload className="h-4 w-4" />
                       Upload Image
@@ -326,80 +449,245 @@ const AddStaff = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Full Name *" 
+                  name="name" 
+                  value={formData.name} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.name} 
+                  touched={touched.name} 
+                  required 
+                  placeholder="Enter full name" 
+                />
+                
+                <Input 
+                  label="Email *" 
+                  name="email" 
+                  type="email" 
+                  value={formData.email} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.email} 
+                  touched={touched.email} 
+                  required 
+                  placeholder="staff@example.com" 
+                />
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
-                  <input
-                    type="text"
-                    value={formData.id || "Auto-generated"}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
-                    disabled
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password * <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+                        errors.password && touched.password ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter password (min 8 characters)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
+                    </button>
+                  </div>
+                  {errors.password && touched.password && (
+                    <p className="mt-1 text-sm text-red-500">{errors.password}</p>
+                  )}
+                </div>
+                
+                <Input 
+                  label="Phone Number *" 
+                  name="phone" 
+                  type="tel" 
+                  value={formData.phone} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.phone} 
+                  touched={touched.phone} 
+                  required 
+                  placeholder="+1 00000 00000" 
+                />
+                
+                <Select 
+                  label="Gender" 
+                  name="gender" 
+                  options={genders} 
+                  value={formData.gender} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.gender} 
+                  touched={touched.gender} 
+                />
+                
+                <Input 
+                  label="Date of Birth" 
+                  name="dob" 
+                  type="date" 
+                  value={formData.dob} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.dob} 
+                  touched={touched.dob} 
+                />
+                
+                <Select 
+                  label="Designation *" 
+                  name="designation" 
+                  options={designations} 
+                  value={formData.designation} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.designation} 
+                  touched={touched.designation} 
+                  required 
+                />
+                
+                <Input 
+                  label="Joining Date" 
+                  name="joiningDate" 
+                  type="date" 
+                  value={formData.joiningDate} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.joiningDate} 
+                  touched={touched.joiningDate} 
+                />
+                
+                <Select 
+                  label="Staff Type" 
+                  name="staffType" 
+                  options={staffTypes} 
+                  value={formData.staffType} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.staffType} 
+                  touched={touched.staffType} 
+                />
+                
+                <Select 
+                  label="Job Type" 
+                  name="jobType" 
+                  options={jobTypes} 
+                  value={formData.jobType} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.jobType} 
+                  touched={touched.jobType} 
+                />
+                
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages Known</label>
+                  <div className="flex gap-2 mb-2">
+                    <select
+                      value={languagesInput}
+                      onChange={(e) => setLanguagesInput(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                    >
+                      <option value="">Select a language</option>
+                      {languages.map(lang => (
+                        <option key={lang} value={lang}>{lang}</option>
+                      ))}
+                    </select>
+                    <Button type="button" variant="outline" onClick={handleAddLanguage}>Add</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.knowLanguages.map((lang, index) => (
+                      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm flex items-center gap-1">
+                        {lang}
+                        <button type="button" onClick={() => handleRemoveLanguage(lang)} className="hover:text-red-500">×</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <Input 
+                    label="Qualification" 
+                    name="qualification" 
+                    value={formData.qualification} 
+                    onChange={handleChange} 
+                    placeholder="MBA, B.Tech, etc." 
                   />
-                  <p className="text-xs text-gray-400 mt-1">Leave empty for auto-generation</p>
                 </div>
-                <Input label="Full Name" name="name" value={formData.name} onChange={handleChange} onBlur={handleBlur} error={errors.name} touched={touched.name} required placeholder="Enter full name" />
-                <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} />
-                <Input label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} />
-                <Input label="Mobile Number" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
-                <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required placeholder="staff@example.com" />
-                <Select label="Designation" name="designation" options={designations} value={formData.designation} onChange={handleChange} onBlur={handleBlur} error={errors.designation} touched={touched.designation} required />
-                <Input label="Appointment Date" name="appointmentDate" type="date" value={formData.appointmentDate} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentDate} touched={touched.appointmentDate} />
-                <Select label="Staff Type" name="staffType" options={['Permanent', 'Contract', 'Temporary', 'Intern']} value={formData.staffType} onChange={handleChange} onBlur={handleBlur} error={errors.staffType} touched={touched.staffType} />
-                <Select label="Job Type" name="jobType" options={['Full Time', 'Part Time', 'Remote', 'Hybrid']} value={formData.jobType} onChange={handleChange} onBlur={handleBlur} error={errors.jobType} touched={touched.jobType} />
+
                 <div className="md:col-span-2">
-                  <Input label="Address Line 1" name="addressLine1" value={formData.addressLine1} onChange={handleChange} placeholder="Street address" />
+                  <h4 className="text-md font-semibold text-gray-800 mb-4 mt-2">Address Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Select 
+                      label="Country" 
+                      name="address.country" 
+                      options={countries} 
+                      value={formData.address.country} 
+                      onChange={handleChange} 
+                    />
+                    <Select 
+                      label="State" 
+                      name="address.state" 
+                      options={states} 
+                      value={formData.address.state} 
+                      onChange={handleChange} 
+                    />
+                    <Select 
+                      label="District" 
+                      name="address.district" 
+                      options={districts} 
+                      value={formData.address.district} 
+                      onChange={handleChange} 
+                    />
+                    <div className="md:col-span-2">
+                      <Input 
+                        label="Address Line 1" 
+                        name="addressLine1" 
+                        value={formData.addressLine1} 
+                        onChange={handleAddressLineChange} 
+                        placeholder="Street address" 
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input 
+                        label="Address Line 2" 
+                        name="addressLine2" 
+                        value={formData.addressLine2} 
+                        onChange={handleAddressLineChange} 
+                        placeholder="Apt, suite, unit (optional)" 
+                      />
+                    </div>
+                    <Input 
+                      label="Pincode" 
+                      name="address.pincode" 
+                      value={formData.address.pincode} 
+                      onChange={handleChange} 
+                      placeholder="Postal code (6 digits)" 
+                      maxLength={6}
+                    />
+                  </div>
                 </div>
-                <div className="md:col-span-2">
-                  <Input label="Address Line 2" name="addressLine2" value={formData.addressLine2} onChange={handleChange} placeholder="Apt, suite, unit (optional)" />
-                </div>
-                <Select label="City" name="city" options={cities} value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
-                <Select label="State" name="state" options={states} value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
-                <Select label="Country" name="country" options={countries} value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
-                <Input label="Pin Code" name="pinCode" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} placeholder="Postal code" />
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
                 <div className="flex items-center">
-                  <Switch checked={formData.status} onChange={handleStatusToggle} />
-                  <span className="ml-3 text-sm text-gray-600">{formData.status ? 'Active' : 'Inactive'}</span>
+                  <Switch checked={formData.status === 'active'} onChange={handleStatusToggle} />
+                  <span className="ml-3 text-sm text-gray-600">{formData.status === 'active' ? 'Active' : 'Inactive'}</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
               </div>
             </div>
           )}
 
-          {activeTab === 'salary' && (
-            <div className="p-6">
-              <Input label="Net Salary" name="netSalary" value={formData.netSalary} onChange={handleChange} placeholder="Enter net salary" className="mb-6 md:w-1/2" />
-              
-              <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                <Input name="basic" placeholder="Basic" value={formData.basic} onChange={handleChange} />
-                <Input name="da" placeholder="DA" value={formData.da} onChange={handleChange} />
-                <Input name="hra" placeholder="HRA" value={formData.hra} onChange={handleChange} />
-                <Input name="conveyance" placeholder="Conveyance" value={formData.conveyance} onChange={handleChange} />
-                <Input name="allowance" placeholder="Allowance" value={formData.allowance} onChange={handleChange} />
-                <Input name="medicalAllowance" placeholder="Medical Allowance" value={formData.medicalAllowance} onChange={handleChange} />
-                <Input name="otherEarnings" placeholder="Others" value={formData.otherEarnings} onChange={handleChange} />
-              </div>
-
-              <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input name="tds" placeholder="TDS" value={formData.tds} onChange={handleChange} />
-                <Input name="pf" placeholder="PF" value={formData.pf} onChange={handleChange} />
-                <Input name="leave" placeholder="Leave" value={formData.leave} onChange={handleChange} />
-                <Input name="profTax" placeholder="Prof. Tax" value={formData.profTax} onChange={handleChange} />
-                <Input name="labourWelfare" placeholder="Labour Welfare" value={formData.labourWelfare} onChange={handleChange} />
-                <Input name="otherDeductions" placeholder="Others" value={formData.otherDeductions} onChange={handleChange} />
-              </div>
-            </div>
-          )}
-
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => navigate('/staffs')}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} icon={Save} disabled={isSubmitting} loading={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Staff'}
+            <Button variant="outline" onClick={() => navigate('/staffs')} disabled={isFormSubmitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit} disabled={isFormSubmitting} loading={isFormSubmitting}>
+              {isFormSubmitting ? 'Saving...' : 'Save Staff'}
             </Button>
           </div>
         </Card>

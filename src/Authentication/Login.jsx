@@ -103,26 +103,19 @@ const Login = () => {
         // Extract hospital data from response (handle different structures)
         const hospitalData = response.data || response.hospital || response.user || {};
         
-const authData = {
-  id: hospitalData?.id || 1,
-  name: hospitalData?.name || "Hospital",
-  email: hospitalData?.email || formData.email,
-  phone: hospitalData?.phone || "",
-  type: hospitalData?.type || "",
-};
-
-// SAVE HOSPITAL ID
-localStorage.setItem(
-  "hospitalId",
-  authData.id
-);
-
-console.log("AUTH DATA:", authData);
-
-await login(authData);
-
-
-        showSuccessToast(`✅ Login successful! Welcome back, ${authData.name || 'Hospital'}!`, 4000);
+        const authData = {
+          id: hospitalData?.id || 1,
+          name: hospitalData?.name || "Hospital",
+          email: hospitalData?.email || formData.email,
+          phone: hospitalData?.phone || "",
+          type: hospitalData?.type || "",
+        };
+        
+        console.log("AUTH DATA:", authData);
+        
+        await login(authData);
+        
+        showSuccessToast(`Login successful! Welcome back, ${authData.name || 'Hospital'}!`, 4000);
         
         setIsSubmitting(false);
         

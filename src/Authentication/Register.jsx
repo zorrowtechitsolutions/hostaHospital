@@ -472,14 +472,14 @@ const Register = () => {
 
       try {
         const response = await register(hospitalData).unwrap();
-        console.log("✅ Registration successful with tokens:", response);
+        console.log("Registration successful with tokens:", response);
         
         // Extract hospital data from response.data (your backend returns data in response.data)
         // Backend did not return hospital data
 if (!response.data) {
 
   showSuccessToast(
-    "✅ Registration completed successfully. Please sign in.",
+    "Registration completed successfully. Please sign in.",
     4000
   );
 

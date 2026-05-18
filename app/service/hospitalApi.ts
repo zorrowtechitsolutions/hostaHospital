@@ -1,4 +1,4 @@
-// hospitalApi.ts - UPDATED VERSION
+// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password & Forgot Password endpoints
 import { api } from "./api";
 
 // Type definitions
@@ -7,7 +7,7 @@ export interface Hospital {
   name: string;
   email: string;
   phone?: string;
-  type?: string; // ADDED: missing type field
+  type?: string;
   address?: {
     country?: string;
     state?: string;
@@ -21,6 +21,7 @@ export interface Hospital {
   about?: string;
   createdAt?: string;
   updatedAt?: string;
+  lastPasswordChange?: string;
 }
 
 export interface LoginCredentials {
@@ -59,13 +60,51 @@ export interface RegisterData {
   working_hours_clinic_nobreak?: any[];
 }
 
-// UPDATED: Match actual backend response structure
+// Change password types
+export interface ChangePasswordData {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+// Forgot Password / Reset Password types
+export interface SendOtpData {
+  email: string;
+}
+
+export interface VerifyOtpData {
+  email: string;
+  otp: string;
+}
+
+export interface ResetPasswordData {
+  email: string;
+  newPassword: string;
+}
+
+export interface OtpResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ResetPasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
 export interface AuthResponse {
   success?: boolean;
   token?: string;
   accessToken?: string;
   refreshToken?: string;
-  data?: Hospital; // Backend returns hospital data in 'data' field
+  data?: Hospital;
   hospital?: Hospital;
   message?: string;
   error?: string;
@@ -74,17 +113,15 @@ export interface AuthResponse {
 export const hospitalApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // FIXED: Use correct endpoint /hospital/register
     register: builder.mutation<AuthResponse, RegisterData>({
       query: (hospitalData) => ({
-        url: `/hospital`, // CHANGED: from '/hospital' to '/hospital/register'
+        url: `/hospital`,
         method: "POST",
         body: hospitalData,
       }),
       transformResponse: (response: AuthResponse) => {
         console.log("📦 Register API response:", response);
         
-        // Extract token from response
         const token = response.token || response.accessToken;
         if (token) {
           localStorage.setItem("accessToken", token);
@@ -95,13 +132,11 @@ export const hospitalApi = api.injectEndpoints({
           console.log("✅ Refresh token stored in localStorage");
         }
         
-        // Return response with proper structure
         return response;
       },
       invalidatesTags: ["Hospital"],
     }),
 
-    // Email login
     loginHospital: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => ({
         url: `/hospital/login`,
@@ -121,7 +156,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // Request OTP
     requestHospitalOtp: builder.mutation<{ message: string }, PhoneLoginData>({
       query: (phoneData) => ({
         url: `/hospital/login/phone`,
@@ -130,7 +164,6 @@ export const hospitalApi = api.injectEndpoints({
       }),
     }),
 
-    // Verify OTP
     verifyHospitalOtp: builder.mutation<AuthResponse, OtpData>({
       query: (otpData) => ({
         url: `/hospital/otp`,
@@ -147,7 +180,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // Refresh token
     refreshToken: builder.mutation<AuthResponse, void>({
       query: () => ({
         url: `/hospital/refresh`,
@@ -162,7 +194,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // Logout
     logoutHospital: builder.mutation<{ message: string }, void>({
       query: () => ({
         url: `/hospital/logout`,
@@ -179,18 +210,98 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // GET all hospitals
+    // Change Password Mutation
+    changePassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
+      query: ({ currentPassword, newPassword }) => ({
+        url: `/hospital/auth/change-password`,
+        method: "PUT",
+        body: { currentPassword, newPassword },
+      }),
+      transformResponse: (response: ChangePasswordResponse) => {
+        console.log("📦 Change password API response:", response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Change password API error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to change password",
+        };
+      },
+      invalidatesTags: ["Hospital"],
+    }),
+
+    // ========== FORGOT PASSWORD / RESET PASSWORD ENDPOINTS ==========
+    
+    // Send OTP to email for password reset
+    sendOtp: builder.mutation<OtpResponse, SendOtpData>({
+      query: (otpData) => ({
+        url: `/hospital/auth/send-otp`,
+        method: "POST",
+        body: otpData,
+      }),
+      transformResponse: (response: OtpResponse) => {
+        console.log("📦 Send OTP response:", response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Send OTP error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to send OTP",
+        };
+      },
+    }),
+
+    // Verify OTP sent to email
+    verifyOtp: builder.mutation<OtpResponse, VerifyOtpData>({
+      query: (otpData) => ({
+        url: `/hospital/auth/verify-otp`,
+        method: "POST",
+        body: otpData,
+      }),
+      transformResponse: (response: OtpResponse) => {
+        console.log("📦 Verify OTP response:", response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Verify OTP error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Invalid OTP",
+        };
+      },
+    }),
+
+    // Reset password using verified OTP
+    resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
+      query: (resetData) => ({
+        url: `/hospital/auth/reset-password`,
+        method: "POST",
+        body: resetData,
+      }),
+      transformResponse: (response: ResetPasswordResponse) => {
+        console.log("📦 Reset password response:", response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Reset password error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to reset password",
+        };
+      },
+    }),
+
     getAllHospitals: builder.query<Hospital[], void>({
       query: () => "/hospital",
       providesTags: ["Hospital"],
     }),
 
-    // GET hospital by ID
     getHospitalById: builder.query<{ data?: Hospital } | Hospital, string>({
       query: (id) => `/hospital/${id}`,
       providesTags: (result, error, id) => [{ type: "Hospital", id }],
       transformResponse: (response: { data?: Hospital } | Hospital) => {
-        // Handle both { data: Hospital } and direct Hospital responses
         if (response && 'data' in response && response.data) {
           return response.data;
         }
@@ -198,7 +309,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // POST - Add new hospital (legacy - keep for compatibility)
     addNewHospital: builder.mutation<AuthResponse, RegisterData>({
       query: (newHospital) => ({
         url: `/hospital`,
@@ -218,7 +328,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // PUT - Update hospital
     updateHospital: builder.mutation<Hospital, { id: string; updateHospital: any }>({
       query: ({ id, updateHospital }) => ({
         url: `/hospital/${id}`,
@@ -228,7 +337,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: "Hospital", id }],
     }),
 
-    // DELETE - Delete hospital
     deleteHospital: builder.mutation<{ message: string }, string>({
       query: (id) => ({
         url: `/hospital/${id}`,
@@ -241,12 +349,21 @@ export const hospitalApi = api.injectEndpoints({
 
 // Export all hooks
 export const {
+  // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,
   useLogoutHospitalMutation,
+  useChangePasswordMutation,
+  
+  // Forgot Password hooks
+  useSendOtpMutation,
+  useVerifyOtpMutation,
+  useResetPasswordMutation,
+  
+  // Hospital management hooks
   useGetAllHospitalsQuery,
   useGetHospitalByIdQuery,
   useAddNewHospitalMutation,

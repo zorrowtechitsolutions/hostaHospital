@@ -1,31 +1,170 @@
-// src/components/patients/AddPatient.jsx - Complete with toast notifications
-import React, { useState } from 'react';
+// src/components/patients/AddPatient.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   AlertCircle, ArrowLeft, Heart, Users, 
   FileText, Briefcase, Clock, Activity, AlertTriangle,
-  Upload, X
+  Upload, X, ChevronDown, Eye, EyeOff, Home, Stethoscope
 } from 'lucide-react';
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
 } from '../ui';
 import { 
-  showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast 
+  showSuccessToast, showErrorToast, showWarningToast, showInfoToast 
 } from '../ui/Toast';
+import { useCreatePatientMutation } from '../../../app/service/patients';
+import { Country, State, City } from 'country-state-city';
+
+// SearchableDropdown Component
+const SearchableDropdown = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  icon: Icon,
+  disabled = false,
+  required = false,
+  getOptionLabel = (option) => option.name || option,
+  getOptionValue = (option) => option.isoCode || option,
+  optionKey = (option, index) => option.isoCode || index
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option => {
+    const label = getOptionLabel(option).toLowerCase();
+    return label.includes(searchTerm.toLowerCase());
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getOptionValue(option), getOptionLabel(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const displayValue = () => {
+    if (!value) return "";
+    const selected = options.find(opt => getOptionValue(opt) === value);
+    return selected ? getOptionLabel(selected) : "";
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <input
+          type="text"
+          value={isOpen ? searchTerm : displayValue()}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={optionKey(option, index)}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getOptionLabel(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AddPatient = () => {
   const navigate = useNavigate();
   
+  // Get user data from auth storage
+  const authData = JSON.parse(localStorage.getItem("auth") || "{}");
+  const user = authData?.user || JSON.parse(localStorage.getItem("user") || "{}");
+  
+  console.log("Logged User:", user);
+  
+  const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
+  
   const [formData, setFormData] = useState({
     profileImage: null,
-    firstName: '', middleName: '', lastName: '', bloodGroup: '', age: '', dob: '',
-    gender: '', maritalStatus: '', mobileNumber: '', emergencyNumber: '',
-    guardianName: '', guardianRelation: '', addressLine1: '', addressLine2: '',
-    country: '', city: '', state: '', pinCode: '', referredBy: '', referredOn: '',
-    department: '', notes: '', height: '', weight: '', bloodPressure: '',
-    allergies: '', chronicConditions: '', occupation: '', email: '',
-    password: '', confirmPassword: ''
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    bloodGroup: '',
+    age: '',
+    dob: '',
+    gender: '',
+    maritalStatus: '',
+    mobileNumber: '',
+    emergencyNumber: '',
+    guardianName: '',
+    guardianRelation: '',
+    addressLine1: '',
+    addressLine2: '',
+    countryCode: '',
+    countryName: '',
+    stateCode: '',
+    stateName: '',
+    district: '',
+    place: '',
+    pincode: '',
+    referredBy: '',
+    referredOn: '',
+    department: '',
+    notes: '',
+    height: '',
+    weight: '',
+    bloodPressure: '',
+    allergies: '',
+    chronicConditions: '',
+    occupation: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
   });
 
   const [errors, setErrors] = useState({});
@@ -33,21 +172,43 @@ const AddPatient = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Mock S3 upload function - replace with actual AWS SDK implementation
-  const uploadToS3 = async (file) => {
-    return new Promise((resolve, reject) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          const mockS3Url = `https://your-bucket.s3.amazonaws.com/patient-images/${Date.now()}-${file.name}`;
-          resolve(mockS3Url);
-        }
-      }, 200);
-    });
+  const countries = Country.getAllCountries();
+  const states = State.getStatesOfCountry(formData.countryCode);
+  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+
+  const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+  const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed'];
+  const departmentOptions = ['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'Pulmonology', 'ENT'];
+  const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
+
+  const handleCountryChange = (code, name) => {
+    setFormData(prev => ({
+      ...prev,
+      countryCode: code,
+      countryName: name,
+      stateCode: '',
+      stateName: '',
+      district: ''
+    }));
+  };
+
+  const handleStateChange = (code, name) => {
+    setFormData(prev => ({
+      ...prev,
+      stateCode: code,
+      stateName: name,
+      district: ''
+    }));
+  };
+
+  const handleCityChange = (name) => {
+    setFormData(prev => ({
+      ...prev,
+      district: name
+    }));
   };
 
   const validateField = (name, value) => {
@@ -88,8 +249,17 @@ const AddPatient = () => {
         if (!value) return 'Address is required';
         if (value.length < 5) return 'Please enter a complete address';
         return '';
-      case 'pinCode':
+      case 'pincode':
         if (value && !/^\d{5,6}$/.test(value)) return 'Pin code must be 5 or 6 digits';
+        return '';
+      case 'countryName':
+        if (!value) return 'Country is required';
+        return '';
+      case 'stateName':
+        if (!value) return 'State is required';
+        return '';
+      case 'district':
+        if (!value) return 'District is required';
         return '';
       case 'password':
         if (value) {
@@ -115,7 +285,10 @@ const AddPatient = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    const fieldsToValidate = ['firstName', 'lastName', 'mobileNumber', 'age', 'dob', 'gender', 'bloodGroup', 'addressLine1'];
+    const fieldsToValidate = [
+      'firstName', 'lastName', 'mobileNumber', 'age', 'dob', 'gender', 
+      'bloodGroup', 'addressLine1', 'countryName', 'stateName', 'district'
+    ];
     fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
@@ -180,21 +353,16 @@ const AddPatient = () => {
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
-    showInfoToast('Uploading image to cloud storage...', 2000);
+    showInfoToast('Uploading image...', 2000);
     
-    try {
-      const s3Url = await uploadToS3(file);
-      setFormData(prev => ({ ...prev, profileImage: s3Url }));
+    // Simulate upload - replace with actual upload to S3/cloud
+    setTimeout(() => {
       setUploadProgress(100);
+      setFormData(prev => ({ ...prev, profileImage: previewImage }));
       showSuccessToast('Image uploaded successfully!', 3000);
-      return true;
-    } catch (error) {
-      console.error('S3 upload error:', error);
-      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
-      showErrorToast('Failed to upload image. Please try again.', 4000);
-      setPreviewImage(null);
-      return false;
-    }
+    }, 1000);
+    
+    return true;
   };
 
   const handleFileSelect = (e) => {
@@ -212,9 +380,62 @@ const AddPatient = () => {
     showSuccessToast('Image removed', 2000);
   };
 
+  const preparePatientData = () => {
+    const userId = user?.userId || user?.id;
+    const hospitalId = user?.hospitalId || user?.id;
+
+    const patientData = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      middleName: formData.middleName || null,
+      bloodGroup: formData.bloodGroup,
+      gender: formData.gender,
+      maritalStatus: formData.maritalStatus || undefined,
+      patientType: "OPD",
+      age: parseInt(formData.age),
+      dob: formData.dob,
+      mobileNumber: formData.mobileNumber,
+      emergencyNumber: formData.emergencyNumber || undefined,
+      guardianName: formData.guardianName || undefined,
+      addressLine1: formData.addressLine1,
+      location: {
+        country: formData.countryName,
+        state: formData.stateName,
+        district: formData.district,
+        place: formData.place || "",
+        pincode: formData.pincode ? parseInt(formData.pincode) : 0
+      },
+      hospitalId: hospitalId,
+      referredBy: formData.referredBy || null,
+      department: formData.department || undefined,
+      referredOn: formData.referredOn || null,
+      email: formData.email || undefined,
+      userId: userId,
+      profileImage: formData.profileImage || null,
+      height: formData.height ? parseInt(formData.height) : null,
+      weight: formData.weight ? parseInt(formData.weight) : null,
+      bloodPressure: formData.bloodPressure || null,
+      allergies: formData.allergies || null,
+      chronicConditions: formData.chronicConditions || null,
+      occupation: formData.occupation || null,
+      guardianRelation: formData.guardianRelation || null
+    };
+
+    // Add password only if provided
+    if (formData.password) {
+      patientData.password = formData.password;
+    }
+
+    return patientData;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const allFields = ['firstName', 'lastName', 'mobileNumber', 'age', 'dob', 'gender', 'bloodGroup', 'addressLine1'];
+    
+    const allFields = [
+      'firstName', 'lastName', 'mobileNumber', 'age', 'dob', 'gender', 
+      'bloodGroup', 'addressLine1', 'countryName', 'stateName', 'district'
+    ];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
     setTouched(touchedFields);
@@ -223,127 +444,58 @@ const AddPatient = () => {
       setIsSubmitting(true);
       showInfoToast('Creating patient profile...', 2000);
       
-      setTimeout(() => {
-        try {
-          const existingPatients = JSON.parse(localStorage.getItem('patients') || '[]');
-          
-          // Check if mobile number already exists
-          const mobileExists = existingPatients.some(p => p.phone === formData.mobileNumber);
-          if (mobileExists) {
-            showErrorToast('Mobile number already exists! Please use a different number.', 4000);
-            setIsSubmitting(false);
-            return;
-          }
-          
-          // Check if email already exists (if provided)
-          if (formData.email) {
-            const emailExists = existingPatients.some(p => p.email === formData.email);
-            if (emailExists) {
-              showWarningToast('Email already exists in the system. Please use a different email.', 4000);
-              setIsSubmitting(false);
-              return;
-            }
-          }
-          
-          const patientId = `PT${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
-          const fullName = `${formData.firstName} ${formData.middleName ? formData.middleName + ' ' : ''}${formData.lastName}`;
-          
-          const newPatient = {
-            id: patientId,
-            name: fullName,
-            firstName: formData.firstName,
-            middleName: formData.middleName,
-            lastName: formData.lastName,
-            age: formData.age,
-            dob: formData.dob,
-            gender: formData.gender,
-            bloodGroup: formData.bloodGroup,
-            maritalStatus: formData.maritalStatus,
-            phone: formData.mobileNumber,
-            emergencyNumber: formData.emergencyNumber,
-            guardianName: formData.guardianName,
-            guardianRelation: formData.guardianRelation,
-            address: `${formData.addressLine1} ${formData.addressLine2}`,
-            city: formData.city,
-            state: formData.state,
-            country: formData.country,
-            pinCode: formData.pinCode,
-            referredBy: formData.referredBy,
-            referredOn: formData.referredOn,
-            department: formData.department,
-            notes: formData.notes,
-            height: formData.height,
-            weight: formData.weight,
-            bloodPressure: formData.bloodPressure,
-            allergies: formData.allergies,
-            chronicConditions: formData.chronicConditions,
-            occupation: formData.occupation,
-            email: formData.email,
-            lastVisit: new Date().toISOString().split('T')[0],
-            lastVisitDisplay: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
-            condition: 'Initial Consultation',
-            status: 'Active',
-            imageUrl: formData.profileImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`
-          };
-          
-          localStorage.setItem('patients', JSON.stringify([...existingPatients, newPatient]));
-          
-          // Show success toast with patient details
-          showAddToast(
-            `${newPatient.name} has been added successfully!`,
-            5000,
-            {
-              'Patient ID': patientId,
-              'Patient Name': fullName,
-              'Age': `${newPatient.age} years`,
-              'Blood Group': newPatient.bloodGroup,
-              'Department': newPatient.department || 'Not Assigned',
-              'Mobile': newPatient.phone
-            }
-          );
-          
-          setIsSubmitting(false);
-          
-          // Navigate after a short delay to show the toast
-          setTimeout(() => {
-            navigate('/patients');
-            showSuccessToast('Redirecting to patients list...', 2000);
-          }, 2000);
-        } catch (error) {
-          console.error('Error saving patient:', error);
-          showErrorToast('Failed to add patient. Please try again.', 4000);
-          setIsSubmitting(false);
+      try {
+        const patientData = preparePatientData();
+        
+        console.log('Sending patient data:', JSON.stringify(patientData, null, 2));
+        
+        const result = await createPatient(patientData).unwrap();
+        
+        const patientId = result?.data?.id;
+        console.log('✅ Patient created successfully! Patient ID:', patientId);
+        
+        showSuccessToast(
+          `${formData.firstName} ${formData.lastName} has been added successfully!`
+        );
+        
+        setIsSubmitting(false);
+        
+        setTimeout(() => {
+          navigate('/patients');
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Error creating patient:', error);
+        
+        if (error.status === 409) {
+          showErrorToast('❌ Mobile number or email already exists!');
+        } else if (error.data?.message?.includes('Mobile number already exists')) {
+          showErrorToast('❌ Mobile number already exists! Please use a different number.', 4000);
+        } else if (error.data?.message?.includes('Email already exists')) {
+          showErrorToast('❌ Email already exists! Please use a different email.', 4000);
+        } else if (error.data?.message) {
+          showErrorToast(`❌ ${error.data.message}`);
+        } else {
+          showErrorToast('❌ Failed to add patient. Please try again.');
         }
-      }, 1000);
+        
+        setIsSubmitting(false);
+      }
     } else {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        const fieldLabel = firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase();
-        showWarningToast(`Please fix the ${fieldLabel} field before submitting.`, 4000);
+        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
       }
-      const firstError = document.querySelector('.error-message');
-      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
   const handleGoBack = () => {
-    // Check if any data has been entered
-    const hasData = formData.firstName || formData.lastName || formData.mobileNumber || previewImage;
-    if (hasData) {
-      showWarningToast('You have unsaved changes. Are you sure you want to leave?', 4000);
-      setTimeout(() => {
-        if (window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
-          navigate('/patients');
-        }
-      }, 100);
-    } else {
-      navigate('/patients');
-    }
+    navigate('/patients');
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
@@ -356,15 +508,10 @@ const AddPatient = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information Card */}
+        <form onSubmit={handleSubmit}>
           <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Patient's personal and medical details</p>
-            </div>
             <div className="p-6 space-y-6">
-              {/* Profile Image Upload with S3 Support */}
+              {/* Profile Image Upload */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="relative">
@@ -411,7 +558,6 @@ const AddPatient = () => {
                     </p>
                   </div>
                   
-                  {/* Upload Progress Bar */}
                   {uploadProgress > 0 && uploadProgress < 100 && (
                     <div className="mt-2">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
@@ -420,7 +566,7 @@ const AddPatient = () => {
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                      <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress}%</p>
                     </div>
                   )}
                   
@@ -428,6 +574,9 @@ const AddPatient = () => {
                 </div>
               </div>
 
+              {/* Personal Information */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <Input 
                   label="First Name" 
@@ -444,7 +593,6 @@ const AddPatient = () => {
                 <Input 
                   label="Middle Name" 
                   name="middleName" 
-                  required={false} 
                   icon={User} 
                   placeholder="Enter middle name" 
                   value={formData.middleName} 
@@ -471,7 +619,7 @@ const AddPatient = () => {
                 <Select 
                   label="Blood Group" 
                   name="bloodGroup" 
-                  options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} 
+                  options={bloodGroupOptions} 
                   placeholder="Select Blood Group" 
                   value={formData.bloodGroup} 
                   onChange={handleChange} 
@@ -526,8 +674,7 @@ const AddPatient = () => {
                 <Select 
                   label="Marital Status" 
                   name="maritalStatus" 
-                  required={false} 
-                  options={['Single', 'Married', 'Divorced', 'Widowed']} 
+                  options={maritalStatusOptions} 
                   placeholder="Select Marital Status" 
                   value={formData.maritalStatus} 
                   onChange={handleChange} 
@@ -538,7 +685,6 @@ const AddPatient = () => {
                 <Input 
                   label="Occupation" 
                   name="occupation" 
-                  required={false} 
                   icon={Briefcase} 
                   placeholder="Occupation" 
                   value={formData.occupation} 
@@ -548,16 +694,10 @@ const AddPatient = () => {
                   touched={touched.occupation} 
                 />
               </div>
-            </div>
-          </Card>
 
-          {/* Contact Information Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Phone numbers and guardian details</p>
-            </div>
-            <div className="p-6 space-y-5">
+              {/* Contact Information */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Contact Information</h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <Input 
                   label="Mobile Number" 
@@ -574,7 +714,6 @@ const AddPatient = () => {
                 <Input 
                   label="Emergency Number" 
                   name="emergencyNumber" 
-                  required={false} 
                   icon={AlertTriangle} 
                   placeholder="Emergency contact" 
                   value={formData.emergencyNumber} 
@@ -584,11 +723,11 @@ const AddPatient = () => {
                   touched={touched.emergencyNumber} 
                 />
               </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <Input 
                   label="Guardian Name" 
                   name="guardianName" 
-                  required={false} 
                   icon={Users} 
                   placeholder="Parent or guardian name" 
                   value={formData.guardianName} 
@@ -600,8 +739,7 @@ const AddPatient = () => {
                 <Select 
                   label="Guardian Relation" 
                   name="guardianRelation" 
-                  required={false} 
-                  options={['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Other']} 
+                  options={guardianRelationOptions} 
                   placeholder="Relationship" 
                   value={formData.guardianRelation} 
                   onChange={handleChange} 
@@ -610,11 +748,11 @@ const AddPatient = () => {
                   touched={touched.guardianRelation} 
                 />
               </div>
+
               <Input 
                 label="Email Address" 
                 name="email" 
                 type="email" 
-                required={false} 
                 icon={Mail} 
                 placeholder="patient@example.com" 
                 value={formData.email} 
@@ -623,16 +761,10 @@ const AddPatient = () => {
                 error={errors.email} 
                 touched={touched.email} 
               />
-            </div>
-          </Card>
 
-          {/* Address Information Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Address Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Residential address details</p>
-            </div>
-            <div className="p-6 space-y-5">
+              {/* Address Information */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Address Information</h3>
+              
               <Input 
                 label="Address Line 1" 
                 name="addressLine1" 
@@ -645,80 +777,73 @@ const AddPatient = () => {
                 touched={touched.addressLine1} 
                 required 
               />
-              <Input 
-                label="Address Line 2" 
-                name="addressLine2" 
-                required={false} 
-                placeholder="Apartment, suite, unit, etc." 
-                value={formData.addressLine2} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.addressLine2} 
-                touched={touched.addressLine2} 
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <Select 
-                  label="Country" 
-                  name="country" 
-                  required={false} 
-                  options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} 
-                  placeholder="Select Country" 
-                  value={formData.country} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.country} 
-                  touched={touched.country} 
+              
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <SearchableDropdown
+                  label="Country"
+                  options={countries}
+                  value={formData.countryCode}
+                  onChange={handleCountryChange}
+                  placeholder="Search for a country..."
+                  icon={MapPin}
+                  required={true}
                 />
-                <Input 
-                  label="City" 
-                  name="city" 
-                  required={false} 
-                  placeholder="City" 
-                  value={formData.city} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.city} 
-                  touched={touched.city} 
-                />
-                <Input 
-                  label="State" 
-                  name="state" 
-                  required={false} 
-                  placeholder="State" 
-                  value={formData.state} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.state} 
-                  touched={touched.state} 
-                />
-                <Input 
-                  label="Pin Code" 
-                  name="pinCode" 
-                  required={false} 
-                  placeholder="Postal code" 
-                  value={formData.pinCode} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.pinCode} 
-                  touched={touched.pinCode} 
+                <SearchableDropdown
+                  label="State"
+                  options={states}
+                  value={formData.stateCode}
+                  onChange={handleStateChange}
+                  placeholder="Search for a state..."
+                  icon={MapPin}
+                  disabled={!formData.countryCode}
+                  required={true}
                 />
               </div>
-            </div>
-          </Card>
 
-          {/* Medical Information Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Medical Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Health metrics and clinical notes</p>
-            </div>
-            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <SearchableDropdown
+                  label="District"
+                  options={cities}
+                  value={formData.district}
+                  onChange={handleCityChange}
+                  placeholder="Search for a district..."
+                  icon={MapPin}
+                  disabled={!formData.stateCode}
+                  required={true}
+                  getOptionLabel={(option) => option.name}
+                  getOptionValue={(option) => option.name}
+                />
+                <Input 
+                  label="Place / Locality" 
+                  name="place" 
+                  placeholder="Place/Locality" 
+                  value={formData.place} 
+                  onChange={handleChange} 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Pin Code" 
+                  name="pincode" 
+                  placeholder="Postal code" 
+                  value={formData.pincode} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.pincode} 
+                  touched={touched.pincode} 
+                />
+              </div>
+
+              {/* Medical Information */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Medical Information</h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <Input 
                   label="Height (cm)" 
                   name="height" 
                   type="number" 
-                  required={false} 
                   icon={Activity} 
                   placeholder="cm" 
                   value={formData.height} 
@@ -731,7 +856,6 @@ const AddPatient = () => {
                   label="Weight (kg)" 
                   name="weight" 
                   type="number" 
-                  required={false} 
                   icon={Activity} 
                   placeholder="kg" 
                   value={formData.weight} 
@@ -743,7 +867,6 @@ const AddPatient = () => {
                 <Input 
                   label="Blood Pressure" 
                   name="bloodPressure" 
-                  required={false} 
                   icon={Heart} 
                   placeholder="e.g., 120/80" 
                   value={formData.bloodPressure} 
@@ -753,6 +876,7 @@ const AddPatient = () => {
                   touched={touched.bloodPressure} 
                 />
               </div>
+
               <Textarea 
                 label="Allergies" 
                 name="allergies" 
@@ -764,6 +888,7 @@ const AddPatient = () => {
                 error={errors.allergies} 
                 touched={touched.allergies} 
               />
+              
               <Textarea 
                 label="Chronic Conditions" 
                 name="chronicConditions" 
@@ -775,21 +900,14 @@ const AddPatient = () => {
                 error={errors.chronicConditions} 
                 touched={touched.chronicConditions} 
               />
-            </div>
-          </Card>
 
-          {/* Referral Information Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Referral Information</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Referring doctor and department details</p>
-            </div>
-            <div className="p-6 space-y-5">
+              {/* Referral Information */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Referral Information</h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <Input 
                   label="Referred By" 
                   name="referredBy" 
-                  required={false} 
                   icon={User} 
                   placeholder="Doctor name" 
                   value={formData.referredBy} 
@@ -802,7 +920,6 @@ const AddPatient = () => {
                   label="Referred On" 
                   name="referredOn" 
                   type="date" 
-                  required={false} 
                   icon={Calendar} 
                   value={formData.referredOn} 
                   onChange={handleChange} 
@@ -813,8 +930,7 @@ const AddPatient = () => {
                 <Select 
                   label="Department" 
                   name="department" 
-                  required={false} 
-                  options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'Pulmonology']} 
+                  options={departmentOptions} 
                   placeholder="Select Department" 
                   value={formData.department} 
                   onChange={handleChange} 
@@ -823,80 +939,77 @@ const AddPatient = () => {
                   touched={touched.department} 
                 />
               </div>
-            </div>
-          </Card>
 
-          {/* Additional Notes Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Additional Notes</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Clinical observations and remarks</p>
-            </div>
-            <div className="p-6">
-              <Textarea 
-                label="Notes" 
-                name="notes" 
-                rows={4} 
-                placeholder="Any additional information about the patient..." 
-                value={formData.notes} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.notes} 
-                touched={touched.notes} 
-              />
-            </div>
-          </Card>
-
-          {/* Account Details Card */}
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-semibold text-gray-900">Account Details</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Login credentials for patient portal (optional)</p>
-            </div>
-            <div className="p-6">
+              {/* Additional Notes */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Additional Notes</h3>
+              
+              
+              {/* Account Details */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Account Details (Optional)</h3>
+              <p className="text-sm text-gray-500 mb-4">Setting a password allows the patient to access the patient portal</p>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input 
-                  label="Password" 
-                  name="password" 
-                  type="password" 
-                  required={false} 
-                  icon={Lock} 
-                  placeholder="Create password" 
-                  value={formData.password} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.password} 
-                  touched={touched.password} 
-                />
-                <Input 
-                  label="Confirm Password" 
-                  name="confirmPassword" 
-                  type="password" 
-                  required={false} 
-                  icon={Lock} 
-                  placeholder="Confirm password" 
-                  value={formData.confirmPassword} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.confirmPassword} 
-                  touched={touched.confirmPassword} 
-                />
+                <div className="relative">
+                  <Input 
+                    label="Password" 
+                    name="password" 
+                    type={showPassword ? "text" : "password"} 
+                    icon={Lock} 
+                    placeholder="Create password" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.password} 
+                    touched={touched.password} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-3 top-9 text-gray-400"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+                
+                <div className="relative">
+                  <Input 
+                    label="Confirm Password" 
+                    name="confirmPassword" 
+                    type={showConfirmPassword ? "text" : "password"} 
+                    icon={Lock} 
+                    placeholder="Confirm password" 
+                    value={formData.confirmPassword} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.confirmPassword} 
+                    touched={touched.confirmPassword} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
+                    className="absolute right-3 top-9 text-gray-400"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-3">
-                Setting a password allows the patient to access the patient portal and view their medical records online.
-              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+              <Button variant="outline" onClick={handleGoBack}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                variant="primary" 
+                disabled={isSubmitting || isCreateLoading} 
+                loading={isSubmitting || isCreateLoading}
+              >
+                {isSubmitting || isCreateLoading ? 'Saving...' : 'Save Patient'}
+              </Button>
             </div>
           </Card>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-2 pb-8">
-            <Button variant="outline" onClick={handleGoBack} type="button">
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Patient'}
-            </Button>
-          </div>
         </form>
       </div>
     </div>

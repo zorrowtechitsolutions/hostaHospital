@@ -1,3 +1,4 @@
+// app/service/api.ts
 import {
   createApi,
   fetchBaseQuery,
@@ -89,144 +90,13 @@ export const api = createApi({
     "Appointment",
     "Doctor",
     "Department",
+    "Ambulance", 
+    "BloodBank",
     "Booking",
     "Role",
-    "RolePermission"
+    "RolePermission",
   ],
   endpoints: () => ({}),
 });
-
-// ================= BOOKING TYPES =================
-
-export interface BookingRequest {
-  id?: string | number;
-  _id?: string;
-  patientId?: string;
-  patientName?: string;
-  age?: number;
-  contact?: string;
-  gender?: string;
-  doctorId?: string | number;
-  doctorName?: string;
-  doctorSpecialty?: string;
-  department?: string;
-  appointmentDate?: string;
-  time?: string;
-  reason?: string;
-  status?: "pending" | "approved" | "rejected" | "cancelled";
-  avatar?: string;
-  email?: string;
-  hospitalId?: string | number;
-  token?: string | number;
-  rejectionReason?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface ApproveBookingData {
-  date: string;
-  time: string;
-  token: string | number;
-  notes?: string;
-}
-
-export interface RejectBookingData {
-  reason: string;
-}
-
-export interface BookingResponse {
-  success: boolean;
-  message: string;
-  data?: BookingRequest | BookingRequest[];
-}
-
-// ================= BOOKING API ENDPOINTS =================
-
-export const bookingApi = api.injectEndpoints({
-  endpoints: (builder) => ({
-
-    // GET BOOKINGS USING DOCTOR ID
-    getBookingsByDoctor: builder.query<
-      BookingResponse,
-      { 
-        doctorId: string | number; 
-        status?: "pending" | "approved" | "rejected" | "cancelled";
-        date?: string;
-      }
-    >({
-      query: ({ doctorId, status, date }) => {
-        const queryParams = new URLSearchParams();
-        
-        if (status) {
-          queryParams.append("status", status);
-        }
-        
-        if (date) {
-          queryParams.append("date", date);
-        }
-        
-        const queryString = queryParams.toString();
-        return `/booking/doctor/${doctorId}${queryString ? `?${queryString}` : ""}`;
-      },
-      
-      providesTags: (result, error, { doctorId }) => [
-        { type: "Booking", id: `doctor-${doctorId}` }
-      ],
-    }),
-
-    // APPROVE BOOKING
-    approveBooking: builder.mutation<
-      BookingResponse,
-      {
-        id: string | number;
-        data: ApproveBookingData;
-      }
-    >({
-      query: ({ id, data }) => ({
-        url: `/booking/${id}/approve`,
-        method: "PUT",
-        body: {
-          date: data.date,
-          time: data.time,
-          token: data.token,
-          notes: data.notes,
-        },
-      }),
-
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id }
-      ],
-    }),
-
-    // REJECT BOOKING
-    rejectBooking: builder.mutation<
-      BookingResponse,
-      {
-        id: string | number;
-        data: RejectBookingData;
-      }
-    >({
-      query: ({ id, data }) => ({
-        url: `/booking/${id}/reject`,
-        method: "PUT",
-        body: {
-          reason: data.reason,
-        },
-      }),
-
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id }
-      ],
-    }),
-  }),
-});
-
-// ================= EXPORT HOOKS =================
-
-export const {
-  useGetBookingsByDoctorQuery,
-  useApproveBookingMutation,
-  useRejectBookingMutation,
-} = bookingApi;
 
 export default api;

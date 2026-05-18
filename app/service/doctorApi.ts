@@ -12,7 +12,7 @@ export interface Doctor {
   email: string;
   password?: string;
   phone?: string;
-  specialty?: string;
+  speciality?: string;
   qualification?: string;
   experience?: number;
   gender?: string;

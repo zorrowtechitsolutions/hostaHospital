@@ -1,5 +1,5 @@
 // App.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth, AuthProvider } from "./context/AuthContext";
 
@@ -13,43 +13,56 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "./pages/Sidebar";
 import TopBar from "./pages/TopBar";
 import Dashboard from "./pages/Dashboard";
-import Patients from "./components/patients/Patients";
-import PatientDetails from "./components/patients/PatientDetails";
-import RequestsTable from "./components/Requests/RequestTable";
-import AddPatientModal from "./components/patients/AddPatientModal";
-import EditPatientModal from "./components/patients/EditPatientModal";
-import Staffs from "./components/staffs/Staffs";
-import AddStaff from "./components/staffs/AddStaff";
-import EditStaff from "./components/staffs/EditStaff";
-import AllLabResults from "./components/Laborartory/AllLabResults";
-import LabTests from "./components/Laborartory/LabTests";
-import AddEditLabResults from "./components/Laborartory/AddEditLabResults";
-import Register from "./Authentication/Register";
-import Login from "./Authentication/Login";
-import Settings from "./components/Settings/Settings";
-import Doctors from "./components/Doctor/Doctors";
-import AddDoctor from "./components/Doctor/AddDoctors";
-import EditDoctor from "./components/Doctor/EditDoctor";
-import Pharmacy from "./components/Pharmacy/Pharmacy";
-import ViewDoctor from "./components/Doctor/ViewDoctor";
-import ViewProduct from "./components/Pharmacy/ViewProduct";
-import Consultation from "./components/Appointment/Consultation";
-import ViewMedicalHistory from "./components/Appointment/ViewMedicalHistory";
-import CalendarPage from "./components/Appointment/CalendarPage";
-import LaboratoryRegistrationForm from "./components/Laborartory/LaboratoryRegistrationForm";
-import NotificationsPage from "./components/Notification/NotificationsPage";
-import PermissionList from "./components/Settings/PermissionList";
-import UserPermissions from "./components/Settings/UserPermissions";
-import Visits from "./components/visits/Visits";
-import Appointments from "./components/Appointment/Appointment";
+import { ToastProvider } from "./components/ui/Toast";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
-import Specialities from "./components/specialities/Specialities";
-import { ToastProvider } from "./components/ui/Toast";
-import EmailTemplates from "./components/Settings/Email";
-import Profile from "./components/MyProfile/Profile";
-import AddPatient from "./components/patients/AddPatientModal";
 
+// Lazy load components
+const Patients = lazy(() => import("./components/patients/Patients"));
+const PatientDetails = lazy(() => import("./components/patients/PatientDetails"));
+const RequestsTable = lazy(() => import("./components/Requests/RequestTable"));
+const EditPatientModal = lazy(() => import("./components/patients/EditPatientModal"));
+const Staffs = lazy(() => import("./components/staffs/Staffs"));
+const AddStaff = lazy(() => import("./components/staffs/AddStaff"));
+const EditStaff = lazy(() => import("./components/staffs/EditStaff"));
+const AllLabResults = lazy(() => import("./components/Laborartory/AllLabResults"));
+const LabTests = lazy(() => import("./components/Laborartory/LabTests"));
+const AddEditLabResults = lazy(() => import("./components/Laborartory/AddEditLabResults"));
+const Register = lazy(() => import("./Authentication/Register"));
+const Login = lazy(() => import("./Authentication/Login"));
+const Settings = lazy(() => import("./components/Settings/Settings"));
+const Doctors = lazy(() => import("./components/Doctor/Doctors"));
+const AddDoctor = lazy(() => import("./components/Doctor/AddDoctors"));
+const EditDoctor = lazy(() => import("./components/Doctor/EditDoctor"));
+const Pharmacy = lazy(() => import("./components/Pharmacy/Pharmacy"));
+const ViewDoctor = lazy(() => import("./components/Doctor/ViewDoctor"));
+const ViewProduct = lazy(() => import("./components/Pharmacy/ViewProduct"));
+const Consultation = lazy(() => import("./components/Appointment/Consultation"));
+const ViewMedicalHistory = lazy(() => import("./components/Appointment/ViewMedicalHistory"));
+const CalendarPage = lazy(() => import("./components/Appointment/CalendarPage"));
+const LaboratoryRegistrationForm = lazy(() => import("./components/Laborartory/LaboratoryRegistrationForm"));
+const NotificationsPage = lazy(() => import("./components/Notification/NotificationsPage"));
+const PermissionList = lazy(() => import("./components/Settings/PermissionList"));
+const UserPermissions = lazy(() => import("./components/Settings/UserPermissions"));
+const Visits = lazy(() => import("./components/visits/Visits"));
+const Appointments = lazy(() => import("./components/Appointment/Appointment"));
+const EmailTemplates = lazy(() => import("./components/Settings/Email"));
+const Profile = lazy(() => import("./components/MyProfile/Profile"));
+const AddPatient = lazy(() => import("./components/patients/AddPatientModal"));
+const ForgotPassword = lazy(() => import("./Authentication/ForgotPassword"));
+const Ambulance = lazy(() => import("./components/Ambulance/Ambulance"));
+const BloodBank = lazy(() => import("./components/BloodBank/BloodBank"));
+
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1C62A0] mx-auto"></div>
+      <p className="mt-4 text-gray-600">Loading...</p>
+    </div>
+  </div>
+);
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -148,14 +161,7 @@ function App() {
   }, [isAuthenticated, location.pathname, loading]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   // If not authenticated, show login/register pages with ToastProvider
@@ -163,11 +169,24 @@ function App() {
     console.log("Rendering PUBLIC routes");
     return (  
       <ToastProvider>
-        <Routes>
-          <Route path="/register" element={<Register />} />
-          <Route path="/sign-in" element={<Login />} />
-          <Route path="*" element={<Navigate to="/sign-in" replace />} />
-        </Routes>
+<Suspense
+  fallback={
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {[...Array(8)].map((_, i) => (
+        <div
+          key={i}
+          className="h-64 rounded-2xl bg-white border border-gray-100 animate-pulse"
+        />
+      ))}
+    </div>
+  }
+>          <Routes>
+            <Route path="/register" element={<Register />} />
+            <Route path="/sign-in" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="*" element={<Navigate to="/sign-in" replace />} />
+          </Routes>
+        </Suspense>
       </ToastProvider>
     );
   }
@@ -254,42 +273,45 @@ function App() {
           
           {/* REMOVED p-4 padding from here */}
           <div className="flex-1 overflow-y-auto">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/patients" element={<Patients />} />
-              <Route path="/add-patient" element={<AddPatient />} />
-              <Route path="/edit-patient/:id" element={<EditPatientModal />} />
-              <Route path="/patients/:id" element={<PatientDetails />} />
-              <Route path="/requests" element={<RequestsTable />} />
-              <Route path="/staffs" element={<Staffs />} />
-              <Route path="/add-staff" element={<AddStaff />} />
-              <Route path="/edit-staff/:id" element={<EditStaff />} />
-              <Route path="/lab/results" element={<AllLabResults />} />
-              <Route path="/lab/tests" element={<LabTests />} />
-              <Route path="/lab/results/add" element={<AddEditLabResults />} />
-              <Route path="/lab/results/edit/:id" element={<AddEditLabResults />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/doctors" element={<Doctors />} />
-              <Route path="/add-doctor" element={<AddDoctor />} />
-              <Route path="/edit-doctor/:id" element={<EditDoctor />} />
-              <Route path="/doctor/:id" element={<ViewDoctor />} />
-              <Route path="/pharmacy" element={<Pharmacy />} />
-              <Route path="/product/:id" element={<ViewProduct />} />
-              <Route path="/appointments/consultation" element={<Consultation />} />
-              <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
-              <Route path="/roles" element={<UserPermissions />} />
-              <Route path="/permissions/:roleId" element={<PermissionList />} /> 
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/visits" element={<Visits/>} />
-              <Route path="/appointments" element={<Appointments/>} />
-              <Route path="/specialities" element={<Specialities />} />
-              <Route path="/email" element={<EmailTemplates/>} />
-              <Route path="/profile" element={<Profile/>} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/patients" element={<Patients />} />
+                <Route path="/add-patient" element={<AddPatient />}  />
+                <Route path="/edit-patient/:id" element={<EditPatientModal />} />
+                <Route path="/patients/:id" element={<PatientDetails />} />
+                <Route path="/requests" element={<RequestsTable />} />
+                <Route path="/staffs" element={<Staffs />} />
+                <Route path="/add-staff" element={<AddStaff />} />
+                <Route path="/edit-staff/:id" element={<EditStaff />} />
+                <Route path="/lab/results" element={<AllLabResults />} />
+                <Route path="/lab/tests" element={<LabTests />} />
+                <Route path="/lab/results/add" element={<AddEditLabResults />} />
+                <Route path="/lab/results/edit/:id" element={<AddEditLabResults />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/doctors" element={<Doctors />} />
+                <Route path="/add-doctor" element={<AddDoctor />} />
+                <Route path="/edit-doctor/:id" element={<EditDoctor />} />
+                <Route path="/doctor/:id" element={<ViewDoctor />} />
+                <Route path="/pharmacy" element={<Pharmacy />} />
+                <Route path="/product/:id" element={<ViewProduct />} />
+                <Route path="/appointments/consultation" element={<Consultation />} />
+                <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
+                <Route path="/roles" element={<UserPermissions />} />
+                <Route path="/permissions/:roleId" element={<PermissionList />} /> 
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/visits" element={<Visits />} />
+                <Route path="/appointments" element={<Appointments />} />
+                <Route path="/email" element={<EmailTemplates />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/ambulance" element={<Ambulance />} />
+                <Route path="/blood" element={<BloodBank />} />
+              </Routes>
+            </Suspense>
           </div>
         </div>
       </div>

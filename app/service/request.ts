@@ -1,4 +1,4 @@
-// app/service/request.ts - Booking/Request API service
+// // app/service/request.ts - Booking/Request API service
 
 import { api } from "./api";
 
@@ -160,9 +160,10 @@ export const bookingApi = api.injectEndpoints({
         },
       }),
 
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id },
-      ],
+invalidatesTags: (result, error, { id }) => [
+  { type: "Booking", id },
+  "Booking",
+],
     }),
 
     // ================= REJECT BOOKING =================
@@ -182,9 +183,10 @@ export const bookingApi = api.injectEndpoints({
         },
       }),
 
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id },
-      ],
+invalidatesTags: (result, error, { id }) => [
+  { type: "Booking", id },
+  "Booking",
+],
     }),
 
     // ================= CANCEL BOOKING =================
@@ -206,6 +208,7 @@ export const bookingApi = api.injectEndpoints({
 
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
+        "Booking",
       ],
     }),
 
@@ -227,8 +230,9 @@ export const bookingApi = api.injectEndpoints({
       }),
 
       invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id },
-      ],
+  { type: "Booking", id },
+  "Booking",
+],
     }),
 
     // ================= UPDATE BOOKING =================
@@ -253,9 +257,10 @@ export const bookingApi = api.injectEndpoints({
         },
       }),
 
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Booking", id },
-      ],
+invalidatesTags: (result, error, { id }) => [
+  { type: "Booking", id },
+  "Booking",
+],
     }),
 
     // ================= DELETE BOOKING =================
@@ -315,3 +320,5 @@ export const {
   useDeleteBookingMutation,
   useGetBookingsByStatusQuery,
 } = bookingApi;
+
+
