@@ -1,21 +1,17 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import App from './App'
-import './index.css'
-
-// ✅ REGISTER SERVICE WORKER
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/firebase-messaging-sw.js')
-      .then((reg) => console.log(' SW registered:', reg))
-      .catch((err) => console.log(' SW error:', err));
-  });
-}
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { Provider } from 'react-redux';
+import { BrowserRouter } from 'react-router-dom';  // Add this import
+import { store } from '../../hostaHospital/app/store';
+import App from './App';
+import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <BrowserRouter>
-    <App />
-  </BrowserRouter>
+  <React.StrictMode>
+    <Provider store={store}>
+      <BrowserRouter>  {/* Wrap App with BrowserRouter */}
+        <App />
+      </BrowserRouter>
+    </Provider>
+  </React.StrictMode>,
 );

@@ -1,249 +1,335 @@
-// src/components/Settings/Security.jsx - With toast notifications
-import React, { useState } from 'react';
+// src/components/Settings/Security.jsx - With Simplified Password Validation
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Modal, Input, Badge, Alert } from '../ui';
-import { showSuccessToast, showWarningToast, showErrorToast, showInfoToast } from '../ui/Toast';
+import {
+  showSuccessToast,
+  showErrorToast
+} from '../ui/Toast';
+import {
+  useLogoutHospitalMutation,
+  useDeleteHospitalMutation,
+  useChangePasswordMutation
+} from '../../../app/service/hospitalApi';
+import { useAuth } from '../../context/AuthContext';
+
+// Constants
+const REDIRECT_DELAY = 2000;
+const TOAST_DURATION = 4000;
+
+// Static security items configuration
+const SECURITY_ITEMS = [
+  {
+    id: 'password',
+    title: 'Password',
+    description: 'Set a unique password to secure the account',
+    meta: (user) => `Last Changed: ${user?.lastPasswordChange || 'Never'}`,
+    actions: [{ label: 'Change', type: 'change' }]
+  },
+  {
+    id: 'delete',
+    title: 'Delete Account',
+    description: 'Your account will be permanently deleted after 30 days',
+    actions: [{ label: 'Delete', type: 'delete' }]
+  },
+];
 
 const Security = () => {
   const navigate = useNavigate();
+  const { logout: authLogout, user } = useAuth();
+  const [logoutHospital] = useLogoutHospitalMutation();
+  const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
+  const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showConfigureModal, setShowConfigureModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteItemModal, setShowDeleteItemModal] = useState(false);
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
-  const [modalData, setModalData] = useState({ title: '', description: '', itemId: '' });
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [newPhoneNumber, setNewPhoneNumber] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [emailAddress, setEmailAddress] = useState('');
-  const [newEmail, setNewEmail] = useState('');
+  const [confirmText, setConfirmText] = useState('');
 
-  const devices = [
-    { device: 'Chrome - Windows', date: '17 Jun 2025', ip: '23.222.12.72', location: 'New York / USA' },
-    { device: 'Safari - Macos', date: '10 Jun 2025', ip: '224.111.12.75', location: 'New York / USA' },
-    { device: 'Firefox - Windows', date: '22 May 2025', ip: '111.222.13.28', location: 'New York / USA' },
-    { device: 'Safari - Macos', date: '15 Jan 2025', ip: '333.555.10.54', location: 'New York / USA' },
-  ];
-
-  const performLogout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    document.cookie.split(";").forEach(function(c) { 
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-    });
-    window.location.href = '/sign-in';
+  const performLogout = async () => {
+    try {
+      await logoutHospital().unwrap();
+    } catch (error) {
+      // Silent fail - we'll log out anyway
+    } finally {
+      authLogout();
+      window.location.href = '/sign-in';
+    }
   };
 
-  const handleDeleteAccount = () => { 
-    const hospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
-    const currentHospital = JSON.parse(localStorage.getItem('hospitalData') || '{}');
-    const updatedHospitals = hospitals.filter(h => h.email !== currentHospital.email);
-    localStorage.setItem('hospitals', JSON.stringify(updatedHospitals));
-    
-    showWarningToast('Account deletion initiated. You have 10 days to recover your account.', 5000);
-    setShowDeleteModal(false);
-    performLogout();
-  };
-  
-  const handleConfigure = () => { 
-    showSuccessToast(`${modalData.title} configured successfully!`, 3000);
-    setShowConfigureModal(false); 
-  };
-  
-  const handleEditItem = () => { 
-    showSuccessToast(`${modalData.title} updated successfully!`, 3000);
-    setShowEditModal(false); 
-  };
-  
-  const handleDeleteItem = () => { 
-    showSuccessToast(`${modalData.title} deleted successfully!`, 3000);
-    setShowDeleteItemModal(false); 
-  };
-  
-  const handleDeactivateAccount = () => { 
-    showWarningToast('Account has been deactivated. You can reactivate by signing in again.', 4000);
-    setShowDeactivateModal(false);
-    performLogout();
-  };
-  
-  const handleKeepActive = () => setShowDeactivateModal(false);
-  
-  const openModal = (type, title, description) => {
-    setModalData({ title, description, itemId: title });
-    if (type === 'configure') setShowConfigureModal(true);
-    else if (type === 'edit') setShowEditModal(true);
-    else if (type === 'deleteItem') setShowDeleteItemModal(true);
-    else if (type === 'deactivate') setShowDeactivateModal(true);
+  // Reset password form helper
+  const resetPasswordForm = (setters) => {
+    setters.setLocalNewPassword('');
+    setters.setLocalConfirmPassword('');
+    setters.setLocalCurrentPassword('');
+    setters.setLocalPasswordError('');
   };
 
+  // Handle Delete Account
+  const handleDeleteAccount = async () => {
+    if (!user?.id) {
+      showErrorToast('Hospital ID not found', 3000);
+      return;
+    }
+
+    try {
+      await deleteHospital(user.id).unwrap();
+
+      showSuccessToast(
+        'Your account has been scheduled for deletion. You have 30 days to recover your account.',
+        5000
+      );
+
+      setShowDeleteModal(false);
+
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Clean cookies
+      document.cookie.split(';').forEach(cookie => {
+        document.cookie = cookie
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+      });
+
+      await performLogout();
+
+    } catch (error) {
+      let errorMessage = 'Failed to delete account. Please try again.';
+
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.status === 401) {
+        errorMessage = 'Session expired. Please login again.';
+      } else if (error.status === 404) {
+        errorMessage = 'Hospital account not found.';
+      }
+
+      showErrorToast(`❌ ${errorMessage}`, TOAST_DURATION);
+    }
+  };
+
+  // Handle Change Password
+  const handleChangePassword = async (currentPwd, newPwd) => {
+    try {
+      await changePassword({
+        currentPassword: currentPwd,
+        newPassword: newPwd
+      }).unwrap();
+
+      showSuccessToast('Password changed successfully! Please login again.', TOAST_DURATION);
+
+      setShowPasswordModal(false);
+
+      setTimeout(async () => {
+        await performLogout();
+      }, REDIRECT_DELAY);
+
+    } catch (error) {
+      let errorMessage = 'Failed to change password. Please try again.';
+
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.status === 400) {
+        errorMessage = 'Invalid current password.';
+      } else if (error.status === 401) {
+        errorMessage = 'Current password is incorrect.';
+      }
+
+      showErrorToast(`❌ ${errorMessage}`, 5000);
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Change Password Modal
   const ChangePasswordModal = () => {
     const [localNewPassword, setLocalNewPassword] = useState('');
     const [localConfirmPassword, setLocalConfirmPassword] = useState('');
     const [localPasswordError, setLocalPasswordError] = useState('');
+    const [localCurrentPassword, setLocalCurrentPassword] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const validatePassword = (password) => {
-      if (password.length < 8) return 'Password must be at least 8 characters long';
-      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[!@#$%^&*]/.test(password)) {
-        return 'Password must include uppercase, lowercase, numbers, and symbols';
+    const isFormLoading = isSubmitting || isChangingPassword;
+
+    const validatePassword = password =>
+      password.length < 8
+        ? 'Password must be at least 8 characters long'
+        : '';
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+
+      if (!localCurrentPassword) {
+        setLocalPasswordError('Current password is required');
+        return;
       }
-      return '';
+
+      const error = validatePassword(localNewPassword);
+      if (error) {
+        setLocalPasswordError(error);
+        return;
+      }
+
+      if (localNewPassword !== localConfirmPassword) {
+        setLocalPasswordError('New passwords do not match');
+        return;
+      }
+
+      if (localCurrentPassword === localNewPassword) {
+        setLocalPasswordError('New password must be different from current password');
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      try {
+        await handleChangePassword(localCurrentPassword, localNewPassword);
+        resetPasswordForm({
+          setLocalNewPassword,
+          setLocalConfirmPassword,
+          setLocalCurrentPassword,
+          setLocalPasswordError
+        });
+      } catch (error) {
+        // Error already handled in handleChangePassword
+      } finally {
+        setIsSubmitting(false);
+      }
     };
 
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const error = validatePassword(localNewPassword);
-      if (error) { setLocalPasswordError(error); return; }
-      if (localNewPassword !== localConfirmPassword) { setLocalPasswordError('Passwords do not match'); return; }
-      showSuccessToast('Password changed successfully!', 3000);
-      setLocalNewPassword(''); setLocalConfirmPassword(''); setLocalPasswordError('');
+    const handleClose = () => {
+      resetPasswordForm({
+        setLocalNewPassword,
+        setLocalConfirmPassword,
+        setLocalCurrentPassword,
+        setLocalPasswordError
+      });
       setShowPasswordModal(false);
     };
 
     return (
-      <Modal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password" size="md">
+      <Modal isOpen={showPasswordModal} onClose={handleClose} title="Change Password" size="md">
         <form onSubmit={handleSubmit}>
-          <Input label="New Password" type="password" value={localNewPassword} onChange={(e) => { setLocalNewPassword(e.target.value); setLocalPasswordError(''); }} placeholder="Enter new password (min 8 characters)" required />
-          <Input label="Confirm New Password" type="password" value={localConfirmPassword} onChange={(e) => { setLocalConfirmPassword(e.target.value); setLocalPasswordError(''); }} placeholder="Confirm new password" required className="mt-4" />
+          <Input
+            label="Current Password *"
+            type="password"
+            value={localCurrentPassword}
+            onChange={(e) => {
+              setLocalCurrentPassword(e.target.value);
+              setLocalPasswordError('');
+            }}
+            placeholder="Enter current password"
+            required
+          />
+          <Input
+            label="New Password *"
+            type="password"
+            value={localNewPassword}
+            onChange={(e) => {
+              setLocalNewPassword(e.target.value);
+              setLocalPasswordError('');
+            }}
+            placeholder="Enter new password (min 8 characters)"
+            required
+            className="mt-4"
+          />
+          <Input
+            label="Confirm New Password *"
+            type="password"
+            value={localConfirmPassword}
+            onChange={(e) => {
+              setLocalConfirmPassword(e.target.value);
+              setLocalPasswordError('');
+            }}
+            placeholder="Confirm new password"
+            required
+            className="mt-4"
+          />
           {localPasswordError && <Alert type="error" message={localPasswordError} className="mt-4" />}
-          <Alert type="info" message="Password must be at least 8 characters long and should include a mix of uppercase, lowercase, numbers, and symbols for better security." className="mt-4" />
+          <Alert
+            type="info"
+            message="Password must be at least 8 characters long."
+            className="mt-4"
+          />
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => { setLocalNewPassword(''); setLocalConfirmPassword(''); setLocalPasswordError(''); setShowPasswordModal(false); }}>Clear</Button>
-            <Button type="submit" variant="primary">Update Password</Button>
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={isFormLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isFormLoading}
+              loading={isFormLoading}
+            >
+              {isFormLoading ? 'Updating...' : 'Update Password'}
+            </Button>
           </div>
         </form>
       </Modal>
     );
   };
 
+  // Delete Account Modal
   const DeleteAccountModal = () => (
-    <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Account" size="md">
+    <Modal isOpen={showDeleteModal} onClose={() => { setShowDeleteModal(false); setConfirmText(''); }} title="Delete Account" size="md">
       <p className="text-sm text-gray-500 mb-6">Permanently delete your hospital account</p>
+
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-        <h3 className="font-semibold text-yellow-800 mb-2 text-sm">Important: Account Deletion Information</h3>
+        <h3 className="font-semibold text-yellow-800 mb-2 text-sm">⚠️ Important: Account Deletion Information</h3>
         <ul className="space-y-1 text-xs text-yellow-800">
-          <li>• This account will be temporarily deleted and permanently removed after 10 days</li>
-          <li>• During this 10-day period, you can recover your account</li>
-          <li>• After 10 days, your account and all associated data will be permanently deleted</li>
-          <li>• All your booking data, patient records, and hospital information will be lost</li>
+          <li>• This account will be scheduled for deletion</li>
+          <li>• You will have 30 days to recover your account</li>
+          <li>• After 30 days, your account and all associated data will be permanently deleted</li>
+          <li>• All patient records, appointments, staff data, and hospital information will be lost</li>
+          <li>• This action cannot be undone after the grace period</li>
         </ul>
       </div>
-      <Alert type="error" message="Warning: This action cannot be undone after the 10-day grace period. Please make sure you have exported any important data before proceeding." className="mb-6" />
+
+      <Alert type="error" message="Warning: Please make sure you have exported any important data before proceeding." className="mb-4" />
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Type <span className="font-mono font-bold text-red-600">DELETE</span> to confirm:
+        </label>
+        <input
+          type="text"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder="Type DELETE here"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+        />
+      </div>
+
       <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
-        <Button onClick={handleDeleteAccount} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Delete My Account</Button>
+        <Button variant="outline" onClick={() => { setShowDeleteModal(false); setConfirmText(''); }}>Cancel</Button>
+        <Button
+          onClick={handleDeleteAccount}
+          disabled={confirmText.trim() !== 'DELETE' || isDeleting}
+          loading={isDeleting}
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isDeleting ? 'Deleting...' : 'Delete My Account'}
+        </Button>
       </div>
     </Modal>
   );
 
-  const ConfigureModal = () => {
-    const isTwoFactor = modalData.title === 'Two Factor authentication';
-    return (
-      <Modal isOpen={showConfigureModal} onClose={() => setShowConfigureModal(false)} title={`Configure ${modalData.title}`} size="md">
-        <p className="text-sm text-gray-500 mb-6">{modalData.description}</p>
-        {isTwoFactor ? (
-          <>
-            <Input label="Phone Number" type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Enter phone number" required />
-            <p className="text-xs text-gray-500 mt-2">By providing your phone number, you agree to receive text messages to enable two-factor authentication when you log in.</p>
-          </>
-        ) : (
-          <Input label="New Email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Enter email address" required />
-        )}
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => setShowConfigureModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleConfigure}>Save Changes</Button>
-        </div>
-      </Modal>
-    );
-  };
-
-  const EditModal = () => {
-    const isPhone = modalData.title === 'Phone Number';
-    const isEmail = modalData.title === 'Email Address';
-    const isDevices = modalData.title === 'Browsers & Devices';
-    return (
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title={`Edit ${modalData.title}`} size="md">
-        <p className="text-sm text-gray-500 mb-6">{modalData.description}</p>
-        {isPhone && (
-          <>
-            <Input label="Current Phone Number" type="tel" value="123-456-7890" readOnly className="bg-gray-100" />
-            <Input label="New Phone Number" type="tel" value={newPhoneNumber} onChange={(e) => setNewPhoneNumber(e.target.value)} placeholder="987-654-3218" required className="mt-4" />
-            <Input label="Current Password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter current password" required className="mt-4" />
-          </>
-        )}
-        {isEmail && (
-          <>
-            <Input label="Current Email" type="email" value="john@example.com" readOnly className="bg-gray-100" />
-            <Input label="New Email" type="email" value={emailAddress} onChange={(e) => setEmailAddress(e.target.value)} placeholder="Enter new email" required className="mt-4" />
-            <Input label="Current Password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter current password" required className="mt-4" />
-          </>
-        )}
-        {isDevices && (
-          <div className="overflow-x-auto mb-4 max-h-80 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Device</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">IP Address</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Location</th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((device, idx) => (
-                  <tr key={idx}>
-                    <td className="px-3 py-2 text-sm text-gray-900">{device.device}</td>
-                    <td className="px-3 py-2 text-sm text-gray-500">{device.date}</td>
-                    <td className="px-3 py-2 text-sm text-gray-500">{device.ip}</td>
-                    <td className="px-3 py-2 text-sm text-gray-500">{device.location}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleEditItem}>Save Changes</Button>
-        </div>
-      </Modal>
-    );
-  };
-
-  const DeleteItemModal = () => (
-    <Modal isOpen={showDeleteItemModal} onClose={() => setShowDeleteItemModal(false)} title={`Delete ${modalData.title}`} size="sm">
-      <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete your {modalData.title.toLowerCase()}?</p>
-      <Alert type="warning" message="This action cannot be undone. You will need to add it again if needed." className="mb-6" />
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => setShowDeleteItemModal(false)}>Cancel</Button>
-        <Button onClick={handleDeleteItem} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Delete</Button>
-      </div>
-    </Modal>
-  );
-
-  const DeactivateModal = () => (
-    <Modal isOpen={showDeactivateModal} onClose={() => setShowDeactivateModal(false)} title="Deactivate Account" size="sm">
-      <p className="text-sm text-gray-500 mb-4">Are you sure you want to deactivate?</p>
-      <Alert type="warning" message="Your account will be shutdown. It will be reactive when you sign in again." className="mb-6" />
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={handleKeepActive}>Keep Active</Button>
-        <Button onClick={handleDeactivateAccount} className="bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors">Yes, Deactivate</Button>
-      </div>
-    </Modal>
-  );
-
-  const securityItems = [
-    { id: 'password', title: 'Password', description: 'Set a unique password to secure the account', meta: 'Last Changed, Mar 18, 2025', actions: [{ label: 'Edit', onClick: () => setShowPasswordModal(true) }] },
-    { id: 'twofactor', title: 'Two Factor authentication', description: 'Use your mobile phone to receive security PIN.', meta: 'Enabled, Mar 18, 2025', actions: [{ label: 'Configure', onClick: () => openModal('configure', 'Two Factor authentication', 'Use your mobile phone to receive security PIN.') }] },
-    { id: 'google', title: 'Google Authentication', description: 'Connect to Google', meta: 'Connected', actions: [{ label: 'Configure', onClick: () => openModal('configure', 'Google Authentication', 'Connect your Google account') }] },
-    { id: 'phone', title: 'Phone Number', description: 'Phone Number associated with the account', meta: 'Verified', actions: [{ label: 'Edit', onClick: () => openModal('edit', 'Phone Number', 'Update phone number') }, { label: 'Delete', onClick: () => openModal('deleteItem', 'Phone Number', 'Delete phone number') }] },
-    { id: 'email', title: 'Email Address', description: 'Email Address associated with the account', meta: 'Verified', actions: [{ label: 'Edit', onClick: () => openModal('edit', 'Email Address', 'Update email address') }, { label: 'Delete', onClick: () => openModal('deleteItem', 'Email Address', 'Delete email address') }] },
-    { id: 'devices', title: 'Browsers & Devices', description: 'The browsers & devices associated with the account', meta: '', actions: [{ label: 'Edit', onClick: () => openModal('edit', 'Browsers & Devices', 'View and manage devices') }, { label: 'Delete', onClick: () => openModal('deleteItem', 'Browsers & Devices', 'Delete device') }] },
-    { id: 'deactivate', title: 'Deactivate Account', description: 'This will shutdown your account. Your account will be reactive when you sign in again', actions: [{ label: 'Deactivate', onClick: () => openModal('deactivate', 'Deactivate Account', 'Deactivate your account') }] },
-    { id: 'delete', title: 'Delete Account', description: 'Your account will be permanently deleted', actions: [{ label: 'Delete', onClick: () => setShowDeleteModal(true) }] },
-  ];
-
-  const deleteButtonStyle = "bg-[#1C62A0] hover:bg-[#154d7a] text-white px-4 py-2 rounded-md transition-colors text-sm font-medium";
+  // Prepare security items with dynamic meta
+  const securityItems = useMemo(() => {
+    return SECURITY_ITEMS.map(item => ({
+      ...item,
+      meta: typeof item.meta === 'function' ? item.meta(user) : item.meta,
+      actions: item.actions.map(action => ({
+        ...action,
+        onClick: action.type === 'change'
+          ? () => setShowPasswordModal(true)
+          : () => setShowDeleteModal(true)
+      }))
+    }));
+  }, [user]);
 
   return (
     <Card>
@@ -258,20 +344,21 @@ const Security = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h3 className="text-base font-semibold text-gray-900">{item.title}</h3>
-                  {item.meta && <Badge variant={item.meta === 'Verified' || item.meta === 'Connected' ? 'success' : 'default'}>{item.meta}</Badge>}
+                  {item.meta && <Badge variant={item.meta.includes('Verified') || item.meta.includes('Connected') ? 'success' : 'default'}>{item.meta}</Badge>}
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{item.description}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {item.actions.map((action, idx) => {
-                  const isDeleteOrDeactivate = action.label === 'Delete' || action.label === 'Deactivate';
+                  const isDangerAction = ['Delete', 'Deactivate'].includes(action.label);
                   return (
-                    <Button 
-                      key={idx} 
-                      variant={!isDeleteOrDeactivate ? 'ghost' : undefined}
-                      size="sm" 
+                    <Button
+                      key={idx}
+                      variant={!isDangerAction ? 'ghost' : undefined}
+                      size="sm"
                       onClick={action.onClick}
-                      className={isDeleteOrDeactivate ? deleteButtonStyle : ''}
+                      className={isDangerAction && action.label === 'Delete' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                        isDangerAction && action.label === 'Deactivate' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}
                     >
                       {action.label}
                     </Button>
@@ -285,10 +372,6 @@ const Security = () => {
 
       <ChangePasswordModal />
       <DeleteAccountModal />
-      <ConfigureModal />
-      <EditModal />
-      <DeleteItemModal />
-      <DeactivateModal />
     </Card>
   );
 };

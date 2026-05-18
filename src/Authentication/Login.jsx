@@ -1,14 +1,16 @@
-// src/Authentication/Login.jsx - With toast notifications
+// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Building, AlertCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Mail, Lock, Eye, EyeOff, Building } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
+import { useLoginHospitalMutation } from '../../app/service/hospitalApi';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const [loginHospital, { isLoading: isApiLoading }] = useLoginHospitalMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -63,51 +65,82 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // UPDATED: Improved handleSubmit with token verification
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const fieldsToTouch = ['email', 'password'];
-    const touchedFields = {};
-    fieldsToTouch.forEach(field => touchedFields[field] = true);
-    setTouched(touchedFields);
     
     if (validateForm()) {
       setIsSubmitting(true);
       setLoginError('');
       
-      setTimeout(() => {
-        const hospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
-        const hospital = hospitals.find(h => h.email === formData.email);
+      try {
+        const response = await loginHospital({
+          email: formData.email,
+          password: formData.password
+        }).unwrap();
         
-        if (hospital && hospital.password === formData.password) {
-          // Success toast message for login
-          showSuccessToast(
-            ` Login successful! Welcome back, ${hospital.hospitalName}!`,
-            4000,
-            {
-              'Hospital': hospital.hospitalName,
-              'Email': hospital.email,
-              'Type': hospital.hospitalType
-            }
-          );
-          
-          login(hospital);
-          
-          // Navigate after a short delay to show the toast
-          setTimeout(() => navigate('/dashboard'), 500);
+        console.log("✅ Login successful - Full response:", response);
+        
+        // STORE TOKEN IN LOCALSTORAGE
+        const token = response.token || response.accessToken;
+        
+        if (token) {
+          localStorage.setItem("accessToken", token);
+          console.log("✅ Access token stored:", token);
         } else {
-          setLoginError('Invalid email or password. Please try again.');
-          showErrorToast('❌ Invalid email or password. Please try again.', 4000);
+          console.log("❌ No token found in response");
         }
+        
+        // Verify tokens were stored
+        const accessToken = localStorage.getItem("accessToken");
+        console.log("Access token stored:", !!accessToken);
+        
+        
+        if (accessToken) {
+          console.log("Access token preview:", accessToken.substring(0, 30) + "...");
+        }
+        
+        // Extract hospital data from response (handle different structures)
+        const hospitalData = response.data || response.hospital || response.user || {};
+        
+        const authData = {
+          id: hospitalData?.id || 1,
+          name: hospitalData?.name || "Hospital",
+          email: hospitalData?.email || formData.email,
+          phone: hospitalData?.phone || "",
+          type: hospitalData?.type || "",
+        };
+        
+        console.log("AUTH DATA:", authData);
+        
+        await login(authData);
+        
+        showSuccessToast(`Login successful! Welcome back, ${authData.name || 'Hospital'}!`, 4000);
+        
         setIsSubmitting(false);
-      }, 500);
+        
+        navigate("/dashboard", { replace: true });
+        
+      } catch (error) {
+        console.error("❌ Login error details:", error);
+        
+        let errorMessage = "Invalid email or password. Please try again.";
+        
+        if (error.data?.message) {
+          errorMessage = error.data.message;
+        } else if (error.status === 401) {
+          errorMessage = "Invalid email or password. Please try again.";
+        } else if (error.status === 404) {
+          errorMessage = "Account not found. Please register first.";
+        }
+        
+        setLoginError(errorMessage);
+        showErrorToast(`❌ ${errorMessage}`, 4000);
+        setIsSubmitting(false);
+      }
     } else {
       showWarningToast('⚠️ Please fill in all required fields correctly', 3000);
     }
-  };
-
-  const hasRegisteredHospitals = () => {
-    const hospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
-    return hospitals.length > 0;
   };
 
   return (
@@ -126,10 +159,6 @@ const Login = () => {
         <Card className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {loginError && <Alert type="error" message={loginError} />}
-
-            {!hasRegisteredHospitals() && (
-              <Alert type="warning" message="No hospital accounts found. Please register first." />
-            )}
 
             <Input
               label="Email Address"
@@ -185,10 +214,10 @@ const Login = () => {
               variant="primary"
               size="md"
               fullWidth
-              disabled={isSubmitting || !hasRegisteredHospitals()}
-              loading={isSubmitting}
+              disabled={isSubmitting || isApiLoading}
+              loading={isSubmitting || isApiLoading}
             >
-              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {isSubmitting || isApiLoading ? 'Signing In...' : 'Sign In'}
             </Button>
 
             <p className="text-center text-sm text-gray-600 mt-4">

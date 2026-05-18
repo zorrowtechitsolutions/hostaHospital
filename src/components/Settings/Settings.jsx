@@ -1,19 +1,69 @@
-// src/components/Settings/Settings.jsx - With address information like Register page
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Button, Card, Input, Tabs } from '../ui';
+// src/components/Settings/Settings.jsx - COMPLETE FIXED VERSION WITH SKELETON LOADING
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  Button,
+  Card,
+  Input,
+  Tabs
+} from '../ui';
 import Security from './Security';
-import Preference from './Preference';
-import Notification from './Notification';
 import UserPermissions from './UserPermissions';
-import Billing from './Billing';
 import Map from './Map';
-import EmailTemplates from './Email';
-import { showSuccessToast, showWarningToast, showInfoToast } from '../ui/Toast';
+import { showSuccessToast, showWarningToast, showInfoToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import { MapPin, ChevronDown } from 'lucide-react'; // Add MapPin here
+import { MapPin, ChevronDown } from 'lucide-react';
+import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
+import { useAuth } from '../../context/AuthContext';
 
-// Custom Searchable Dropdown Component
+// Time options constant
+const TIME_OPTIONS = [
+  '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
+  '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
+  '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
+  '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
+];
+
+// Default working hours constant
+const DEFAULT_WORKING_HOURS = {
+  monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  wednesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  thursday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  friday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  saturday: { open: '09:00 AM', close: '06:00 PM', closed: false },
+  sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
+};
+
+// Days constant
+const DAYS = [
+  { key: 'monday', label: 'Monday' },
+  { key: 'tuesday', label: 'Tuesday' },
+  { key: 'wednesday', label: 'Wednesday' },
+  { key: 'thursday', label: 'Thursday' },
+  { key: 'friday', label: 'Friday' },
+  { key: 'saturday', label: 'Saturday' },
+  { key: 'sunday', label: 'Sunday' },
+];
+
+// Tabs constant
+const TABS = ['General', 'Security', 'User Permissions', 'Map'];
+
+// Hospital types constant
+const HOSPITAL_TYPES = [
+  'Allopathy', 'Homeopathy', 'Ayurveda', 'Unani', 
+  'Physiotherapy', 'Mental Health', 'Laboratory', 'Other'
+];
+
+// Tab component map
+const TAB_COMPONENTS = {
+  General: null, // Will be set dynamically
+  Security: Security,
+  'User Permissions': UserPermissions,
+  Map: Map
+};
+
+// SearchableDropdown Component
 const SearchableDropdown = ({ 
   label, 
   options, 
@@ -53,11 +103,9 @@ const SearchableDropdown = ({
     setIsOpen(false);
   };
 
-  const displayValue = () => {
-    if (!value) return "";
-    const selected = options.find(opt => getOptionValue(opt) === value);
-    return selected ? getOptionLabel(selected) : "";
-  };
+  const displayValue = value
+    ? getOptionLabel(options.find(opt => getOptionValue(opt) === value) || {})
+    : "";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -68,7 +116,7 @@ const SearchableDropdown = ({
         {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
         <input
           type="text"
-          value={isOpen ? searchTerm : displayValue()}
+          value={isOpen ? searchTerm : displayValue}
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setIsOpen(true);
@@ -115,84 +163,215 @@ const SearchableDropdown = ({
   );
 };
 
+// Skeleton Loader Component
+const SettingsSkeleton = () => {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <div className="h-9 w-48 bg-gray-200 rounded animate-pulse mb-2"></div>
+          <div className="h-5 w-64 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+
+        <div className="border-b border-gray-200 mb-6">
+          <div className="flex gap-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-1"></div>
+              <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i}>
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-3"></div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i}>
+                        <div className="h-4 w-16 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Settings = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
-  // Address fields using country-state-city
-  const [countryCode, setCountryCode] = useState("");
-  const [countryName, setCountryName] = useState("");
-  const [stateCode, setStateCode] = useState("");
-  const [stateName, setStateName] = useState("");
-  const [cityName, setCityName] = useState("");
-  const [streetAddress, setStreetAddress] = useState("");
-  const [pincode, setPincode] = useState("");
+  // API hooks
+  const hospitalId = user?.id;
+  const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
+    skip: !hospitalId,
+  });
+  const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
 
+  // State hooks - simplified to use editForm only
   const [hospitalInfo, setHospitalInfo] = useState({
-    name: 'AL ABEER HOSPITAL KIZHISSERI',
-    email: 'alabeerh@gmail.com',
-    hospitalType: 'Multi-Specialty',
-    mobileNumber: '+91 9876543210',
+    name: '',
+    email: '',
+    hospitalType: '',
+    mobileNumber: '',
     createdDate: 'N/A',
-    lastUpdated: 'November 30, 2025 at 12:54 PM',
+    lastUpdated: 'N/A',
   });
 
-  const [workingHours, setWorkingHours] = useState({
-    monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    wednesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    thursday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    friday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    saturday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-    sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
-  });
-
+  const [workingHours, setWorkingHours] = useState(DEFAULT_WORKING_HOURS);
   const [isEditing, setIsEditing] = useState(false);
   const [is24HourMode, setIs24HourMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
   const [editForm, setEditForm] = useState({
-    name: hospitalInfo.name,
-    email: hospitalInfo.email,
-    hospitalType: hospitalInfo.hospitalType,
-    mobileNumber: hospitalInfo.mobileNumber,
-    streetAddress: streetAddress,
-    countryCode: countryCode,
-    countryName: countryName,
-    stateCode: stateCode,
-    stateName: stateName,
-    cityName: cityName,
-    pincode: pincode,
+    name: '',
+    email: '',
+    hospitalType: '',
+    mobileNumber: '',
+    streetAddress: '',
+    countryCode: '',
+    countryName: '',
+    stateCode: '',
+    stateName: '',
+    cityName: '',
+    pincode: '',
   });
 
-  // Get dropdown options
+  // Non-hook computed values
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(editForm.countryCode);
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
+
+  // Check for fetch errors (401 etc)
+  useEffect(() => {
+    if (fetchError?.status === 401) {
+      showErrorToast('Session expired. Redirecting to login...', 2000);
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
+    }
+  }, [fetchError, logout, navigate]);
+
+  // Check for update errors
+  useEffect(() => {
+    if (updateError) {
+      const status = updateError?.status || updateError?.originalStatus;
+      if (status === 401) {
+        showErrorToast('Authentication failed. Please log in again.', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(updateError?.data?.message || 'Failed to update hospital information', 4000);
+      }
+      resetUpdate?.();
+    }
+  }, [updateError, logout, navigate, resetUpdate]);
+
+  // Handle hospital data extraction
+  useEffect(() => {
+    if (hospitalData) {
+      const hospital = hospitalData.data || hospitalData;
+      
+      setHospitalInfo({
+        name: hospital.name || '',
+        email: hospital.email || '',
+        hospitalType: hospital.type || '',
+        mobileNumber: hospital.phone || '',
+        createdDate: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'N/A',
+        lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
+      });
+      
+      if (hospital.address) {
+        const country = countries.find(c => c.name === hospital.address.country);
+        const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === hospital.address.state) : null;
+        
+        setEditForm(prev => ({
+          ...prev,
+          streetAddress: hospital.address.place || '',
+          countryCode: country?.isoCode || '',
+          countryName: hospital.address.country || '',
+          stateCode: state?.isoCode || '',
+          stateName: hospital.address.state || '',
+          cityName: hospital.address.district || '',
+          pincode: hospital.address.pincode?.toString() || '',
+        }));
+      }
+    }
+  }, [hospitalData, countries]);
 
   useEffect(() => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
 
-  // Load saved address data from localStorage on component mount
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('hospitals') || '[]');
-    const currentHospital = userData[0]; // Assuming first hospital is current
-    if (currentHospital?.address) {
-      setStreetAddress(currentHospital.address.street || '');
-      setCountryCode(currentHospital.address.countryCode || '');
-      setCountryName(currentHospital.address.country || '');
-      setStateCode(currentHospital.address.stateCode || '');
-      setStateName(currentHospital.address.state || '');
-      setCityName(currentHospital.address.city || '');
-      setPincode(currentHospital.address.pincode || '');
-    }
-  }, []);
-
-  const handleEditSubmit = useCallback((e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     
-    setTimeout(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      showErrorToast('No authentication token found. Please log in again.', 4000);
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
+      setIsSaving(false);
+      return;
+    }
+    
+    try {
+      const updateData = {
+        name: editForm.name,
+        email: editForm.email,
+        type: editForm.hospitalType,
+        phone: editForm.mobileNumber,
+        address: {
+          country: editForm.countryName,
+          state: editForm.stateName,
+          district: editForm.cityName,
+          place: editForm.streetAddress,
+          pincode: Number(editForm.pincode)
+        }
+      };
+      
+      await updateHospital({ 
+        id: hospitalId, 
+        updateHospital: updateData 
+      }).unwrap();
+      
       const now = new Date();
       const formattedDate = now.toLocaleString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
@@ -207,54 +386,42 @@ const Settings = () => {
         lastUpdated: formattedDate 
       }));
       
-      // Save address changes
-      setStreetAddress(editForm.streetAddress);
-      setCountryCode(editForm.countryCode);
-      setCountryName(editForm.countryName);
-      setStateCode(editForm.stateCode);
-      setStateName(editForm.stateName);
-      setCityName(editForm.cityName);
-      setPincode(editForm.pincode);
-      
-      showSuccessToast(
-        'Hospital information updated successfully!',
-        4000,
-        {
-          'Hospital Name': editForm.name,
-          'Email': editForm.email,
-          'Type': editForm.hospitalType,
-          'Address': `${editForm.streetAddress}, ${editForm.cityName}, ${editForm.stateName}, ${editForm.countryName} - ${editForm.pincode}`
-        }
-      );
-      
+      showSuccessToast('Hospital information updated successfully!', 4000);
       setIsEditing(false);
+      refetch();
+      
+    } catch (error) {
+      if (error.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(error.data?.message || error.message || 'Failed to update hospital information', 4000);
+      }
+    } finally {
       setIsSaving(false);
-    }, 500);
-  }, [editForm]);
+    }
+  };
 
-  const handleEditClick = useCallback(() => {
-    setEditForm({
+  const handleEditClick = () => {
+    setEditForm(prev => ({
+      ...prev,
       name: hospitalInfo.name,
       email: hospitalInfo.email,
       hospitalType: hospitalInfo.hospitalType,
       mobileNumber: hospitalInfo.mobileNumber,
-      streetAddress: streetAddress,
-      countryCode: countryCode,
-      countryName: countryName,
-      stateCode: stateCode,
-      stateName: stateName,
-      cityName: cityName,
-      pincode: pincode,
-    });
+    }));
     setIsEditing(true);
-  }, [hospitalInfo, streetAddress, countryCode, countryName, stateCode, stateName, cityName, pincode]);
+  };
 
-  const handleInputChange = useCallback((e) => {
+  const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditForm(prev => ({ ...prev, [name]: value }));
-  }, []);
+  };
 
-  const handleCountryChange = useCallback((code, name) => {
+  const handleCountryChange = (code, name) => {
     setEditForm(prev => ({
       ...prev,
       countryCode: code,
@@ -263,80 +430,64 @@ const Settings = () => {
       stateName: '',
       cityName: ''
     }));
-  }, []);
+  };
 
-  const handleStateChange = useCallback((code, name) => {
+  const handleStateChange = (code, name) => {
     setEditForm(prev => ({
       ...prev,
       stateCode: code,
       stateName: name,
       cityName: ''
     }));
-  }, []);
+  };
 
-  const handleCityChange = useCallback((name) => {
+  const handleCityChange = (name) => {
     setEditForm(prev => ({ ...prev, cityName: name }));
-  }, []);
+  };
 
-  const handleWorkingHourChange = useCallback((day, field, value) => {
+  const handleWorkingHourChange = (day, field, value) => {
     setWorkingHours(prev => ({
       ...prev,
       [day]: { ...prev[day], [field]: value }
     }));
     showInfoToast(`${day} ${field} updated to ${value}`, 1500);
-  }, []);
+  };
 
-  const handleToggleClosed = useCallback((day) => {
-    setWorkingHours(prev => ({
-      ...prev,
-      [day]: { ...prev[day], closed: !prev[day].closed }
-    }));
-    const newStatus = !workingHours[day].closed;
-    showInfoToast(`${day} is now ${newStatus ? 'closed' : 'open'}`, 2000);
-  }, [workingHours]);
+  const handleToggleClosed = (day) => {
+    setWorkingHours(prev => {
+      const updated = {
+        ...prev,
+        [day]: {
+          ...prev[day],
+          closed: !prev[day].closed
+        }
+      };
+      showInfoToast(`${day} is now ${updated[day].closed ? 'closed' : 'open'}`, 2000);
+      return updated;
+    });
+  };
 
-  const handleSet24HourMode = useCallback(() => {
+  const handleSet24HourMode = () => {
     if (is24HourMode) {
-      setWorkingHours({
-        monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        wednesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        thursday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        friday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        saturday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-        sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
-      });
+      setWorkingHours(DEFAULT_WORKING_HOURS);
       showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
     } else {
       const newHours = {};
-      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      days.forEach(day => {
-        newHours[day] = { open: '00:00 AM', close: '11:59 PM', closed: false };
+      DAYS.forEach(day => {
+        newHours[day.key] = { open: '00:00 AM', close: '11:59 PM', closed: false };
       });
       setWorkingHours(newHours);
       showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
     }
     setIs24HourMode(!is24HourMode);
-  }, [is24HourMode]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
     showWarningToast('Edit cancelled. Changes discarded.', 2000);
-  }, []);
+  };
 
-  const tabs = useMemo(() => ['General', 'Security', 'Preferences', 'Notifications', 'Email Templates', 'User Permissions', 'Map'], []);
-
-  const days = [
-    { key: 'monday', label: 'Monday' },
-    { key: 'tuesday', label: 'Tuesday' },
-    { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
-    { key: 'saturday', label: 'Saturday' },
-    { key: 'sunday', label: 'Sunday' },
-  ];
-
-  const GeneralTab = useMemo(() => (
+  const GeneralTab = (
     <div className="space-y-8">
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -353,16 +504,15 @@ const Settings = () => {
                 <div><label className="block text-sm font-medium text-gray-700">Mobile Number</label><p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p></div>
               </div>
               
-              {/* Address Display */}
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  <div><label className="block text-sm font-medium text-gray-700">Street Address</label><p className="mt-1 text-gray-900">{streetAddress || 'Not provided'}</p></div>
+                  <div><label className="block text-sm font-medium text-gray-700">Street Address</label><p className="mt-1 text-gray-900">{editForm.streetAddress || 'Not provided'}</p></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700">Country</label><p className="mt-1 text-gray-900">{countryName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">State</label><p className="mt-1 text-gray-900">{stateName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">City</label><p className="mt-1 text-gray-900">{cityName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Pincode</label><p className="mt-1 text-gray-900">{pincode || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Country</label><p className="mt-1 text-gray-900">{editForm.countryName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">State</label><p className="mt-1 text-gray-900">{editForm.stateName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">District</label><p className="mt-1 text-gray-900">{editForm.cityName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Pincode</label><p className="mt-1 text-gray-900">{editForm.pincode || 'Not provided'}</p></div>
                   </div>
                 </div>
               </div>
@@ -385,24 +535,19 @@ const Settings = () => {
                     required
                   >
                     <option value="">Select hospital type</option>
-                    <option value="General Hospital">General Hospital</option>
-                    <option value="Multi-Specialty">Multi-Specialty</option>
-                    <option value="Super Specialty">Super Specialty</option>
-                    <option value="Teaching Hospital">Teaching Hospital</option>
-                    <option value="Clinic">Clinic</option>
-                    <option value="Nursing Home">Nursing Home</option>
+                    {HOSPITAL_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
                   </select>
                 </div>
                 
                 <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />
               </div>
 
-              {/* Address Edit Section */}
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
                 
                 <div className="space-y-4">
-
                   <SearchableDropdown
                     label="Country"
                     options={countries}
@@ -434,7 +579,8 @@ const Settings = () => {
                     getOptionValue={(option) => option.name}
                     optionKey={(option, index) => index}
                   />
-                   <Input 
+                  
+                  <Input 
                     label="Street Address" 
                     name="streetAddress" 
                     value={editForm.streetAddress} 
@@ -464,7 +610,6 @@ const Settings = () => {
         </div>
       </Card>
 
-      {/* Working Hours Section */}
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Working Hours</h2>
@@ -486,7 +631,7 @@ const Settings = () => {
           </div>
           
           <div className="space-y-4">
-            {days.map((day) => (
+            {DAYS.map((day) => (
               <div key={day.key} className="border-b border-gray-200 pb-4 last:border-0">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium text-gray-900">{day.label}</h3>
@@ -510,7 +655,7 @@ const Settings = () => {
                         onChange={(e) => handleWorkingHourChange(day.key, 'open', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
                       >
-                        {['12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM', '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'].map(time => (
+                        {TIME_OPTIONS.map(time => (
                           <option key={time} value={time}>{time}</option>
                         ))}
                       </select>
@@ -522,7 +667,7 @@ const Settings = () => {
                         onChange={(e) => handleWorkingHourChange(day.key, 'close', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
                       >
-                        {['12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM', '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'].map(time => (
+                        {TIME_OPTIONS.map(time => (
                           <option key={time} value={time}>{time}</option>
                         ))}
                       </select>
@@ -535,7 +680,6 @@ const Settings = () => {
         </div>
       </Card>
 
-      {/* Account Information Card */}
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
@@ -555,20 +699,17 @@ const Settings = () => {
         </div>
       </Card>
     </div>
-  ), [isEditing, hospitalInfo, editForm, workingHours, is24HourMode, isSaving, streetAddress, countryName, stateName, cityName, pincode, countries, states, cities, handleEditClick, handleEditSubmit, handleInputChange, handleCancelEdit, handleWorkingHourChange, handleToggleClosed, handleSet24HourMode, handleCountryChange, handleStateChange, handleCityChange]);
+  );
 
-  const renderTabContent = useCallback(() => {
-    switch (activeTab) {
-      case 'General': return GeneralTab;
-      case 'Security': return <Security />;
-      case 'Preferences': return <Preference />;
-      case 'Notifications': return <Notification />;
-      case 'Email Templates': return <EmailTemplates />;
-      case 'User Permissions': return <UserPermissions />;
-      case 'Map': return <Map />;
-      default: return null;
-    }
-  }, [activeTab, GeneralTab]);
+  const renderTabContent = () => {
+    if (activeTab === 'General') return GeneralTab;
+    const Component = TAB_COMPONENTS[activeTab];
+    return Component ? <Component /> : null;
+  };
+
+  if (isLoadingHospital) {
+    return <SettingsSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -578,7 +719,7 @@ const Settings = () => {
           <p className="text-gray-500 mt-1">Manage your account settings</p>
         </div>
         
-        <Tabs tabs={tabs.map(tab => ({ id: tab, label: tab }))} activeTab={activeTab} onTabChange={setActiveTab} className="mb-6" />
+        <Tabs tabs={TABS.map(tab => ({ id: tab, label: tab }))} activeTab={activeTab} onTabChange={setActiveTab} className="mb-6" />
         
         <div className="mt-6">{renderTabContent()}</div>
         

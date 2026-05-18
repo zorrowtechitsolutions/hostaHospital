@@ -14,6 +14,11 @@ import {
   FileText,
   Microscope,
   PlusCircle,
+  ClipboardList,
+  Activity,
+  Ambulance,
+  FileClock,
+  Droplet,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -29,18 +34,20 @@ const menu = [
     items: [
       { label: "Patients", icon: Users, path: "/patients" },
       { label: "Doctors", icon: Stethoscope, path: "/doctors" },
-      {label: "Specialities", icon: Pill, path: "/specialities"},
-      { label: "Requests", icon: CalendarDays, path: "/requests" },
+      // {label: "Specialities", icon: Pill, path: "/specialities"},
+      { label: "Requests", icon: ClipboardList, path: "/requests" },
       {
         label: "Appointments",
         icon: CalendarDays,
         hasDropdown: true,
         dropdownItems: [
-          { label: "Appointments List", icon: CalendarDays, path: "/appointments" },
+          { label: "Appointments List", icon: FileClock, path: "/appointments" },
           { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation" },
         ],
       },
-      { label: "Visits", icon: CalendarDays, path: "/visits" },
+      { label: "Visits", icon: Activity, path: "/visits" },
+      { label: "Ambulance", icon: Ambulance, path: "/ambulance" },
+      { label: "Blood Bank", icon: Droplet, path: "/blood" },
       // {
       //   label: "Laboratory",
       //   icon: FlaskConical,

@@ -1,34 +1,22 @@
-import React, { useState } from "react";
+// RejectRequestModal.jsx (Simpler version - no API call)
+import React from "react";
 import { XCircle } from "lucide-react";
 import { Modal, Button, Textarea } from "../ui";
-import { showWarningToast, showErrorToast } from "../ui/Toast";
+import { showWarningToast } from "../ui/Toast";
 
-const RejectRequestModal = ({ onClose, onConfirm, reason, setReason }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
+const RejectRequestModal = ({ 
+  onClose, 
+  onConfirm, 
+  reason, 
+  setReason,
+  isLoading = false  // Add loading prop
+}) => {
   const handleConfirm = () => {
     if (!reason.trim()) {
       showWarningToast("Please enter a reason for rejection", 3000);
       return;
     }
-
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      onConfirm();
-      
-      showErrorToast(
-        `Request has been rejected. Reason: ${reason.substring(0, 100)}${reason.length > 100 ? '...' : ''}`,
-        4000,
-        {
-          'Reason': reason.substring(0, 50) + (reason.length > 50 ? '...' : ''),
-          'Status': 'Rejected'
-        }
-      );
-      
-      setIsSubmitting(false);
-      onClose();
-    }, 500);
+    onConfirm();
   };
 
   return (
@@ -51,13 +39,16 @@ const RejectRequestModal = ({ onClose, onConfirm, reason, setReason }) => {
           onChange={(e) => setReason(e.target.value)} 
           placeholder="Enter reason for rejection..." 
           required
+          disabled={isLoading}
         />
       </div>
 
       <div className="flex justify-center gap-3 mt-5">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button variant="danger" onClick={handleConfirm} disabled={isSubmitting} loading={isSubmitting}>
-          {isSubmitting ? 'Rejecting...' : 'Yes, Reject'}
+        <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button variant="danger" onClick={handleConfirm} disabled={isLoading} loading={isLoading}>
+          {isLoading ? 'Rejecting...' : 'Yes, Reject'}
         </Button>
       </div>
     </Modal>

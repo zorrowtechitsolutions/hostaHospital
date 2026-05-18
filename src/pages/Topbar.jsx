@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
+import { useLogoutHospitalMutation } from '../../app/service/hospitalApi';
 
 const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const navigate = useNavigate();
@@ -15,6 +16,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
+  
+  // API hook for logout
+  const [logoutHospital, { isLoading: isLoggingOut }] = useLogoutHospitalMutation();
   
   const notifications = [
     { id: 1, title: 'New leave request', message: 'John Doe requested sick leave', time: '5 mins ago', read: false },
@@ -45,10 +49,20 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     console.log("Logout button clicked");
-    logout();
-    navigate("/sign-in");
+    try {
+      // Call the logout API endpoint
+      await logoutHospital().unwrap();
+      console.log("Logout API call successful");
+    } catch (error) {
+      console.error("Logout API error:", error);
+      // Even if API fails, we still want to clear local state
+    } finally {
+      // Clear auth context and localStorage (already handled by logoutHospital mutation)
+      logout();
+      navigate("/sign-in");
+    }
   };
 
   const handleSettings = () => {
@@ -176,10 +190,11 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
                 <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                 <button 
                   onClick={handleLogout} 
-                  className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3"
+                  disabled={isLoggingOut}
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <LogOut size={16} className="text-red-500 dark:text-red-400" />
-                  <span>Logout</span>
+                  <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
                 </button>
               </div>
             </div>
