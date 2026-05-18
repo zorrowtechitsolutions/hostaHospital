@@ -1,45 +1,189 @@
 // src/components/Settings/UserPermissions.jsx - With toast notifications
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { data, useNavigate } from 'react-router-dom';
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
-  TableCell, Modal, Input, Select, Badge, Alert 
+  TableCell, Modal, Badge 
 } from '../ui';
 import { showSuccessToast, showWarningToast, showErrorToast, showAddToast, showDeleteToast } from '../ui/Toast';
+import {
+  useGetRolesQuery,
+  useCreateRoleMutation,
+  useUpdateRoleMutation,
+  useDeleteRoleMutation,
+} from "../../../app/service/role";
+
+
+
+const NewRoleModal = memo(({
+  showNewRoleModal,
+  setShowNewRoleModal,
+  newRole,
+  setNewRole,
+  handleNewRoleSubmit,
+  isSubmitting
+}) => (
+  <Modal
+    isOpen={showNewRoleModal}
+    onClose={() => setShowNewRoleModal(false)}
+    title="Create New Role"
+    size="md"
+  >
+    <form onSubmit={handleNewRoleSubmit}>
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Role Name <span className="text-red-500">*</span>
+        </label>
+
+        <input
+          type="text"
+          value={newRole.name}
+          onChange={(e) =>
+            setNewRole((prev) => ({
+              ...prev,
+              name: e.target.value,
+            }))
+          }
+          placeholder="Enter role name"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          required
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Description
+        </label>
+
+        <textarea
+          value={newRole.description}
+          onChange={(e) =>
+            setNewRole((prev) => ({
+              ...prev,
+              description: e.target.value,
+            }))
+          }
+          placeholder="Enter role description"
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+        />
+      </div>
+
+      <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowNewRoleModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Creating..." : "Create Role"}
+        </Button>
+      </div>
+    </form>
+  </Modal>
+));
+
+
+const EditRoleModal = memo(({
+  showEditRoleModal,
+  setShowEditRoleModal,
+  editRole,
+  setEditRole,
+  handleEditRoleSubmit,
+  isSubmitting
+}) => (
+    <Modal isOpen={showEditRoleModal} onClose={() => setShowEditRoleModal(false)} title="Edit Role" size="md">
+      <form onSubmit={handleEditRoleSubmit}>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Role Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={editRole.name}
+            onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter role name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            required
+          />
+        </div>
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={editRole.description}
+            onChange={(e) => setEditRole(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Enter role description"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+          />
+        </div>
+        
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          <Button type="button" variant="outline" onClick={() => setShowEditRoleModal(false)}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  ));
+
+
 
 const UserPermissions = () => {
   const navigate = useNavigate();
 
-  const [roles, setRoles] = useState([
-    { name: 'Owner', createdDate: '22 Jun 2025', status: 'Active' },
-    { name: 'Admin', createdDate: '17 Jun 2025', status: 'Active' },
-    { name: 'Patient', createdDate: '10 Jun 2025', status: 'Inactive' },
-    { name: 'Doctor', createdDate: '22 May 2025', status: 'Active' },
-    { name: 'Nurse', createdDate: '15 May 2025', status: 'Inactive' },
-    { name: 'Supervisor', createdDate: '30 Apr 2025', status: 'Active' },
-    { name: 'Pharmacist', createdDate: '15 Jan 2025', status: 'Inactive' },
-  ]);
+
+
+   
+  const {
+    data: rolesResponse,
+    isLoading,
+    refetch,
+  } = useGetRolesQuery({
+  hospitalId: localStorage.getItem("hospitalId"),
+});
+
+  console.log(rolesResponse);
+
+  const [createRole] = useCreateRoleMutation();
+  const [updateRole] = useUpdateRoleMutation();
+  const [deleteRole] = useDeleteRoleMutation();
+
+  // Get API roles only - NO dummy admin
+  const roles = rolesResponse?.data || [];
 
   const [showNewRoleModal, setShowNewRoleModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
-  const [newRole, setNewRole] = useState({ name: '', status: 'Active' });
-  const [editRole, setEditRole] = useState({ name: '', status: 'Active', originalName: '' });
+  const [newRole, setNewRole] = useState({ name: '', description: '' });
+  const [editRole, setEditRole] = useState({ name: '', description: '', originalName: '' });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
   const dropdownRefs = useRef({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [rolePermissions, setRolePermissions] = useState({
-    Owner: ['all_access', 'manage_users', 'manage_roles', 'view_reports', 'edit_settings'],
-    Admin: ['manage_users', 'view_reports', 'edit_settings'],
-    Doctor: ['view_patients', 'create_appointments', 'view_reports'],
-    Patient: ['view_profile', 'book_appointment'],
-    Nurse: ['view_patients', 'update_records'],
-    Supervisor: ['view_reports', 'approve_requests', 'manage_staff'],
-    Pharmacist: ['view_inventory', 'manage_medicines'],
-  });
+  // const [rolePermissions, setRolePermissions] = useState({
+  //   Owner: ['all_access', 'manage_users', 'manage_roles', 'view_reports', 'edit_settings'],
+  //   Admin: ['manage_users', 'view_reports', 'edit_settings'],
+  //   Doctor: ['view_patients', 'create_appointments', 'view_reports'],
+  //   Patient: ['view_profile', 'book_appointment'],
+  //   Nurse: ['view_patients', 'update_records'],
+  //   Supervisor: ['view_reports', 'approve_requests', 'manage_staff'],
+  //   Pharmacist: ['view_inventory', 'manage_medicines'],
+  // });
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -52,106 +196,131 @@ const UserPermissions = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDropdown]);
 
-  const handleNewRoleSubmit = useCallback((e) => {
+  const handleNewRoleSubmit = useCallback(async (e) => {
     e.preventDefault();
+
     if (newRole.name.trim()) {
-      setIsSubmitting(true);
+      try {
+        setIsSubmitting(true);
+
+              const  hospitalId = localStorage?.getItem("hospitalId");
       
-      setTimeout(() => {
-        const formattedDate = new Date().toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-        setRoles(prev => [...prev, { name: newRole.name, createdDate: formattedDate, status: newRole.status }]);
-        setRolePermissions(prev => ({ ...prev, [newRole.name]: [] }));
-        
+      if( hospitalId === null) {
+        showErrorToast("Hospital ID is missing. Please log in again.");
+        return;
+      }
+
+
+
+
+        await createRole({
+          name: newRole.name,
+          description: newRole.description,
+          hospitalId
+        }).unwrap();
+
+
+        await refetch();
+
         showAddToast(
-          `New role "${newRole.name}" created successfully!`,
-          4000,
-          {
-            'Role': newRole.name,
-            'Status': newRole.status,
-            'Created': formattedDate
-          }
+          `New role "${newRole.name}" created successfully!`
         );
-        
-        setNewRole({ name: '', status: 'Active' });
+
+        setNewRole({
+          name: "",
+          description: "",
+        });
+
         setShowNewRoleModal(false);
+      } catch (error) {
+        console.error(error);
+        showErrorToast("Failed to create role");
+      } finally {
         setIsSubmitting(false);
-      }, 500);
+      }
     }
-  }, [newRole]);
+  }, [newRole, createRole, refetch]);
 
-  const handleEditRoleSubmit = useCallback((e) => {
+  const handleEditRoleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (editRole.name.trim()) {
-      setIsSubmitting(true);
-      
-      setTimeout(() => {
-        setRoles(prev => prev.map(role => 
-          role.name === editRole.originalName 
-            ? { ...role, name: editRole.name, status: editRole.status } 
-            : role
-        ));
-        
-        if (editRole.name !== editRole.originalName) {
-          setRolePermissions(prev => {
-            const newPermissions = { ...prev };
-            newPermissions[editRole.name] = newPermissions[editRole.originalName];
-            delete newPermissions[editRole.originalName];
-            return newPermissions;
-          });
-        }
-        
-        showSuccessToast(
-          `Role "${editRole.name}" updated successfully!`,
-          4000,
-          {
-            'Role': editRole.name,
-            'Status': editRole.status
-          }
-        );
-        
-        setShowEditRoleModal(false);
-        setSelectedRole(null);
-        setOpenDropdown(null);
-        setIsSubmitting(false);
-      }, 500);
-    }
-  }, [editRole]);
 
-  const handleDeleteRole = () => {
-    setIsSubmitting(true);
-    
-    setTimeout(() => {
-      setRoles(prev => prev.filter(r => r.name !== roleToDelete));
-      setRolePermissions(prev => {
-        const newPermissions = { ...prev };
-        delete newPermissions[roleToDelete];
-        return newPermissions;
-      });
-      
-      showDeleteToast(
-        `Role "${roleToDelete}" has been deleted successfully!`,
-        4000,
-        {
-          'Role': roleToDelete,
-          'Status': 'Deleted'
-        }
+    if (editRole.name === "Admin") {
+      showWarningToast("Admin role cannot be edited");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      await updateRole({
+        id: selectedRole?.id,
+        name: editRole.name,
+        description: editRole.description,
+      }).unwrap();
+
+      await refetch();
+
+      showSuccessToast(
+        `Role "${editRole.name}" updated successfully!`
       );
-      
+
+      setShowEditRoleModal(false);
+      setSelectedRole(null);
+      setOpenDropdown(null);
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Failed to update role");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [editRole, selectedRole, updateRole, refetch]);
+
+  const handleDeleteRole = async () => {
+    if (roleToDelete?.name === "Admin") {
+      showWarningToast("Admin role cannot be deleted");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      await deleteRole(roleToDelete?.id).unwrap();
+
+      await refetch();
+
+      showDeleteToast(
+        `Role "${roleToDelete?.name}" deleted successfully!`
+      );
+
       setShowDeleteModal(false);
       setRoleToDelete(null);
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Failed to delete role");
+    } finally {
       setIsSubmitting(false);
-    }, 500);
+    }
   };
 
   const handleOpenEditModal = useCallback((role) => {
     setSelectedRole(role);
-    setEditRole({ name: role.name, status: role.status, originalName: role.name });
+    setEditRole({ 
+      name: role.name, 
+      description: role.description || '', 
+      originalName: role.name 
+    });
     setShowEditRoleModal(true);
     setOpenDropdown(null);
   }, []);
 
+  const handleOpenViewModal = useCallback((role) => {
+    setSelectedRole(role);
+    setShowViewModal(true);
+    setOpenDropdown(null);
+  }, []);
+
   const handleOpenPermissionsPage = (role) => {
-    navigate(`/permissions/${role.name}`, { state: { from: "User Permissions" } });
+    navigate(`/permissions/${role.id}`, { state: { from: "User Permissions" } });
     setOpenDropdown(null);
   };
 
@@ -166,11 +335,15 @@ const UserPermissions = () => {
       </Button>
       {openDropdown === role.name && (
         <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+          <button onClick={() => handleOpenViewModal(role)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            View
+          </button>
           <button onClick={() => handleOpenEditModal(role)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
             Edit
           </button>
-          <button onClick={() => { setRoleToDelete(role.name); setShowDeleteModal(true); }} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+          <button onClick={() => { setRoleToDelete(role); setShowDeleteModal(true); }} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             Delete
           </button>
@@ -183,77 +356,65 @@ const UserPermissions = () => {
     </div>
   );
 
-  const NewRoleModal = () => (
-    <Modal isOpen={showNewRoleModal} onClose={() => setShowNewRoleModal(false)} title="Create New Role" size="md">
-      <form onSubmit={handleNewRoleSubmit}>
-        <Input 
-          label="Role Name" 
-          value={newRole.name} 
-          onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))} 
-          placeholder="Enter role name" 
-          required 
-          autoFocus 
-        />
-        <Select 
-          label="Default Status" 
-          value={newRole.status} 
-          onChange={(e) => setNewRole(prev => ({ ...prev, status: e.target.value }))} 
-          options={['Active', 'Inactive']} 
-          className="mt-4" 
-        />
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => setShowNewRoleModal(false)}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-            {isSubmitting ? 'Creating...' : 'Create Role'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
 
-  const EditRoleModal = () => (
-    <Modal isOpen={showEditRoleModal} onClose={() => setShowEditRoleModal(false)} title="Edit Role" size="md">
-      <form onSubmit={handleEditRoleSubmit}>
-        <Input 
-          label="Role Name" 
-          value={editRole.name} 
-          onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))} 
-          placeholder="Enter role name" 
-          required 
-        />
-        <Select 
-          label="Status" 
-          value={editRole.status} 
-          onChange={(e) => setEditRole(prev => ({ ...prev, status: e.target.value }))} 
-          options={['Active', 'Inactive']} 
-          className="mt-4" 
-        />
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => setShowEditRoleModal(false)}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-            {isSubmitting ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
 
-  const DeleteRoleModal = () => (
+  const ViewRoleModal = memo(() => (
+    <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="View Role Details" size="md">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Role Name</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {selectedRole?.name}
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {selectedRole?.description || '-'}
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Created Date</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {selectedRole?.createdDate || selectedRole?.createdAt || '-'}
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          <Button type="button" variant="outline" onClick={() => setShowViewModal(false)}>Close</Button>
+        </div>
+      </div>
+    </Modal>
+  ));
+
+  const DeleteRoleModal = memo(() => (
     <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Role" size="sm" showCloseButton={false}>
       <div className="text-center">
         <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center rounded-full bg-red-100">
           <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M6 7h12M9 7v12m6-12v12M5 7l1-3h12l1 3" /></svg>
         </div>
-        <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete <span className="font-medium">{roleToDelete}</span>?</p>
+        <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete <span className="font-medium">{roleToDelete?.name}</span>?</p>
         <div className="flex justify-center gap-3">
-          <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
           <Button variant="danger" onClick={handleDeleteRole} disabled={isSubmitting} loading={isSubmitting}>
             {isSubmitting ? 'Deleting...' : 'Delete'}
           </Button>
         </div>
       </div>
     </Modal>
-  );
+  ));
+
+  if (isLoading) {
+    return (
+      <Card>
+        <div className="p-8 text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <p className="mt-2 text-gray-500">Loading roles...</p>
+        </div>
+      </Card>
+    );
+  }
+
+  // Sort roles to show Admin first
 
   return (
     <>
@@ -261,10 +422,10 @@ const UserPermissions = () => {
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Total Roles: {roles.length}</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Total Roles: </h2>
               <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
             </div>
-            <Button variant="primary" onClick={() => setShowNewRoleModal(true)} className="flex items-center gap-2">
+            <Button type="button" variant="primary" onClick={() => setShowNewRoleModal(true)} className="flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               New Role
             </Button>
@@ -275,27 +436,107 @@ const UserPermissions = () => {
             <thead className="bg-gray-50">
               <tr>
                 <TableHeader>Role</TableHeader>
+                <TableHeader>Description</TableHeader>
                 <TableHeader>Created Date</TableHeader>
-                <TableHeader>Status</TableHeader>
                 <TableHeader>Actions</TableHeader>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {roles.map((role, idx) => (
-                <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                  <TableCell className="whitespace-nowrap"><div className="text-sm font-medium text-gray-900">{role.name}</div></TableCell>
-                  <TableCell className="whitespace-nowrap"><div className="text-sm text-gray-500">{role.createdDate}</div></TableCell>
-                  <TableCell className="whitespace-nowrap"><Badge variant={role.status === 'Active' ? 'success' : 'danger'}>{role.status}</Badge></TableCell>
-                  <TableCell className="whitespace-nowrap"><RoleDropdown role={role} /></TableCell>
-                </tr>
-              ))}
+             {
+  rolesResponse?.admin
+    ?.filter((admin) => admin?.id === 2)
+    .map((admin) => (
+      <tr
+        key={admin?.id}
+        className="hover:bg-gray-50 transition-colors"
+      >
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm font-medium text-gray-900">
+            {admin?.name}
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm text-gray-500">
+            {admin?.description || "-"}
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm text-gray-500">
+            {admin?.createdDate ||
+              admin?.createdAt ||
+              "-"}
+              
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          {/* <RoleDropdown role={admin} /> */}
+        </TableCell>
+      </tr>
+    ))
+}
+            </tbody>
+
+              <tbody className="bg-white divide-y divide-gray-200">
+             {
+  rolesResponse?.data
+    .map((role) => (
+      <tr
+        key={role?.id}
+        className="hover:bg-gray-50 transition-colors"
+      >
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm font-medium text-gray-900">
+            {role?.name}
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm text-gray-500">
+            {role?.description || "-"}
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          <div className="text-sm text-gray-500">
+            {role?.createdDate ||
+              role?.createdAt ||
+              "-"}
+              
+          </div>
+        </TableCell>
+
+        <TableCell className="whitespace-nowrap">
+          <RoleDropdown role={role} />
+        </TableCell>
+      </tr>
+    ))
+}
             </tbody>
           </table>
         </div>
       </Card>
 
-      <NewRoleModal />
-      <EditRoleModal />
+<NewRoleModal
+  showNewRoleModal={showNewRoleModal}
+  setShowNewRoleModal={setShowNewRoleModal}
+  newRole={newRole}
+  setNewRole={setNewRole}
+  handleNewRoleSubmit={handleNewRoleSubmit}
+  isSubmitting={isSubmitting}
+/>
+<EditRoleModal
+  showEditRoleModal={showEditRoleModal}
+  setShowEditRoleModal={setShowEditRoleModal}
+  editRole={editRole}
+  setEditRole={setEditRole}
+  handleEditRoleSubmit={handleEditRoleSubmit}
+  isSubmitting={isSubmitting}
+/>
+
+      <ViewRoleModal />
       <DeleteRoleModal />
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Check, X, Search, Calendar, Stethoscope, Filter, 
   RefreshCcw, Download, Upload, Users as UsersIcon, Phone, Clock
@@ -8,73 +8,125 @@ import {
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
-import AutoDeclineModal from "./AutoDeclineModal";
 import { showSuccessToast, showWarningToast, showErrorToast, showAddToast } from "../ui/Toast";
+import { useAuth } from "../../context/AuthContext";
+import { 
+  useGetBookingsQuery,
+  useApproveBookingMutation,
+  useRejectBookingMutation
+} from "../../../app/service/request";
 
-// Configuration
-const DEFAULT_AUTO_DECLINE_MINUTES = 5;
-
-// Updated dummy data with patient ages and contact numbers - ONLY PENDING STATUS
-const dummyRequests = [
-  { 
-    id: "REQ003", patientId: "PT0025", patientName: "James Carter", 
-    age: 34, contact: "+1 123 456 7890", gender: "Male",
-    doctorName: "Dr. Michael Brown", doctorSpecialty: "Neurologist", 
-    department: "Neurology", appointmentDate: "2025-01-25", time: "11:00 AM", 
-    reason: "Migraine follow-up", status: "pending", 
-    avatar: "https://randomuser.me/api/portraits/men/32.jpg", 
-    email: "james.carter@example.com" 
-  },
-  { 
-    id: "REQ004", patientId: "PT0026", patientName: "Emily Rodriguez", 
-    age: 28, contact: "+1 234 567 8901", gender: "Female",
-    doctorName: "Dr. Emily Wilson", doctorSpecialty: "Orthopedic", 
-    department: "Orthopedics", appointmentDate: "2025-01-28", time: "09:15 AM", 
-    reason: "Knee pain assessment", status: "pending", 
-    avatar: "https://randomuser.me/api/portraits/women/44.jpg", 
-    email: "emily.r@example.com" 
-  },
-  { 
-    id: "REQ005", patientId: "PT0027", patientName: "Michael Chen", 
-    age: 45, contact: "+1 345 678 9012", gender: "Male",
-    doctorName: "Dr. Robert Taylor", doctorSpecialty: "Ophthalmologist", 
-    department: "Ophthalmology", appointmentDate: "2025-01-30", time: "03:45 PM", 
-    reason: "Vision checkup", status: "pending", 
-    avatar: "https://randomuser.me/api/portraits/men/45.jpg", 
-    email: "michael.chen@example.com" 
-  },
-  { 
-    id: "REQ008", patientId: "PT0030", patientName: "David Thompson", 
-    age: 41, contact: "+1 678 901 2345", gender: "Male",
-    doctorName: "Dr. James Wilson", doctorSpecialty: "Cardiologist", 
-    department: "Cardiology", appointmentDate: "2025-02-05", time: "10:00 AM", 
-    reason: "Heart checkup", status: "pending", 
-    avatar: "https://randomuser.me/api/portraits/men/28.jpg", 
-    email: "david.t@example.com" 
-  }
-];
-
-const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null, onApprove, onReject }) => {
+const RequestTable = ({ doctorId = null, doctorName = null }) => {
+  const { user } = useAuth();
+  
+  // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [showAllData, setShowAllData] = useState(false);
+  
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
+  // Modal States
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  
-  // Auto Decline Modal State
-  const [showAutoDeclineModal, setShowAutoDeclineModal] = useState(false);
-  const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(DEFAULT_AUTO_DECLINE_MINUTES);
 
-  // Filter to ONLY show pending requests
-  const safeData = Array.isArray(data) ? data.filter(item => item.status === "pending") : [];
+  // API Hooks
+  const { 
+    data: bookingsResponse, 
+    isLoading: loading, 
+    refetch,
+    isFetching 
+  } = useGetBookingsQuery(
+    { 
+      hospitalId: user?.id,
+      status: "pending"
+    },
+    { skip: !user?.id }
+  );
 
+  const [approveBooking, { isLoading: isApproving }] = useApproveBookingMutation();
+  const [rejectBooking, { isLoading: isRejecting }] = useRejectBookingMutation();
+
+  // Helper function to format ID for display
+  const formatRequestId = (id) => {
+    if (!id) return '#REQ0000';
+    let numericId;
+    if (typeof id === 'string') {
+      const match = id.match(/\d+/);
+      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
+    } else {
+      numericId = parseInt(id) || 0;
+    }
+    return `#REQ${String(numericId).padStart(4, '0')}`;
+  };
+
+  // Transform API response
+  const transformBookingsData = (bookingList) => {
+    if (!bookingList || !Array.isArray(bookingList)) return [];
+
+    return bookingList.map((booking, index) => {
+      const DEFAULT_PROFILE_IMAGE = `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`;
+      
+      const calculateAge = (dob) => {
+        if (!dob) return "N/A";
+        const birthDate = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      };
+
+      // Get the ID properly (handle both id and _id)
+      const bookingId = booking.id || booking._id;
+      
+      console.log(`Transforming booking ${index}:`, {
+        originalId: booking.id,
+        originalUnderscoreId: booking._id,
+        finalId: bookingId
+      });
+
+      return {
+        id: bookingId,
+        formattedId: formatRequestId(bookingId),
+        patientId: `PT${String(booking.userId || index).padStart(4, "0")}`,
+        patientName: booking.patient_name || booking.patientName || "N/A",
+        age: calculateAge(booking.patient_dob || booking.dob),
+        contact: booking.patient_phone || booking.contact || "N/A",
+        gender: booking.gender || "Male",
+        doctorId: booking.doctorId,
+        doctorName: booking.doctor_name || booking.doctorName || "N/A",
+        department: booking.doctor_department || booking.department || "N/A",
+        appointmentDate: booking.booking_date || booking.appointmentDate
+          ? (booking.booking_date || booking.appointmentDate).split("T")[0]
+          : "N/A",
+        time: booking.consulting_time || booking.time || "N/A",
+        reason: booking.reason || "",
+        status: booking.status || "pending",
+        avatar: booking.avatar || DEFAULT_PROFILE_IMAGE,
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+      };
+    });
+  };
+
+  const safeData = useMemo(() => {
+    const data = transformBookingsData(bookingsResponse?.data || []);
+    console.log("Transformed data count:", data.length);
+    console.log("Sample transformed item:", data[0]);
+    return data;
+  }, [bookingsResponse]);
+
+  // Get all unique departments
   const getAllDepartments = () => {
     let sourceData;
     if (doctorId && !showAllData) {
@@ -82,12 +134,14 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
     } else {
       sourceData = safeData;
     }
-    return [...new Set(sourceData.map(r => r.department))].sort();
+    return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
   };
 
+  // Filter requests based on all criteria
   const getFilteredRequests = () => {
     let filtered;
     
+    // Apply doctor filter
     if (doctorId && !showAllData) {
       filtered = safeData.filter(item => 
         item.doctorId === doctorId || item.doctorName === doctorName
@@ -96,9 +150,10 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
       filtered = [...safeData];
     }
     
+    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(item => 
-        (item.id && item.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.formattedId && item.formattedId.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.patientId && item.patientId.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.patientName && item.patientName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.doctorName && item.doctorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -106,19 +161,23 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
         (item.contact && item.contact.includes(searchTerm))
       );
     }
-    if (departmentFilter) filtered = filtered.filter(item => item.department === departmentFilter);
-    if (dateFilter) filtered = filtered.filter(item => item.appointmentDate === dateFilter);
+    
+    // Apply department filter
+    if (departmentFilter) {
+      filtered = filtered.filter(item => item.department === departmentFilter);
+    }
+    
+    // Apply date filter
+    if (dateFilter) {
+      filtered = filtered.filter(item => item.appointmentDate === dateFilter);
+    }
+    
+    // Apply status filter
+    if (statusFilter) {
+      filtered = filtered.filter(item => item.status === statusFilter);
+    }
     
     return filtered;
-  };
-
-  const getStatusBadgeClass = (status) => {
-    const classes = {
-      pending: "bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs",
-      approved: "bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs",
-      rejected: "bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs"
-    };
-    return classes[status] || classes.pending;
   };
 
   const filteredRequests = getFilteredRequests();
@@ -126,16 +185,25 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
 
+  // Reset page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, dateFilter, statusFilter, showAllData]);
+
+  // Handlers
   const handleRefresh = () => { 
     setSearchTerm(""); 
     setDepartmentFilter(""); 
     setDateFilter(""); 
+    setStatusFilter("");
     setCurrentPage(1); 
+    refetch();
+    showSuccessToast("Refreshed requests", 2000);
   };
   
   const handleExport = () => {
-    const exportData = getFilteredRequests().map(req => ({ 
-      'Request ID': req.id, 
+    const exportData = filteredRequests.map(req => ({ 
+      'Request ID': req.formattedId,
       'Patient ID': req.patientId, 
       'Patient Name': req.patientName,
       'Age': req.age,
@@ -146,6 +214,7 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
       'Status': req.status, 
       'Reason': req.reason 
     }));
+    
     const link = document.createElement('a');
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
@@ -156,6 +225,7 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = (e) => {
       try { 
@@ -179,65 +249,132 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
     setDepartmentFilter(''); 
     setDateFilter(''); 
     setSearchTerm('');
+    setStatusFilter('');
+    showSuccessToast("All filters cleared", 2000);
   };
 
-  const activeFilterCount = (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
+  const activeFilterCount = (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0) + (statusFilter ? 1 : 0);
 
   const handleApproveClick = (request) => { 
+    console.log("=== Opening Approve Modal ===");
+    console.log("Selected request:", request);
+    console.log("Request ID being passed:", request.id);
+    
+    if (!request.id) {
+      console.error("❌ Cannot approve: Request ID is missing!");
+      showErrorToast("Invalid request: Missing ID. Please refresh and try again.", 3000);
+      return;
+    }
+    
+    console.log("✅ Setting selected request with ID:", request.id);
     setSelectedRequest(request); 
     setShowApproveModal(true); 
   };
   
-  const handleConfirmApprove = (appointmentData) => {
-    if (selectedRequest) {
-      if (onApprove) onApprove(selectedRequest, appointmentData);
-      else {
-        showSuccessToast(
-          `Request ${selectedRequest.id} approved successfully!`,
-          4000,
-          {
-            'Patient': selectedRequest.patientName,
-            'Date': appointmentData.date,
-            'Time': appointmentData.time,
-            'Token': `#${appointmentData.token}`
-          }
-        );
-      }
+  const handleConfirmApprove = async (appointmentData) => {
+    console.log("=== Confirm Approve Called ===");
+    console.log("Selected request:", selectedRequest);
+    console.log("Appointment data:", appointmentData);
+    
+    if (!selectedRequest) {
+      console.error("❌ No request selected");
+      showErrorToast("No request selected", 3000);
+      return;
     }
-    setShowApproveModal(false);
-    setSelectedRequest(null);
+
+    if (!selectedRequest.id) {
+      console.error("❌ Selected request has no ID!");
+      showErrorToast("Request ID is missing. Cannot approve.", 3000);
+      setShowApproveModal(false);
+      setSelectedRequest(null);
+      return;
+    }
+
+    console.log("✅ Approving with ID:", selectedRequest.id);
+    console.log("✅ Approval data:", {
+      id: selectedRequest.id,
+      data: appointmentData
+    });
+
+    try {
+      const result = await approveBooking({
+        id: selectedRequest.id,
+        data: {
+          date: appointmentData.date,
+          time: appointmentData.time,
+          token: appointmentData.token,
+          notes: appointmentData.notes || ""
+        }
+      }).unwrap();
+      
+      console.log("✅ Approval successful:", result);
+      
+      showSuccessToast(
+        `Request ${selectedRequest.formattedId} approved successfully!`,
+        4000,
+        {
+          'Patient': selectedRequest.patientName,
+          'Date': appointmentData.date,
+          'Time': appointmentData.time,
+          'Token': `#${appointmentData.token}`
+        }
+      );
+      
+      await refetch();
+      setShowApproveModal(false);
+      setSelectedRequest(null);
+      
+    } catch (error) {
+      console.error("❌ Approve error:", error);
+      showErrorToast(error?.data?.message || 'Failed to approve request', 3000);
+    }
   };
   
   const handleRejectClick = (request) => { 
+    console.log("Opening reject modal for:", request);
     setSelectedRequest(request); 
     setRejectReason(""); 
     setShowRejectModal(true); 
   };
   
-  const handleConfirmReject = () => {
-    if (selectedRequest) {
-      if (onReject) onReject(selectedRequest, rejectReason);
-      else {
-        showErrorToast(
-          `Request ${selectedRequest.id} rejected successfully!`,
-          4000,
-          {
-            'Patient': selectedRequest.patientName,
-            'Doctor': selectedRequest.doctorName,
-            'Reason': rejectReason || "No reason provided"
-          }
-        );
-      }
+  const handleConfirmReject = async () => {
+    if (!selectedRequest) {
+      showErrorToast("No request selected", 3000);
+      return;
     }
-    setShowRejectModal(false);
-    setSelectedRequest(null);
-    setRejectReason("");
-  };
 
-  const handleSaveAutoDecline = (minutes) => {
-    setAutoDeclineMinutes(minutes);
-    localStorage.setItem('autoDeclineMinutes', minutes);
-    showSuccessToast(`Auto decline time has been set to ${minutes} minutes.`, 3000);
+    if (!selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot reject.", 3000);
+      setShowRejectModal(false);
+      setSelectedRequest(null);
+      return;
+    }
+
+    try {
+      await rejectBooking({
+        id: selectedRequest.id,
+        data: { reason: rejectReason }
+      }).unwrap();
+      
+      showErrorToast(
+        `Request ${selectedRequest.formattedId} rejected successfully!`,
+        4000,
+        {
+          'Patient': selectedRequest.patientName,
+          'Doctor': selectedRequest.doctorName,
+          'Reason': rejectReason || "No reason provided"
+        }
+      );
+      
+      await refetch();
+      setShowRejectModal(false);
+      setSelectedRequest(null);
+      setRejectReason("");
+      
+    } catch (error) {
+      console.error('Reject error:', error);
+      showErrorToast(error?.data?.message || 'Failed to reject request', 3000);
+    }
   };
 
   const toggleShowAllData = () => {
@@ -246,6 +383,7 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
     setDepartmentFilter('');
     setDateFilter('');
     setSearchTerm('');
+    setStatusFilter('');
     if (!showAllData) {
       showSuccessToast(`Now showing all doctors' requests`, 2000);
     } else {
@@ -255,22 +393,79 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
 
   const showDoctorBanner = doctorId && !showAllData;
 
-  if (safeData.length === 0) {
-    return (
-      <Card>
+  // Skeleton Loading Component
+  const SkeletonLoader = () => (
+    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      {/* Breadcrumb Skeleton */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+      </div>
+
+      {/* Search and Filters Skeleton */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <div className="flex-1 max-w-md">
+          <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
+        </div>
+        <div className="flex gap-2">
+          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+        </div>
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
         <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">
-            Total Pending Requests 
-            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">0</span>
-          </h2>
+          <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
         </div>
-        <div className="p-12 text-center">
-          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-sm font-medium text-gray-500">No pending requests found</p>
-          <p className="text-xs text-gray-400 mt-1">Pending requests will appear here once available</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-100">
+              <tr>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                  <th key={i} className="px-6 py-3">
+                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...Array(5)].map((_, i) => (
+                <tr key={i} className="border-b border-gray-100">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                    <td key={j} className="px-6 py-4">
+                      <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </Card>
-    );
+        {/* Pagination Skeleton */}
+        <div className="px-6 py-4 border-t bg-gray-50">
+          <div className="flex justify-between items-center">
+            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+            <div className="flex gap-2">
+              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Loading state with skeleton
+  if (loading) {
+    return <SkeletonLoader />;
   }
 
   return (
@@ -278,25 +473,6 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-800">Requests</h1>
         <p className="text-sm text-gray-500">Home / Requests</p>
-      </div>
-
-      {/* Auto-Decline Banner with Change Button */}
-      <div className="mb-4 w-full bg-blue-50 border border-blue-200 rounded-lg px-6 py-3 overflow-hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Clock size={16} className="text-blue-600 flex-shrink-0" />
-            <span className="text-sm text-blue-800">
-              <strong>Auto-Decline: {autoDeclineMinutes} minutes</strong> — Pending bookings will be automatically declined after {autoDeclineMinutes} minutes if not approved by staff.
-            </span>
-          </div>
-          <button
-            onClick={() => setShowAutoDeclineModal(true)}
-            className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
-          >
-            <Clock size={14} />
-            Change
-          </button>
-        </div>
       </div>
 
       {showDoctorBanner && (
@@ -348,20 +524,29 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
           />
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
-            <RefreshCcw size={16} />
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            title="Refresh"
+            disabled={isFetching}
+          >
+            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
           <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import Requests">
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer transition-colors" title="Import Requests">
             <Upload size={16} />
           </label>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Pending Requests">
+          <button 
+            onClick={handleExport} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            title="Export Pending Requests"
+          >
             <Download size={16} />
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+            className={`relative p-2 border border-gray-200 rounded-md bg-white transition-colors ${
+              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
             } hover:bg-gray-50`}
             title="Toggle Filters"
           >
@@ -393,7 +578,7 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
             </button>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
               <select
@@ -417,6 +602,21 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
                 className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="cancel">Cancelled</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
@@ -429,16 +629,23 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
               {filteredRequests.length}
             </span>
           </h2>
+          {filteredRequests.length > 0 && (
+            <p className="text-xs text-gray-500">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
+            </p>
+          )}
         </div>
 
         {filteredRequests.length === 0 ? (
           <div className="text-center py-12">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No pending requests found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
             <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-            <button onClick={clearAllFilters} className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154A7D] transition-colors text-sm">
-              Clear All Filters
-            </button>
+            {activeFilterCount > 0 && (
+              <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
+                Clear all filters
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -446,6 +653,7 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
+                    <th className="px-6 py-3">Request ID</th>
                     <th className="px-6 py-3">Patient ID</th>
                     <th className="px-6 py-3">Patient Name</th>
                     <th className="px-6 py-3">Age</th>
@@ -460,28 +668,32 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
                   {paginatedRequests.map((item, index) => (
                     <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
-                        <span className="text-[#1C62A0] font-medium">#{item.patientId}</span>
+                        <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-gray-600">#{item.patientId}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img 
-                            src={item.avatar} 
-                            alt={item.patientName} 
-                            className="w-8 h-8 rounded-full object-cover"
+                          <img
+                            src={item.avatar}
+                            alt={item.patientName}
+                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover"
                             onError={(e) => {
-                              e.target.src = `https://randomuser.me/api/portraits/${item.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
+                              e.target.onerror = null;
+                              e.target.src = "https://randomuser.me/api/portraits/lego/1.jpg";
                             }}
                           />
                           <span className="font-medium text-gray-800">{item.patientName}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-gray-700">{item.age || 'N/A'} yrs</span>
+                        <span className="text-gray-700">{item.age} yrs</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <Phone size={14} className="text-gray-400" />
-                          <span className="text-gray-700">{item.contact || 'N/A'}</span>
+                          <span className="text-gray-700">{item.contact}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -522,47 +734,51 @@ const RequestTable = ({ data = dummyRequests, doctorId = null, doctorName = null
                 </tbody>
               </table>
             </div>
-            <Pagination 
-              currentPage={currentPage} 
-              totalPages={totalPages} 
-              onPageChange={setCurrentPage} 
-              totalItems={filteredRequests.length} 
-              itemsPerPage={itemsPerPage} 
-            />
+            
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t">
+                <Pagination 
+                  currentPage={currentPage} 
+                  totalPages={totalPages} 
+                  onPageChange={setCurrentPage} 
+                  totalItems={filteredRequests.length} 
+                  itemsPerPage={itemsPerPage} 
+                />
+              </div>
+            )}
           </>
         )}
       </Card>
 
-      {showApproveModal && (
+      {/* Approve Modal */}
+      {showApproveModal && selectedRequest && (
         <ApproveRequestModal 
+          bookingId={selectedRequest.id}
+          requestData={selectedRequest}
           onClose={() => { 
             setShowApproveModal(false); 
             setSelectedRequest(null); 
           }} 
-          onConfirm={handleConfirmApprove} 
+          onConfirm={handleConfirmApprove}
+          initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
+          initialTime={selectedRequest.time !== "N/A" ? selectedRequest.time : ""}
+          initialToken=""
         />
       )}
       
-      {showRejectModal && (
+      {/* Reject Modal */}
+      {showRejectModal && selectedRequest && (
         <RejectRequestModal 
           onClose={() => { 
             setShowRejectModal(false); 
             setSelectedRequest(null); 
-            setRejectReason(""); 
+            setRejectReason("");
           }} 
           onConfirm={handleConfirmReject} 
           reason={rejectReason} 
           setReason={setRejectReason} 
         />
       )}
-
-      {/* Auto Decline Modal */}
-      <AutoDeclineModal
-        isOpen={showAutoDeclineModal}
-        onClose={() => setShowAutoDeclineModal(false)}
-        currentMinutes={autoDeclineMinutes}
-        onSave={handleSaveAutoDecline}
-      />
     </div>
   );
 };

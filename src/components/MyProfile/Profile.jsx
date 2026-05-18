@@ -18,6 +18,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
+import { showErrorToast, showSuccessToast, showWarningToast } from '../ui/Toast';
 
 const Profile = () => {
   // State for profile data
@@ -76,6 +77,7 @@ const Profile = () => {
     setEditedProfile({...profile});
     setPreviewImage(null);
     setUploadProgress(0);
+    showSuccessToast('Edit mode activated', 2000);
   };
 
   const handleSave = () => {
@@ -83,6 +85,10 @@ const Profile = () => {
     setIsEditing(false);
     setPreviewImage(null);
     setUploadProgress(0);
+    showSuccessToast('Profile updated successfully', 3000, {
+      'Updated fields': getUpdatedFieldsCount(),
+      'Time': new Date().toLocaleTimeString()
+    });
   };
 
   const handleCancel = () => {
@@ -90,6 +96,15 @@ const Profile = () => {
     setIsEditing(false);
     setPreviewImage(null);
     setUploadProgress(0);
+    showWarningToast('Changes discarded', 2000);
+  };
+
+  const getUpdatedFieldsCount = () => {
+    let count = 0;
+    Object.keys(profile).forEach(key => {
+      if (profile[key] !== editedProfile[key]) count++;
+    });
+    return count;
   };
 
   const handleChange = (field, value) => {
@@ -105,14 +120,20 @@ const Profile = () => {
     
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB');
+      showErrorToast('File size must be less than 5MB', 3000, {
+        'Selected file': `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        'Maximum size': '5MB'
+      });
       return false;
     }
     
     // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      alert('Only JPEG, PNG, GIF, and WEBP files are allowed');
+      showErrorToast('Invalid file type', 3000, {
+        'Allowed types': 'JPEG, PNG, GIF, WEBP',
+        'Selected type': file.type
+      });
       return false;
     }
     
@@ -123,15 +144,26 @@ const Profile = () => {
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
+    // Show upload started toast
+    showSuccessToast('Uploading image...', 2000);
+    
     // Upload to S3
     try {
       const s3Url = await uploadToS3(file);
       handleChange('profilePicture', s3Url);
       setUploadProgress(100);
+      showSuccessToast('Profile picture updated successfully!', 3000, {
+        'File name': file.name,
+        'File size': `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        'Type': file.type.split('/')[1].toUpperCase()
+      });
       return true;
     } catch (error) {
       console.error('S3 upload error:', error);
-      alert('Failed to upload image. Please try again.');
+      showErrorToast('Failed to upload image. Please try again.', 4000, {
+        'Error': error.message || 'Unknown error',
+        'Time': new Date().toLocaleTimeString()
+      });
       setPreviewImage(null);
       return false;
     }
@@ -148,6 +180,7 @@ const Profile = () => {
     handleChange('profilePicture', '');
     setPreviewImage(null);
     setUploadProgress(0);
+    showWarningToast('Profile picture removed', 2000);
   };
 
   return (

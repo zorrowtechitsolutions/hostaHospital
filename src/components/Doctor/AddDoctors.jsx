@@ -1,16 +1,312 @@
-// src/components/Doctor/AddDoctor.jsx - With toast notifications and Salary Info
-import React, { useState } from 'react';
+// src/components/Doctor/AddDoctors.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
-  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X 
+  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users
 } from 'lucide-react';
-import { 
-  Button, Input, Select, Textarea, Card, Alert, Loader 
-} from '../ui';
+import {
+  Button,
+  Input,
+  Select,
+  Textarea,
+  Card,
+  Alert,
+} from "../ui";
+
+import {
+  showSuccessToast,
+  showErrorToast,
+  showWarningToast,
+} from "../ui/Toast";
+import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
+import { Country, State, City } from 'country-state-city';
+
+// SearchableDropdown Component
+const SearchableDropdown = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  icon: Icon,
+  disabled = false,
+  required = false,
+  getOptionLabel = (option) => option.name || option,
+  getOptionValue = (option) => option.isoCode || option,
+  optionKey = (option, index) => option.isoCode || index
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option => {
+    const label = getOptionLabel(option).toLowerCase();
+    return label.includes(searchTerm.toLowerCase());
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getOptionValue(option), getOptionLabel(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const displayValue = () => {
+    if (!value) return "";
+    const selected = options.find(opt => getOptionValue(opt) === value);
+    return selected ? getOptionLabel(selected) : "";
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <input
+          type="text"
+          value={isOpen ? searchTerm : displayValue()}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={optionKey(option, index)}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getOptionLabel(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Day Schedule Row Component
+const DayScheduleRow = ({ day, schedule, onUpdate }) => {
+  const [isHoliday, setIsHoliday] = useState(schedule.isHoliday || false);
+  const [hasBreak, setHasBreak] = useState(schedule.hasBreak || false);
+  const [morningOpen, setMorningOpen] = useState(schedule.morningOpen || '09:00');
+  const [morningClose, setMorningClose] = useState(schedule.morningClose || '12:00');
+  const [eveningOpen, setEveningOpen] = useState(schedule.eveningOpen || '16:00');
+  const [eveningClose, setEveningClose] = useState(schedule.eveningClose || '20:00');
+
+  const formatTimeDisplay = (time) => {
+    if (!time) return '';
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  const handleHolidayChange = (checked) => {
+    setIsHoliday(checked);
+    onUpdate({
+      ...schedule,
+      isHoliday: checked,
+      hasBreak: checked ? false : hasBreak
+    });
+  };
+
+  const handleBreakChange = (checked) => {
+    setHasBreak(checked);
+    onUpdate({
+      ...schedule,
+      hasBreak: checked,
+      isHoliday: isHoliday
+    });
+  };
+
+  const updateMorningOpenTime = (value) => {
+    setMorningOpen(value);
+    onUpdate({
+      ...schedule,
+      morningOpen: value,
+      isHoliday: isHoliday,
+      hasBreak: hasBreak
+    });
+  };
+
+  const updateMorningCloseTime = (value) => {
+    setMorningClose(value);
+    onUpdate({
+      ...schedule,
+      morningClose: value,
+      isHoliday: isHoliday,
+      hasBreak: hasBreak
+    });
+  };
+
+  const updateEveningOpenTime = (value) => {
+    setEveningOpen(value);
+    onUpdate({
+      ...schedule,
+      eveningOpen: value,
+      isHoliday: isHoliday,
+      hasBreak: hasBreak
+    });
+  };
+
+  const updateEveningCloseTime = (value) => {
+    setEveningClose(value);
+    onUpdate({
+      ...schedule,
+      eveningClose: value,
+      isHoliday: isHoliday,
+      hasBreak: hasBreak
+    });
+  };
+
+  return (
+    <div className={`border rounded-lg p-4 mb-4 ${isHoliday ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+        <h4 className="text-lg font-semibold text-gray-900">{day}</h4>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isHoliday}
+            onChange={(e) => handleHolidayChange(e.target.checked)}
+            className="h-4 w-4 text-red-500 focus:ring-red-500 rounded"
+          />
+          <span className={`text-sm ${isHoliday ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+            Holiday
+          </span>
+        </label>
+      </div>
+
+      {!isHoliday && (
+        <>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Sun className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm font-medium text-gray-700">Morning Session</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pl-6">
+              <div className="flex-1 min-w-[120px]">
+                <input
+                  type="time"
+                  value={morningOpen}
+                  onChange={(e) => updateMorningOpenTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(morningOpen)}</p>
+              </div>
+              <span className="text-gray-400">to</span>
+              <div className="flex-1 min-w-[120px]">
+                <input
+                  type="time"
+                  value={morningClose}
+                  onChange={(e) => updateMorningCloseTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(morningClose)}</p>
+              </div>
+            </div>
+          </div>
+
+          {hasBreak && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Moon className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Evening Session</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pl-6">
+                <div className="flex-1 min-w-[120px]">
+                  <input
+                    type="time"
+                    value={eveningOpen}
+                    onChange={(e) => updateEveningOpenTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(eveningOpen)}</p>
+                </div>
+                <span className="text-gray-400">to</span>
+                <div className="flex-1 min-w-[120px]">
+                  <input
+                    type="time"
+                    value={eveningClose}
+                    onChange={(e) => updateEveningCloseTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(eveningClose)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 pt-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasBreak}
+                onChange={(e) => handleBreakChange(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded"
+              />
+              <span className="text-sm text-gray-700">Has Break Between Sessions</span>
+            </label>
+            <p className="text-xs text-gray-500 ml-6 mt-1">
+              {hasBreak ? 'Morning & Evening sessions' : 'Normal schedule (single session)'}
+            </p>
+          </div>
+        </>
+      )}
+
+      {isHoliday && (
+        <div className="text-center py-3">
+          <p className="text-sm text-gray-500">📅 Closed for the day</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AddDoctor = () => {
   const navigate = useNavigate();
+  const [addNewDoctor] = useAddNewDoctorMutation();
   
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -18,61 +314,208 @@ const AddDoctor = () => {
     lastName: '',
     department: '',
     specialist: '',
+    qualification: '',
     fees: '',
     phoneNumber: '',
     email: '',
     dob: '',
     gender: '',
     registrationNumber: '',
-    knownLanguages: '',
+    knownLanguages: [],
     about: '',
-    address: '',
-    country: '',
-    state: '',
-    city: '',
-    pinCode: '',
+    countryCode: '',
+    countryName: '',
+    stateCode: '',
+    stateName: '',
+    district: '',
+    place: '',
+    pincode: '',
     displayName: '',
     userName: '',
     password: '',
     confirmPassword: '',
-    // Salary fields
-    netSalary: '',
-    basic: '',
-    da: '',
-    hra: '',
-    conveyance: '',
-    allowance: '',
-    medicalAllowance: '',
-    otherEarnings: '',
-    tds: '',
-    pf: '',
-    leave: '',
-    profTax: '',
-    labourWelfare: '',
-    otherDeductions: ''
+    joiningDate: '',
+    hospitalId: localStorage.getItem("hospitalId") || '',
+    experience: '',
+    appointmentCount: '',
+    weeklySchedule: {
+      monday: { 
+        isHoliday: false, 
+        hasBreak: true,
+        morningOpen: '09:00', 
+        morningClose: '12:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      tuesday: { 
+        isHoliday: false, 
+        hasBreak: false,
+        morningOpen: '09:00', 
+        morningClose: '18:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      wednesday: { 
+        isHoliday: false, 
+        hasBreak: false,
+        morningOpen: '09:00', 
+        morningClose: '18:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      thursday: { 
+        isHoliday: false, 
+        hasBreak: true,
+        morningOpen: '09:00', 
+        morningClose: '12:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      friday: { 
+        isHoliday: false, 
+        hasBreak: true,
+        morningOpen: '09:00', 
+        morningClose: '12:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      saturday: { 
+        isHoliday: false, 
+        hasBreak: false,
+        morningOpen: '09:00', 
+        morningClose: '14:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      },
+      sunday: { 
+        isHoliday: true, 
+        hasBreak: false,
+        morningOpen: '10:00', 
+        morningClose: '13:00', 
+        eveningOpen: '16:00', 
+        eveningClose: '20:00'
+      }
+    },
+    outDoorConsultingOpen: '',
+    outDoorConsultingClose: '',
+    outDoorConsultingPlace: '',
+    bookingOpen: true
   });
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('basic'); // Tab state for Basic Info / Salary Info
+  const [activeTab, setActiveTab] = useState('basic');
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Validation functions
+  const countries = Country.getAllCountries();
+  const states = State.getStatesOfCountry(formData.countryCode);
+  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+
+  const languageOptions = [
+    { value: 'mal', label: 'Malayalam' },
+    { value: 'eng', label: 'English' },
+    { value: 'hin', label: 'Hindi' },
+    { value: 'tam', label: 'Tamil' },
+    { value: 'tel', label: 'Telugu' },
+    { value: 'kan', label: 'Kannada' },
+    { value: 'ben', label: 'Bengali' },
+    { value: 'mar', label: 'Marathi' },
+    { value: 'guj', label: 'Gujarati' },
+    { value: 'pun', label: 'Punjabi' },
+    { value: 'urd', label: 'Urdu' },
+    { value: 'spa', label: 'Spanish' },
+    { value: 'fre', label: 'French' },
+    { value: 'ger', label: 'German' },
+    { value: 'chi', label: 'Chinese' },
+    { value: 'ara', label: 'Arabic' },
+    { value: 'rus', label: 'Russian' },
+    { value: 'jap', label: 'Japanese' }
+  ];
+
+  const weekDays = [
+    { key: 'monday', label: 'Monday' },
+    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'wednesday', label: 'Wednesday' },
+    { key: 'thursday', label: 'Thursday' },
+    { key: 'friday', label: 'Friday' },
+    { key: 'saturday', label: 'Saturday' },
+    { key: 'sunday', label: 'Sunday' }
+  ];
+
+  const updateScheduleForDay = (day, newSchedule) => {
+    setFormData(prev => ({
+      ...prev,
+      weeklySchedule: {
+        ...prev.weeklySchedule,
+        [day]: newSchedule
+      }
+    }));
+  };
+
+  const handleCountryChange = (code, name) => {
+    setFormData(prev => ({
+      ...prev,
+      countryCode: code,
+      countryName: name,
+      stateCode: '',
+      stateName: '',
+      district: ''
+    }));
+  };
+
+  const handleStateChange = (code, name) => {
+    setFormData(prev => ({
+      ...prev,
+      stateCode: code,
+      stateName: name,
+      district: ''
+    }));
+  };
+
+  const handleCityChange = (name) => {
+    setFormData(prev => ({
+      ...prev,
+      district: name
+    }));
+  };
+
+  const handleLanguageSelect = (languageValue) => {
+    setFormData(prev => {
+      const currentLanguages = [...prev.knownLanguages];
+      if (currentLanguages.includes(languageValue)) {
+        return { ...prev, knownLanguages: currentLanguages.filter(lang => lang !== languageValue) };
+      } else {
+        return { ...prev, knownLanguages: [...currentLanguages, languageValue] };
+      }
+    });
+  };
+
+  const removeLanguage = (languageValue) => {
+    setFormData(prev => ({
+      ...prev,
+      knownLanguages: prev.knownLanguages.filter(lang => lang !== languageValue)
+    }));
+  };
+
+  const getLanguageLabel = (value) => {
+    const lang = languageOptions.find(l => l.value === value);
+    return lang ? lang.label : value;
+  };
+
   const validateField = (name, value) => {
     switch (name) {
       case 'firstName':
         if (!value) return 'First name is required';
         if (value.length < 2) return 'First name must be at least 2 characters';
-        if (value.length > 50) return 'First name must be less than 50 characters';
-        if (!/^[a-zA-Z\s\-']+$/.test(value)) return 'First name can only contain letters, spaces, hyphens, and apostrophes';
         return '';
 
       case 'lastName':
         if (!value) return 'Last name is required';
         if (value.length < 2) return 'Last name must be at least 2 characters';
-        if (value.length > 50) return 'Last name must be less than 50 characters';
-        if (!/^[a-zA-Z\s\-']+$/.test(value)) return 'Last name can only contain letters, spaces, hyphens, and apostrophes';
         return '';
 
       case 'department':
@@ -81,33 +524,29 @@ const AddDoctor = () => {
 
       case 'specialist':
         if (!value) return 'Specialist field is required';
-        if (value.length < 3) return 'Specialist must be at least 3 characters';
+        return '';
+
+      case 'qualification':
+        if (!value) return 'Qualification is required';
         return '';
 
       case 'fees':
         if (!value) return 'Fees are required';
         if (isNaN(value) || value <= 0) return 'Fees must be a positive number';
-        if (value > 10000) return 'Fees cannot exceed $10,000';
         return '';
 
       case 'phoneNumber':
         if (!value) return 'Phone number is required';
-        const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,4}[-\s\.]?[0-9]{3,4}$/;
-        if (!phoneRegex.test(value)) return 'Please enter a valid phone number';
         return '';
 
       case 'email':
         if (!value) return 'Email address is required';
         const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
         if (!emailRegex.test(value)) return 'Please enter a valid email address';
-        if (value.length > 100) return 'Email must be less than 100 characters';
         return '';
 
       case 'dob':
         if (!value) return 'Date of birth is required';
-        const age = new Date().getFullYear() - new Date(value).getFullYear();
-        if (age < 25) return 'Doctor must be at least 25 years old';
-        if (age > 80) return 'Doctor must be less than 80 years old';
         return '';
 
       case 'gender':
@@ -116,41 +555,46 @@ const AddDoctor = () => {
 
       case 'registrationNumber':
         if (!value) return 'Registration number is required';
-        if (value.length < 5) return 'Registration number must be at least 5 characters';
-        if (!/^[A-Z0-9\-]+$/.test(value)) return 'Registration number can only contain uppercase letters, numbers, and hyphens';
         return '';
 
       case 'knownLanguages':
-        if (!value) return 'At least one language is required';
+        if (!value || value.length === 0) return 'At least one language is required';
         return '';
 
-      case 'address':
-        if (!value) return 'Address is required';
-        if (value.length < 10) return 'Please enter a complete address';
+      case 'countryName':
+        if (!value) return 'Country is required';
         return '';
 
-      case 'pinCode':
-        if (value && !/^\d{5,6}$/.test(value)) return 'Pin code must be 5 or 6 digits';
+      case 'stateName':
+        if (!value) return 'State is required';
         return '';
 
-      case 'userName':
-        if (value && value.length < 4) return 'Username must be at least 4 characters';
-        if (value && !/^[a-zA-Z0-9_]+$/.test(value)) return 'Username can only contain letters, numbers, and underscores';
+      case 'district':
+        if (!value) return 'District is required';
+        return '';
+
+      case 'displayName':
+        if (!value) return 'Display name is required';
+        if (value.length < 4) return 'Display name must be at least 4 characters';
         return '';
 
       case 'password':
-        if (value) {
-          if (value.length < 8) return 'Password must be at least 8 characters';
-          if (!/[A-Z]/.test(value)) return 'Password must contain at least one uppercase letter';
-          if (!/[a-z]/.test(value)) return 'Password must contain at least one lowercase letter';
-          if (!/[0-9]/.test(value)) return 'Password must contain at least one number';
-          if (!/[!@#$%^&*]/.test(value)) return 'Password must contain at least one special character (!@#$%^&*)';
-        }
+        if (!value) return 'Password is required';
+        if (value.length < 8) return 'Password must be at least 8 characters';
         return '';
 
       case 'confirmPassword':
-        if (formData.password && value !== formData.password) return 'Passwords do not match';
+        if (!formData.password && !value) return '';
         if (formData.password && !value) return 'Please confirm your password';
+        if (formData.password && value !== formData.password) return 'Passwords do not match';
+        return '';
+
+      case 'joiningDate':
+        if (!value) return 'Joining date is required';
+        return '';
+
+      case 'experience':
+        if (!value) return 'Experience is required';
         return '';
 
       default:
@@ -161,9 +605,10 @@ const AddDoctor = () => {
   const validateForm = () => {
     const newErrors = {};
     const fieldsToValidate = [
-      'firstName', 'lastName', 'department', 'specialist', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 
-      'knownLanguages', 'address'
+      'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
+      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
+      'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 'password', 
+      'confirmPassword', 'experience'
     ];
     
     fieldsToValidate.forEach(field => {
@@ -171,42 +616,33 @@ const AddDoctor = () => {
       if (error) newErrors[field] = error;
     });
 
-    if (formData.password) {
-      const passwordError = validateField('password', formData.password);
-      if (passwordError) newErrors.password = passwordError;
-      const confirmError = validateField('confirmPassword', formData.confirmPassword);
-      if (confirmError) newErrors.confirmPassword = confirmError;
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
     if (touched[name]) {
-      const error = validateField(name, value);
+      const error = validateField(name, type === 'checkbox' ? (checked ? 'true' : 'false') : value);
       setErrors(prev => ({ ...prev, [name]: error }));
     }
   };
 
   const handleBlur = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setTouched(prev => ({ ...prev, [name]: true }));
-    const error = validateField(name, value);
+    const error = validateField(name, type === 'checkbox' ? (checked ? 'true' : 'false') : value);
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
   const handleImageUpload = (file) => {
-    if (!file) return;
+    if (!file) return false;
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-      return false;
-    }
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
       return false;
     }
     setErrors(prev => ({ ...prev, profileImage: '' }));
@@ -225,15 +661,110 @@ const AddDoctor = () => {
   const removeImage = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
-    setErrors(prev => ({ ...prev, profileImage: '' }));
+  };
+
+  // PERFECT prepareDoctorData function matching Postman payload
+  const prepareDoctorData = () => {
+    let hospitalId = Number(formData.hospitalId);
+    if (isNaN(hospitalId) || hospitalId <= 0) {
+      hospitalId = 5;
+    }
+
+    // Build consultingOne array (days without break)
+    const consultingOneArray = [];
+    // Build consultingTwo array (days with break)
+    const consultingTwoArray = [];
+
+    Object.entries(formData.weeklySchedule).forEach(([day, schedule]) => {
+      if (!schedule.isHoliday) {
+        if (schedule.hasBreak) {
+          consultingTwoArray.push({
+            day: day,
+            morning_session: {
+              open: schedule.morningOpen,
+              close: schedule.morningClose
+            },
+            evening_session: {
+              open: schedule.eveningOpen,
+              close: schedule.eveningClose
+            },
+            is_holiday: false,
+            has_break: true
+          });
+        } else {
+          consultingOneArray.push({
+            day: day,
+            opening_time: schedule.morningOpen,
+            closing_time: schedule.morningClose,
+            is_holiday: false
+          });
+        }
+      }
+    });
+
+    const doctorData = {
+      email: formData.email,
+      password: formData.password,
+      phone: formData.phoneNumber,
+      hospitalId: hospitalId,
+      joiningDate: formData.joiningDate,
+      dob: formData.dob,
+      gender: formData.gender?.toLowerCase(),
+      knowLanguages: formData.knownLanguages,
+      qualification: formData.qualification,
+      address: {
+        country: formData.countryName,
+        state: formData.stateName,
+        district: formData.district,
+        place: formData.place || "",
+        pincode: formData.pincode ? Number(formData.pincode) : ""
+      },
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      fees: Number(formData.fees),
+      department: formData.department,
+      specialist: formData.specialist,
+      consultingOne: consultingOneArray,
+      consultingTwo: consultingTwoArray,
+      bookingOpen: formData.bookingOpen,
+      displayName: formData.displayName || `${formData.firstName} ${formData.lastName}`,
+      experience: formData.experience,
+    };
+
+    // Add registrationNumber if provided (as regNo to match Postman)
+    if (formData.registrationNumber) {
+      doctorData.regNo = formData.registrationNumber;
+    }
+
+    // Add appointmentCount if provided (as appoimentCount to match Postman typo)
+    if (formData.appointmentCount && formData.appointmentCount !== '') {
+      doctorData.appoimentCount = Number(formData.appointmentCount);
+    }
+
+    // Add outDoorConsulting if all fields are present
+    if (formData.outDoorConsultingOpen && 
+        formData.outDoorConsultingClose && 
+        formData.outDoorConsultingPlace) {
+      doctorData.outDoorConsulting = {
+        time: {
+          open: formData.outDoorConsultingOpen,
+          close: formData.outDoorConsultingClose,
+        },
+        place: formData.outDoorConsultingPlace,
+      };
+    }
+
+    return doctorData;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     const allFields = [
-      'firstName', 'lastName', 'department', 'specialist', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 
-      'knownLanguages', 'address'
+      'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
+      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
+      'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
+      'password', 'confirmPassword', 'experience'
     ];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
@@ -241,132 +772,57 @@ const AddDoctor = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
-      setTimeout(() => {
-        const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
+      
+      try {
+        const doctorData = prepareDoctorData();
         
-        // Check if email already exists
-        const emailExists = existingDoctors.some(doc => doc.email === formData.email);
-        if (emailExists) {
-          showErrorToast('❌ Email already exists! Please use a different email address.', 4000);
-          setIsSubmitting(false);
-          return;
-        }
+        console.log( JSON.stringify(doctorData, null, 2));
         
-        const newDoctorId = existingDoctors.length + 1;
-        const newDoctor = {
-          id: newDoctorId,
-          name: `Dr. ${formData.firstName} ${formData.lastName}`,
-          specialty: formData.specialist,
-          experience: calculateExperience(formData.dob),
-          appointments: 0,
-          email: formData.email,
-          phone: formData.phoneNumber,
-          photo: previewImage || `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/${Math.floor(Math.random() * 100)}.jpg`,
-          department: formData.department,
-          registrationNumber: formData.registrationNumber,
-          gender: formData.gender,
-          dob: formData.dob,
-          knownLanguages: formData.knownLanguages,
-          about: formData.about,
-          address: formData.address,
-          country: formData.country,
-          state: formData.state,
-          city: formData.city,
-          pinCode: formData.pinCode,
-          displayName: formData.displayName,
-          userName: formData.userName,
-          // Include salary details
-          salaryDetails: {
-            netSalary: formData.netSalary,
-            earnings: {
-              basic: formData.basic,
-              da: formData.da,
-              hra: formData.hra,
-              conveyance: formData.conveyance,
-              allowance: formData.allowance,
-              medicalAllowance: formData.medicalAllowance,
-              others: formData.otherEarnings
-            },
-            deductions: {
-              tds: formData.tds,
-              pf: formData.pf,
-              leave: formData.leave,
-              profTax: formData.profTax,
-              labourWelfare: formData.labourWelfare,
-              others: formData.otherDeductions
-            }
-          }
-        };
+        const result = await addNewDoctor(doctorData).unwrap();
         
-        const updatedDoctors = [...existingDoctors, newDoctor];
-        localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
-        
-        showAddToast(
-          `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`,
-          5000,
-          {
-            '👨‍⚕️ Name': `Dr. ${formData.firstName} ${formData.lastName}`,
-            '🔬 Specialty': formData.specialist,
-            '🏥 Department': formData.department,
-            '🆔 ID': `#DR${String(newDoctorId).padStart(4, '0')}`,
-            '💰 Fees': `$${formData.fees}`,
-            '📧 Email': formData.email,
-            '📞 Phone': formData.phoneNumber
-          }
+        showSuccessToast(
+          `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`
         );
         
         setIsSubmitting(false);
         
-        // Navigate after toast
         setTimeout(() => {
           navigate('/doctors');
         }, 2000);
-      }, 1000);
+        
+      } catch (error) {
+        console.error('Error adding doctor:', error);
+        
+        if (error.status === 409) {
+          showErrorToast('❌ Email already exists! Please use a different email address.');
+        } else if (error.data?.message) {
+          showErrorToast(`❌ ${error.data.message}`);
+        } else {
+          showErrorToast('❌ Failed to add doctor. Please try again.');
+        }
+        
+        setIsSubmitting(false);
+      }
     } else {
-      // Show validation error toast
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`, 3000);
+        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
       }
-      
-      const firstError = document.querySelector('.error-message');
-      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  };
-
-  const calculateExperience = (dob) => {
-    if (!dob) return '0+ Years';
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-    const experienceYears = Math.max(0, age - 25);
-    return `${experienceYears}+ Years`;
   };
 
   const handleGoBack = () => {
-    if (formData.firstName || formData.lastName || formData.email || previewImage) {
-      showWarningToast('⚠️ Any unsaved data will be lost. Confirm to continue.', 3000);
-      setTimeout(() => {
-        if (window.confirm('Are you sure you want to go back? Any unsaved data will be lost.')) {
-          navigate('/doctors');
-        }
-      }, 100);
-    } else {
-      navigate('/doctors');
-    }
+    navigate('/doctors');
   };
 
-  // Tabs configuration
   const tabs = [
     { id: 'basic', label: 'Basic Info' },
-    { id: 'salary', label: 'Salary Info' }
+    { id: 'professional', label: 'Professional Info' },
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
@@ -381,7 +837,6 @@ const AddDoctor = () => {
 
         <form onSubmit={handleSubmit}>
           <Card>
-            {/* Tabs Header */}
             <div className="border-b border-gray-200 px-6">
               <nav className="-mb-px flex space-x-8">
                 {tabs.map((tab) => (
@@ -401,10 +856,8 @@ const AddDoctor = () => {
               </nav>
             </div>
 
-            {/* Basic Information Tab */}
             {activeTab === 'basic' && (
               <div className="p-6 space-y-6">
-                {/* Image Upload Section */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                   <div className="flex-shrink-0">
                     <div className="relative">
@@ -436,50 +889,158 @@ const AddDoctor = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">Doctor ID:</span>
-                    <span className="text-sm font-medium text-gray-900">Auto-generated</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
                   <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery']} placeholder="Select Department" value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
+                  <Input
+                    label="Hospital ID"
+                    name="hospitalId"
+                    type="number"
+                    icon={Building}
+                    value={formData.hospitalId}
+                    readOnly
+                  />
+                  <Input 
+                    label="Joining Date" 
+                    name="joiningDate" 
+                    type="date" 
+                    icon={Calendar} 
+                    value={formData.joiningDate} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.joiningDate} 
+                    touched={touched.joiningDate} 
+                    required 
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'ENT']} value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
                   <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input label="Qualification" name="qualification" icon={GraduationCap} placeholder="e.g., MBBS, MD" value={formData.qualification} onChange={handleChange} onBlur={handleBlur} error={errors.qualification} touched={touched.qualification} required />
                   <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
                   <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                  <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} placeholder="Select Gender" value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
-                  <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
+                  <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select label="Known Languages" name="knownLanguages" options={['English', 'Spanish', 'French', 'German', 'Chinese', 'Arabic', 'Hindi', 'Russian', 'Japanese']} placeholder="Select Language" value={formData.knownLanguages} onChange={handleChange} onBlur={handleBlur} error={errors.knownLanguages} touched={touched.knownLanguages} required />
+                  <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
+                  <Input label="Experience" name="experience" icon={Briefcase} placeholder="e.g., 5 years" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
-                <Textarea label="About" name="about" rows={3} placeholder="Write a brief description about the doctor's experience, qualifications, and expertise..." value={formData.about} onChange={handleChange} onBlur={handleBlur} error={errors.about} touched={touched.about} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Input label="Appointment Count (Optional)" name="appointmentCount" type="number" icon={Users} placeholder="Number of appointments" value={formData.appointmentCount} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentCount} touched={touched.appointmentCount} />
+                </div>
+
+                {/* Languages Dropdown */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Known Languages <span className="text-red-500">*</span>
+                  </label>
+                  
+                  {formData.knownLanguages.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {formData.knownLanguages.map(lang => (
+                        <span key={lang} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                          {getLanguageLabel(lang)}
+                          <button type="button" onClick={() => removeLanguage(lang)}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                      className={`w-full px-3 py-2 text-left border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between ${
+                        errors.knownLanguages && touched.knownLanguages ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    >
+                      <span>{formData.knownLanguages.length === 0 ? 'Select languages' : `${formData.knownLanguages.length} language(s) selected`}</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {isLanguageDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {languageOptions.map(lang => (
+                          <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.knownLanguages.includes(lang.value)}
+                              onChange={() => handleLanguageSelect(lang.value)}
+                              className="h-4 w-4 text-blue-600 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">{lang.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {touched.knownLanguages && errors.knownLanguages && <p className="text-sm text-red-600">{errors.knownLanguages}</p>}
+                </div>
+
+                <Textarea label="About" name="about" rows={3} placeholder="Write a brief description..." value={formData.about} onChange={handleChange} />
 
                 {/* Address Information */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
-                    <Input label="Address" name="address" icon={MapPin} placeholder="Street address" value={formData.address} onChange={handleChange} onBlur={handleBlur} error={errors.address} touched={touched.address} required />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                      <Select label="Country" name="country" required={false} options={['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France']} placeholder="Select Country" value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
-                      <Input label="State" name="state" required={false} placeholder="State" value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
-                      <Input label="City" name="city" required={false} placeholder="City" value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
-                      <Input label="Pin Code" name="pinCode" required={false} placeholder="Postal code" value={formData.pinCode} onChange={handleChange} onBlur={handleBlur} error={errors.pinCode} touched={touched.pinCode} />
+                    <SearchableDropdown
+                      label="Country"
+                      options={countries}
+                      value={formData.countryCode}
+                      onChange={handleCountryChange}
+                      placeholder="Search for a country..."
+                      icon={MapPin}
+                      required={true}
+                    />
+                    {touched.countryName && errors.countryName && <p className="text-sm text-red-600">{errors.countryName}</p>}
+
+                    <SearchableDropdown
+                      label="State"
+                      options={states}
+                      value={formData.stateCode}
+                      onChange={handleStateChange}
+                      placeholder="Search for a state..."
+                      icon={MapPin}
+                      disabled={!formData.countryCode}
+                      required={true}
+                    />
+                    {touched.stateName && errors.stateName && <p className="text-sm text-red-600">{errors.stateName}</p>}
+
+                    <SearchableDropdown
+                      label="District"
+                      options={cities}
+                      value={formData.district}
+                      onChange={handleCityChange}
+                      placeholder="Search for a district..."
+                      icon={MapPin}
+                      disabled={!formData.stateCode}
+                      required={true}
+                      getOptionLabel={(option) => option.name}
+                      getOptionValue={(option) => option.name}
+                    />
+                    {touched.district && errors.district && <p className="text-sm text-red-600">{errors.district}</p>}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <Input label="Place" name="place" placeholder="Place/Locality" value={formData.place} onChange={handleChange} />
+                      <Input label="Pincode" name="pincode" placeholder="Postal code" value={formData.pincode} onChange={handleChange} />
                     </div>
                   </div>
                 </div>
@@ -488,51 +1049,84 @@ const AddDoctor = () => {
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input label="Display Name" name="displayName" required={false} icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} />
-                    <Input label="Username" name="userName" required={false} icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} />
-                    <Input label="Password" name="password" type="password" required={false} icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
-                    <Input label="Confirm Password" name="confirmPassword" type="password" required={false} icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
+                    <Input label="Display Name" name="displayName" icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} required />
+                    {/* <Input label="Username" name="userName" icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} required /> */}
+                    
+                    <div className="relative">
+                      <Input label="Password" name="password" type={showPassword ? "text" : "password"} required icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400">
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    
+                    <div className="relative">
+                      <Input label="Confirm Password" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} required icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
+                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400">
+                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Salary Information Tab */}
-            {activeTab === 'salary' && (
-              <div className="p-6">
-                <Input 
-                  name="netSalary" 
-                  label="Net Salary"
-                  value={formData.netSalary} 
-                  onChange={handleChange} 
-                  placeholder="Enter net salary" 
-                  className="mb-6" 
-                />
+            {activeTab === 'professional' && (
+              <div className="p-6 space-y-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
                 
-                <h4 className="text-md font-semibold text-gray-800 mb-4">Earnings</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                  <Input name="basic" label="Basic" value={formData.basic} onChange={handleChange} placeholder="Basic" />
-                  <Input name="da" label="DA" value={formData.da} onChange={handleChange} placeholder="DA" />
-                  <Input name="hra" label="HRA" value={formData.hra} onChange={handleChange} placeholder="HRA" />
-                  <Input name="conveyance" label="Conveyance" value={formData.conveyance} onChange={handleChange} placeholder="Conveyance" />
-                  <Input name="allowance" label="Allowance" value={formData.allowance} onChange={handleChange} placeholder="Allowance" />
-                  <Input name="medicalAllowance" label="Medical Allowance" value={formData.medicalAllowance} onChange={handleChange} placeholder="Medical Allowance" />
-                  <Input name="otherEarnings" label="Others" value={formData.otherEarnings} onChange={handleChange} placeholder="Others" />
+                <div className="space-y-4">
+                  {weekDays.map((day) => (
+                    <DayScheduleRow
+                      key={day.key}
+                      day={day.label}
+                      schedule={formData.weeklySchedule[day.key]}
+                      onUpdate={(newSchedule) => updateScheduleForDay(day.key, newSchedule)}
+                    />
+                  ))}
                 </div>
 
-                <h4 className="text-md font-semibold text-gray-800 mb-4">Deductions</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input name="tds" label="TDS" value={formData.tds} onChange={handleChange} placeholder="TDS" />
-                  <Input name="pf" label="PF" value={formData.pf} onChange={handleChange} placeholder="PF" />
-                  <Input name="leave" label="Leave" value={formData.leave} onChange={handleChange} placeholder="Leave" />
-                  <Input name="profTax" label="Prof. Tax" value={formData.profTax} onChange={handleChange} placeholder="Prof. Tax" />
-                  <Input name="labourWelfare" label="Labour Welfare" value={formData.labourWelfare} onChange={handleChange} placeholder="Labour Welfare" />
-                  <Input name="otherDeductions" label="Others" value={formData.otherDeductions} onChange={handleChange} placeholder="Others" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
+                  <Home className="h-5 w-5" /> Out Door Consulting
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input label="Open Time" name="outDoorConsultingOpen" type="time" value={formData.outDoorConsultingOpen} onChange={handleChange} />
+                      <Input label="Close Time" name="outDoorConsultingClose" type="time" value={formData.outDoorConsultingClose} onChange={handleChange} />
+                    </div>
+                  </div>
+                  <Input label="Consulting Place" name="outDoorConsultingPlace" icon={MapPin} placeholder="Enter consulting location" value={formData.outDoorConsultingPlace} onChange={handleChange} />
+                </div>
+
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
+                  <Video className="h-5 w-5" /> Booking Status
+                </h3>
+                
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Booking Availability</label>
+                      <p className="text-xs text-gray-500">Allow patients to book appointments with this doctor</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, bookingOpen: !prev.bookingOpen }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  <div className="mt-2">
+                    {formData.bookingOpen ? <span className="text-xs text-green-600">Bookings Open</span> : <span className="text-xs text-red-600">Bookings Closed</span>}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
               <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>

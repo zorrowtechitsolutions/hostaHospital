@@ -1,35 +1,145 @@
 // src/components/Doctor/AppointmentManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { Clock, X, Save, Settings, Users, Calendar, AlertCircle } from 'lucide-react';
+import { useUpdateDoctorMutation } from "../../../app/service/doctorApi";
+import { showSaveToast, showErrorToast } from '../ui/Toast';
 
-const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null }) => {
+const AppointmentManagement = ({
+  isOpen,
+  onClose,
+  onSave,
+  doctor = null,
+  refetchDoctors
+}) => {
   const [selectionType, setSelectionType] = useState('manual_count');
   const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(5);
-  const [manualCount, setManualCount] = useState(10);
+  const [manualCount, setManualCount] = useState(21);
+  const [updateDoctor, { isLoading }] = useUpdateDoctorMutation();
 
   useEffect(() => {
     if (doctor && doctor.id) {
+      // Load saved settings from localStorage
       const savedSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
       const settings = savedSettings[doctor.id];
       if (settings) {
         setSelectionType(settings.selectionType || 'manual_count');
         setAutoDeclineMinutes(settings.autoDeclineMinutes || 5);
-        setManualCount(settings.manualCount || 10);
+        setManualCount(settings.manualCount || 21);
+      } else {
+        if (doctor.autoDecline) {
+          setSelectionType('auto_decline');
+          setAutoDeclineMinutes(doctor.autoDecline);
+        }
+
+        if (doctor.appointmentCount) {
+          setSelectionType('manual_count');
+          setManualCount(doctor.appointmentCount);
+        }
       }
     }
   }, [doctor]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    onSave({
-      selectionType,
-      autoDeclineMinutes,
-      manualCount,
-      doctorId: doctor?.id,
-      doctorName: doctor?.name
-    });
-    onClose();
+  const handleSave = async () => {
+    try {
+      // Validate doctor data
+      if (!doctor || !doctor.id) {
+        console.error('Doctor data is missing:', doctor);
+        showErrorToast('Doctor information is missing. Please try again.', 4000);
+        return;
+      }
+
+      // Get doctor name
+      const doctorName = doctor.displayName || 
+                        `${doctor.firstName} ${doctor.lastName}` || 
+                        doctor.name || 
+                        'Doctor';
+
+      // Prepare payload for API  
+      let body = {};
+
+      if (selectionType === "manual_count") {
+        body = {
+          appointmentCount: Number(manualCount),
+          autoDecline: 0,
+        };
+      }
+
+      if (selectionType === "auto_decline") {
+        body = {
+          autoDecline: Number(autoDeclineMinutes),
+          appointmentCount: 0,
+        };
+      }
+
+      const payload = {
+        id: doctor.id,
+        updateDoctor: body,
+      };
+
+      console.log("FINAL PAYLOAD", payload);
+
+      const result = await updateDoctor(payload).unwrap();
+
+      console.log("Doctor updated successfully", result);
+
+      if (refetchDoctors) {
+        await refetchDoctors();
+      }
+      
+      // Create complete settings object for callback and localStorage
+      const settingsToSave = {
+        doctorId: doctor.id,
+        doctorName: doctorName,
+        selectionType: selectionType,
+        autoDeclineMinutes: selectionType === 'auto_decline' ? autoDeclineMinutes : null,
+        manualCount: selectionType === 'manual_count' ? manualCount : null,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Settings to save:', settingsToSave);
+      
+      // Save to localStorage
+      const savedSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
+      savedSettings[doctor.id] = settingsToSave;
+      localStorage.setItem('appointmentSettings', JSON.stringify(savedSettings));
+      
+      // Show toast notification (this is the nice popup, not an alert)
+      const settingDescription = selectionType === 'manual_count' 
+        ? `Maximum ${manualCount} appointments per day` 
+        : `Auto-decline after ${autoDeclineMinutes} minutes`;
+      
+      showSaveToast(`Settings saved for ${doctorName}!`, 4000, {
+        Doctor: doctorName,
+        'Setting Type': selectionType === 'manual_count' ? 'Manual Count Limit' : 'Auto Decline',
+        'Configuration': settingDescription,
+        'Status': 'Successfully applied'
+      });
+      
+      // Call the onSave callback with complete settings
+      if (onSave && typeof onSave === 'function') {
+        onSave(settingsToSave);
+      }
+      
+      // Close the modal
+      onClose();
+      
+    } catch (error) {
+      console.error("Update failed:", error);
+      const errorMessage = error?.data?.message || error?.message || 'Unknown error occurred';
+      const doctorName = doctor?.displayName || 
+                        `${doctor?.firstName} ${doctor?.lastName}` || 
+                        doctor?.name || 
+                        'Doctor';
+      
+      // Show error toast instead of alert
+      showErrorToast(`Failed to save settings for ${doctorName}`, 5000, {
+        Doctor: doctorName,
+        'Error Details': errorMessage,
+        'Action Required': 'Please try again or contact support'
+      });
+    }
   };
 
   return (
@@ -55,7 +165,9 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null }) => {
           {doctor && (
             <div className="mb-4 pb-3 border-b border-gray-100">
               <p className="text-sm text-gray-600">
-                <span className="font-medium">{doctor.name}</span> • {doctor.specialty}
+                <span className="font-medium">
+                  {doctor.displayName || `${doctor.firstName} ${doctor.lastName}` || doctor.name}
+                </span> • {doctor.specialist || doctor.specialty}
               </p>
             </div>
           )}
@@ -144,59 +256,78 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null }) => {
             </div>
           )}
 
-          {selectionType === 'manual_count' && (
-            <div className="mt-5 pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-2 mb-3">
-                <Users size={14} className="text-gray-500" />
-                <h4 className="text-sm font-medium text-gray-700">Manual Count Configuration</h4>
-              </div>
-              
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Maximum Bookings per Day
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={manualCount}
-                    onChange={(e) => setManualCount(parseInt(e.target.value) || 1)}
-                    className="w-24 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#3676ae]"
-                  />
-                  <span className="text-xs text-gray-500">appointments per day</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Maximum number of appointments that can be booked per day
-                </p>
-              </div>
+{selectionType === 'manual_count' && (
+  <div className="mt-5 pt-4 border-t border-gray-100">
+    <div className="flex items-center gap-2 mb-3">
+      <Users size={14} className="text-gray-500" />
+      <h4 className="text-sm font-medium text-gray-700">Manual Count Configuration</h4>
+    </div>
+    
+    <div className="mb-3">
+      <label className="block text-xs font-medium text-gray-600 mb-1">
+        Maximum Bookings per Day
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min="1"
+          value={manualCount}
+          onChange={(e) => {
+            let value = parseInt(e.target.value);
+            if (e.target.value === '') {
+              setManualCount('');
+              return;
+            }
+            if (!isNaN(value)) {
+              // Remove the 100 limit - only enforce minimum of 1
+              if (value < 1) {
+                setManualCount(1);
+              } else {
+                setManualCount(value);
+              }
+            }
+          }}
+          onBlur={() => {
+            if (manualCount === '' || manualCount === null) {
+              setManualCount(1);
+            }
+          }}
+          className="w-32 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#3676ae]"
+        />
+        <span className="text-xs text-gray-500">appointments per day (unlimited maximum)</span>
+      </div>
+      <p className="text-xs text-gray-400 mt-1">
+        Maximum number of appointments that can be booked per day. No upper limit.
+      </p>
+    </div>
 
-              <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-100">
-                <div className="flex items-center gap-2">
-                  <AlertCircle size={12} className="text-gray-400" />
-                  <p className="text-xs text-gray-600">
-                    Current: Maximum <span className="font-medium">{manualCount} appointments</span> allowed per day
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
+    <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-100">
+      <div className="flex items-center gap-2">
+        <AlertCircle size={12} className="text-gray-400" />
+        <p className="text-xs text-gray-600">
+          Current: Maximum <span className="font-medium">{manualCount || 'unlimited'}</span> appointments allowed per day
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+</div>
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
           <button
             onClick={onClose}
             className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            disabled={isLoading}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-[#1C62A0] rounded hover:bg-[#6b97bd] transition-colors flex items-center gap-1"
+            disabled={isLoading}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-[#1C62A0] rounded hover:bg-[#6b97bd] transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={12} />
-            Save Settings
+            {isLoading ? 'Saving...' : 'Save Settings'}
           </button>
         </div>
       </div>

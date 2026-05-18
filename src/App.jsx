@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth, AuthProvider } from "./context/AuthContext";
+
 import {
   generateToken,
   listenMessages,
@@ -48,6 +49,7 @@ import { ToastProvider } from "./components/ui/Toast";
 import EmailTemplates from "./components/Settings/Email";
 import Profile from "./components/MyProfile/Profile";
 import AddPatient from "./components/patients/AddPatientModal";
+
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -280,7 +282,7 @@ function App() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
               <Route path="/roles" element={<UserPermissions />} />
-              <Route path="/permissions/:roleName" element={<PermissionList />} /> 
+              <Route path="/permissions/:roleId" element={<PermissionList />} /> 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
               <Route path="/visits" element={<Visits/>} />
               <Route path="/appointments" element={<Appointments/>} />

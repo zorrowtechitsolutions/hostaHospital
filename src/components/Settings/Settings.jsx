@@ -1,19 +1,65 @@
-// src/components/Settings/Settings.jsx - With address information like Register page
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+// src/components/Settings/Settings.jsx - WITH LAZY LOADING (RequestTable pattern)
+import React, { useState, useCallback, useMemo, useEffect, useRef, Suspense, lazy } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Card, Input, Tabs } from '../ui';
-import Security from './Security';
-import Preference from './Preference';
-import Notification from './Notification';
-import UserPermissions from './UserPermissions';
-import Billing from './Billing';
-import Map from './Map';
-import EmailTemplates from './Email';
-import { showSuccessToast, showWarningToast, showInfoToast } from '../ui/Toast';
+import { showSuccessToast, showWarningToast, showInfoToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import { MapPin, ChevronDown } from 'lucide-react'; // Add MapPin here
+import { MapPin, ChevronDown, Building } from 'lucide-react';
+import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
+import { useAuth } from '../../context/AuthContext';
 
-// Custom Searchable Dropdown Component
+// Lazy load non-critical components (same pattern as RequestTable imports)
+const Security = lazy(() => import('./Security'));
+const Preference = lazy(() => import('./Preference'));
+const Notification = lazy(() => import('./Notification'));
+const UserPermissions = lazy(() => import('./UserPermissions'));
+const Billing = lazy(() => import('./Billing'));
+const Map = lazy(() => import('./Map'));
+const EmailTemplates = lazy(() => import('./Email'));
+
+// Skeleton Loader Component (similar to RequestTable's SkeletonLoader)
+const TabSkeletonLoader = () => (
+  <div className="space-y-6">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="h-6 w-40 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mt-1"></div>
+      </div>
+      <div className="p-6 space-y-6">
+        {/* Form fields skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Address section skeleton */}
+        <div className="border-t border-gray-200 pt-4 mt-2">
+          <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Buttons skeleton */}
+        <div className="flex space-x-3 pt-4">
+          <div className="h-10 w-28 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// SearchableDropdown Component (unchanged)
 const SearchableDropdown = ({ 
   label, 
   options, 
@@ -116,10 +162,21 @@ const SearchableDropdown = ({
 };
 
 const Settings = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
-  // Address fields using country-state-city
+  // ==================== ALL HOOKS FIRST ====================
+  
+  // API hooks
+  const hospitalId = user?.id;
+  const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
+    skip: !hospitalId,
+  });
+  const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
+
+  // State hooks
   const [countryCode, setCountryCode] = useState("");
   const [countryName, setCountryName] = useState("");
   const [stateCode, setStateCode] = useState("");
@@ -129,12 +186,12 @@ const Settings = () => {
   const [pincode, setPincode] = useState("");
 
   const [hospitalInfo, setHospitalInfo] = useState({
-    name: 'AL ABEER HOSPITAL KIZHISSERI',
-    email: 'alabeerh@gmail.com',
-    hospitalType: 'Multi-Specialty',
-    mobileNumber: '+91 9876543210',
+    name: '',
+    email: '',
+    hospitalType: '',
+    mobileNumber: '',
     createdDate: 'N/A',
-    lastUpdated: 'November 30, 2025 at 12:54 PM',
+    lastUpdated: 'N/A',
   });
 
   const [workingHours, setWorkingHours] = useState({
@@ -151,48 +208,147 @@ const Settings = () => {
   const [is24HourMode, setIs24HourMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: hospitalInfo.name,
-    email: hospitalInfo.email,
-    hospitalType: hospitalInfo.hospitalType,
-    mobileNumber: hospitalInfo.mobileNumber,
-    streetAddress: streetAddress,
-    countryCode: countryCode,
-    countryName: countryName,
-    stateCode: stateCode,
-    stateName: stateName,
-    cityName: cityName,
-    pincode: pincode,
+    name: '',
+    email: '',
+    hospitalType: '',
+    mobileNumber: '',
+    streetAddress: '',
+    countryCode: '',
+    countryName: '',
+    stateCode: '',
+    stateName: '',
+    cityName: '',
+    pincode: '',
   });
 
-  // Get dropdown options
+  // Non-hook computed values
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(editForm.countryCode);
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
+
+  // Debug token on mount
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    console.log("🔑 Current token in Settings:", token ? `${token.substring(0, 30)}...` : "NO TOKEN");
+    console.log("🏥 Hospital ID:", hospitalId);
+    console.log("👤 User object:", user);
+  }, [hospitalId, user]);
+
+  // Check for fetch errors (401 etc)
+  useEffect(() => {
+    if (fetchError) {
+      console.error("❌ Fetch error:", fetchError);
+      if (fetchError.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...', 2000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      }
+    }
+  }, [fetchError, logout, navigate]);
+
+  // Check for update errors
+  useEffect(() => {
+    if (updateError) {
+      console.error("❌ Update error:", updateError);
+      const status = updateError?.status || updateError?.originalStatus;
+      if (status === 401) {
+        showErrorToast('Authentication failed. Please log in again.', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(updateError?.data?.message || 'Failed to update hospital information', 4000);
+      }
+      resetUpdate?.();
+    }
+  }, [updateError, logout, navigate, resetUpdate]);
+
+  // ==================== FIXED: Handle hospital data extraction ====================
+  useEffect(() => {
+    if (hospitalData) {
+      // FIXED: Extract hospital data correctly - handle both response formats
+      const hospital = hospitalData.data || hospitalData;
+      console.log("🏥 Hospital data loaded:", hospital);
+      
+      setHospitalInfo({
+        name: hospital.name || '',
+        email: hospital.email || '',
+        hospitalType: hospital.type || '',
+        mobileNumber: hospital.phone || '',
+        createdDate: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'N/A',
+        lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
+      });
+      
+      if (hospital.address) {
+        setStreetAddress(hospital.address.place || '');
+        setCountryName(hospital.address.country || '');
+        setStateName(hospital.address.state || '');
+        setCityName(hospital.address.district || '');
+        setPincode(hospital.address.pincode?.toString() || '');
+        
+        const foundCountry = countries.find(c => c.name === hospital.address.country);
+        if (foundCountry) {
+          setCountryCode(foundCountry.isoCode);
+          const foundState = State.getStatesOfCountry(foundCountry.isoCode).find(s => s.name === hospital.address.state);
+          if (foundState) {
+            setStateCode(foundState.isoCode);
+          }
+        }
+      }
+    }
+  }, [hospitalData, countries]);
 
   useEffect(() => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
 
-  // Load saved address data from localStorage on component mount
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('hospitals') || '[]');
-    const currentHospital = userData[0]; // Assuming first hospital is current
-    if (currentHospital?.address) {
-      setStreetAddress(currentHospital.address.street || '');
-      setCountryCode(currentHospital.address.countryCode || '');
-      setCountryName(currentHospital.address.country || '');
-      setStateCode(currentHospital.address.stateCode || '');
-      setStateName(currentHospital.address.state || '');
-      setCityName(currentHospital.address.city || '');
-      setPincode(currentHospital.address.pincode || '');
-    }
-  }, []);
-
-  const handleEditSubmit = useCallback((e) => {
+  // Handle edit submit with better error handling
+  const handleEditSubmit = useCallback(async (e) => {
     e.preventDefault();
     setIsSaving(true);
     
-    setTimeout(() => {
+    // Check token before making request
+    const token = localStorage.getItem("accessToken");
+    console.log("🔑 Token before update:", token ? `${token.substring(0, 30)}...` : "NO TOKEN");
+    
+    if (!token) {
+      showErrorToast('No authentication token found. Please log in again.', 4000);
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
+      setIsSaving(false);
+      return;
+    }
+    
+    try {
+      const updateData = {
+        name: editForm.name,
+        email: editForm.email,
+        type: editForm.hospitalType,
+        phone: editForm.mobileNumber,
+        address: {
+          country: editForm.countryName,
+          state: editForm.stateName,
+          district: editForm.cityName,
+          place: editForm.streetAddress,
+          pincode: Number(editForm.pincode)
+        }
+      };
+      
+      console.log("📤 Sending update request for hospital ID:", hospitalId);
+      console.log("📦 Update data:", updateData);
+      
+      const result = await updateHospital({ 
+        id: hospitalId, 
+        updateHospital: updateData 
+      }).unwrap();
+      
+      console.log("✅ Update successful:", result);
+      
       const now = new Date();
       const formattedDate = now.toLocaleString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
@@ -207,7 +363,6 @@ const Settings = () => {
         lastUpdated: formattedDate 
       }));
       
-      // Save address changes
       setStreetAddress(editForm.streetAddress);
       setCountryCode(editForm.countryCode);
       setCountryName(editForm.countryName);
@@ -216,21 +371,27 @@ const Settings = () => {
       setCityName(editForm.cityName);
       setPincode(editForm.pincode);
       
-      showSuccessToast(
-        'Hospital information updated successfully!',
-        4000,
-        {
-          'Hospital Name': editForm.name,
-          'Email': editForm.email,
-          'Type': editForm.hospitalType,
-          'Address': `${editForm.streetAddress}, ${editForm.cityName}, ${editForm.stateName}, ${editForm.countryName} - ${editForm.pincode}`
-        }
-      );
-      
+      showSuccessToast('Hospital information updated successfully!', 4000);
       setIsEditing(false);
+      refetch();
+      
+    } catch (error) {
+      console.error("❌ Update error details:", error);
+      
+      // Handle specific error cases
+      if (error.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(error.data?.message || error.message || 'Failed to update hospital information', 4000);
+      }
+    } finally {
       setIsSaving(false);
-    }, 500);
-  }, [editForm]);
+    }
+  }, [editForm, hospitalId, updateHospital, refetch, logout, navigate]);
 
   const handleEditClick = useCallback(() => {
     setEditForm({
@@ -325,8 +486,7 @@ const Settings = () => {
   }, []);
 
   const tabs = useMemo(() => ['General', 'Security', 'Preferences', 'Notifications', 'Email Templates', 'User Permissions', 'Map'], []);
-
-  const days = [
+  const days = useMemo(() => [
     { key: 'monday', label: 'Monday' },
     { key: 'tuesday', label: 'Tuesday' },
     { key: 'wednesday', label: 'Wednesday' },
@@ -334,7 +494,7 @@ const Settings = () => {
     { key: 'friday', label: 'Friday' },
     { key: 'saturday', label: 'Saturday' },
     { key: 'sunday', label: 'Sunday' },
-  ];
+  ], []);
 
   const GeneralTab = useMemo(() => (
     <div className="space-y-8">
@@ -353,7 +513,6 @@ const Settings = () => {
                 <div><label className="block text-sm font-medium text-gray-700">Mobile Number</label><p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p></div>
               </div>
               
-              {/* Address Display */}
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
                 <div className="grid grid-cols-1 gap-3">
@@ -361,7 +520,7 @@ const Settings = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><label className="block text-sm font-medium text-gray-700">Country</label><p className="mt-1 text-gray-900">{countryName || 'Not provided'}</p></div>
                     <div><label className="block text-sm font-medium text-gray-700">State</label><p className="mt-1 text-gray-900">{stateName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">City</label><p className="mt-1 text-gray-900">{cityName || 'Not provided'}</p></div>
+                    <div><label className="block text-sm font-medium text-gray-700">District</label><p className="mt-1 text-gray-900">{cityName || 'Not provided'}</p></div>
                     <div><label className="block text-sm font-medium text-gray-700">Pincode</label><p className="mt-1 text-gray-900">{pincode || 'Not provided'}</p></div>
                   </div>
                 </div>
@@ -385,24 +544,24 @@ const Settings = () => {
                     required
                   >
                     <option value="">Select hospital type</option>
-                    <option value="General Hospital">General Hospital</option>
-                    <option value="Multi-Specialty">Multi-Specialty</option>
-                    <option value="Super Specialty">Super Specialty</option>
-                    <option value="Teaching Hospital">Teaching Hospital</option>
-                    <option value="Clinic">Clinic</option>
-                    <option value="Nursing Home">Nursing Home</option>
+                    <option value="Allopathy">Allopathy</option>
+                    <option value="Homeopathy">Homeopathy</option>
+                    <option value="Ayurveda">Ayurveda</option>
+                    <option value="Unani">Unani</option>
+                    <option value="Physiotherapy">Physiotherapy</option>
+                    <option value="Mental Health">Mental Health</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 
                 <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />
               </div>
 
-              {/* Address Edit Section */}
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
                 
                 <div className="space-y-4">
-
                   <SearchableDropdown
                     label="Country"
                     options={countries}
@@ -434,7 +593,8 @@ const Settings = () => {
                     getOptionValue={(option) => option.name}
                     optionKey={(option, index) => index}
                   />
-                   <Input 
+                  
+                  <Input 
                     label="Street Address" 
                     name="streetAddress" 
                     value={editForm.streetAddress} 
@@ -464,7 +624,6 @@ const Settings = () => {
         </div>
       </Card>
 
-      {/* Working Hours Section */}
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Working Hours</h2>
@@ -535,7 +694,6 @@ const Settings = () => {
         </div>
       </Card>
 
-      {/* Account Information Card */}
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
@@ -555,21 +713,42 @@ const Settings = () => {
         </div>
       </Card>
     </div>
-  ), [isEditing, hospitalInfo, editForm, workingHours, is24HourMode, isSaving, streetAddress, countryName, stateName, cityName, pincode, countries, states, cities, handleEditClick, handleEditSubmit, handleInputChange, handleCancelEdit, handleWorkingHourChange, handleToggleClosed, handleSet24HourMode, handleCountryChange, handleStateChange, handleCityChange]);
+  ), [isEditing, hospitalInfo, editForm, workingHours, is24HourMode, isSaving, streetAddress, countryName, stateName, cityName, pincode, countries, states, cities, handleEditClick, handleEditSubmit, handleInputChange, handleCancelEdit, handleWorkingHourChange, handleToggleClosed, handleSet24HourMode, handleCountryChange, handleStateChange, handleCityChange, days]);
+
+  // Wrapper function for lazy-loaded tabs (similar to RequestTable's pattern)
+  const renderLazyTab = (Component, props = {}) => (
+    <Suspense fallback={<TabSkeletonLoader />}>
+      <Component {...props} />
+    </Suspense>
+  );
 
   const renderTabContent = useCallback(() => {
     switch (activeTab) {
-      case 'General': return GeneralTab;
-      case 'Security': return <Security />;
-      case 'Preferences': return <Preference />;
-      case 'Notifications': return <Notification />;
-      case 'Email Templates': return <EmailTemplates />;
-      case 'User Permissions': return <UserPermissions />;
-      case 'Map': return <Map />;
-      default: return null;
+      case 'General': 
+        return GeneralTab;
+      case 'Security': 
+        return renderLazyTab(Security);
+      case 'Preferences': 
+        return renderLazyTab(Preference);
+      case 'Notifications': 
+        return renderLazyTab(Notification);
+      case 'Email Templates': 
+        return renderLazyTab(EmailTemplates);
+      case 'User Permissions': 
+        return renderLazyTab(UserPermissions);
+      case 'Map': 
+        return renderLazyTab(Map);
+      default: 
+        return null;
     }
   }, [activeTab, GeneralTab]);
 
+  // Loading state with skeleton (similar to RequestTable pattern)
+  if (isLoadingHospital) {
+    return <TabSkeletonLoader />;
+  }
+
+  // ==================== FINAL RETURN ====================
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

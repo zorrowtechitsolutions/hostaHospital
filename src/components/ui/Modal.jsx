@@ -38,7 +38,9 @@ export const Modal = ({
         <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={onClose} />
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
         
-        <div className={`
+        <div
+        onClick={(e) => e.stopPropagation()}
+        className={`
           inline-block overflow-hidden text-left align-bottom transition-all 
           transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:w-full
           ${sizes[size]}
