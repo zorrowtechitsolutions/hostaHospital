@@ -8,49 +8,7 @@ import {
 } from "lucide-react";
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
-import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
-
-// Mock doctor data for when API is unavailable
-const MOCK_DOCTOR = {
-  id: 7,
-  hospitalId: 27,
-  firstName: "Michael",
-  lastName: "Brown",
-  displayName: "Dr. Michael Brown",
-  userName: "drbrown",
-  email: "brown@gmail.com",
-  phone: "8714239987",
-  specialist: "Cardiologist",
-  department: "Cardiology",
-  qualification: "MD, FACC",
-  experience: "15+ years",
-  fees: 350,
-  about: "Experienced cardiologist specializing in heart disease prevention and treatment.",
-  bookingOpen: true,
-  image: "https://randomuser.me/api/portraits/men/32.jpg",
-  address: {
-    country: "USA",
-    state: "California",
-    district: "Los Angeles",
-    place: "Beverly Hills",
-    pincode: "90210"
-  },
-  knowLanguages: ["English", "Spanish"],
-  consultingOne: [
-    { day: "monday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "tuesday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "wednesday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "thursday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "friday", opening_time: "09:00 AM", closing_time: "05:00 PM" }
-  ],
-  consultingTwo: [
-    { 
-      day: "saturday", 
-      morning_session: { open: "10:00 AM", close: "01:00 PM" },
-      evening_session: { open: "02:00 PM", close: "05:00 PM" }
-    }
-  ]
-};
+import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 
 const ViewDoctor = () => {
   const { id } = useParams();
@@ -59,58 +17,41 @@ const ViewDoctor = () => {
   // Clean the ID
   const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
   
-  const [useMockData, setUseMockData] = useState(false);
+  const [activeTab, setActiveTab] = useState("basic");
   
+  // Use getDoctorById query for single doctor
   const {
     data: doctorResponse,
     isLoading,
     error,
     refetch,
-  } = useGetDoctorsQuery({ doctorId: doctorId }, {
-    skip: useMockData // Skip API call if using mock data
+  } = useGetDoctorByIdQuery(doctorId, {
+    skip: !doctorId
   });
   
   console.log("=== VIEW DOCTOR DEBUG ===");
   console.log("Doctor ID:", doctorId);
   console.log("API Response:", doctorResponse);
   console.log("API Error:", error);
-  console.log("Using Mock Data:", useMockData);
   
-  // Extract doctor from API response or use mock data
-  let doctor = null;
-  if (!useMockData && doctorResponse?.data) {
-    const doctors = doctorResponse.data || [];
-    doctor = doctors.find(doc => String(doc.id) === String(doctorId));
-  }
-  
-  // If API failed or doctor not found, use mock data
-  useEffect(() => {
-    if (error || (!doctor && !isLoading)) {
-      console.log("API failed, switching to mock data");
-      setUseMockData(true);
-    }
-  }, [error, doctor, isLoading]);
-  
-  // Use mock doctor if API fails
-  if (useMockData && !doctor) {
-    doctor = { ...MOCK_DOCTOR, id: parseInt(doctorId) || 7 };
-  }
+  // Extract doctor from response
+  const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
   
   console.log("Extracted doctor:", doctor);
   
-  const [activeTab, setActiveTab] = useState("requests");
+  const doctorName = doctor?.displayName || `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim() || "Doctor";
 
-  // Loading state (only show if using API and loading)
-  if (!useMockData && isLoading) {
+  // Loading state
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader centered />
+        <Loader centered text="Loading doctor details..." />
       </div>
     );
   }
   
-  // Error state with option to use mock data
-  if (error && !useMockData) {
+  // Error state
+  if (error) {
     console.error("Error fetching doctor:", error);
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -125,18 +66,11 @@ const ViewDoctor = () => {
             </p>
             <div className="flex gap-3 justify-center mt-6">
               <Button onClick={() => refetch()} className="px-4 py-2">
-                Retry API
-              </Button>
-              <Button 
-                onClick={() => setUseMockData(true)} 
-                variant="outline"
-                className="px-4 py-2"
-              >
-                Use Demo Data
+                Retry
               </Button>
               <Button 
                 onClick={() => navigate('/doctors')} 
-                variant="ghost"
+                variant="outline"
                 className="px-4 py-2"
               >
                 Back to Doctors
@@ -148,6 +82,7 @@ const ViewDoctor = () => {
     );
   }
   
+  // Doctor not found
   if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -155,9 +90,6 @@ const ViewDoctor = () => {
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
             <div className="flex gap-3 justify-center mt-6">
-              <Button onClick={() => setUseMockData(true)} className="px-4 py-2">
-                Use Demo Data
-              </Button>
               <Button onClick={() => navigate('/doctors')} variant="outline" className="px-4 py-2">
                 Back to Doctors
               </Button>
@@ -168,40 +100,50 @@ const ViewDoctor = () => {
     );
   }
 
-  const doctorName = doctor?.displayName || `${doctor?.firstName} ${doctor?.lastName}`;
+  // Helper to format consulting hours
+  const getConsultingHours = () => {
+    const hours = [];
+    
+    // Process consultingOne (single session days)
+    if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
+      doctor.consultingOne.forEach(item => {
+        hours.push({
+          day: item.day,
+          hours: `${item.opening_time || 'N/A'} - ${item.closing_time || 'N/A'}`,
+          type: 'single'
+        });
+      });
+    }
+    
+    // Process consultingTwo (split session days)
+    if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
+      doctor.consultingTwo.forEach(item => {
+        const morning = item.morning_session;
+        const evening = item.evening_session;
+        hours.push({
+          day: item.day,
+          hours: `${morning?.open || 'N/A'} - ${morning?.close || 'N/A'} & ${evening?.open || 'N/A'} - ${evening?.close || 'N/A'}`,
+          type: 'split'
+        });
+      });
+    }
+    
+    return hours;
+  };
+
+  const consultingHours = getConsultingHours();
+  
+  // Get day order for sorting
+  const dayOrder = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
+  const sortedHours = [...consultingHours].sort((a, b) => (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99));
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6">
-        {/* Mock Data Banner */}
-        {useMockData && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-yellow-600">⚠️</span>
-                <span className="text-sm text-yellow-800">
-                  Using demo data. API is currently unavailable.
-                </span>
-              </div>
-              <Button 
-                onClick={() => {
-                  setUseMockData(false);
-                  refetch();
-                }} 
-                size="sm"
-                variant="outline"
-                className="text-xs"
-              >
-                Try API Again
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-800">Doctor Details</h1>
-          <Button variant="outline" onClick={() => navigate(-1)} className="text-sm">
+          <Button variant="outline" onClick={() => navigate('/doctors')} className="text-sm">
             ← Back to Doctors
           </Button>
         </div>
@@ -210,20 +152,22 @@ const ViewDoctor = () => {
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="flex items-start gap-6">
             <img 
-              src={doctor?.image || MOCK_DOCTOR.image} 
+              src={doctor?.image || `https://randomuser.me/api/portraits/${Math.random() > 0.5 ? 'men' : 'women'}/1.jpg`} 
               className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" 
               alt={doctorName}
-              onError={(e) => e.target.src = MOCK_DOCTOR.image}
+              onError={(e) => {
+                e.target.src = `https://randomuser.me/api/portraits/men/1.jpg`;
+              }}
             />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
-                <Badge variant="outline" className="text-xs">ID: DR{String(doctor?.id).padStart(5, "0")}</Badge>
+                <Badge variant="outline" className="text-xs">ID: DR{String(doctor?.id).padStart(4, '0')}</Badge>
                 <Badge variant={doctor?.bookingOpen !== false ? "success" : "danger"} className="text-xs">
                   {doctor?.bookingOpen !== false ? "Bookings Open" : "Bookings Closed"}
                 </Badge>
               </div>
-              <p className="text-gray-600 text-sm mb-2">{doctor?.specialist || doctor?.department || "Cardiology"}</p>
+              <p className="text-gray-600 text-sm mb-2">{doctor?.specialist || doctor?.department || "General Physician"}</p>
               <p className="text-gray-500 text-sm mb-3">{doctor?.about || "No description available"}</p>
               <div className="flex items-center gap-4 text-gray-500 text-sm">
                 <div className="flex items-center gap-2">
@@ -297,11 +241,11 @@ const ViewDoctor = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">First Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.firstName || "Michael"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.firstName || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Last Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.lastName || "Brown"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.lastName || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Display Name</span>
@@ -309,7 +253,7 @@ const ViewDoctor = () => {
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Hospital ID</span>
-                      <span className="text-gray-800">{doctor?.hospitalId || "HOS027"}</span>
+                      <span className="text-gray-800">{doctor?.hospitalId || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -321,25 +265,27 @@ const ViewDoctor = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Department</span>
-                      <span className="text-gray-800 font-medium">{doctor?.department || "Cardiology"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.department || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Specialist</span>
-                      <span className="text-gray-800 font-medium">{doctor?.specialist || "Cardiologist"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.specialist || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Qualification</span>
-                      <span className="text-gray-800 font-medium">{doctor?.qualification || "MD, FACC"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.qualification || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Experience</span>
-                      <span className="text-gray-800 font-medium text-green-600">{doctor?.experience || "15+ years"}</span>
+                      <span className="text-gray-800 font-medium">{doctor?.experience || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Fees</span>
-                      <span className="text-gray-800 font-medium text-green-600">
-                        ${doctor?.fees || "350"}
-                      </span>
+                      <span className="text-gray-800 font-medium">${doctor?.fees || "0"}</span>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <span className="text-gray-500">Registration Number</span>
+                      <span className="text-gray-800 font-medium">{doctor?.regNo || doctor?.registrationNumber || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -351,14 +297,44 @@ const ViewDoctor = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Email</span>
-                      <span className="text-gray-800">{doctor?.email || "brown@gmail.com"}</span>
+                      <span className="text-gray-800">{doctor?.email || "N/A"}</span>
                     </div>
                     <div className="flex justify-between py-2">
                       <span className="text-gray-500">Phone</span>
-                      <span className="text-gray-800">{doctor?.phone || "8714239987"}</span>
+                      <span className="text-gray-800">{doctor?.phone || "N/A"}</span>
                     </div>
                   </div>
                 </div>
+
+                {doctor?.address && Object.values(doctor.address).some(v => v) && (
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+                      Address
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex justify-between py-2">
+                        <span className="text-gray-500">Country</span>
+                        <span className="text-gray-800">{doctor.address?.country || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-gray-500">State</span>
+                        <span className="text-gray-800">{doctor.address?.state || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-gray-500">District</span>
+                        <span className="text-gray-800">{doctor.address?.district || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-gray-500">Place</span>
+                        <span className="text-gray-800">{doctor.address?.place || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-gray-500">Pincode</span>
+                        <span className="text-gray-800">{doctor.address?.pincode || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
@@ -372,7 +348,7 @@ const ViewDoctor = () => {
                         </span>
                       ))
                     ) : (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">English</span>
+                      <span className="text-gray-500">No languages specified</span>
                     )}
                   </div>
                 </div>
@@ -387,20 +363,20 @@ const ViewDoctor = () => {
                     <Clock className="inline-block h-5 w-5 mr-2" />
                     Consulting Hours
                   </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Monday - Friday</span>
-                      <span className="text-gray-600">9:00 AM - 5:00 PM</span>
+                  {sortedHours.length > 0 ? (
+                    <div className="space-y-2">
+                      {sortedHours.map((item, index) => (
+                        <div key={index} className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="font-medium text-gray-700 capitalize">{item.day}</span>
+                          <span className="text-gray-600">{item.hours}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Saturday</span>
-                      <span className="text-gray-600">10:00 AM - 2:00 PM</span>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      No consulting hours configured
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Sunday</span>
-                      <span className="text-gray-600">Closed</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <div>
@@ -409,9 +385,15 @@ const ViewDoctor = () => {
                     Booking Status
                   </h3>
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                      <CheckCircle className="h-4 w-4" /> Bookings Open
-                    </span>
+                    {doctor?.bookingOpen !== false ? (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                        <CheckCircle className="h-4 w-4" /> Bookings Open
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                        <XCircle className="h-4 w-4" /> Bookings Closed
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -430,7 +412,6 @@ const ViewDoctor = () => {
               <RequestTable 
                 doctorId={doctor?.id}
                 doctorName={doctorName}
-                useMockData={true}
               />
             )}
           </div>

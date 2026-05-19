@@ -19,7 +19,6 @@ import {
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
 import { showSuccessToast, showWarningToast, showErrorToast, showAddToast } from "../ui/Toast";
-import { useAuth } from "../../context/AuthContext";
 import {
   useGetBookingsQuery,
   useApproveBookingMutation,
@@ -103,8 +102,6 @@ const matchesDoctor = (item, doctorId, doctorName) => {
 };
 
 const RequestTable = ({ doctorId = null, doctorName = null }) => {
-  const { user } = useAuth();
-
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -122,25 +119,23 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  
+  // Loading states for mutations
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
-  // API Hooks
+  // API Hooks - hospitalId is automatically injected by the API service
   const {
     data: bookingsResponse,
     isLoading: loading,
     refetch,
     isFetching
-  } = useGetBookingsQuery(
-    {
-      hospitalId: user?.id,
-      status: "pending"
-    },
-    { skip: !user?.id }
-  );
+  } = useGetBookingsQuery({
+    status: "pending"
+  });
 
-  const [approveBooking, { isLoading: isApproving }] = useApproveBookingMutation();
-  const [rejectBooking, { isLoading: isRejecting }] = useRejectBookingMutation();
-
-  const isFormSubmitting = isApproving || isRejecting;
+  const [approveBooking] = useApproveBookingMutation();
+  const [rejectBooking] = useRejectBookingMutation();
 
   // Modal close helpers
   const closeApproveModal = () => {
@@ -312,6 +307,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
+    setIsApproving(true); // Set loading state
+
     try {
       await approveBooking({
         id: selectedRequest.id,
@@ -334,11 +331,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         }
       );
 
-      await refetch();
+      refetch(); // Non-blocking refresh
       closeApproveModal();
 
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to approve request', TOAST_DURATION);
+    } finally {
+      setIsApproving(false); // Stop loading
     }
   };
 
@@ -360,6 +359,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
+    setIsRejecting(true); // Set loading state
+
     try {
       await rejectBooking({
         id: selectedRequest.id,
@@ -376,11 +377,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         }
       );
 
-      await refetch();
+      refetch(); // Non-blocking refresh
       closeRejectModal();
 
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to reject request', TOAST_DURATION);
+    } finally {
+      setIsRejecting(false); // Stop loading
     }
   };
 
@@ -763,6 +766,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
           initialTime={selectedRequest.time !== "N/A" ? selectedRequest.time : ""}
           initialToken=""
+          isLoading={isApproving}
         />
       )}
 
@@ -773,6 +777,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           onConfirm={handleConfirmReject}
           reason={rejectReason}
           setReason={setRejectReason}
+          isLoading={isRejecting}
         />
       )}
     </div>

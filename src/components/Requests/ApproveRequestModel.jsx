@@ -67,6 +67,7 @@ const ApproveRequestModal = ({
   initialDate = "",
   initialTime = "",
   initialToken = "",
+  isLoading = false, // Add loading prop from parent
 }) => {
   // States
   const [date, setDate] = useState(initialDate || getDefaultDate());
@@ -121,6 +122,7 @@ const ApproveRequestModal = ({
             size="sm"
             onClick={() => setIsEditing(true)}
             className="text-xs text-blue-600"
+            disabled={isLoading}
           >
             Edit
           </Button>
@@ -137,14 +139,15 @@ const ApproveRequestModal = ({
                 Token Number <span className="text-red-500">*</span>
               </label>
               <input
-  type="text"
-  value={token}
-  onChange={(e) => setToken(e.target.value)}
-  placeholder="Enter token number"
-  autoFocus
-  className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-  required
-/>
+                type="text"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Enter token number"
+                autoFocus
+                disabled={isLoading}
+                className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                required
+              />
             </div>
           </div>
         </div>
@@ -174,6 +177,7 @@ const ApproveRequestModal = ({
         onChange={(e) => setDate(e.target.value)}
         min={today}
         required
+        disabled={isLoading}
       />
 
       <Select
@@ -183,6 +187,7 @@ const ApproveRequestModal = ({
         value={time}
         onChange={(e) => setTime(e.target.value)}
         required
+        disabled={isLoading}
       />
 
       <Input
@@ -193,13 +198,24 @@ const ApproveRequestModal = ({
         onChange={(e) => setToken(e.target.value)}
         placeholder="Enter token number"
         required
+        disabled={isLoading}
       />
 
       <div className="flex gap-2 pt-2">
-        <Button variant="outline" onClick={() => setIsEditing(false)} fullWidth>
+        <Button 
+          variant="outline" 
+          onClick={() => setIsEditing(false)} 
+          fullWidth
+          disabled={isLoading}
+        >
           Cancel Edit
         </Button>
-        <Button variant="success" onClick={handleSaveEdit} fullWidth>
+        <Button 
+          variant="success" 
+          onClick={handleSaveEdit} 
+          fullWidth
+          disabled={isLoading}
+        >
           Save Changes
         </Button>
       </div>
@@ -241,11 +257,11 @@ const ApproveRequestModal = ({
 
       {/* FOOTER BUTTONS */}
       <div className="flex justify-center gap-3 mt-5">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={isLoading}>
           Cancel
         </Button>
-        <Button variant="success" onClick={handleConfirm}>
-          Confirm Appointment
+        <Button variant="success" onClick={handleConfirm} disabled={isLoading} loading={isLoading}>
+          {isLoading ? 'Confirming...' : 'Confirm Appointment'}
         </Button>
       </div>
     </Modal>

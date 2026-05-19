@@ -11,7 +11,7 @@ import {
   useDeleteHospitalMutation,
   useChangePasswordMutation
 } from '../../../app/service/hospitalApi';
-import { useAuth } from '../../context/AuthContext';
+import { getHospitalId, getAuthUser, clearAuth } from '../../utils/auth';
 
 // Constants
 const REDIRECT_DELAY = 2000;
@@ -36,7 +36,11 @@ const SECURITY_ITEMS = [
 
 const Security = () => {
   const navigate = useNavigate();
-  const { logout: authLogout, user } = useAuth();
+  
+  // Get user info from auth utility
+  const authUser = getAuthUser();
+  const hospitalId = getHospitalId();
+  
   const [logoutHospital] = useLogoutHospitalMutation();
   const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
   const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
@@ -51,7 +55,7 @@ const Security = () => {
     } catch (error) {
       // Silent fail - we'll log out anyway
     } finally {
-      authLogout();
+      clearAuth();
       window.location.href = '/sign-in';
     }
   };
@@ -66,13 +70,13 @@ const Security = () => {
 
   // Handle Delete Account
   const handleDeleteAccount = async () => {
-    if (!user?.id) {
+    if (!hospitalId) {
       showErrorToast('Hospital ID not found', 3000);
       return;
     }
 
     try {
-      await deleteHospital(user.id).unwrap();
+      await deleteHospital(hospitalId).unwrap();
 
       showSuccessToast(
         'Your account has been scheduled for deletion. You have 30 days to recover your account.',
@@ -317,11 +321,16 @@ const Security = () => {
     </Modal>
   );
 
+  // Create user object for meta display
+  const userForMeta = useMemo(() => ({
+    lastPasswordChange: authUser?.lastPasswordChange || null
+  }), [authUser]);
+
   // Prepare security items with dynamic meta
   const securityItems = useMemo(() => {
     return SECURITY_ITEMS.map(item => ({
       ...item,
-      meta: typeof item.meta === 'function' ? item.meta(user) : item.meta,
+      meta: typeof item.meta === 'function' ? item.meta(userForMeta) : item.meta,
       actions: item.actions.map(action => ({
         ...action,
         onClick: action.type === 'change'
@@ -329,7 +338,7 @@ const Security = () => {
           : () => setShowDeleteModal(true)
       }))
     }));
-  }, [user]);
+  }, [userForMeta]);
 
   return (
     <Card>

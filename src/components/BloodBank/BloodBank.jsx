@@ -9,20 +9,48 @@ import {
   Button, Badge, Loader, Card, Modal, SearchBar
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
-import { useAuth } from '../../context/AuthContext';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { 
   useGetBloodBankQuery,
   useCreateBloodBankMutation,
   useUpdateBloodBankMutation,
   useDeleteBloodBankMutation
-} from '../../../app/service/bloodbank';  // ← Changed from bloodbank to blood
+} from '../../../app/service/bloodbank';
+
+// Blood groups list
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+// Helper function to format ID for display only
+const formatBloodId = (id) => {
+  if (!id) return '#BLD0000';
+  let numericId;
+  if (typeof id === 'string') {
+    const match = id.match(/\d+/);
+    numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
+  } else {
+    numericId = parseInt(id) || 0;
+  }
+  return `#BLD${String(numericId).padStart(4, '0')}`;
+};
+
+// Transform API response - SEPARATE display ID from database ID
+const transformBloodStockData = (stockList) => {
+  if (!stockList || !Array.isArray(stockList)) return [];
+  
+  return stockList.map((stock, index) => ({
+    id: stock.id || stock._id,
+    formattedId: formatBloodId(stock.id || stock._id || index + 1),
+    bloodGroup: stock.bloodGroup || '',
+    count: stock.count || 0,
+    hospitalId: stock.hospitalId,
+    lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+  }));
+};
 
 // Skeleton Loading Component
 const BloodBankSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb Skeleton */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -31,7 +59,6 @@ const BloodBankSkeleton = () => {
         <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
       </div>
 
-      {/* Search and Filters Skeleton */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
@@ -46,23 +73,17 @@ const BloodBankSkeleton = () => {
         </div>
       </div>
 
-      {/* Grid Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[...Array(8)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse"
-          >
+          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
             <div className="flex justify-between mb-6">
               <div className="w-16 h-6 bg-gray-200 rounded-full"></div>
               <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
             </div>
-
             <div className="flex flex-col items-center">
               <div className="w-20 h-20 rounded-full bg-gray-200 mb-4"></div>
               <div className="w-16 h-6 bg-gray-200 rounded mb-2"></div>
               <div className="w-24 h-5 bg-gray-200 rounded mb-6"></div>
-
               <div className="w-full border-t border-gray-100 pt-4 mt-2">
                 <div className="text-center">
                   <div className="w-20 h-3 bg-gray-200 rounded mx-auto mb-2"></div>
@@ -77,9 +98,196 @@ const BloodBankSkeleton = () => {
   );
 };
 
+// Add Blood Stock Modal
+const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
+  const [formData, setFormData] = useState({
+    bloodGroup: 'A+',
+    count: 0
+  });
+
+  const handleSubmit = () => {
+    if (formData.count < 0) {
+      showErrorToast('Count cannot be negative', 3000);
+      return;
+    }
+    if (formData.count > 1000) {
+      showErrorToast('Count cannot exceed 1000 units', 3000);
+      return;
+    }
+    onSave(formData);
+    setFormData({ bloodGroup: 'A+', count: 0 });
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Blood Stock" size="md">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <Droplet className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-md font-semibold text-gray-800">Add New Blood Stock</h3>
+            <p className="text-xs text-gray-500">Enter blood group and available units</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
+          <select
+            value={formData.bloodGroup}
+            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+          >
+            {BLOOD_GROUPS.map(group => (
+              <option key={group} value={group}>{group}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
+          <input
+            type="number"
+            min="0"
+            value={formData.count}
+            onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) || 0 })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+            placeholder="Enter number of units"
+          />
+          <p className="text-xs text-gray-400 mt-1">Number of blood units available</p>
+        </div>
+
+        <div className="flex gap-3 pt-4">
+          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
+            {isSaving ? 'Adding...' : 'Add Blood Stock'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// Edit Blood Stock Modal
+const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
+  const [formData, setFormData] = useState({
+    bloodGroup: '',
+    count: 0
+  });
+
+  useEffect(() => {
+    if (stock) {
+      setFormData({
+        bloodGroup: stock.bloodGroup,
+        count: stock.count
+      });
+    }
+  }, [stock]);
+
+  const handleSubmit = () => {
+    if (formData.count < 0) {
+      showErrorToast('Count cannot be negative', 3000);
+      return;
+    }
+    if (formData.count > 1000) {
+      showErrorToast('Count cannot exceed 1000 units', 3000);
+      return;
+    }
+    onSave({ ...stock, ...formData });
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Blood Stock" size="md">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <Droplet className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-md font-semibold text-gray-800">Edit Blood Stock</h3>
+            <p className="text-xs text-gray-500">Update blood group and available units</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
+          <select
+            value={formData.bloodGroup}
+            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+          >
+            {BLOOD_GROUPS.map(group => (
+              <option key={group} value={group}>{group}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
+          <input
+            type="number"
+            min="0"
+            value={formData.count}
+            onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) || 0 })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+          />
+          <p className="text-xs text-gray-400 mt-1">Number of blood units available</p>
+        </div>
+
+        <div className="flex gap-3 pt-4">
+          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
+            {isSaving ? 'Updating...' : 'Update Blood Stock'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// View Modal Component
+const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
+  if (!stock) return null;
+  
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Blood Stock Details" size="md">
+      <div className="space-y-4">
+        <div className="flex justify-center mb-4">
+          <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center shadow-lg">
+            <Droplet className="w-10 h-10 text-red-600" />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Blood Stock ID</label>
+            <p className="text-sm font-semibold text-gray-800">{stock.formattedId}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Blood Group</label>
+            <p className="text-sm font-semibold text-gray-800">{stock.bloodGroup}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Available Units</label>
+            <p className="text-2xl font-bold text-[#1C62A0]">{stock.count}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Last Updated</label>
+            <p className="text-sm text-gray-600">{stock.lastUpdated || new Date().toISOString().split('T')[0]}</p>
+          </div>
+        </div>
+        
+        <div className="flex gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
+          <Button variant="primary" onClick={() => { onClose(); }} fullWidth>Edit Stock</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 const BloodBank = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -99,49 +307,17 @@ const BloodBank = () => {
   // Filter states
   const [bloodGroupFilter, setBloodGroupFilter] = useState('all');
 
-  // Blood groups list
-  const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-
-  // API Hooks - Updated to use new unified query
+  // API Hooks - hospitalId is automatically injected by the API service
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
-    refetch 
-  } = useGetBloodBankQuery(
-    { hospitalId: user?.id },
-    { skip: !user?.id }
-  );
+    refetch,
+    isFetching
+  } = useGetBloodBankQuery(); // No need to pass hospitalId!
 
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
-
-  // Helper function to format ID for display only
-  const formatBloodId = (id) => {
-    if (!id) return '#BLD0000';
-    let numericId;
-    if (typeof id === 'string') {
-      const match = id.match(/\d+/);
-      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-    } else {
-      numericId = parseInt(id) || 0;
-    }
-    return `#BLD${String(numericId).padStart(4, '0')}`;
-  };
-
-  // Transform API response - SEPARATE display ID from database ID
-  const transformBloodStockData = (stockList) => {
-    if (!stockList || !Array.isArray(stockList)) return [];
-    
-    return stockList.map((stock, index) => ({
-      id: stock.id || stock._id, // Keep original ID for API operations
-      formattedId: formatBloodId(stock.id || stock._id || index + 1), // Formatted ID for display only
-      bloodGroup: stock.bloodGroup || '',
-      count: stock.count || 0,
-      hospitalId: stock.hospitalId,
-      lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
-    }));
-  };
 
   const bloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
 
@@ -161,13 +337,13 @@ const BloodBank = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers with API - Updated to use new mutation names
+  // CRUD Handlers with API - hospitalId is auto-injected
   const handleAddBloodStock = async (newBloodStock) => {
     try {
       const stockToAdd = {
         bloodGroup: newBloodStock.bloodGroup,
-        count: newBloodStock.count,
-        hospitalId: user?.id
+        count: newBloodStock.count
+        // No hospitalId needed - API auto-injects it
       };
       
       await createBloodBank(stockToAdd).unwrap();
@@ -187,7 +363,6 @@ const BloodBank = () => {
         count: updatedStock.count
       };
       
-      // Use the numeric ID directly with the new data structure
       await updateBloodBank({ 
         id: updatedStock.id, 
         data: updateData 
@@ -252,6 +427,7 @@ const BloodBank = () => {
     setBloodGroupFilter("all");
     setCurrentPage(1);
     refetch();
+    showSuccessToast("Blood stock refreshed", 2000);
   };
 
   const handleExport = () => {
@@ -288,8 +464,8 @@ const BloodBank = () => {
           try {
             await createBloodBank({
               bloodGroup: stock['Blood Group'] || stock.bloodGroup,
-              count: stock['Count (Units)'] || stock.count || 0,
-              hospitalId: user?.id
+              count: stock['Count (Units)'] || stock.count || 0
+              // No hospitalId needed - API auto-injects it
             }).unwrap();
             successCount++;
           } catch (error) {
@@ -311,6 +487,7 @@ const BloodBank = () => {
   const clearAllFilters = () => {
     setBloodGroupFilter('all');
     setSearchTerm('');
+    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
@@ -321,194 +498,6 @@ const BloodBank = () => {
   };
 
   const activeFilterCount = getActiveFilterCount();
-
-  // Add Blood Stock Modal
-  const AddBloodStockModal = ({ isOpen, onClose, onSave }) => {
-    const [formData, setFormData] = useState({
-      bloodGroup: 'A+',
-      count: 0
-    });
-
-    const handleSubmit = () => {
-      if (formData.count < 0) {
-        showErrorToast('Count cannot be negative', 3000);
-        return;
-      }
-      if (formData.count > 1000) {
-        showErrorToast('Count cannot exceed 1000 units', 3000);
-        return;
-      }
-      onSave(formData);
-      setFormData({ bloodGroup: 'A+', count: 0 });
-    };
-
-    return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Add Blood Stock" size="md">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <Droplet className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h3 className="text-md font-semibold text-gray-800">Add New Blood Stock</h3>
-              <p className="text-xs text-gray-500">Enter blood group and available units</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
-            <select
-              value={formData.bloodGroup}
-              onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            >
-              {bloodGroups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
-            <input
-              type="number"
-              min="0"
-              value={formData.count}
-              onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-              placeholder="Enter number of units"
-            />
-            <p className="text-xs text-gray-400 mt-1">Number of blood units available</p>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} disabled={isAdding} loading={isAdding} fullWidth>
-              {isAdding ? 'Adding...' : 'Add Blood Stock'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  };
-
-  // Edit Blood Stock Modal
-  const EditBloodStockModal = ({ isOpen, onClose, onSave, stock }) => {
-    const [formData, setFormData] = useState({
-      bloodGroup: '',
-      count: 0
-    });
-
-    useEffect(() => {
-      if (stock) {
-        setFormData({
-          bloodGroup: stock.bloodGroup,
-          count: stock.count
-        });
-      }
-    }, [stock]);
-
-    const handleSubmit = () => {
-      if (formData.count < 0) {
-        showErrorToast('Count cannot be negative', 3000);
-        return;
-      }
-      if (formData.count > 1000) {
-        showErrorToast('Count cannot exceed 1000 units', 3000);
-        return;
-      }
-      onSave({ ...stock, ...formData });
-    };
-
-    return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Edit Blood Stock" size="md">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <Droplet className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h3 className="text-md font-semibold text-gray-800">Edit Blood Stock</h3>
-              <p className="text-xs text-gray-500">Update blood group and available units</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
-            <select
-              value={formData.bloodGroup}
-              onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            >
-              {bloodGroups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
-            <input
-              type="number"
-              min="0"
-              value={formData.count}
-              onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            />
-            <p className="text-xs text-gray-400 mt-1">Number of blood units available</p>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} disabled={isUpdating} loading={isUpdating} fullWidth>
-              {isUpdating ? 'Updating...' : 'Update Blood Stock'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  };
-
-  // View Modal Component
-  const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
-    if (!stock) return null;
-    
-    return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Blood Stock Details" size="md">
-        <div className="space-y-4">
-          <div className="flex justify-center mb-4">
-            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center shadow-lg">
-              <Droplet className="w-10 h-10 text-red-600" />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500">Blood Stock ID</label>
-              <p className="text-sm font-semibold text-gray-800">{stock.formattedId}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500">Blood Group</label>
-              <p className="text-sm font-semibold text-gray-800">{stock.bloodGroup}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500">Available Units</label>
-              <p className="text-2xl font-bold text-[#1C62A0]">{stock.count}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500">Last Updated</label>
-              <p className="text-sm text-gray-600">{stock.lastUpdated || new Date().toISOString().split('T')[0]}</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
-            <Button variant="primary" onClick={() => { onClose(); setSelectedBloodStock(stock); setShowEditModal(true); }} fullWidth>Edit Stock</Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  };
 
   // Loading state with skeleton
   if (loading) {
@@ -569,15 +558,19 @@ const BloodBank = () => {
             className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
           >
             <option value="all">All Blood Groups</option>
-            {bloodGroups.map(group => (
+            {BLOOD_GROUPS.map(group => (
               <option key={group} value={group}>{group}</option>
             ))}
           </select>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
-            <RefreshCcw size={16} />
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            disabled={isFetching}
+          >
+            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
@@ -592,7 +585,7 @@ const BloodBank = () => {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
             } hover:bg-gray-50`}
           >
             <Filter size={16} />
@@ -638,7 +631,7 @@ const BloodBank = () => {
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="all">All Blood Groups</option>
-              {bloodGroups.map(group => (
+              {BLOOD_GROUPS.map(group => (
                 <option key={group} value={group}>{group}</option>
               ))}
             </select>
@@ -646,7 +639,7 @@ const BloodBank = () => {
         </div>
       )}
 
-      {/* Blood Stock Grid View - Using formattedId for display */}
+      {/* Blood Stock Grid View */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {paginatedBloodStocks.map((stock) => {
           return (
@@ -692,10 +685,10 @@ const BloodBank = () => {
 
       {/* No Results */}
       {!loading && filteredBloodStocks.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No blood stock found</h3>
-            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-          </div>
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No blood stock found</h3>
+        </div>
       )}
 
       {/* Pagination */}
@@ -740,6 +733,7 @@ const BloodBank = () => {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSave={handleAddBloodStock}
+        isSaving={isAdding}
       />
 
       <EditBloodStockModal
@@ -750,6 +744,7 @@ const BloodBank = () => {
         }}
         onSave={handleEditBloodStock}
         stock={selectedBloodStock}
+        isSaving={isUpdating}
       />
 
       <ViewBloodStockModal

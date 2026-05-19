@@ -32,7 +32,6 @@ import {
   SearchBar,
   Card
 } from '../ui';
-import { useAuth } from '../../context/AuthContext';
 import { 
   useGetAmbulanceQuery,
   useCreateAmbulanceMutation,
@@ -119,7 +118,6 @@ const AmbulanceSkeleton = () => {
 
 const Ambulance = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -150,16 +148,14 @@ const Ambulance = () => {
     return `#AMB${String(numericId).padStart(4, '0')}`;
   };
 
-  // API Hooks - Updated to use the new unified query
+  // API Hooks - hospitalId is automatically injected by the API service
+  // No need to pass hospitalId manually anymore!
   const { 
     data: ambulancesResponse, 
     isLoading: loading, 
     refetch,
     isFetching
-  } = useGetAmbulanceQuery(
-    { hospitalId: user?.id },
-    { skip: !user?.id }
-  );
+  } = useGetAmbulanceQuery(); // Simplified - no params needed!
   
   const [createAmbulance, { isLoading: isAdding }] = useCreateAmbulanceMutation();
   const [updateAmbulance, { isLoading: isUpdating }] = useUpdateAmbulanceMutation();
@@ -200,15 +196,15 @@ const Ambulance = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers with API - Updated to use new mutation names
+  // CRUD Handlers with API - hospitalId is automatically added by the API service
   const handleAddAmbulance = async (newAmbulance) => {
     try {
+      // No need to add hospitalId manually - API service handles it!
       const ambulanceToAdd = {
         serviceName: newAmbulance.serviceName,
         phone: newAmbulance.phone,
         vehicleType: newAmbulance.vehicleType,
-        address: newAmbulance.address,
-        hospitalId: user?.id
+        address: newAmbulance.address
       };
       
       const response = await createAmbulance(ambulanceToAdd).unwrap();
@@ -230,7 +226,6 @@ const Ambulance = () => {
         address: updatedAmbulance.address
       };
       
-      // Use the numeric ID directly with the new data structure
       const response = await updateAmbulance({ 
         id: updatedAmbulance.id, 
         data: updateData 
@@ -249,7 +244,6 @@ const Ambulance = () => {
   const handleDeleteAmbulance = async () => {
     if (selectedAmbulance) {
       try {
-        // Use the numeric ID directly
         await deleteAmbulance(selectedAmbulance.id).unwrap();
         showSuccessToast(`${selectedAmbulance.serviceName} has been deleted successfully!`, 3000);
         refetch();
@@ -303,6 +297,7 @@ const Ambulance = () => {
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -312,6 +307,7 @@ const Ambulance = () => {
     setCountryFilter("");
     setCurrentPage(1);
     refetch();
+    showSuccessToast("Refreshed ambulance list", 2000);
   };
 
   const handleExport = () => {
@@ -355,6 +351,7 @@ const Ambulance = () => {
         
         for (const amb of importedData) {
           try {
+            // No need to add hospitalId - API service handles it!
             await createAmbulance({
               serviceName: amb['Service Name'] || amb.serviceName,
               phone: amb.Phone || amb.phone,
@@ -365,8 +362,7 @@ const Ambulance = () => {
                 district: amb.District || amb.address?.district,
                 place: amb.Place || amb.address?.place,
                 pincode: amb.Pincode || amb.address?.pincode
-              },
-              hospitalId: user?.id
+              }
             }).unwrap();
             successCount++;
           } catch (error) {
@@ -389,6 +385,8 @@ const Ambulance = () => {
     setTypeFilter('all');
     setCountryFilter('');
     setSearchTerm('');
+    setCurrentPage(1);
+    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
@@ -476,24 +474,25 @@ const Ambulance = () => {
             </button>
           </div>
 
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
-            <RefreshCcw size={16} />
+          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer">
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
             <Upload size={16} />
           </label>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export">
             <Download size={16} />
           </button>
 
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
             } hover:bg-gray-50`}
+            title="Toggle Filters"
           >
             <Filter size={16} />
             {activeFilterCount > 0 && !showFilters && (
@@ -556,61 +555,86 @@ const Ambulance = () => {
 
       {/* GRID VIEW - Using formattedId for display */}
       {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {paginatedAmbulances.map((ambulance) => (
-            <div key={ambulance.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-full flex justify-between items-start mb-4">
-                <Badge variant="info" className="text-[10px]">
-                  {ambulance.formattedId}
-                </Badge>
-                <div className="relative menu-container">
-                  <button onClick={(e) => toggleMenu(ambulance.id, e)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold">
-                    ⋮
-                  </button>
-                  {activeMenu === ambulance.id && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                      <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                        <Eye size={16} /> View Details
-                      </button>
-                      <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                        <Edit size={16} /> Edit
-                      </button>
-                      <div className="border-t border-gray-100 my-1"></div>
-                      <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                        <Trash2 size={16} /> Delete
-                      </button>
-                    </div>
-                  )}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {paginatedAmbulances.map((ambulance) => (
+              <div key={ambulance.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-full flex justify-between items-start mb-4">
+                  <Badge variant="info" className="text-[10px]">
+                    {ambulance.formattedId}
+                  </Badge>
+                  <div className="relative menu-container">
+                    <button onClick={(e) => toggleMenu(ambulance.id, e)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold">
+                      ⋮
+                    </button>
+                    {activeMenu === ambulance.id && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Eye size={16} /> View Details
+                        </button>
+                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Edit size={16} /> Edit
+                        </button>
+                        <div className="border-t border-gray-100 my-1"></div>
+                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                          <Trash2 size={16} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative mb-3">
+                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm">
+                    <Truck className="w-8 h-8 text-[#1C62A0]" />
+                  </div>
+                </div>
+
+                <h3 onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0] text-center">
+                  {ambulance.serviceName}
+                </h3>
+                <p className="text-[11px] text-gray-500 mb-4 text-center">{ambulance.vehicleType}</p>
+
+                <div className="grid grid-cols-1 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                  <div className="w-full flex flex-col items-center justify-center text-center">
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Phone</p>
+                    <p className="text-xs font-bold text-gray-700">{ambulance.phone}</p>
+                  </div>
+                </div>
+
+                <div className="w-full border-t border-gray-50 pt-3 mt-1">
+                  <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500">
+                    <MapPin size={10} />
+                    <span className="truncate">{ambulance.address?.place}, {ambulance.address?.district}</span>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="relative mb-3">
-                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm">
-                  <Truck className="w-8 h-8 text-[#1C62A0]" />
-                </div>
-              </div>
-
-              <h3 onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0] text-center">
-                {ambulance.serviceName}
-              </h3>
-              <p className="text-[11px] text-gray-500 mb-4 text-center">{ambulance.vehicleType}</p>
-
-              <div className="grid grid-cols-1 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
-                <div className="w-full flex flex-col items-center justify-center text-center">
-                  <p className="text-[9px] text-gray-400 uppercase font-bold">Phone</p>
-                  <p className="text-xs font-bold text-gray-700">{ambulance.phone}</p>
-                </div>
-              </div>
-
-              <div className="w-full border-t border-gray-50 pt-3 mt-1">
-                <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500">
-                  <MapPin size={10} />
-                  <span className="truncate">{ambulance.address?.place}, {ambulance.address?.district}</span>
-                </div>
+          {/* Pagination for Grid View */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex justify-center">
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => handlePageChange(currentPage - 1)} 
+                  disabled={currentPage === 1} 
+                  className={`px-4 py-2 border rounded-md text-sm transition-all ${currentPage === 1 ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"}`}
+                >
+                  Previous
+                </button>
+                <span className="px-4 py-2 bg-[#1C62A0] text-white rounded-md text-sm font-medium">{currentPage}</span>
+                <button 
+                  onClick={() => handlePageChange(currentPage + 1)} 
+                  disabled={currentPage === totalPages || totalPages === 0} 
+                  className={`px-4 py-2 border rounded-md text-sm transition-all ${currentPage === totalPages || totalPages === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"}`}
+                >
+                  Next
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* LIST VIEW - Using formattedId for display */}
@@ -621,6 +645,11 @@ const Ambulance = () => {
               Total Ambulances
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredAmbulances.length}</span>
             </h2>
+            {filteredAmbulances.length > 0 && (
+              <p className="text-xs text-gray-500">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredAmbulances.length)} of {filteredAmbulances.length} ambulances
+              </p>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -686,12 +715,11 @@ const Ambulance = () => {
             </table>
           </div>
 
-          {/* Pagination */}
-          {filteredAmbulances.length > 0 && (
+          {/* Pagination for List View */}
+          {filteredAmbulances.length > 0 && totalPages > 1 && (
             <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
               <div className="text-sm text-gray-500">
-                Showing {filteredAmbulances.length > 0 ? ((currentPage - 1) * itemsPerPage) + 1 : 0} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredAmbulances.length)} of {filteredAmbulances.length} ambulances
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredAmbulances.length)} of {filteredAmbulances.length} ambulances
               </div>
               <div className="flex gap-2">
                 <button
@@ -730,10 +758,6 @@ const Ambulance = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No ambulances found</h3>
-          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-          <button onClick={clearAllFilters} className="px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D]">
-            Clear Filters
-          </button>
         </div>
       )}
 
@@ -743,7 +767,6 @@ const Ambulance = () => {
         onClose={() => setShowAddModal(false)}
         onSave={handleAddAmbulance}
         ambulanceTypes={ambulanceTypes}
-        hospitalId={user?.id}
       />
 
       <EditAmbulanceModal

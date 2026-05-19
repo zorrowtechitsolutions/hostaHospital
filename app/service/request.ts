@@ -1,6 +1,7 @@
-// // app/service/request.ts - Booking/Request API service
+// app/service/request.ts - Booking/Request API service
 
 import { api } from "./api";
+import { getHospitalId } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -67,26 +68,30 @@ export interface BookingResponse {
   data?: BookingRequest | BookingRequest[];
 }
 
+export interface GetBookingsParams {
+  id?: string | number;
+  doctorId?: string | number;
+  status?: BookingStatus;
+}
+
 // ================= API =================
 
 export const bookingApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ================= GET BOOKINGS =================
+    // Automatically adds hospitalId from authenticated user
     getBookings: builder.query<
       BookingResponse,
-      {
-        id?: string | number;
-        hospitalId?: string | number;
-        doctorId?: string | number;
-        status?: BookingStatus;
-      } | void
+      GetBookingsParams | void
     >({
       query: (params) => {
         const queryParams = new URLSearchParams();
-
-        if (params?.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
+        
+        // Auto-inject hospitalId from auth
+        const hospitalId = getHospitalId();
+        if (hospitalId) {
+          queryParams.append("hospitalId", String(hospitalId));
         }
 
         if (params?.doctorId) {
@@ -99,12 +104,19 @@ export const bookingApi = api.injectEndpoints({
 
         const queryString = queryParams.toString();
 
-        return params?.id
-          ? `/booking/${params.id}`
-          : `/booking${queryString ? `?${queryString}` : ""}`;
+        if (params?.id) {
+          return `/booking/${params.id}${queryString ? `?${queryString}` : ""}`;
+        }
+
+        return `/booking${queryString ? `?${queryString}` : ""}`;
       },
 
-      providesTags: ["Booking"],
+      providesTags: (result, error, params) => {
+        if (params?.id && result?.data && !Array.isArray(result.data)) {
+          return [{ type: "Booking", id: params.id }];
+        }
+        return ["Booking"];
+      },
     }),
 
     // ================= GET BOOKING BY ID =================
@@ -114,29 +126,34 @@ export const bookingApi = api.injectEndpoints({
     }),
 
     // ================= CREATE BOOKING =================
-    // FIXED: Using snake_case field names to match backend
+    // Automatically adds hospitalId from authenticated user
     createBooking: builder.mutation<
       BookingResponse,
-      Partial<BookingRequest>
+      Partial<Omit<BookingRequest, 'hospitalId'>>
     >({
-      query: (data) => ({
-        url: "/booking",
-        method: "POST",
-        body: {
-          // Use snake_case to match backend
-          patient_name: data.patient_name,
-          patient_dob: data.patient_dob,
-          patient_place: data.patient_place,
-          patient_phone: data.patient_phone,
-          doctorId: data.doctorId,
-          displayName: data.displayName,
-          department: data.department,
-          booking_date: data.booking_date,
-          consulting_time: data.consulting_time,
-          reason: data.reason,
-          status: data.status || "pending",
-        },
-      }),
+      query: (data) => {
+        const hospitalId = getHospitalId();
+        
+        return {
+          url: "/booking",
+          method: "POST",
+          body: {
+            // Use snake_case to match backend
+            patient_name: data.patient_name,
+            patient_dob: data.patient_dob,
+            patient_place: data.patient_place,
+            patient_phone: data.patient_phone,
+            doctorId: data.doctorId,
+            displayName: data.displayName,
+            department: data.department,
+            booking_date: data.booking_date,
+            consulting_time: data.consulting_time,
+            reason: data.reason,
+            status: data.status || "pending",
+            hospitalId: hospitalId, // Auto-inject from auth
+          },
+        };
+      },
       invalidatesTags: ["Booking"],
     }),
 
@@ -159,11 +176,10 @@ export const bookingApi = api.injectEndpoints({
           status: "accepted",
         },
       }),
-
-invalidatesTags: (result, error, { id }) => [
-  { type: "Booking", id },
-  "Booking",
-],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Booking", id },
+        "Booking",
+      ],
     }),
 
     // ================= REJECT BOOKING =================
@@ -178,15 +194,14 @@ invalidatesTags: (result, error, { id }) => [
         url: `/booking/${id}`,
         method: "PUT",
         body: {
-          reason: data.reason,
-          status: "declined",
-        },
+      rejectionReason: data.reason,
+      status: "declined",
+    },
       }),
-
-invalidatesTags: (result, error, { id }) => [
-  { type: "Booking", id },
-  "Booking",
-],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Booking", id },
+        "Booking",
+      ],
     }),
 
     // ================= CANCEL BOOKING =================
@@ -205,7 +220,6 @@ invalidatesTags: (result, error, { id }) => [
           status: "cancel",
         },
       }),
-
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
         "Booking",
@@ -228,11 +242,10 @@ invalidatesTags: (result, error, { id }) => [
           status: "completed",
         },
       }),
-
       invalidatesTags: (result, error, { id }) => [
-  { type: "Booking", id },
-  "Booking",
-],
+        { type: "Booking", id },
+        "Booking",
+      ],
     }),
 
     // ================= UPDATE BOOKING =================
@@ -240,7 +253,7 @@ invalidatesTags: (result, error, { id }) => [
       BookingResponse,
       {
         id: string | number;
-        data: Partial<BookingRequest>;
+        data: Partial<Omit<BookingRequest, 'hospitalId'>>;
       }
     >({
       query: ({ id, data }) => ({
@@ -256,11 +269,10 @@ invalidatesTags: (result, error, { id }) => [
           status: data.status,
         },
       }),
-
-invalidatesTags: (result, error, { id }) => [
-  { type: "Booking", id },
-  "Booking",
-],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Booking", id },
+        "Booking",
+      ],
     }),
 
     // ================= DELETE BOOKING =================
@@ -272,22 +284,23 @@ invalidatesTags: (result, error, { id }) => [
         url: `/booking/${id}`,
         method: "DELETE",
       }),
-
       invalidatesTags: ["Booking"],
     }),
 
     // ================= GET BOOKINGS BY STATUS =================
+    // Automatically adds hospitalId from authenticated user
     getBookingsByStatus: builder.query<
       BookingResponse,
       {
-        hospitalId?: string | number;
         doctorId?: string | number;
         status: BookingStatus;
       }
     >({
-      query: ({ hospitalId, doctorId, status }) => {
+      query: ({ doctorId, status }) => {
         const queryParams = new URLSearchParams();
         
+        // Auto-inject hospitalId from auth
+        const hospitalId = getHospitalId();
         if (hospitalId) {
           queryParams.append("hospitalId", String(hospitalId));
         }
@@ -300,7 +313,6 @@ invalidatesTags: (result, error, { id }) => [
         
         return `/booking?${queryParams.toString()}`;
       },
-      
       providesTags: ["Booking"],
     }),
   }),
@@ -320,5 +332,3 @@ export const {
   useDeleteBookingMutation,
   useGetBookingsByStatusQuery,
 } = bookingApi;
-
-

@@ -39,13 +39,13 @@ const EditStaff = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // API hooks
+  // API hooks - hospitalId is automatically injected by the API service
   const {
     data: staffData,
     isLoading: loading,
     refetch
   } = useGetStaffQuery(
-    { id },
+    { id }, // Only need id - hospitalId is auto-injected
     { skip: !id }
   );
   const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
@@ -333,6 +333,7 @@ const EditStaff = () => {
     try {
       const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
       
+      // Update data - hospitalId is NOT included (doesn't change)
       const updateData = {
         name: formData.name,
         email: formData.email,

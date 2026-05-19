@@ -4,7 +4,7 @@ import { Modal, Input, Button } from '../ui';
 import { Country, State, City } from 'country-state-city';
 import { showErrorToast } from '../ui/Toast';
 
-const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes, hospitalId }) => {
+const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   const [formData, setFormData] = useState({
     serviceName: '',
     address: {
@@ -187,12 +187,11 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes, hospitalId
     
     setIsSubmitting(true);
     
-    // Pass only the required backend fields
+    // Pass only the required backend fields (hospitalId is automatically added by API)
     onSave({
       serviceName: formData.serviceName,
       phone: formData.phone,
       vehicleType: formData.vehicleType,
-      hospitalId: Number(hospitalId),
       address: {
         country: formData.address.country,
         state: formData.address.state,

@@ -22,6 +22,7 @@ import {
 } from "../ui/Toast";
 import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
+import { getHospitalId } from '../../utils/auth';
 
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
@@ -308,6 +309,9 @@ const AddDoctor = () => {
   const navigate = useNavigate();
   const [addNewDoctor] = useAddNewDoctorMutation();
   
+  // Get hospitalId from auth utility
+  const hospitalId = getHospitalId();
+  
   const [formData, setFormData] = useState({
     profileImage: null,
     firstName: '',
@@ -335,7 +339,7 @@ const AddDoctor = () => {
     password: '',
     confirmPassword: '',
     joiningDate: '',
-    hospitalId: localStorage.getItem("hospitalId") || '',
+    // hospitalId is NOT stored in state - auto-injected by API
     experience: '',
     appointmentCount: '',
     weeklySchedule: {
@@ -663,13 +667,8 @@ const AddDoctor = () => {
     setPreviewImage(null);
   };
 
-  // PERFECT prepareDoctorData function matching Postman payload
+  // PERFECT prepareDoctorData function - hospitalId auto-injected by API
   const prepareDoctorData = () => {
-    let hospitalId = Number(formData.hospitalId);
-    if (isNaN(hospitalId) || hospitalId <= 0) {
-      hospitalId = 5;
-    }
-
     // Build consultingOne array (days without break)
     const consultingOneArray = [];
     // Build consultingTwo array (days with break)
@@ -706,7 +705,7 @@ const AddDoctor = () => {
       email: formData.email,
       password: formData.password,
       phone: formData.phoneNumber,
-      hospitalId: hospitalId,
+      // hospitalId is NOT included here - API will auto-inject from JWT
       joiningDate: formData.joiningDate,
       dob: formData.dob,
       gender: formData.gender?.toLowerCase(),
@@ -776,7 +775,8 @@ const AddDoctor = () => {
       try {
         const doctorData = prepareDoctorData();
         
-        console.log( JSON.stringify(doctorData, null, 2));
+        console.log("Sending doctor data:", JSON.stringify(doctorData, null, 2));
+        console.log("Hospital ID from auth:", hospitalId);
         
         const result = await addNewDoctor(doctorData).unwrap();
         
@@ -894,14 +894,6 @@ const AddDoctor = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input
-                    label="Hospital ID"
-                    name="hospitalId"
-                    type="number"
-                    icon={Building}
-                    value={formData.hospitalId}
-                    readOnly
-                  />
                   <Input 
                     label="Joining Date" 
                     name="joiningDate" 
@@ -1050,7 +1042,6 @@ const AddDoctor = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <Input label="Display Name" name="displayName" icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} required />
-                    {/* <Input label="Username" name="userName" icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} required /> */}
                     
                     <div className="relative">
                       <Input label="Password" name="password" type={showPassword ? "text" : "password"} required icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />

@@ -6,7 +6,7 @@ import { showErrorToast } from '../ui/Toast';
 
 const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes }) => {
   const [formData, setFormData] = useState({
-    id: null, // Store the numeric ID
+    id: null,
     serviceName: '',
     address: {
       country: '',
@@ -29,10 +29,11 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
   const states = State.getStatesOfCountry(countryCode);
   const cities = City.getCitiesOfState(countryCode, stateCode);
 
+  // Populate form when ambulance data changes
   useEffect(() => {
     if (ambulance) {
       setFormData({
-        id: ambulance.id, // Store the numeric ID directly
+        id: ambulance.id,
         serviceName: ambulance.serviceName || '',
         address: {
           country: ambulance.address?.country || '',
@@ -45,7 +46,7 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
         vehicleType: ambulance.vehicleType || '',
       });
 
-      // Set country and state codes
+      // Set country and state codes for dropdowns
       const foundCountry = countries.find(c => c.name === ambulance.address?.country);
       if (foundCountry) {
         setCountryCode(foundCountry.isoCode);
@@ -210,9 +211,10 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
     
     setIsSubmitting(true);
     
-    // Pass the numeric ID directly - no conversion needed
+    // Pass the update data to parent component
+    // Note: hospitalId is NOT included here - API will handle it automatically
     onSave({
-      id: formData.id, // This is the numeric database ID
+      id: formData.id,
       serviceName: formData.serviceName,
       phone: formData.phone,
       vehicleType: formData.vehicleType,

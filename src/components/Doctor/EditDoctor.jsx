@@ -1,5 +1,5 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Rewrite
-import React, { useState, useEffect, useRef } from 'react';
+// src/components/Doctor/EditDoctor.jsx - Complete Rewrite with Fixed Image Handling
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
@@ -11,13 +11,25 @@ import {
 } from '../ui';
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 import {
-  useGetDoctorsQuery,
+  useGetDoctorByIdQuery,
   useUpdateDoctorMutation
 } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
+import { getHospitalId } from '../../utils/auth';
 
-// SearchableDropdown Component (keep as is)
-const SearchableDropdown = ({ 
+// Lazy load heavy components
+const SearchableDropdown = lazy(() => import('./SearchableDropdown'));
+const DayScheduleRow = lazy(() => import('./DayScheduleRow'));
+
+// Fallback loading component
+const LoadingFallback = () => (
+  <div className="w-full py-12 flex justify-center items-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+// SearchableDropdown Component - FIXED to always pass string values
+const SearchableDropdownComponent = ({ 
   label, 
   options, 
   value, 
@@ -50,15 +62,16 @@ const SearchableDropdown = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // FIXED: Always pass string values
   const handleSelect = (option) => {
-    onChange(getOptionValue(option), getOptionLabel(option));
+    onChange(String(getOptionValue(option)), String(getOptionLabel(option)));
     setSearchTerm("");
     setIsOpen(false);
   };
 
   const displayValue = () => {
     if (!value) return "";
-    const selected = options.find(opt => getOptionValue(opt) === value);
+    const selected = options.find(opt => String(getOptionValue(opt)) === String(value));
     return selected ? getOptionLabel(selected) : "";
   };
 
@@ -118,8 +131,8 @@ const SearchableDropdown = ({
   );
 };
 
-// Day Schedule Row Component (simplified)
-const DayScheduleRow = ({ day, schedule, onUpdate }) => {
+// Day Schedule Row Component
+const DayScheduleRowComponent = ({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
   useEffect(() => {
@@ -241,6 +254,16 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
   );
 };
 
+// Centered Loader Component
+const CenteredLoader = ({ text = "Loading..." }) => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">{text}</p>
+    </div>
+  </div>
+);
+
 const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
@@ -260,9 +283,9 @@ const EditDoctor = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
   
-  // Form state - initialize with empty values
+  // Form state - profileImage stores the File object for uploads
   const [formData, setFormData] = useState({
-    profileImage: null,
+    profileImage: null, // This stores the actual File object when new image is selected
     firstName: '',
     lastName: '',
     department: '',
@@ -288,7 +311,6 @@ const EditDoctor = () => {
     password: '',
     confirmPassword: '',
     joiningDate: '',
-    hospitalId: '',
     experience: '',
     appointmentCount: '',
     weeklySchedule: {},
@@ -299,27 +321,22 @@ const EditDoctor = () => {
   });
 
   const [errors, setErrors] = useState({});
+  console.log(formData);
+  
 
-  // Fetch doctor data
-  const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorsQuery({
-    doctorId: doctorId,
+  // Use getDoctorById query for single doctor
+  const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
+    skip: !doctorId
   });
   
   const [updateDoctor] = useUpdateDoctorMutation();
 
-console.log("Doctor API Response:", doctorResponse);
+  console.log("Doctor API Response:", doctorResponse);
 
-// Extract doctor from response
-const doctors = Array.isArray(doctorResponse)
-  ? doctorResponse
-  : doctorResponse?.data || [];
+  // Extract doctor from response
+  const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
 
-const doctor = doctors.find(
-  (doc) => String(doc.id) === String(doctorId)
-);
-
-console.log("Extracted Doctor:", doctor);
-
+  console.log("Extracted Doctor:", doctor);
 
   const countries = Country.getAllCountries();
   const [availableStates, setAvailableStates] = useState([]);
@@ -420,7 +437,7 @@ console.log("Extracted Doctor:", doctor);
       }
       
       const newFormData = {
-        profileImage: doctor.image || null,
+        profileImage: null, // Don't store file object in state
         firstName: doctor.firstName || "",
         lastName: doctor.lastName || "",
         department: doctor.department || "",
@@ -431,7 +448,7 @@ console.log("Extracted Doctor:", doctor);
         email: doctor.email || "",
         dob: doctor.dob ? new Date(doctor.dob).toISOString().split('T')[0] : "",
         gender: doctor.gender ? doctor.gender.charAt(0).toUpperCase() + doctor.gender.slice(1) : "",
-        registrationNumber: doctor.registrationNumber || "",
+        registrationNumber: doctor.regNo || doctor.registrationNumber || "",
         knownLanguages: doctor.knowLanguages || [],
         about: doctor.about || "",
         place: doctor.address?.place || "",
@@ -446,9 +463,8 @@ console.log("Extracted Doctor:", doctor);
         password: "",
         confirmPassword: "",
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
-        hospitalId: doctor.hospitalId || localStorage.getItem("hospitalId") || '',
         experience: doctor.experience || "",
-        appointmentCount: doctor.appointmentCount || "",
+        appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
@@ -505,7 +521,6 @@ console.log("Extracted Doctor:", doctor);
       password: '',
       confirmPassword: '',
       joiningDate: '',
-      hospitalId: '',
       experience: '',
       appointmentCount: '',
       weeklySchedule: getDefaultSchedule(),
@@ -527,6 +542,7 @@ console.log("Extracted Doctor:", doctor);
     }));
   };
 
+  // FIXED: Store the actual File object, NOT a blob URL
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
@@ -550,13 +566,10 @@ console.log("Extracted Doctor:", doctor);
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
-    // Simulate upload (replace with actual S3 upload)
-    setTimeout(() => {
-      const fakeUrl = URL.createObjectURL(file);
-      setFormData(prev => ({ ...prev, profileImage: fakeUrl }));
-      setUploadProgress(100);
-      showSuccessToast('Image uploaded successfully!', 2000);
-    }, 1000);
+    // Store the actual File object, not a blob URL
+    setFormData(prev => ({ ...prev, profileImage: file }));
+    setUploadProgress(100);
+    showSuccessToast('Image uploaded successfully!', 2000);
     
     return true;
   };
@@ -573,11 +586,12 @@ console.log("Extracted Doctor:", doctor);
     showSuccessToast('Image removed', 2000);
   };
 
+  // FIXED: Handle country change with both code and name as strings
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
       ...prev,
-      countryCode: code,
-      countryName: name,
+      countryCode: String(code),
+      countryName: String(name),
       stateCode: '',
       stateName: '',
       district: ''
@@ -586,20 +600,22 @@ console.log("Extracted Doctor:", doctor);
     setAvailableCities([]);
   };
 
+  // FIXED: Handle state change with both code and name as strings
   const handleStateChange = (code, name) => {
     setFormData(prev => ({
       ...prev,
-      stateCode: code,
-      stateName: name,
+      stateCode: String(code),
+      stateName: String(name),
       district: ''
     }));
     setAvailableCities(City.getCitiesOfState(formData.countryCode, code));
   };
 
-  const handleCityChange = (name) => {
+  // FIXED: Handle city change - receives (value, name) from SearchableDropdown
+  const handleCityChange = (value, name) => {
     setFormData(prev => ({
       ...prev,
-      district: name
+      district: String(name)
     }));
   };
 
@@ -639,6 +655,7 @@ console.log("Extracted Doctor:", doctor);
     try {
       setIsSubmitting(true);
 
+      // No hospitalId in update - only fields that can change
       const updatedDoctorData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -650,16 +667,15 @@ console.log("Extracted Doctor:", doctor);
         email: formData.email,
         dob: formData.dob,
         gender: formData.gender?.toLowerCase(),
-        registrationNumber: formData.registrationNumber,
+        regNo: formData.registrationNumber,
         knowLanguages: formData.knownLanguages,
         about: formData.about,
         displayName: formData.displayName,
-        userName: formData.userName,
-        image: formData.profileImage || previewImage,
+        // FIXED: Only send image if it's a string URL (from previewImage or existing doctor image)
+        image: typeof previewImage === "string" ? previewImage : "",
         experience: formData.experience,
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
-        hospitalId: Number(formData.hospitalId),
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -693,7 +709,7 @@ console.log("Extracted Doctor:", doctor);
       };
 
       if (formData.appointmentCount && formData.appointmentCount !== '') {
-        updatedDoctorData.appointmentCount = Number(formData.appointmentCount);
+        updatedDoctorData.appoimentCount = Number(formData.appointmentCount);
       }
 
       if (formData.outDoorConsultingOpen && 
@@ -737,10 +753,12 @@ console.log("Extracted Doctor:", doctor);
     navigate('/doctors');
   };
 
+  // Centered loading state for initial load
   if (isLoading) {
-    return <Loader centered text="Loading doctor data..." />;
+    return <CenteredLoader text="Loading doctor data..." />;
   }
 
+  // Error state
   if (error) {
     console.error("Error fetching doctor:", error);
     return (
@@ -760,20 +778,17 @@ console.log("Extracted Doctor:", doctor);
     );
   }
 
-  if (!doctor && !isLoading && doctors.length > 0) {
+  // No doctor found
+  if (!doctor && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="bg-yellow-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-yellow-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mt-4">No Doctor Data</h2>
-          <p className="text-gray-600 mt-2">No doctor data received from the server.</p>
-          <p className="text-gray-500 text-sm mt-1">ID: {doctorId}</p>
-          <Button variant="primary" onClick={() => refetch()} className="mt-6 mr-2">
-            Retry
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/doctors')} className="mt-6">
+          <h2 className="text-2xl font-bold text-gray-900 mt-4">Doctor Not Found</h2>
+          <p className="text-gray-600 mt-2">No doctor found with ID: {doctorId}</p>
+          <Button variant="primary" onClick={() => navigate('/doctors')} className="mt-6">
             Back to Doctors List
           </Button>
         </div>
@@ -781,9 +796,9 @@ console.log("Extracted Doctor:", doctor);
     );
   }
 
-  // Show loading if form is not initialized yet
+  // Show centered loading if form is not initialized yet
   if (!formInitialized && doctor) {
-    return <Loader centered text="Loading form data..." />;
+    return <CenteredLoader text="Loading form data..." />;
   }
 
   return (
@@ -897,14 +912,6 @@ console.log("Extracted Doctor:", doctor);
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input 
-                    label="Hospital ID" 
-                    name="hospitalId" 
-                    type="number" 
-                    icon={Building} 
-                    value={formData.hospitalId} 
-                    readOnly 
-                  />
-                  <Input 
                     label="Joining Date" 
                     name="joiningDate" 
                     type="date" 
@@ -921,7 +928,7 @@ console.log("Extracted Doctor:", doctor);
                     options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'ENT']} 
                     placeholder="Select Department" 
                     value={formData.department} 
-                    onChange={(value) => handleFieldChange('department', value)} 
+                    onChange={(e) => handleFieldChange('department', e.target.value)} 
                     required 
                   />
                   <Input 
@@ -1097,7 +1104,7 @@ console.log("Extracted Doctor:", doctor);
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="Country"
                       options={countries}
                       value={formData.countryCode}
@@ -1107,7 +1114,7 @@ console.log("Extracted Doctor:", doctor);
                       required={true}
                     />
                     
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="State"
                       options={availableStates}
                       value={formData.stateCode}
@@ -1118,7 +1125,7 @@ console.log("Extracted Doctor:", doctor);
                       required={true}
                     />
 
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="District"
                       options={availableCities}
                       value={formData.district}
@@ -1162,14 +1169,6 @@ console.log("Extracted Doctor:", doctor);
                       value={formData.displayName} 
                       onChange={(e) => handleFieldChange('displayName', e.target.value)} 
                     />
-                    {/* <Input 
-                      label="Username" 
-                      name="userName" 
-                      icon={User} 
-                      placeholder="Unique username" 
-                      value={formData.userName} 
-                      onChange={(e) => handleFieldChange('userName', e.target.value)} 
-                    /> */}
                     
                     <div className="relative">
                       <Input 
@@ -1211,7 +1210,7 @@ console.log("Extracted Doctor:", doctor);
                 
                 <div className="space-y-4">
                   {weekDays.map((day) => (
-                    <DayScheduleRow
+                    <DayScheduleRowComponent
                       key={day.key}
                       day={day.label}
                       schedule={formData.weeklySchedule[day.key] || { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '17:00', eveningOpen: '', eveningClose: '' }}

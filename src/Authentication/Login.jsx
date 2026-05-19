@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION
+// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION (JWT-Only Architecture)
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
 import { useLoginHospitalMutation } from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
+import { jwtDecode } from 'jwt-decode';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -65,7 +66,6 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // UPDATED: Improved handleSubmit with token verification
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -79,46 +79,48 @@ const Login = () => {
           password: formData.password
         }).unwrap();
         
-        console.log("✅ Login successful - Full response:", response);
+        console.log("✅ Login successful - Response:", response);
         
-        // STORE TOKEN IN LOCALSTORAGE
-        const token = response.token || response.accessToken;
+        // STORE ONLY TOKEN IN LOCALSTORAGE (JWT is the single source of truth)
+        const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
         
         if (token) {
           localStorage.setItem("accessToken", token);
-          console.log("✅ Access token stored:", token);
+          console.log("✅ Access token stored successfully");
+          
+          // Optional: Verify token is valid (for debugging)
+          try {
+            const decoded = jwtDecode(token);
+            console.log("✅ Token decoded successfully - Hospital ID:", decoded.id);
+            console.log("Token expiration:", new Date(decoded.exp * 1000).toLocaleString());
+          } catch (decodeError) {
+            console.warn("Could not decode token:", decodeError);
+          }
         } else {
-          console.log("❌ No token found in response");
+          console.warn("⚠️ No token found in response. Response structure:", Object.keys(response));
         }
         
-        // Verify tokens were stored
-        const accessToken = localStorage.getItem("accessToken");
-        console.log("Access token stored:", !!accessToken);
-        
-        
-        if (accessToken) {
-          console.log("Access token preview:", accessToken.substring(0, 30) + "...");
-        }
-        
-        // Extract hospital data from response (handle different structures)
-        const hospitalData = response.data || response.hospital || response.user || {};
+        // Extract hospital data from response for auth context
+        const hospitalData = response.data || response.hospital || response.user || response;
         
         const authData = {
-          id: hospitalData?.id || 1,
-          name: hospitalData?.name || "Hospital",
+          id: hospitalData?.id || hospitalData?.hospitalId || 1,
+          name: hospitalData?.name || hospitalData?.hospitalName || "Hospital",
           email: hospitalData?.email || formData.email,
-          phone: hospitalData?.phone || "",
-          type: hospitalData?.type || "",
+          phone: hospitalData?.phone || hospitalData?.mobileNumber || "",
+          type: hospitalData?.type || hospitalData?.hospitalType || "",
         };
         
-        console.log("AUTH DATA:", authData);
+        console.log("👤 Auth data being passed to context:", authData);
         
+        // Call login from auth context
         await login(authData);
         
-        showSuccessToast(`Login successful! Welcome back, ${authData.name || 'Hospital'}!`, 4000);
+        showSuccessToast(`Login successful! Welcome back, ${authData.name}!`, 4000);
         
         setIsSubmitting(false);
         
+        // Navigate to dashboard
         navigate("/dashboard", { replace: true });
         
       } catch (error) {
@@ -132,6 +134,8 @@ const Login = () => {
           errorMessage = "Invalid email or password. Please try again.";
         } else if (error.status === 404) {
           errorMessage = "Account not found. Please register first.";
+        } else if (error.status === 400) {
+          errorMessage = error.data?.message || "Invalid request. Please check your credentials.";
         }
         
         setLoginError(errorMessage);

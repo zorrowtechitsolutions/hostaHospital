@@ -1,6 +1,7 @@
 // app/service/staffApi.ts
 
 import { api } from "./api";
+import { getHospitalId } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -42,75 +43,88 @@ export interface StaffResponse {
   refreshToken?: string;
 }
 
+export interface GetStaffParams {
+  id?: string | number;
+}
+
 // ================= API =================
 
 export const staffApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ================= GET STAFF =================
-
+    // Automatically adds hospitalId from authenticated user
     getStaff: builder.query<
       StaffResponse,
-      {
-        id?: string | number;
-        hospitalId?: string | number;
-      } | void
+      GetStaffParams | void
     >({
       query: (params) => {
         const queryParams = new URLSearchParams();
-
-        if (params?.hospitalId) {
-          queryParams.append(
-  "id",
-  String(params.hospitalId)
-);
+        
+        // Auto-inject hospitalId from auth
+        const hospitalId = getHospitalId();
+        if (hospitalId) {
+          queryParams.append("hospitalId", String(hospitalId));
         }
 
         const queryString = queryParams.toString();
 
-        return params?.id
-          ? `/staff/${params.id}`
-          : `/staff${queryString ? `?${queryString}` : ""}`;
+        if (params?.id) {
+          return `/staff/${params.id}${queryString ? `?${queryString}` : ""}`;
+        }
+
+        return `/staff${queryString ? `?${queryString}` : ""}`;
       },
 
-      providesTags: ["Staff"],
+      providesTags: (result, error, params) => {
+        if (params?.id && result?.data && !Array.isArray(result.data)) {
+          return [{ type: "Staff", id: params.id }];
+        }
+        return ["Staff"];
+      },
     }),
 
-    // CREATE STAFF 
-
+    // ================= CREATE STAFF =================
+    // Automatically adds hospitalId from authenticated user
     createStaff: builder.mutation<
       StaffResponse,
-      Partial<Staff>
+      Omit<Staff, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
     >({
-      query: (data) => ({
-        url: "/staff",
-        method: "POST",
-        body: data,
-      }),
-
+      query: (data) => {
+        const hospitalId = getHospitalId();
+        
+        return {
+          url: "/staff",
+          method: "POST",
+          body: {
+            ...data,
+            hospitalId: hospitalId, // Auto-inject from auth
+          },
+        };
+      },
       invalidatesTags: ["Staff"],
     }),
 
     // ================= UPDATE STAFF =================
-
     updateStaff: builder.mutation<
-  StaffResponse,
-  {
-    id: string | number;
-    data: Partial<Staff>;
-  }
->({
-  query: ({ id, data }) => ({
-    url: `/staff/${id}`,
-    method: "PUT",
-    body: data,
-  }),
-
-  invalidatesTags: ["Staff"],
-}),
+      StaffResponse,
+      {
+        id: string | number;
+        data: Partial<Omit<Staff, 'id' | 'hospitalId'>>;
+      }
+    >({
+      query: ({ id, data }) => ({
+        url: `/staff/${id}`,
+        method: "PUT",
+        body: data,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Staff", id },
+        "Staff",
+      ],
+    }),
 
     // ================= DELETE STAFF =================
-
     deleteStaff: builder.mutation<
       { message: string },
       string | number
@@ -119,12 +133,13 @@ export const staffApi = api.injectEndpoints({
         url: `/staff/${id}`,
         method: "DELETE",
       }),
-
-      invalidatesTags: ["Staff"],
+      invalidatesTags: (result, error, id) => [
+        { type: "Staff", id },
+        "Staff",
+      ],
     }),
 
     // ================= LOGIN =================
-
     loginStaff: builder.mutation<
       StaffResponse,
       {
@@ -137,10 +152,16 @@ export const staffApi = api.injectEndpoints({
         method: "POST",
         body: data,
       }),
+      transformResponse: (response: StaffResponse) => {
+        const token = response.token;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+        }
+        return response;
+      },
     }),
 
     // ================= LOGIN PHONE =================
-
     loginStaffPhone: builder.mutation<
       StaffResponse,
       {
@@ -155,7 +176,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= VERIFY OTP =================
-
     verifyStaffOtp: builder.mutation<
       StaffResponse,
       {
@@ -168,10 +188,16 @@ export const staffApi = api.injectEndpoints({
         method: "POST",
         body: data,
       }),
+      transformResponse: (response: StaffResponse) => {
+        const token = response.token;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+        }
+        return response;
+      },
     }),
 
     // ================= REFRESH =================
-
     refreshStaff: builder.mutation<
       StaffResponse,
       void
@@ -180,10 +206,16 @@ export const staffApi = api.injectEndpoints({
         url: "/staff/refresh",
         method: "POST",
       }),
+      transformResponse: (response: StaffResponse) => {
+        const token = response.token;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+        }
+        return response;
+      },
     }),
 
     // ================= LOGOUT =================
-
     logoutStaff: builder.mutation<
       { message: string },
       void
@@ -192,6 +224,14 @@ export const staffApi = api.injectEndpoints({
         url: "/staff/logout",
         method: "POST",
       }),
+      onQueryStarted: async (_arg, { queryFulfilled }) => {
+        try {
+          await queryFulfilled;
+          localStorage.removeItem("accessToken");
+        } catch (error) {
+          console.error("Logout error:", error);
+        }
+      },
     }),
   }),
 });

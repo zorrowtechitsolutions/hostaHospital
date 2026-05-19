@@ -1,6 +1,6 @@
 // doctorApi.ts
-
 import { api } from "./api";
+import { getAuthUser } from "../../src/utils/auth";
 
 // ==============================
 // TYPES
@@ -52,17 +52,19 @@ export const doctorApi = api.injectEndpoints({
 
     // ==============================
     // GET DOCTORS
+    // Automatically adds hospitalId from authenticated user
     // ==============================
-
-// app/service/doctorApi.js
     getDoctors: builder.query({
       query: (params) => {
+        const auth = getAuthUser();
         const queryParams = new URLSearchParams();
         
-        if (params?.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
+        // Automatically add hospitalId from authenticated user
+        if (auth?.id) {
+          queryParams.append("hospitalId", String(auth.id));
         }
         
+        // Optional speciality filter (can be passed from component)
         if (params?.speciality) {
           queryParams.append("speciality", params.speciality);
         }
@@ -74,13 +76,17 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ==============================
+    // GET DOCTOR BY ID
+    // ==============================
+    getDoctorById: builder.query<DoctorAuthResponse, string>({
+      query: (id) => `/doctor/${id}`,
+      providesTags: (result, error, id) => [{ type: "Doctor", id }],
+    }),
+
+    // ==============================
     // LOGIN DOCTOR
     // ==============================
-
-    loginDoctor: builder.mutation<
-      DoctorAuthResponse,
-      LoginDoctorData
-    >({
+    loginDoctor: builder.mutation<DoctorAuthResponse, LoginDoctorData>({
       query: (logUser) => ({
         url: "/doctor/login",
         method: "POST",
@@ -95,10 +101,7 @@ export const doctorApi = api.injectEndpoints({
         }
 
         if (response.refreshToken) {
-          localStorage.setItem(
-            "refreshToken",
-            response.refreshToken
-          );
+          localStorage.setItem("refreshToken", response.refreshToken);
         }
 
         return response;
@@ -110,11 +113,7 @@ export const doctorApi = api.injectEndpoints({
     // ==============================
     // LOGOUT DOCTOR
     // ==============================
-
-    logoutDoctor: builder.mutation<
-      { message: string },
-      { hospitalId: string }
-    >({
+    logoutDoctor: builder.mutation<{ message: string }, { hospitalId: string }>({
       query: ({ hospitalId }) => ({
         url: `/doctor/logout/${hospitalId}`,
         method: "PUT",
@@ -123,7 +122,6 @@ export const doctorApi = api.injectEndpoints({
       onQueryStarted: async (_arg, { queryFulfilled }) => {
         try {
           await queryFulfilled;
-
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
         } catch (error) {
@@ -134,52 +132,48 @@ export const doctorApi = api.injectEndpoints({
 
     // ==============================
     // ADD NEW DOCTOR
+    // Automatically adds hospitalId from authenticated user
     // ==============================
-
-    addNewDoctor: builder.mutation<
-      DoctorAuthResponse,
-      Doctor
-    >({
-      query: (newDoctor) => ({
-        url: "/doctor",
-        method: "POST",
-        body: newDoctor,
-      }),
-
+    addNewDoctor: builder.mutation<DoctorAuthResponse, Omit<Doctor, 'hospitalId'>>({
+      query: (newDoctor) => {
+        const auth = getAuthUser();
+        
+        return {
+          url: "/doctor",
+          method: "POST",
+          body: {
+            ...newDoctor,
+            hospitalId: auth?.id, // Automatically add from auth
+          },
+        };
+      },
       invalidatesTags: ["Doctor"],
     }),
 
     // ==============================
     // UPDATE DOCTOR
     // ==============================
-
-    updateDoctor: builder.mutation<
-      Doctor,
-      {id: string; updateDoctor: Partial<Doctor> }
-    >({
-      query: ({id, updateDoctor }) => ({
+    updateDoctor: builder.mutation<Doctor, { id: string; updateDoctor: Partial<Doctor> }>({
+      query: ({ id, updateDoctor }) => ({
         url: `/doctor/${id}`,
         method: "PUT",
         body: updateDoctor,
       }),
-
-      invalidatesTags: ["Doctor"],
+      invalidatesTags: (result, error, { id }) => [{ type: "Doctor", id }],
     }),
 
     // ==============================
     // DELETE DOCTOR
     // ==============================
-
-    deleteDoctor: builder.mutation<
-      { message: string },
-      string
-    >({
-      query: (hospitalId) => ({
-        url: `/doctor/${hospitalId}`,
+    deleteDoctor: builder.mutation<{ message: string }, string>({
+      query: (doctorId) => ({
+        url: `/doctor/${doctorId}`,
         method: "DELETE",
       }),
-
-      invalidatesTags: ["Doctor"],
+      invalidatesTags: (result, error, doctorId) => [
+        { type: "Doctor", doctorId },
+        "Doctor",
+      ],
     }),
   }),
 
@@ -192,6 +186,7 @@ export const doctorApi = api.injectEndpoints({
 
 export const {
   useGetDoctorsQuery,
+  useGetDoctorByIdQuery,
   useLoginDoctorMutation,
   useLogoutDoctorMutation,
   useAddNewDoctorMutation,

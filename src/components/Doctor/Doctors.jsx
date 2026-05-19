@@ -1,6 +1,7 @@
 // src/components/Doctor/Doctors.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { getHospitalId } from '../../utils/auth';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
 import {
@@ -111,7 +112,6 @@ const Doctors = () => {
   const [showAppointmentManagement, setShowAppointmentManagement] = useState(false);
   const [selectedDoctorForManagement, setSelectedDoctorForManagement] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const hospitalId = localStorage.getItem("hospitalId");
 
   const [specialityFilter, setSpecialityFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -121,20 +121,18 @@ const Doctors = () => {
 
   const fileInputRef = useRef(null);
 
+  // API Hook - hospitalId is automatically injected by the API service
   const {
     data: response,
     error,
     isLoading,
     isFetching,
     refetch,
-  } = useGetDoctorsQuery({
-    hospitalId,
-  });
+  } = useGetDoctorsQuery();
 
   const doctors = response?.data || [];
 
-  console.log("Hospital ID:", hospitalId);
-  console.log("Doctors:", doctors);
+  console.log("Doctors count:", doctors.length);
 
   useEffect(() => {
     if (location.state?.speciality) {
@@ -184,7 +182,6 @@ const Doctors = () => {
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      // Optional: Scroll to top when changing pages
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };

@@ -18,22 +18,21 @@ const AppointmentManagement = ({
 
   useEffect(() => {
     if (doctor && doctor.id) {
-      // Load saved settings from localStorage
-      const savedSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
-      const settings = savedSettings[doctor.id];
-      if (settings) {
-        setSelectionType(settings.selectionType || 'manual_count');
-        setAutoDeclineMinutes(settings.autoDeclineMinutes || 5);
-        setManualCount(settings.manualCount || 21);
+      // First check if doctor has appointment settings from API
+      if (doctor.autoDecline && doctor.autoDecline > 0) {
+        setSelectionType('auto_decline');
+        setAutoDeclineMinutes(doctor.autoDecline);
+      } else if (doctor.appointmentCount && doctor.appointmentCount > 0) {
+        setSelectionType('manual_count');
+        setManualCount(doctor.appointmentCount);
       } else {
-        if (doctor.autoDecline) {
-          setSelectionType('auto_decline');
-          setAutoDeclineMinutes(doctor.autoDecline);
-        }
-
-        if (doctor.appointmentCount) {
-          setSelectionType('manual_count');
-          setManualCount(doctor.appointmentCount);
+        // Fallback to localStorage for backward compatibility
+        const savedSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
+        const settings = savedSettings[doctor.id];
+        if (settings) {
+          setSelectionType(settings.selectionType || 'manual_count');
+          setAutoDeclineMinutes(settings.autoDeclineMinutes || 5);
+          setManualCount(settings.manualCount || 21);
         }
       }
     }
@@ -56,18 +55,18 @@ const AppointmentManagement = ({
                         doctor.name || 
                         'Doctor';
 
-      // Prepare payload for API  
-      let body = {};
+      // Prepare payload for API - hospitalId is auto-injected by API service
+      let updateData = {};
 
       if (selectionType === "manual_count") {
-        body = {
+        updateData = {
           appointmentCount: Number(manualCount),
           autoDecline: 0,
         };
       }
 
       if (selectionType === "auto_decline") {
-        body = {
+        updateData = {
           autoDecline: Number(autoDeclineMinutes),
           appointmentCount: 0,
         };
@@ -75,10 +74,10 @@ const AppointmentManagement = ({
 
       const payload = {
         id: doctor.id,
-        updateDoctor: body,
+        updateDoctor: updateData,
       };
 
-      console.log("FINAL PAYLOAD", payload);
+      console.log("Updating doctor with payload:", payload);
 
       const result = await updateDoctor(payload).unwrap();
 
@@ -88,7 +87,7 @@ const AppointmentManagement = ({
         await refetchDoctors();
       }
       
-      // Create complete settings object for callback and localStorage
+      // Create complete settings object for callback and localStorage backup
       const settingsToSave = {
         doctorId: doctor.id,
         doctorName: doctorName,
@@ -100,12 +99,12 @@ const AppointmentManagement = ({
       
       console.log('Settings to save:', settingsToSave);
       
-      // Save to localStorage
+      // Save to localStorage as backup (optional, API is primary source)
       const savedSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
       savedSettings[doctor.id] = settingsToSave;
       localStorage.setItem('appointmentSettings', JSON.stringify(savedSettings));
       
-      // Show toast notification (this is the nice popup, not an alert)
+      // Show toast notification
       const settingDescription = selectionType === 'manual_count' 
         ? `Maximum ${manualCount} appointments per day` 
         : `Auto-decline after ${autoDeclineMinutes} minutes`;
@@ -133,7 +132,7 @@ const AppointmentManagement = ({
                         doctor?.name || 
                         'Doctor';
       
-      // Show error toast instead of alert
+      // Show error toast
       showErrorToast(`Failed to save settings for ${doctorName}`, 5000, {
         Doctor: doctorName,
         'Error Details': errorMessage,
@@ -256,62 +255,62 @@ const AppointmentManagement = ({
             </div>
           )}
 
-{selectionType === 'manual_count' && (
-  <div className="mt-5 pt-4 border-t border-gray-100">
-    <div className="flex items-center gap-2 mb-3">
-      <Users size={14} className="text-gray-500" />
-      <h4 className="text-sm font-medium text-gray-700">Manual Count Configuration</h4>
-    </div>
-    
-    <div className="mb-3">
-      <label className="block text-xs font-medium text-gray-600 mb-1">
-        Maximum Bookings per Day
-      </label>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min="1"
-          value={manualCount}
-          onChange={(e) => {
-            let value = parseInt(e.target.value);
-            if (e.target.value === '') {
-              setManualCount('');
-              return;
-            }
-            if (!isNaN(value)) {
-              // Remove the 100 limit - only enforce minimum of 1
-              if (value < 1) {
-                setManualCount(1);
-              } else {
-                setManualCount(value);
-              }
-            }
-          }}
-          onBlur={() => {
-            if (manualCount === '' || manualCount === null) {
-              setManualCount(1);
-            }
-          }}
-          className="w-32 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#3676ae]"
-        />
-        <span className="text-xs text-gray-500">appointments per day (unlimited maximum)</span>
-      </div>
-      <p className="text-xs text-gray-400 mt-1">
-        Maximum number of appointments that can be booked per day. No upper limit.
-      </p>
-    </div>
+          {selectionType === 'manual_count' && (
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={14} className="text-gray-500" />
+                <h4 className="text-sm font-medium text-gray-700">Manual Count Configuration</h4>
+              </div>
+              
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Maximum Bookings per Day
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={manualCount}
+                    onChange={(e) => {
+                      let value = parseInt(e.target.value);
+                      if (e.target.value === '') {
+                        setManualCount('');
+                        return;
+                      }
+                      if (!isNaN(value)) {
+                        if (value < 1) {
+                          setManualCount(1);
+                        } else {
+                          setManualCount(value);
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      if (manualCount === '' || manualCount === null) {
+                        setManualCount(1);
+                      }
+                    }}
+                    className="w-32 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#3676ae]"
+                  />
+                  <span className="text-xs text-gray-500">appointments per day</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Maximum number of appointments that can be booked per day
+                </p>
+              </div>
 
-    <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-100">
-      <div className="flex items-center gap-2">
-        <AlertCircle size={12} className="text-gray-400" />
-        <p className="text-xs text-gray-600">
-          Current: Maximum <span className="font-medium">{manualCount || 'unlimited'}</span> appointments allowed per day
-        </p>
-      </div>
-    </div>
-  </div>
-)}
-</div>
+              <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={12} className="text-gray-400" />
+                  <p className="text-xs text-gray-600">
+                    Current: Maximum <span className="font-medium">{manualCount || 'unlimited'}</span> appointments allowed per day
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
           <button

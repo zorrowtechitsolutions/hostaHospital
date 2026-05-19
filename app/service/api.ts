@@ -1,4 +1,3 @@
-// app/service/api.ts
 import {
   createApi,
   fetchBaseQuery,
@@ -7,6 +6,8 @@ import {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
+import { getToken, clearAuth } from "../../src/utils/auth";
+
 interface RefreshResponse {
   token?: string;
   accessToken?: string;
@@ -14,16 +15,18 @@ interface RefreshResponse {
 
 const baseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+
   credentials: "include",
+
   prepareHeaders: (headers) => {
-    const token = localStorage.getItem("accessToken");
-    
+    const token = getToken();
+
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
-    
+
     headers.set("Content-Type", "application/json");
-    
+
     return headers;
   },
 });
@@ -34,10 +37,10 @@ const baseQueryWithReauth: BaseQueryFn<
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
   let result = await baseQuery(args, api, extraOptions);
-  
+
   if (result.error && result.error.status === 401) {
-    console.log("🔑 401 detected - Attempting refresh...");
-    
+    console.log("🔑 Token expired. Refreshing...");
+
     const refreshResult = await baseQuery(
       {
         url: "/hospital/refresh",
@@ -46,43 +49,33 @@ const baseQueryWithReauth: BaseQueryFn<
       api,
       extraOptions
     );
-    
+
     if (refreshResult.data) {
       const refreshData = refreshResult.data as RefreshResponse;
-      const newToken = refreshData.token || refreshData.accessToken;
-      
+
+      const newToken =
+        refreshData.token || refreshData.accessToken;
+
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
-        
-        result = await baseQuery(
-          {
-            ...(typeof args === "string" ? { url: args } : args),
-            headers: {
-              ...(typeof args !== "string" ? args.headers : {}),
-              Authorization: `Bearer ${newToken}`,
-            },
-          },
-          api,
-          extraOptions
-        );
+
+        result = await baseQuery(args, api, extraOptions);
       } else {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        window.location.href = "/sign-in";
+        clearAuth();
       }
     } else {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      window.location.href = "/sign-in";
+      clearAuth();
     }
   }
-  
+
   return result;
 };
 
 export const api = createApi({
   reducerPath: "api",
+
   baseQuery: baseQueryWithReauth,
+
   tagTypes: [
     "Hospital",
     "Staff",
@@ -90,12 +83,13 @@ export const api = createApi({
     "Appointment",
     "Doctor",
     "Department",
-    "Ambulance", 
+    "Ambulance",
     "BloodBank",
     "Booking",
     "Role",
     "RolePermission",
   ],
+
   endpoints: () => ({}),
 });
 

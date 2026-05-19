@@ -29,19 +29,16 @@ import {
   useDeleteStaffMutation
 } from '../../../app/service/staffApi';
 
-import { useAuth } from '../../context/AuthContext';
-
 import {
   showSuccessToast,
   showErrorToast
 } from '../ui/Toast';
 
 // Default profile image URL
-const DEFAULT_PROFILE_IMAGE = "https://randomuser.me/api/portraits/lego/${index}.jpg";
+const DEFAULT_PROFILE_IMAGE = "https://randomuser.me/api/portraits/lego/1.jpg";
 
 const Staffs = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -57,15 +54,14 @@ const Staffs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fetch staff data filtered by hospital ID
+  // API Hooks - hospitalId is automatically injected by the API service
   const {
     data: staffApiResponse,
     isLoading: loading,
-    refetch
-  } = useGetStaffQuery(
-    { hospitalId: user?.id },
-    { skip: !user?.id }
-  );
+    refetch,
+    isFetching
+  } = useGetStaffQuery(); // No need to pass hospitalId!
+
   const [deleteStaff] = useDeleteStaffMutation();
 
   // Helper function to format staff ID
@@ -83,32 +79,32 @@ const Staffs = () => {
 
   // Transform API response to match the expected format
   const transformStaffData = (staffList) => {
-  if (!staffList || !Array.isArray(staffList)) return [];
-  
-  return staffList.map((staff, index) => ({
-    id: staff.id,
-    formattedId: formatStaffId(staff.id || index + 1),
-    originalId: staff.id || staff._id,
-    name: staff.name || '',
-    firstName: staff.name?.split(' ')[0] || '',
-    lastName: staff.name?.split(' ').slice(1).join(' ') || '',
-    gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
-    designation: staff.designation || '',
-    phone: staff.phone || '',
-    email: staff.email || '',
-    appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
-    appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-    patientsCount: Math.floor(Math.random() * 200) + 10,
-    profileImage: staff.profileImage || null,
-    status: staff.status === 'inactive' ? 'Inactive' : 'Active',
-    jobType: staff.jobType || '',
-    dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
-    address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
-    joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-    department: staff.designation || '',
-    staffType: staff.staffType || ''
-  }));
-};
+    if (!staffList || !Array.isArray(staffList)) return [];
+    
+    return staffList.map((staff, index) => ({
+      id: staff.id,
+      formattedId: formatStaffId(staff.id || index + 1),
+      originalId: staff.id || staff._id,
+      name: staff.name || '',
+      firstName: staff.name?.split(' ')[0] || '',
+      lastName: staff.name?.split(' ').slice(1).join(' ') || '',
+      gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
+      designation: staff.designation || '',
+      phone: staff.phone || '',
+      email: staff.email || '',
+      appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
+      appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+      patientsCount: Math.floor(Math.random() * 200) + 10,
+      profileImage: staff.profileImage || null,
+      status: staff.status === 'inactive' ? 'Inactive' : 'Active',
+      jobType: staff.jobType || '',
+      dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
+      address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
+      joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+      department: staff.designation || '',
+      staffType: staff.staffType || ''
+    }));
+  };
 
   const staffsData = transformStaffData(staffApiResponse?.data || []);
 
@@ -160,6 +156,7 @@ const Staffs = () => {
   const handleRefresh = () => {
     clearAllFilters();
     refetch();
+    showSuccessToast("Refreshed staff list", 2000);
   };
 
   const handleExport = () => {
@@ -195,8 +192,9 @@ const Staffs = () => {
       try {
         const importedData = JSON.parse(e.target.result);
         showSuccessToast(`Successfully imported ${importedData.length} staff members! (Note: Import to API requires additional implementation)`, 3000);
+        refetch();
       } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.');
+        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     reader.readAsText(file);
@@ -406,8 +404,8 @@ const Staffs = () => {
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
-              <RefreshCcw size={16} />
+            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
+              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
             <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
@@ -495,6 +493,12 @@ const Staffs = () => {
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
+            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+            {(activeFilterCount > 0 || searchTerm) && (
+              <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
+                Clear all filters
+              </button>
+            )}
           </div>
         ) : (
           <Card>

@@ -14,7 +14,6 @@ import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
 import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/service/request';
-import { useAuth } from '../../context/AuthContext';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // Helper functions for date formatting
@@ -50,7 +49,6 @@ const formatDateTime = (date, time) => {
 
 const Visits = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -67,19 +65,15 @@ const Visits = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
-  // Fetch accepted bookings from API (only approved appointments)
+  // API Hooks - hospitalId is automatically injected by the API service
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching 
-  } = useGetBookingsQuery(
-    { 
-      hospitalId: user?.id,
-      status: "accepted" // Only fetch approved appointments
-    },
-    { skip: !user?.id }
-  );
+  } = useGetBookingsQuery({
+    status: "accepted" // Only fetch approved appointments
+  });
 
   // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
@@ -98,7 +92,7 @@ const Visits = () => {
     console.log("BOOKINGS RESPONSE:", bookingsResponse);
     console.log("BOOKING LIST:", bookingList);
 
-    // Filter only accepted bookings
+    // Filter only accepted bookings (already filtered by API, but double-check)
     const acceptedBookings = bookingList.filter(
       (booking) => booking.status?.toLowerCase() === "accepted"
     );
@@ -190,6 +184,7 @@ const Visits = () => {
     setDateFilter("");
     setCurrentPage(1); 
     refetch(); 
+    showSuccessToast("Refreshed visits", 2000);
   };
   
   const handleExport = () => {
@@ -209,6 +204,7 @@ const Visits = () => {
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `approved_visits_export_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
+    showSuccessToast(`Exported ${exportData.length} visits`, 2000);
   };
   
   const handleImport = (event) => {
@@ -219,10 +215,10 @@ const Visits = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        alert(`Successfully imported ${importedData.length} visits!`);
+        showSuccessToast(`Successfully imported ${importedData.length} visits!`, 3000);
         refetch();
       } catch (error) { 
-        alert('Error parsing JSON file.'); 
+        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     reader.readAsText(file);
@@ -232,7 +228,8 @@ const Visits = () => {
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
     setDateFilter('');
-    setSearchTerm(''); 
+    setSearchTerm('');
+    showSuccessToast("All filters cleared", 2000);
   };
   
   const getActiveFilterCount = () => {
@@ -268,11 +265,13 @@ const Visits = () => {
     setShowEditModal(false);
     setEditingVisit(null);
     refetch();
+    showSuccessToast("Visit updated successfully", 2000);
   };
   
   const handleAddVisit = (newVisit) => { 
     setShowAddModal(false); 
     refetch();
+    showSuccessToast("Visit added successfully", 2000);
   };
   
   const handleDeleteClick = (visit) => { 

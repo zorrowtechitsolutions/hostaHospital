@@ -27,16 +27,16 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
     setIsDeleting(true);
     
     try {
-      // Call API to delete doctor
+      // Call API to delete doctor - auth is automatic via API service
       const result = await deleteDoctor(doctorId).unwrap();
       console.log('Delete result:', result);
       
-      // Also remove from localStorage for backup
+      // Also remove from localStorage for backup (optional)
       const existingDoctors = JSON.parse(localStorage.getItem('doctors') || '[]');
       const updatedDoctors = existingDoctors.filter(doc => doc.id !== doctorId);
       localStorage.setItem('doctors', JSON.stringify(updatedDoctors));
       
-      // Remove appointment settings for this doctor
+      // Remove appointment settings for this doctor (optional)
       const appointmentSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
       delete appointmentSettings[doctorId];
       localStorage.setItem('appointmentSettings', JSON.stringify(appointmentSettings));
