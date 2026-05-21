@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Calendar, 
-  Users, 
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Users,
   Link as LinkIcon,
-  Camera, 
   Save,
   Edit2,
   Globe,
@@ -20,34 +18,123 @@ import {
 } from 'lucide-react';
 import { showErrorToast, showSuccessToast, showWarningToast } from '../ui/Toast';
 
-const Profile = () => {
-  // State for profile data
-  const [profile, setProfile] = useState({
-    // Basic Info
-    fullName: 'Alex Morgan',
-    username: '@alexmorgan',
-    email: 'alex.morgan@example.com',
-    phoneNumber: '+1 (555) 123-4567',
-    
-    // Profile Details
-    profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-    bio: 'Passionate full-stack developer with 8+ years of experience. React enthusiast, open-source contributor, and tech blogger. Love building meaningful applications that make a difference.',
-    websiteLink: 'https://alexmorgan.dev',
-    
-    // Personal Info
-    location: 'San Francisco, California, USA',
-    dateOfBirth: '1990-05-15',
-    gender: 'Male',
-    
-    // Additional Info
-    occupation: 'Senior Software Engineer',
-    education: 'M.S. in Computer Science'
-  });
+// ==================== CONSTANTS ====================
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const VALID_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const FALLBACK_IMAGE = 'https://via.placeholder.com/150?text=No+Image';
 
+const INPUT_CLASS = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+const CARD_CLASS = 'bg-white rounded-2xl shadow-sm border border-gray-100 p-6';
+const SECTION_TITLE_CLASS = 'text-lg font-semibold text-gray-900 mb-4 flex items-center';
+const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
+const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
+
+const INITIAL_PROFILE = {
+  fullName: 'Alex Morgan',
+  username: '@alexmorgan',
+  email: 'alex.morgan@example.com',
+  phoneNumber: '+1 (555) 123-4567',
+  profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
+  bio: 'Passionate full-stack developer with 8+ years of experience. React enthusiast, open-source contributor, and tech blogger. Love building meaningful applications that make a difference.',
+  websiteLink: 'https://alexmorgan.dev',
+  location: 'San Francisco, California, USA',
+  dateOfBirth: '1990-05-15',
+  gender: 'Male',
+  occupation: 'Senior Software Engineer',
+  education: 'M.S. in Computer Science'
+};
+
+// ==================== HELPER FUNCTIONS ====================
+const formatFileSize = (size) => `${(size / (1024 * 1024)).toFixed(2)}MB`;
+
+// ==================== REUSABLE COMPONENTS ====================
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className={SECTION_TITLE_CLASS}>
+    <Icon className={SECTION_ICON_CLASS} />
+    {title}
+  </h3>
+);
+
+const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+    {isEditing ? (
+      <input
+        type={type}
+        value={value || ''}
+        onChange={onChange}
+        className={INPUT_CLASS}
+      />
+    ) : (
+      <div className="flex items-center space-x-2">
+        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
+        <span className="text-gray-900">{value || 'Not specified'}</span>
+      </div>
+    )}
+  </div>
+);
+
+const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+    {isEditing ? (
+      <textarea
+        value={value || ''}
+        onChange={onChange}
+        rows={3}
+        className={INPUT_CLASS}
+        placeholder={`Enter ${label.toLowerCase()}`}
+      />
+    ) : (
+      <p className="text-gray-900 leading-relaxed">{value || 'Not specified'}</p>
+    )}
+  </div>
+);
+
+const ProfileSelect = ({ label, value, isEditing, onChange, options }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+    {isEditing ? (
+      <select
+        value={value || ''}
+        onChange={onChange}
+        className={INPUT_CLASS}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    ) : (
+      <div className="flex items-center space-x-2">
+        <Users className="w-4 h-4 text-gray-400" />
+        <span className="text-gray-900">{value || 'Not specified'}</span>
+      </div>
+    )}
+  </div>
+);
+
+const Profile = () => {
+  const [profile, setProfile] = useState(INITIAL_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(profile);
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const resetUploadState = () => {
+    setPreviewImage(null);
+    setUploadProgress(0);
+  };
+
+  const updateProfile = (field, value) => {
+    setEditedProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const getUpdatedFieldsCount = () => {
+    return Object.keys(profile).filter(key => profile[key] !== editedProfile[key]).length;
+  };
 
   // Mock S3 upload function - replace with actual AWS SDK implementation
   const uploadToS3 = async (file) => {
@@ -55,16 +142,13 @@ const Profile = () => {
     // For production, you would typically:
     // 1. Get a pre-signed URL from your backend
     // 2. Upload directly to S3 using that URL
-    
     return new Promise((resolve, reject) => {
-      // Simulate upload progress
       let progress = 0;
       const interval = setInterval(() => {
         progress += 10;
         setUploadProgress(progress);
         if (progress >= 100) {
           clearInterval(interval);
-          // Return a mock S3 URL
           const mockS3Url = `https://your-bucket.s3.amazonaws.com/profile-images/${Date.now()}-${file.name}`;
           resolve(mockS3Url);
         }
@@ -72,64 +156,18 @@ const Profile = () => {
     });
   };
 
-  const handleEdit = () => {
-    setIsEditing(true);
-    setEditedProfile({...profile});
-    setPreviewImage(null);
-    setUploadProgress(0);
-    showSuccessToast('Edit mode activated', 2000);
-  };
-
-  const handleSave = () => {
-    setProfile({...editedProfile});
-    setIsEditing(false);
-    setPreviewImage(null);
-    setUploadProgress(0);
-    showSuccessToast('Profile updated successfully', 3000, {
-      'Updated fields': getUpdatedFieldsCount(),
-      'Time': new Date().toLocaleTimeString()
-    });
-  };
-
-  const handleCancel = () => {
-    setEditedProfile({...profile});
-    setIsEditing(false);
-    setPreviewImage(null);
-    setUploadProgress(0);
-    showWarningToast('Changes discarded', 2000);
-  };
-
-  const getUpdatedFieldsCount = () => {
-    let count = 0;
-    Object.keys(profile).forEach(key => {
-      if (profile[key] !== editedProfile[key]) count++;
-    });
-    return count;
-  };
-
-  const handleChange = (field, value) => {
-    setEditedProfile(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // STANDARD IMAGE UPLOAD HANDLER WITH S3 UPLOAD
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE) {
       showErrorToast('File size must be less than 5MB', 3000, {
-        'Selected file': `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        'Selected file': formatFileSize(file.size),
         'Maximum size': '5MB'
       });
       return false;
     }
     
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    if (!VALID_IMAGE_TYPES.includes(file.type)) {
       showErrorToast('Invalid file type', 3000, {
         'Allowed types': 'JPEG, PNG, GIF, WEBP',
         'Selected type': file.type
@@ -139,31 +177,24 @@ const Profile = () => {
     
     setUploadProgress(0);
     
-    // Create preview immediately
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
-    // Show upload started toast
     showSuccessToast('Uploading image...', 2000);
     
-    // Upload to S3
     try {
       const s3Url = await uploadToS3(file);
-      handleChange('profilePicture', s3Url);
+      updateProfile('profilePicture', s3Url);
       setUploadProgress(100);
       showSuccessToast('Profile picture updated successfully!', 3000, {
         'File name': file.name,
-        'File size': `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        'File size': formatFileSize(file.size),
         'Type': file.type.split('/')[1].toUpperCase()
       });
       return true;
     } catch (error) {
-      console.error('S3 upload error:', error);
-      showErrorToast('Failed to upload image. Please try again.', 4000, {
-        'Error': error.message || 'Unknown error',
-        'Time': new Date().toLocaleTimeString()
-      });
+      showErrorToast('Failed to upload image. Please try again.', 4000);
       setPreviewImage(null);
       return false;
     }
@@ -171,16 +202,44 @@ const Profile = () => {
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      handleImageUpload(file);
-    }
+    if (file) handleImageUpload(file);
   };
 
   const removeImage = () => {
-    handleChange('profilePicture', '');
-    setPreviewImage(null);
-    setUploadProgress(0);
+    updateProfile('profilePicture', '');
+    resetUploadState();
     showWarningToast('Profile picture removed', 2000);
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditedProfile({ ...profile });
+    resetUploadState();
+    showSuccessToast('Edit mode activated', 2000);
+  };
+
+  const handleSave = () => {
+    setProfile({ ...editedProfile });
+    setIsEditing(false);
+    resetUploadState();
+    showSuccessToast('Profile updated successfully', 3000, {
+      'Updated fields': getUpdatedFieldsCount(),
+      'Time': new Date().toLocaleTimeString()
+    });
+  };
+
+  const handleCancel = () => {
+    setEditedProfile({ ...profile });
+    setIsEditing(false);
+    resetUploadState();
+    showWarningToast('Changes discarded', 2000);
+  };
+
+  const getProfileImage = () => {
+    if (previewImage) return previewImage;
+    if (isEditing && editedProfile.profilePicture) return editedProfile.profilePicture;
+    if (profile.profilePicture) return profile.profilePicture;
+    return FALLBACK_IMAGE;
   };
 
   return (
@@ -195,15 +254,19 @@ const Profile = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Profile Picture & Bio */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Profile Picture Card - UPDATED WITH S3 UPLOAD STYLE */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            {/* Profile Picture Card */}
+            <div className={CARD_CLASS}>
               <div className="flex flex-col items-center">
                 <div className="relative">
                   <div className="relative group">
                     <img
-                      src={previewImage || (isEditing ? editedProfile.profilePicture : profile.profilePicture)}
+                      src={getProfileImage()}
                       alt="Profile"
                       className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-100"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = FALLBACK_IMAGE;
+                      }}
                     />
                     {isEditing && (
                       <>
@@ -216,7 +279,7 @@ const Profile = () => {
                         />
                         <button
                           type="button"
-                          onClick={() => document.getElementById('profileImageInput').click()}
+                          onClick={() => document.getElementById('profileImageInput')?.click()}
                           className="absolute bottom-0 right-0 bg-[#1C62A0] rounded-full p-2 shadow-lg hover:bg-[#4c6c88] transition-colors"
                         >
                           <Upload className="w-4 h-4 text-white" />
@@ -267,7 +330,7 @@ const Profile = () => {
                 {!isEditing ? (
                   <button
                     onClick={handleEdit}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#4c6c88] transition-colors"
+                    className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88]`}
                   >
                     <Edit2 className="w-4 h-4" />
                     <span>Edit Profile</span>
@@ -276,14 +339,14 @@ const Profile = () => {
                   <>
                     <button
                       onClick={handleSave}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#4c6c88] transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88]`}
                     >
                       <Save className="w-4 h-4" />
                       <span>Save Changes</span>
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-gray-200 text-gray-700 hover:bg-gray-300`}
                     >
                       <span>Cancel</span>
                     </button>
@@ -296,40 +359,25 @@ const Profile = () => {
           {/* Right Column - Detailed Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* About Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <User className="w-5 h-5 mr-2 text-blue-600" />
-                About Me
-              </h3>
+            <div className={CARD_CLASS}>
+              <SectionTitle icon={Heart} title="About Me" />
               
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Bio
-                </label>
-                {isEditing ? (
-                  <textarea
-                    value={editedProfile.bio}
-                    onChange={(e) => handleChange('bio', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter bio"
-                  />
-                ) : (
-                  <p className="text-gray-900 leading-relaxed">{profile.bio || 'Not specified'}</p>
-                )}
-              </div>
+              <ProfileTextarea
+                label="Bio"
+                value={isEditing ? editedProfile.bio : profile.bio}
+                isEditing={isEditing}
+                onChange={(e) => updateProfile('bio', e.target.value)}
+              />
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Website Link
-                </label>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Website Link</label>
                 {isEditing ? (
                   <div className="flex items-center space-x-2">
                     <LinkIcon className="w-4 h-4 text-gray-400" />
                     <input
                       type="text"
                       value={editedProfile.websiteLink || ''}
-                      onChange={(e) => handleChange('websiteLink', e.target.value)}
+                      onChange={(e) => updateProfile('websiteLink', e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter website link"
                     />
@@ -353,180 +401,92 @@ const Profile = () => {
             </div>
 
             {/* Basic Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Briefcase className="w-5 h-5 mr-2 text-blue-600" />
-                Basic Information
-              </h3>
+            <div className={CARD_CLASS}>
+              <SectionTitle icon={Briefcase} title="Basic Information" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Full Name</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.fullName}
-                      onChange={(e) => handleChange('fullName', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <span className="text-gray-900">{profile.fullName}</span>
-                  )}
-                </div>
+                <ProfileField
+                  label="Full Name"
+                  value={isEditing ? editedProfile.fullName : profile.fullName}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('fullName', e.target.value)}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Username</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.username}
-                      onChange={(e) => handleChange('username', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <span className="text-gray-900">{profile.username}</span>
-                  )}
-                </div>
+                <ProfileField
+                  label="Username"
+                  value={isEditing ? editedProfile.username : profile.username}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('username', e.target.value)}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
-                  {isEditing ? (
-                    <input
-                      type="email"
-                      value={editedProfile.email}
-                      onChange={(e) => handleChange('email', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.email}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Email"
+                  value={isEditing ? editedProfile.email : profile.email}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('email', e.target.value)}
+                  type="email"
+                  icon={Mail}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Phone Number</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.phoneNumber}
-                      onChange={(e) => handleChange('phoneNumber', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.phoneNumber}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Phone Number"
+                  value={isEditing ? editedProfile.phoneNumber : profile.phoneNumber}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('phoneNumber', e.target.value)}
+                  icon={Phone}
+                />
               </div>
             </div>
 
             {/* Personal Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Heart className="w-5 h-5 mr-2 text-blue-600" />
-                Personal Information
-              </h3>
+            <div className={CARD_CLASS}>
+              <SectionTitle icon={Heart} title="Personal Information" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Location</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.location}
-                      onChange={(e) => handleChange('location', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.location}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Location"
+                  value={isEditing ? editedProfile.location : profile.location}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('location', e.target.value)}
+                  icon={MapPin}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Date of Birth</label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      value={editedProfile.dateOfBirth}
-                      onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.dateOfBirth}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Date of Birth"
+                  value={isEditing ? editedProfile.dateOfBirth : profile.dateOfBirth}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('dateOfBirth', e.target.value)}
+                  type="date"
+                  icon={Calendar}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Gender</label>
-                  {isEditing ? (
-                    <select
-                      value={editedProfile.gender}
-                      onChange={(e) => handleChange('gender', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.gender}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileSelect
+                  label="Gender"
+                  value={isEditing ? editedProfile.gender : profile.gender}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('gender', e.target.value)}
+                  options={['Male', 'Female', 'Other', 'Prefer not to say']}
+                />
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Occupation</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.occupation}
-                      onChange={(e) => handleChange('occupation', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <Briefcase className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.occupation}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Occupation"
+                  value={isEditing ? editedProfile.occupation : profile.occupation}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('occupation', e.target.value)}
+                  icon={Briefcase}
+                />
               </div>
             </div>
 
             {/* Additional Info */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <School className="w-5 h-5 mr-2 text-blue-600" />
-                Additional Information
-              </h3>
+            <div className={CARD_CLASS}>
+              <SectionTitle icon={School} title="Additional Information" />
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Education</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editedProfile.education}
-                      onChange={(e) => handleChange('education', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <School className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{profile.education}</span>
-                    </div>
-                  )}
-                </div>
+                <ProfileField
+                  label="Education"
+                  value={isEditing ? editedProfile.education : profile.education}
+                  isEditing={isEditing}
+                  onChange={(e) => updateProfile('education', e.target.value)}
+                  icon={School}
+                />
               </div>
             </div>
           </div>

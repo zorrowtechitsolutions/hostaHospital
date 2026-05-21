@@ -35,7 +35,7 @@ const DEFAULT_AVATAR = "https://randomuser.me/api/portraits/lego/1.jpg";
 const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transition-colors";
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
 
-// Helper functions (moved outside component)
+// Helper functions
 const formatRequestId = (id) => {
   if (!id) return '#REQ0000';
   let numericId;
@@ -60,6 +60,8 @@ const calculateAge = (dob) => {
   return age;
 };
 
+// FIXED: Proper operator precedence for date and time extraction
+// IMPORTANT: Keep field name as "time" (not consulting_time) to match display logic
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -69,6 +71,10 @@ const transformBookingsData = (bookingList) => {
     
     // Get patient image - check multiple possible fields
     const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+
+    // Extract raw values first to avoid operator precedence issues
+    const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
+const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
 
     return {
       id: bookingId,
@@ -81,10 +87,9 @@ const transformBookingsData = (bookingList) => {
       doctorId: booking.doctorId,
       doctorName: booking.doctor_name || booking.doctorName || "N/A",
       department: booking.doctor_department || booking.department || "N/A",
-      appointmentDate: booking.booking_date || booking.appointmentDate
-        ? (booking.booking_date || booking.appointmentDate).split("T")[0]
-        : "N/A",
-      time: booking.consulting_time || booking.time || "N/A",
+      appointmentDate: rawDate === "N/A" ? "N/A" : rawDate.split("T")[0],
+      // IMPORTANT: Keep as "time" (not consulting_time) to match display logic
+      consulting_time: rawTime,
       reason: booking.reason || "",
       status: booking.status || "pending",
       patientImageKey: patientImageKey,
@@ -107,6 +112,71 @@ const matchesDoctor = (item, doctorId, doctorName) => {
   return item.doctorId === doctorId || item.doctorName === doctorName;
 };
 
+// Skeleton Loader Component
+const SkeletonLoader = () => (
+  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+    </div>
+
+    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+      <div className="flex-1 max-w-md">
+        <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
+      </div>
+      <div className="flex gap-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+        ))}
+      </div>
+    </div>
+
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+        <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100">
+            <tr>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(5)].map((_, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-6 py-4 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+          <div className="flex gap-2">
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 const RequestTable = ({ doctorId = null, doctorName = null }) => {
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -125,12 +195,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
   
   // Loading states for mutations
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
 
-  // API Hooks - hospitalId is automatically injected by the API service
+  // API Hooks
   const {
     data: bookingsResponse,
     isLoading: loading,
@@ -160,7 +231,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return transformBookingsData(bookingsResponse?.data || []);
   }, [bookingsResponse]);
 
-  // Get all unique departments with useMemo
+  // Get all unique departments
   const departments = useMemo(() => {
     let sourceData;
     if (doctorId && !showAllData) {
@@ -171,7 +242,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  // Filter requests based on all criteria with useMemo
+  // Filter requests based on all criteria
   const filteredRequests = useMemo(() => {
     let filtered;
 
@@ -225,7 +296,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter, statusFilter, showAllData]);
 
-  // Handlers using helpers
+  // Handlers
   const handleRefresh = () => {
     resetFilters({
       setSearchTerm,
@@ -258,7 +329,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       'Contact Number': req.contact,
       'Doctor Name': req.doctorName,
       'Department': req.department,
-      'Appointment Date': `${req.appointmentDate} at ${req.time}`,
+      'Appointment Date': `${req.appointmentDate} at ${req.consulting_time}`,
       'Status': req.status,
       'Reason': req.reason
     }));
@@ -313,14 +384,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
-    setIsApproving(true); // Set loading state
+    setIsApproving(true);
 
     try {
       await approveBooking({
         id: selectedRequest.id,
         data: {
           date: appointmentData.date,
-          time: appointmentData.time,
+          consulting_time: appointmentData.consulting_time,
           token: appointmentData.token,
           notes: appointmentData.notes || ""
         }
@@ -332,18 +403,18 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         {
           'Patient': selectedRequest.patientName,
           'Date': appointmentData.date,
-          'Time': appointmentData.time,
+          'consulting_time': appointmentData.consulting_time,
           'Token': `#${appointmentData.token}`
         }
       );
 
-      refetch(); // Non-blocking refresh
+      refetch();
       closeApproveModal();
 
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to approve request', TOAST_DURATION);
     } finally {
-      setIsApproving(false); // Stop loading
+      setIsApproving(false);
     }
   };
 
@@ -365,7 +436,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
-    setIsRejecting(true); // Set loading state
+    setIsRejecting(true);
 
     try {
       await rejectBooking({
@@ -383,13 +454,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         }
       );
 
-      refetch(); // Non-blocking refresh
+      refetch();
       closeRejectModal();
 
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to reject request', TOAST_DURATION);
     } finally {
-      setIsRejecting(false); // Stop loading
+      setIsRejecting(false);
     }
   };
 
@@ -411,72 +482,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const showDoctorBanner = doctorId && !showAllData;
-
-  // Skeleton Loading Component
-  const SkeletonLoader = () => (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-        </div>
-        <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex-1 max-w-md">
-          <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
-        </div>
-        <div className="flex gap-2">
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-        <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-          <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
-          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                  <th key={i} className="px-6 py-3">
-                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...Array(5)].map((_, i) => (
-                <tr key={i} className="border-b border-gray-100">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
-                    <td key={j} className="px-6 py-4">
-                      <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-6 py-4 border-t bg-gray-50">
-          <div className="flex justify-between items-center">
-            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-            <div className="flex gap-2">
-              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   if (loading) {
     return <SkeletonLoader />;
@@ -721,7 +726,10 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 text-gray-600">
                           <Calendar size={14} className="text-gray-400" />
-                          {item.appointmentDate} at {item.time}
+                          {/* FIXED: Uses item.consulting_time (not item.time) */}
+                          {item.appointmentDate} {item.consulting_time && item.consulting_time !== "N/A" && item.consulting_time !== "--:--" && (
+                            <>at {item.consulting_time}</>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -763,6 +771,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         )}
       </Card>
 
+
       {/* Approve Modal */}
       {showApproveModal && selectedRequest && (
         <ApproveRequestModal
@@ -771,11 +780,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           onClose={closeApproveModal}
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          initialTime={selectedRequest.time !== "N/A" ? selectedRequest.time : ""}
+          // FIXED: Uses item.consulting_time (not item.time)
+          initialTime={selectedRequest.consulting_time && selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}          
           initialToken=""
           isLoading={isApproving}
+          
         />
-      )}
+        )}
+
+
+      
 
       {/* Reject Modal */}
       {showRejectModal && selectedRequest && (

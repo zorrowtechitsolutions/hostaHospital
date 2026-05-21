@@ -1,4 +1,4 @@
-// src/components/Ambulance/Ambulance.jsx - Connected to API with formatted IDs and skeleton loading
+// src/components/Ambulance/Ambulance.jsx - Filters removed (only dropdowns remain)
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,7 +13,6 @@ import {
   RefreshCcw,
   Upload,
   Trash2,
-  Filter,
   Search,
   Phone,
   MapPin,
@@ -66,14 +65,13 @@ const AmbulanceSkeleton = () => {
         <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
       </div>
 
-      {/* Search and Filters Skeleton */}
+      {/* Search and Action Buttons Skeleton */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="h-10 w-56 bg-gray-200 rounded-md animate-pulse"></div>
         </div>
         <div className="flex gap-2">
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
@@ -121,7 +119,8 @@ const Ambulance = () => {
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
-  const [showFilters, setShowFilters] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [countryFilter, setCountryFilter] = useState('');
   
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -132,10 +131,6 @@ const Ambulance = () => {
   
   // Menu state for grid view
   const [activeMenu, setActiveMenu] = useState(null);
-  
-  // Filter states
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [countryFilter, setCountryFilter] = useState('');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -149,13 +144,12 @@ const Ambulance = () => {
   };
 
   // API Hooks - hospitalId is automatically injected by the API service
-  // No need to pass hospitalId manually anymore!
   const { 
     data: ambulancesResponse, 
     isLoading: loading, 
     refetch,
     isFetching
-  } = useGetAmbulanceQuery(); // Simplified - no params needed!
+  } = useGetAmbulanceQuery();
   
   const [createAmbulance, { isLoading: isAdding }] = useCreateAmbulanceMutation();
   const [updateAmbulance, { isLoading: isUpdating }] = useUpdateAmbulanceMutation();
@@ -166,8 +160,8 @@ const Ambulance = () => {
     if (!ambulanceList || !Array.isArray(ambulanceList)) return [];
     
     return ambulanceList.map((ambulance, index) => ({
-      id: ambulance.id, // Keep original numeric ID for API operations
-      formattedId: formatAmbulanceId(ambulance.id || index + 1), // Formatted ID for display only
+      id: ambulance.id,
+      formattedId: formatAmbulanceId(ambulance.id || index + 1),
       serviceName: ambulance.serviceName || '',
       phone: ambulance.phone || '',
       vehicleType: ambulance.vehicleType || '',
@@ -196,10 +190,9 @@ const Ambulance = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers with API - hospitalId is automatically added by the API service
+  // CRUD Handlers with API
   const handleAddAmbulance = async (newAmbulance) => {
     try {
-      // No need to add hospitalId manually - API service handles it!
       const ambulanceToAdd = {
         serviceName: newAmbulance.serviceName,
         phone: newAmbulance.phone,
@@ -262,7 +255,7 @@ const Ambulance = () => {
     setActiveMenu(activeMenu === id ? null : id);
   };
 
-  // Filter functions
+  // Filter function
   const getFilteredAmbulances = () => {
     let filtered = [...ambulancesData];
     
@@ -351,7 +344,6 @@ const Ambulance = () => {
         
         for (const amb of importedData) {
           try {
-            // No need to add hospitalId - API service handles it!
             await createAmbulance({
               serviceName: amb['Service Name'] || amb.serviceName,
               phone: amb.Phone || amb.phone,
@@ -380,24 +372,6 @@ const Ambulance = () => {
     reader.readAsText(file);
     event.target.value = '';
   };
-
-  const clearAllFilters = () => {
-    setTypeFilter('all');
-    setCountryFilter('');
-    setSearchTerm('');
-    setCurrentPage(1);
-    showSuccessToast("All filters cleared", 2000);
-  };
-
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (typeFilter !== 'all') count++;
-    if (countryFilter) count++;
-    if (searchTerm) count++;
-    return count;
-  };
-
-  const activeFilterCount = getActiveFilterCount();
 
   // Loading state with skeleton
   if (loading) {
@@ -428,9 +402,9 @@ const Ambulance = () => {
         <h1 className="text-xl font-bold text-gray-800">Ambulance Management</h1>
       </div>
 
-      {/* Search and Action Buttons Row */}
+      {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
           <div className="relative flex-1 max-w-sm">
             <input
               type="text"
@@ -448,7 +422,9 @@ const Ambulance = () => {
               </button>
             )}
             <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </button>
           </div>
 
@@ -487,73 +463,13 @@ const Ambulance = () => {
             <Download size={16} />
           </button>
 
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
-            title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
           <button onClick={() => setShowAddModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D]">
             <Plus size={16} /> Add Ambulance
           </button>
         </div>
       </div>
 
-      {/* FILTER SECTION */}
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
-              Clear All Filters
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Vehicle Types</option>
-              {ambulanceTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-
-            <input
-              type="text"
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              placeholder="Filter by country..."
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* GRID VIEW - Using formattedId for display */}
+      {/* GRID VIEW */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -637,7 +553,7 @@ const Ambulance = () => {
         </>
       )}
 
-      {/* LIST VIEW - Using formattedId for display */}
+      {/* LIST VIEW */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">

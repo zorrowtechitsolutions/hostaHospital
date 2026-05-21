@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power
 } from 'lucide-react';
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
@@ -272,6 +272,53 @@ const CenteredLoader = ({ text = "Loading..." }) => (
   </div>
 );
 
+// Status Toggle Component
+const StatusToggle = ({ status, onToggle, disabled }) => {
+  const isActive = status;
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+        <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+          <Power className="h-5 w-5 text-blue-600" /> 
+          Doctor Status
+        </h3>
+      </div>
+      <div className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {isActive ? 'Active' : 'Inactive'}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isActive 
+                ? 'Doctor is currently active and can receive appointments' 
+                : 'Doctor is inactive and will not appear in search results'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={disabled}
+            className={`
+              relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+              ${isActive ? 'bg-green-500' : 'bg-gray-300'}
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            <span
+              className={`
+                inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-md
+                ${isActive ? 'translate-x-6' : 'translate-x-1'}
+              `}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
@@ -327,7 +374,8 @@ const EditDoctor = () => {
     outDoorConsultingOpen: '',
     outDoorConsultingClose: '',
     outDoorConsultingPlace: '',
-    bookingOpen: true
+    bookingOpen: true,
+    isActive: true
   });
 
   const [errors, setErrors] = useState({});
@@ -494,7 +542,8 @@ const EditDoctor = () => {
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
         outDoorConsultingPlace: doctor.outDoorConsulting?.place || "",
-        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true
+        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
+        isActive: doctor.isActive ?? true
       };
       
       console.log("Setting form data:", newFormData);
@@ -560,7 +609,8 @@ const EditDoctor = () => {
       outDoorConsultingOpen: '',
       outDoorConsultingClose: '',
       outDoorConsultingPlace: '',
-      bookingOpen: true
+      bookingOpen: true,
+      isActive: true
     });
     setPreviewImage(null);
   }, [doctorId]);
@@ -710,6 +760,22 @@ const EditDoctor = () => {
     }));
   };
 
+  const toggleDoctorStatus = () => {
+    setFormData(prev => ({
+      ...prev,
+      isActive: !prev.isActive
+    }));
+    showSuccessToast(`Doctor status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
+  };
+
+  const toggleBookingStatus = () => {
+    setFormData(prev => ({
+      ...prev,
+      bookingOpen: !prev.bookingOpen
+    }));
+    showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -738,6 +804,7 @@ const EditDoctor = () => {
         experience: formData.experience,
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
+        isActive: formData.isActive,
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -1286,6 +1353,15 @@ const EditDoctor = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Status Toggle - Placed at the end of Basic Info */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <StatusToggle 
+                    status={formData.isActive} 
+                    onToggle={toggleDoctorStatus}
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
             )}
 
@@ -1350,7 +1426,7 @@ const EditDoctor = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, bookingOpen: !prev.bookingOpen }))}
+                      onClick={toggleBookingStatus}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                         formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
                       }`}

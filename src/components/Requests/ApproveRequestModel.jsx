@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { CalendarCheck, Hash } from "lucide-react";
 import { Modal, Button, Input, Select } from "../ui";
 import { showWarningToast, showErrorToast } from "../ui/Toast";
+import { useUpdateBookingMutation } from "../../../app/service/request";
 
 // Constants moved outside component
 const TIME_SLOTS = [
@@ -40,13 +41,13 @@ const InfoRow = ({ icon: Icon, label, value }) => (
 );
 
 // Validation helper
-const validateForm = (date, time, token, showWarningToast) => {
+const validateForm = (date, consulting_time, token, showWarningToast) => {
   if (!date) {
     showWarningToast('Please select appointment date', 3000);
     return false;
   }
 
-  if (!time) {
+  if (!consulting_time) {
     showWarningToast('Please select appointment time', 3000);
     return false;
   }
@@ -71,11 +72,13 @@ const ApproveRequestModal = ({
 }) => {
   // States
   const [date, setDate] = useState(initialDate || getDefaultDate());
-  const [time, setTime] = useState(initialTime || getDefaultTime());
+  const [consulting_time, setConsultingTime] = useState(initialTime || getDefaultTime());
   const [token, setToken] = useState(initialToken || "");
   const [isEditing, setIsEditing] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
+    const [updateBooking] = useUpdateBookingMutation();
+
 
   // Validate bookingId on mount (only for warning, not API call)
   useEffect(() => {
@@ -85,22 +88,25 @@ const ApproveRequestModal = ({
   }, [bookingId]);
 
   // Handle confirm - only calls parent's onConfirm (no API here)
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!bookingId) {
       showErrorToast("Booking ID is missing. Please refresh and try again.", 5000);
       return;
     }
 
-    if (!validateForm(date, time, token, showWarningToast)) return;
+    if (!validateForm(date, consulting_time, token, showWarningToast)) return;
 
     // Pass data to parent component to handle API call
-    if (onConfirm) {
-      onConfirm({
-        date,
-        time,
-        token: token.trim(),
-      });
-    }
+    // if (onConfirm) {
+    //   onConfirm({
+    //     date,
+    //     consulting_time,
+    //     token: token.trim(),
+    //   });
+
+    // }
+      await updateBooking({ id: bookingId, data: { date, consulting_time, token: token.trim(), status: "accepted" } }).unwrap();
+
 
     onClose();
   };
@@ -130,7 +136,7 @@ const ApproveRequestModal = ({
 
         <div className="space-y-4">
           <InfoRow icon={CalendarCheck} label="Date" value={date} />
-          <InfoRow icon={CalendarCheck} label="Time" value={time} />
+          <InfoRow icon={CalendarCheck} label="Consulting Time" value={consulting_time} />
 
           <div className="flex items-start gap-2">
             <Hash size={16} className="text-green-600 mt-3" />
@@ -157,7 +163,7 @@ const ApproveRequestModal = ({
         <p className="text-xs text-gray-500 text-center">
           Appointment scheduled for{" "}
           <span className="font-medium text-gray-700">{date}</span> at{" "}
-          <span className="font-medium text-gray-700">{time}</span>{" "}
+          <span className="font-medium text-gray-700">{consulting_time}</span>{" "}
           {token && (
             <>with Token <span className="font-medium text-gray-700">#{token}</span></>
           )}
@@ -182,10 +188,10 @@ const ApproveRequestModal = ({
 
       <Select
         label="Appointment Time"
-        name="time"
+        name="consulting_time"
         options={TIME_SLOTS}
-        value={time}
-        onChange={(e) => setTime(e.target.value)}
+        value={consulting_time}
+        onChange={(e) => setConsultingTime(e.target.value)}
         required
         disabled={isLoading}
       />

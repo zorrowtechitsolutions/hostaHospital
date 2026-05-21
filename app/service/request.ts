@@ -43,7 +43,6 @@ export interface BookingRequest {
   doctorName?: string;
   doctorSpecialty?: string;
   appointmentDate?: string;
-  time?: string;
   hospitalId?: string | number;
   token?: string | number;
   rejectionReason?: string;
@@ -53,7 +52,7 @@ export interface BookingRequest {
 
 export interface ApproveBookingData {
   date: string;
-  time: string;
+  consulting_time: string;
   token: string | number;
   notes?: string;
 }
@@ -165,12 +164,13 @@ export const bookingApi = api.injectEndpoints({
         data: ApproveBookingData;
       }
     >({
-      query: ({ id, data }) => ({
+      query: ({ id, data }) => (
+        console.log("Approving booking with data:", data), {
         url: `/booking/${id}`,
         method: "PUT",
         body: {
           date: data.date,
-          time: data.time,
+          consulting_time: data.consulting_time,
           token: data.token,
           notes: data.notes,
           status: "accepted",
@@ -256,7 +256,9 @@ export const bookingApi = api.injectEndpoints({
         data: Partial<Omit<BookingRequest, 'hospitalId'>>;
       }
     >({
-      query: ({ id, data }) => ({
+      query: ({ id, data }) => (
+        console.log(data, "Updating booking with data:"),
+        {
         url: `/booking/${id}`,
         method: "PUT",
         body: {
@@ -267,6 +269,7 @@ export const bookingApi = api.injectEndpoints({
           consulting_time: data.consulting_time,
           reason: data.reason,
           status: data.status,
+          token: data.token,
         },
       }),
       invalidatesTags: (result, error, { id }) => [

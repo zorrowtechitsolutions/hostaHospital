@@ -159,7 +159,10 @@ export const doctorApi = api.injectEndpoints({
         method: "PUT",
         body: updateDoctor,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: "Doctor", id }],
+invalidatesTags: (result, error, { id }) => [
+  { type: "Doctor", id },
+  "Doctor",
+],
     }),
 
     // ==============================

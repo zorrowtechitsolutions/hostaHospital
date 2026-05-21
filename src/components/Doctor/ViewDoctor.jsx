@@ -1,10 +1,17 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { Button, Badge, Loader } from "../ui";
-import { 
-  Mail, Phone, MapPin, Calendar, Building, GraduationCap, 
-  DollarSign, IdCard, Briefcase, Users, Home, Video, 
-  CheckCircle, XCircle, Clock, Sun, Moon 
+import {
+  Mail,
+  Phone,
+  Video,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Home,
+  MapPin,
+  Calendar as CalendarIcon,
+  Building
 } from "lucide-react";
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
@@ -23,6 +30,83 @@ const getS3ImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
+// ==================== CONSTANTS ====================
+const TABS = [
+  { id: "basic", label: "Basic Information" },
+  { id: "schedule", label: "Schedule & Consulting" },
+  { id: "appointments", label: "Appointments" },
+  { id: "requests", label: "Requests" }
+];
+
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-4";
+const CARD_CLASS = "bg-white rounded-lg border border-gray-200";
+
+const DAY_ORDER = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sunday: 7
+};
+
+// ==================== HELPER FUNCTIONS ====================
+const getValue = (value, fallback = "N/A") => value || fallback;
+const isBookingOpen = (doctor) => doctor?.bookingOpen !== false;
+
+const getDoctorName = (doctor) =>
+  doctor?.displayName ||
+  `${doctor?.firstName || ""} ${doctor?.lastName || ""}`.trim() ||
+  "Doctor";
+
+const hasAddress = (address) =>
+  address && Object.values(address).some(Boolean);
+
+// Format time from 24h to 12h format
+const formatTime = (time) => {
+  if (!time || time === 'N/A') return 'N/A';
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
+// Format day name to display
+const formatDay = (day) => {
+  if (!day) return '';
+  return day.charAt(0).toUpperCase() + day.slice(1);
+};
+
+// ==================== REUSABLE COMPONENTS ====================
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
+    {Icon && <Icon className="h-5 w-5" />}
+    {title}
+  </h3>
+);
+
+const EmptyState = ({ text, icon: Icon }) => (
+  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+    {Icon && <Icon className="h-8 w-8 mx-auto mb-2 text-gray-300" />}
+    {text}
+  </div>
+);
+
+const SmallBadge = ({ children, variant = "outline" }) => (
+  <Badge variant={variant} className="text-xs">
+    {children}
+  </Badge>
+);
+
+const DetailRow = ({ label, value }) => (
+  <div className="flex justify-between py-2">
+    <span className="text-gray-500">{label}</span>
+    <span className="text-gray-800 font-medium">{getValue(value)}</span>
+  </div>
+);
+
 const ViewDoctor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -31,6 +115,11 @@ const ViewDoctor = () => {
   const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
   
   const [activeTab, setActiveTab] = useState("basic");
+  
+  // Handle tab change
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+  };
   
   // Use getDoctorById query for single doctor
   const {
@@ -42,11 +131,6 @@ const ViewDoctor = () => {
     skip: !doctorId
   });
   
-  console.log("=== VIEW DOCTOR DEBUG ===");
-  console.log("Doctor ID:", doctorId);
-  console.log("API Response:", doctorResponse);
-  console.log("API Error:", error);
-  
   // Extract doctor from response
   const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
   
@@ -56,7 +140,53 @@ const ViewDoctor = () => {
   const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
   console.log("🖼️ Image key:", imageKey);
   
-  const doctorName = doctor?.displayName || `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim() || "Doctor";
+  // Get doctor name - using helper function (only declared once)
+  const doctorName = getDoctorName(doctor);
+
+  // Helper to format consulting hours - memoized
+  const consultingHours = useMemo(() => {
+    const hours = [];
+    
+    // Process consultingOne (single session days)
+    if (doctor?.consultingOne && Array.isArray(doctor.consultingOne)) {
+      doctor.consultingOne.forEach(item => {
+        hours.push({
+          day: item.day,
+          morningOpen: item.opening_time,
+          morningClose: item.closing_time,
+          hasBreak: false
+        });
+      });
+    }
+    
+    // Process consultingTwo (split session days)
+    if (doctor?.consultingTwo && Array.isArray(doctor.consultingTwo)) {
+      doctor.consultingTwo.forEach(item => {
+        const morning = item.morning_session;
+        const evening = item.evening_session;
+        hours.push({
+          day: item.day,
+          morningOpen: morning?.open,
+          morningClose: morning?.close,
+          eveningOpen: evening?.open,
+          eveningClose: evening?.close,
+          hasBreak: true
+        });
+      });
+    }
+    
+    return hours;
+  }, [doctor]);
+
+  const sortedHours = [...consultingHours].sort(
+    (a, b) => (DAY_ORDER[a.day] || 99) - (DAY_ORDER[b.day] || 99)
+  );
+
+  // Get Out Door Consulting data
+  const outDoorConsulting = doctor?.outDoorConsulting;
+  const hasOutDoorConsulting = outDoorConsulting?.time?.open && 
+                                outDoorConsulting?.time?.close && 
+                                outDoorConsulting?.place;
 
   // Loading state
   if (isLoading) {
@@ -69,11 +199,10 @@ const ViewDoctor = () => {
   
   // Error state
   if (error) {
-    console.error("Error fetching doctor:", error);
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
             <div className="text-red-500 mb-4">
               <XCircle size={48} className="mx-auto" />
             </div>
@@ -104,7 +233,7 @@ const ViewDoctor = () => {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
             <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
             <div className="flex gap-3 justify-center mt-6">
               <Button onClick={() => navigate('/doctors')} variant="outline" className="px-4 py-2">
@@ -116,43 +245,6 @@ const ViewDoctor = () => {
       </div>
     );
   }
-
-  // Helper to format consulting hours
-  const getConsultingHours = () => {
-    const hours = [];
-    
-    // Process consultingOne (single session days)
-    if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
-      doctor.consultingOne.forEach(item => {
-        hours.push({
-          day: item.day,
-          hours: `${item.opening_time || 'N/A'} - ${item.closing_time || 'N/A'}`,
-          type: 'single'
-        });
-      });
-    }
-    
-    // Process consultingTwo (split session days)
-    if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
-      doctor.consultingTwo.forEach(item => {
-        const morning = item.morning_session;
-        const evening = item.evening_session;
-        hours.push({
-          day: item.day,
-          hours: `${morning?.open || 'N/A'} - ${morning?.close || 'N/A'} & ${evening?.open || 'N/A'} - ${evening?.close || 'N/A'}`,
-          type: 'split'
-        });
-      });
-    }
-    
-    return hours;
-  };
-
-  const consultingHours = getConsultingHours();
-  
-  // Get day order for sorting
-  const dayOrder = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
-  const sortedHours = [...consultingHours].sort((a, b) => (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -166,7 +258,7 @@ const ViewDoctor = () => {
         </div>
 
         {/* Doctor Profile Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className={`${CARD_CLASS} p-6 mb-6`}>
           <div className="flex items-start gap-6">
             <Avatar className="w-20 h-20">
               <AvatarImage 
@@ -181,21 +273,21 @@ const ViewDoctor = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
-                <Badge variant="outline" className="text-xs">ID: DR{String(doctor?.id).padStart(4, '0')}</Badge>
-                <Badge variant={doctor?.bookingOpen !== false ? "success" : "danger"} className="text-xs">
-                  {doctor?.bookingOpen !== false ? "Bookings Open" : "Bookings Closed"}
-                </Badge>
+                <SmallBadge>ID: DR{String(doctor?.id).padStart(4, '0')}</SmallBadge>
+                <SmallBadge variant={isBookingOpen(doctor) ? "success" : "danger"}>
+                  {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
+                </SmallBadge>
               </div>
               <p className="text-gray-600 text-sm mb-2">{doctor?.specialist || doctor?.department || "General Physician"}</p>
-              <p className="text-gray-500 text-sm mb-3">{doctor?.about || "No description available"}</p>
+              <p className="text-gray-500 text-sm mb-3">{getValue(doctor?.about, "No description available")}</p>
               <div className="flex items-center gap-4 text-gray-500 text-sm">
                 <div className="flex items-center gap-2">
                   <Phone size={14} />
-                  <span>{doctor?.phone || "N/A"}</span>
+                  <span>{getValue(doctor?.phone)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail size={14} />
-                  <span>{doctor?.email || "N/A"}</span>
+                  <span>{getValue(doctor?.email)}</span>
                 </div>
               </div>
             </div>
@@ -203,49 +295,22 @@ const ViewDoctor = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg border border-gray-200">
+        <div className={CARD_CLASS}>
           <div className="border-b border-gray-200 px-6">
             <div className="flex gap-8 overflow-x-auto">
-              <button
-                onClick={() => setActiveTab("basic")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "basic"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Basic Information
-              </button>
-              <button
-                onClick={() => setActiveTab("schedule")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "schedule"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Schedule & Consulting
-              </button>
-              <button
-                onClick={() => setActiveTab("appointments")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "appointments"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Appointments
-              </button>
-              <button
-                onClick={() => setActiveTab("requests")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "requests"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Requests
-              </button>
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -254,111 +319,50 @@ const ViewDoctor = () => {
             {activeTab === "basic" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Personal Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">First Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.firstName || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Last Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.lastName || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Display Name</span>
-                      <span className="text-gray-800 font-medium">{doctorName}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Hospital ID</span>
-                      <span className="text-gray-800">{doctor?.hospitalId || "N/A"}</span>
-                    </div>
+                  <SectionTitle title="Personal Information" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="First Name" value={doctor?.firstName} />
+                    <DetailRow label="Last Name" value={doctor?.lastName} />
+                    <DetailRow label="Display Name" value={doctorName} />
+                    <DetailRow label="Hospital ID" value={doctor?.hospitalId} />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Professional Details
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Department</span>
-                      <span className="text-gray-800 font-medium">{doctor?.department || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Specialist</span>
-                      <span className="text-gray-800 font-medium">{doctor?.specialist || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Qualification</span>
-                      <span className="text-gray-800 font-medium">{doctor?.qualification || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Experience</span>
-                      <span className="text-gray-800 font-medium">{doctor?.experience || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Fees</span>
-                      <span className="text-gray-800 font-medium">${doctor?.fees || "0"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Registration Number</span>
-                      <span className="text-gray-800 font-medium">{doctor?.regNo || doctor?.registrationNumber || "N/A"}</span>
-                    </div>
+                  <SectionTitle title="Professional Details" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="Department" value={doctor?.department} />
+                    <DetailRow label="Specialist" value={doctor?.specialist} />
+                    <DetailRow label="Qualification" value={doctor?.qualification} />
+                    <DetailRow label="Experience" value={doctor?.experience} />
+                    <DetailRow label="Fees" value={doctor?.fees ? `$${doctor.fees}` : null} />
+                    <DetailRow label="Registration Number" value={doctor?.regNo || doctor?.registrationNumber} />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Contact Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Email</span>
-                      <span className="text-gray-800">{doctor?.email || "N/A"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Phone</span>
-                      <span className="text-gray-800">{doctor?.phone || "N/A"}</span>
-                    </div>
+                  <SectionTitle title="Contact Information" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="Email" value={doctor?.email} />
+                    <DetailRow label="Phone" value={doctor?.phone} />
                   </div>
                 </div>
 
-                {doctor?.address && Object.values(doctor.address).some(v => v) && (
+                {hasAddress(doctor?.address) && (
                   <div>
-                    <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                      Address
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-500">Country</span>
-                        <span className="text-gray-800">{doctor.address?.country || "N/A"}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-500">State</span>
-                        <span className="text-gray-800">{doctor.address?.state || "N/A"}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-500">District</span>
-                        <span className="text-gray-800">{doctor.address?.district || "N/A"}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-500">Place</span>
-                        <span className="text-gray-800">{doctor.address?.place || "N/A"}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-500">Pincode</span>
-                        <span className="text-gray-800">{doctor.address?.pincode || "N/A"}</span>
-                      </div>
+                    <SectionTitle title="Address" />
+                    <div className={GRID_CLASS}>
+                      <DetailRow label="Country" value={doctor.address?.country} />
+                      <DetailRow label="State" value={doctor.address?.state} />
+                      <DetailRow label="District" value={doctor.address?.district} />
+                      <DetailRow label="Place" value={doctor.address?.place} />
+                      <DetailRow label="Pincode" value={doctor.address?.pincode} />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Languages Known
-                  </h3>
+                  <SectionTitle title="Languages Known" />
                   <div className="flex flex-wrap gap-2">
                     {doctor?.knowLanguages && doctor.knowLanguages.length > 0 ? (
                       doctor.knowLanguages.map((lang, index) => (
@@ -367,52 +371,129 @@ const ViewDoctor = () => {
                         </span>
                       ))
                     ) : (
-                      <span className="text-gray-500">No languages specified</span>
+                      <EmptyState text="No languages specified" />
                     )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Schedule Tab */}
+            {/* Schedule Tab - Enhanced UI for Out Door Consulting */}
             {activeTab === "schedule" && (
               <div className="space-y-6">
+                {/* Consulting Hours Section */}
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    <Clock className="inline-block h-5 w-5 mr-2" />
-                    Consulting Hours
-                  </h3>
+                  <SectionTitle icon={Clock} title="Consulting Hours" />
                   {sortedHours.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="bg-white rounded-lg overflow-hidden">
                       {sortedHours.map((item, index) => (
-                        <div key={index} className="flex justify-between py-2 border-b border-gray-100">
-                          <span className="font-medium text-gray-700 capitalize">{item.day}</span>
-                          <span className="text-gray-600">{item.hours}</span>
+                        <div 
+                          key={index} 
+                          className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 ${
+                            index !== sortedHours.length - 1 ? 'border-b border-gray-100' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-2 sm:mb-0">
+                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                            <span className="font-semibold text-gray-800 capitalize min-w-[100px]">
+                              {formatDay(item.day)}
+                            </span>
+                          </div>
+                          <div className="text-gray-600">
+                            {item.hasBreak ? (
+                              <div className="flex flex-wrap gap-2">
+                                <span className="bg-blue-50 px-2 py-1 rounded text-sm">
+                                  {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                                </span>
+                                <span className="text-gray-400">&</span>
+                                <span className="bg-blue-50 px-2 py-1 rounded text-sm">
+                                  {formatTime(item.eveningOpen)} - {formatTime(item.eveningClose)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                                {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      No consulting hours configured
-                    </div>
+                    <EmptyState text="No consulting hours configured" />
                   )}
                 </div>
 
+                {/* Out Door Consulting Section - Enhanced UI */}
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    <Video className="inline-block h-5 w-5 mr-2" />
-                    Booking Status
-                  </h3>
-                  <div className="flex items-center gap-3">
-                    {doctor?.bookingOpen !== false ? (
-                      <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                        <CheckCircle className="h-4 w-4" /> Bookings Open
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
-                        <XCircle className="h-4 w-4" /> Bookings Closed
-                      </span>
-                    )}
+                  <SectionTitle icon={Building} title="Out Door Consulting" />
+                  {hasOutDoorConsulting ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-5 border border-blue-100 shadow-sm">
+                      {/* Consulting Time */}
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-500" />
+                          Consulting Time
+                        </p>
+                        <div className="grid grid-cols-2 gap-4 max-w-md">
+                          <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                            <span className="text-xs text-gray-500 block mb-1">Open Time</span>
+                            <p className="text-lg font-semibold text-gray-800">
+                              {formatTime(outDoorConsulting.time.open)}
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                            <span className="text-xs text-gray-500 block mb-1">Close Time</span>
+                            <p className="text-lg font-semibold text-gray-800">
+                              {formatTime(outDoorConsulting.time.close)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Consulting Place */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-blue-500" />
+                          Consulting Place
+                        </p>
+                        <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                          <p className="text-gray-700 flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-gray-400" />
+                            {outDoorConsulting.place}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState icon={Building} text="No out door consulting configured" />
+                  )}
+                </div>
+
+                {/* Booking Status Section - Enhanced UI */}
+                <div>
+                  <SectionTitle icon={Video} title="Booking Status" />
+                  <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-5 border border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Booking Availability</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Allow patients to book appointments with this doctor
+                        </p>
+                      </div>
+                      {isBookingOpen(doctor) ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200 w-fit">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700">Bookings Open</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-full border border-red-200 w-fit">
+                          <XCircle className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-700">Bookings Closed</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

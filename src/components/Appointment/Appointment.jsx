@@ -209,7 +209,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-  // API Hooks - hospitalId is automatically injected by the API service
+  // API Hooks
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
@@ -283,7 +283,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Transform API response to match appointment format
+  // Transform API response with proper operator precedence
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -303,7 +303,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       // Format date for display
       const formatDate = (dateString) => {
-        if (!dateString) return "N/A";
+        if (!dateString || dateString === "N/A") return "N/A";
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
       };
@@ -313,6 +313,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       // Get patient image key - check multiple possible fields
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
       
+      // Extract raw values first to avoid operator precedence issues
+      // Using ?? for better handling of empty strings and 0 values
+      const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
+    
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
@@ -324,13 +328,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
-        appointmentDate: booking.booking_date || booking.appointmentDate 
-          ? (booking.booking_date || booking.appointmentDate).split('T')[0] 
-          : "N/A",
-        appointmentDateDisplay: formatDate(booking.booking_date || booking.appointmentDate),
-        startTime: booking.consulting_time || booking.time || "N/A",
-        endTime: booking.consulting_time || booking.time ? addHour(booking.consulting_time || booking.time) : "N/A",
-        status: displayStatus,
+        appointmentDate: rawDate && rawDate !== "N/A" ? rawDate.split('T')[0] : "N/A",
+        appointmentDateDisplay: formatDate(rawDate),
+        consulting_time: booking.consulting_time || "N/A",
+        
+
+status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
         fee: booking.fee || "$0",
         duration: "1 hour",
@@ -369,7 +372,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return departments.sort();
   };
 
-  // Updated filter function to use originalStatus
+  // Filter function
   const getFilteredAppointments = () => {
     let filtered;
     
@@ -392,7 +395,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       );
     }
     
-    // Use originalStatus for filtering (backend status)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(apt => apt.originalStatus === statusFilter);
     }
@@ -435,7 +437,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
-      'Time': apt.startTime,
+      'Consulting Time': apt.startTime,
       'Status': apt.status,
       'Original Status': apt.originalStatus,
       'Reason': apt.reason
@@ -472,7 +474,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorName: appointment.doctorName,
         department: appointment.department,
         appointmentDate: appointment.appointmentDateDisplay,
-        reason: appointment.reason,
+        reason: appointment.reason, 
         notes: appointment.notes
       } 
     });
@@ -503,7 +505,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         id: selectedRequest.id,
         data: {
           date: appointmentData.date,
-          time: appointmentData.time,
+          consulting_time: appointmentData.consulting_time,
           token: appointmentData.token,
           notes: appointmentData.notes
         }
@@ -515,14 +517,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         {
           'Patient': selectedRequest.patientName,
           'Date': appointmentData.date,
-          'Time': appointmentData.time,
+          'Consulting Time': appointmentData.consulting_time,
           'Token': `#${appointmentData.token}`
         }
       );
       
       refetch();
     } catch (error) {
-      console.error('Approve error:', error);
       showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
     } finally {
       setIsApproving(false);
@@ -560,7 +561,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       refetch();
     } catch (error) {
-      console.error('Reject error:', error);
       showErrorToast(error?.data?.message || 'Failed to reject appointment', 3000);
     } finally {
       setIsRejecting(false);
@@ -603,7 +603,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       refetch();
       
     } catch (error) {
-      console.error('Delete error:', error);
       showErrorToast(error?.data?.message || 'Failed to delete appointment. Please try again.', 4000);
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
@@ -983,7 +982,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                       <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
                       <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
                       <td className="px-6 py-4 text-gray-600">{apt.department}</td>
-                      <td className="px-6 py-4 text-gray-600">{apt.appointmentDateDisplay}<br/><span className="text-xs">{apt.startTime}</span></td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {apt.appointmentDateDisplay}
+                        <br />
+                        <span className="text-xs">
+  {apt.consulting_time}
+</span>
+                      </td>
                       <td className="px-6 py-4">
                         <span className={apt.statusClass}>{apt.status}</span>
                       </td>
@@ -991,8 +996,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                         <div className="flex justify-end">
                           <RowActionMenu appointment={apt} />
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))}
                 </tbody>
               </table>

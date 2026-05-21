@@ -1,5 +1,5 @@
-// src/components/staffs/Staffs.jsx - With formatted Staff IDs, skeleton loading
-import { useState, useRef, useEffect, useMemo } from 'react';
+// src/components/staffs/Staffs.jsx - Fixed status mapping from API with S3 Support
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -38,10 +38,12 @@ import {
   Avatar,
   AvatarImage,
   AvatarFallback
-} from "@/components/ui/avatar"
+} from "@/components/ui/avatar";
+
+import { getS3ImageUrl } from '../../../app/service/S3';
 
 // Helper function to get S3 image URL
-const getS3ImageUrl = (imageKey) => {
+const getS3ImageUrlHelper = (imageKey) => {
   if (!imageKey) return "";
   if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return imageKey;
@@ -50,147 +52,21 @@ const getS3ImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
-const iconButtonClass = 'p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50';
-
-// Helper functions moved outside component
-const formatStaffId = (id) => {
-  if (!id) return '#SF0000';
-  let numericId;
-  if (typeof id === 'string') {
-    const match = id.match(/\d+/);
-    numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-  } else {
-    numericId = parseInt(id) || 0;
-  }
-  return `#SF${String(numericId).padStart(4, '0')}`;
-};
-
-const transformStaffData = (staffList) => {
-  if (!staffList || !Array.isArray(staffList)) return [];
-  
-  return staffList.map((staff, index) => {
-    // Get the image key from the staff object - prioritize imageUrl
-    const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
-    
-    return {
-      id: staff.id,
-      formattedId: formatStaffId(staff.id || index + 1),
-      originalId: staff.id || staff._id,
-      name: staff.name || '',
-      firstName: staff.name?.split(' ')[0] || '',
-      lastName: staff.name?.split(' ').slice(1).join(' ') || '',
-      gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
-      designation: staff.designation || '',
-      phone: staff.phone || '',
-      email: staff.email || '',
-      appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
-      appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      patientsCount: Math.floor(Math.random() * 200) + 10,
-      imageUrl: imageKey,
-      imageKey: imageKey,
-      status: staff.status === 'inactive' ? 'Inactive' : 'Active',
-      jobType: staff.jobType || '',
-      dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
-      address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
-      joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      department: staff.designation || '',
-      staffType: staff.staffType || ''
-    };
-  });
-};
-
-const formatDisplayDate = (date) => {
-  if (!date) return 'N/A';
-  return new Date(date).toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-};
-
-const resetFilters = (setDesignationFilter, setGenderFilter, setDateFilter, setSearchTerm, setCurrentPage) => {
-  setDesignationFilter('all');
-  setGenderFilter('all');
-  setDateFilter('');
-  setSearchTerm('');
-  setCurrentPage(1);
-};
-
-const closeDeleteModal = (setShowDeleteModal, setStaffToDelete) => {
-  setShowDeleteModal(false);
-  setStaffToDelete(null);
-};
-
-const StaffsSkeleton = () => (
-  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-    {/* Breadcrumb Skeleton */}
-    <div className="mb-6">
-      <div className="flex items-center gap-3 mb-1">
-        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-      </div>
-      <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
-    </div>
-
-    {/* Search and Filters Skeleton */}
-    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-      <div className="flex flex-1 gap-3 w-full lg:w-auto">
-        <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
-        <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
-      </div>
-      <div className="flex gap-2">
-        <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        <div className="w-28 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-      </div>
-    </div>
-
-    {/* Table Skeleton */}
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-        <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-100">
-            <tr>
-              {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                <th key={i} className="px-6 py-3">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7].map((j) => (
-                  <td key={j} className="px-6 py-4">
-                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-);
-
 const Staffs = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [staffToDelete, setStaffToDelete] = useState(null);
+  
   const [designationFilter, setDesignationFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -204,88 +80,145 @@ const Staffs = () => {
 
   const [deleteStaff] = useDeleteStaffMutation();
 
-  // Memoized transformed data
-  const staffsData = useMemo(() => {
-    return transformStaffData(staffApiResponse?.data || []);
-  }, [staffApiResponse]);
+  // Helper function to format staff ID
+  const formatStaffId = (id) => {
+    if (!id) return '#SF0000';
+    let numericId;
+    if (typeof id === 'string') {
+      const match = id.match(/\d+/);
+      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
+    } else {
+      numericId = parseInt(id) || 0;
+    }
+    return `#SF${String(numericId).padStart(4, '0')}`;
+  };
 
-  // Memoized designations
-  const designations = useMemo(() => {
-    return [
-      ...new Set(
-        staffsData
-          .map(staff => staff.designation)
-          .filter(Boolean)
-      )
-    ].sort();
-  }, [staffsData]);
+  // Transform API response to match the expected format
+  const transformStaffData = (staffList) => {
+    if (!staffList || !Array.isArray(staffList)) return [];
+    
+    return staffList.map((staff, index) => {
+      // Get the image key from the staff object - prioritize imageUrl, then profileImage, then imageKey
+      const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
+      
+      // FIXED: Properly map status from API response
+      let staffStatus = 'Inactive'; // Default to Inactive
+      
+      // Check status from various possible sources in the API response
+      if (staff.status === 'active') {
+        staffStatus = 'Active';
+      } else if (staff.status === 'inactive') {
+        staffStatus = 'Inactive';
+      } else if (staff.isActive === true) {
+        staffStatus = 'Active';
+      } else if (staff.isActive === false) {
+        staffStatus = 'Inactive';
+      } else if (staff.active === true) {
+        staffStatus = 'Active';
+      } else if (staff.active === false) {
+        staffStatus = 'Inactive';
+      }
+      
+      // Debug: log the status to console to see what the API returns
+      console.log(`Staff ${staff.name || staff.id}: status from API = ${staff.status}, mapped to = ${staffStatus}`);
+      
+      return {
+        id: staff.id,
+        formattedId: formatStaffId(staff.id || index + 1),
+        originalId: staff.id || staff._id,
+        name: staff.name || '',
+        firstName: staff.name?.split(' ')[0] || '',
+        lastName: staff.name?.split(' ').slice(1).join(' ') || '',
+        gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
+        designation: staff.designation || '',
+        phone: staff.phone || '',
+        email: staff.email || '',
+        appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
+        appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        patientsCount: Math.floor(Math.random() * 200) + 10,
+        imageKey: imageKey,
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        status: staffStatus,
+        jobType: staff.jobType || '',
+        dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
+        address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
+        joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        department: staff.designation || '',
+        staffType: staff.staffType || '',
+        isActive: staffStatus === 'Active',
+        // Keep original status for debugging
+        originalStatus: staff.status
+      };
+    });
+  };
 
-  // Memoized filtered staffs
-  const filteredStaffs = useMemo(() => {
+  const staffsData = transformStaffData(staffApiResponse?.data || []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+
+  const getAllDesignations = () => {
+    const designations = [...new Set(staffsData.map(s => s.designation).filter(Boolean))];
+    return designations.sort();
+  };
+
+  const getFilteredStaffs = () => {
     let filtered = [...staffsData];
-
+    
     if (searchTerm) {
-      const normalizedSearch = searchTerm.toLowerCase();
-      filtered = filtered.filter(staff =>
-        staff.name?.toLowerCase().includes(normalizedSearch) ||
-        staff.formattedId?.toLowerCase().includes(normalizedSearch) ||
-        staff.designation?.toLowerCase().includes(normalizedSearch) ||
+      filtered = filtered.filter(staff => 
+        staff.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        staff.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        staff.designation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         staff.phone?.includes(searchTerm) ||
-        staff.email?.toLowerCase().includes(normalizedSearch)
+        staff.email?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
+    
     if (designationFilter !== 'all') {
-      filtered = filtered.filter(
-        staff => staff.designation === designationFilter
-      );
+      filtered = filtered.filter(staff => staff.designation === designationFilter);
     }
-
+    
     if (genderFilter !== 'all') {
-      filtered = filtered.filter(
-        staff => staff.gender.toLowerCase() === genderFilter.toLowerCase()
-      );
+      filtered = filtered.filter(staff => staff.gender.toLowerCase() === genderFilter.toLowerCase());
     }
-
+    
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(staff => staff.status === statusFilter);
+    }
+    
     if (dateFilter) {
-      filtered = filtered.filter(
-        staff => staff.appointmentDate === dateFilter
-      );
+      filtered = filtered.filter(staff => staff.appointmentDate === dateFilter);
     }
-
+    
     return filtered;
-  }, [staffsData, searchTerm, designationFilter, genderFilter, dateFilter]);
+  };
 
+  const filteredStaffs = getFilteredStaffs();
   const totalPages = Math.ceil(filteredStaffs.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedStaffs = filteredStaffs.slice(startIndex, startIndex + itemsPerPage);
 
-  // Simplified active filter count
-  const activeFilterCount = [
-    designationFilter !== 'all',
-    genderFilter !== 'all',
-    !!dateFilter,
-    !!searchTerm
-  ].filter(Boolean).length;
-
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter, dateFilter]);
-
   const clearAllFilters = () => {
-    resetFilters(setDesignationFilter, setGenderFilter, setDateFilter, setSearchTerm, setCurrentPage);
-    showSuccessToast("All filters cleared", 2000);
+    setDesignationFilter('all');
+    setGenderFilter('all');
+    setStatusFilter('all');
+    setDateFilter('');
+    setSearchTerm('');
+    setCurrentPage(1);
   };
 
   const handleRefresh = () => {
-    resetFilters(setDesignationFilter, setGenderFilter, setDateFilter, setSearchTerm, setCurrentPage);
+    clearAllFilters();
     refetch();
     showSuccessToast("Refreshed staff list", 2000);
   };
 
   const handleExport = () => {
-    const exportData = filteredStaffs.map(staff => ({
+    const exportData = getFilteredStaffs().map(staff => ({
       'Staff ID': staff.formattedId,
       'Staff Name': staff.name,
       'Gender': staff.gender,
@@ -342,19 +275,30 @@ const Staffs = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!staffToDelete) return;
-    
-    try {
-      await deleteStaff(staffToDelete.id).unwrap();
-      showSuccessToast(`${staffToDelete.name} has been deleted successfully!`, 2000);
-      refetch();
-      closeDeleteModal(setShowDeleteModal, setStaffToDelete);
-    } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to delete staff member', 3000);
+    if (staffToDelete) {
+      try {
+        await deleteStaff(staffToDelete.id).unwrap();
+        showSuccessToast(`${staffToDelete.name} has been deleted successfully!`, 2000);
+        refetch();
+        setShowDeleteModal(false);
+        setStaffToDelete(null);
+      } catch (error) {
+        console.error('Delete error:', error);
+        showErrorToast(error?.data?.message || 'Failed to delete staff member', 3000);
+      }
     }
   };
 
   const handleAddStaff = () => navigate('/add-staff');
+  
+  const getActiveFilterCount = () =>
+    [
+      designationFilter !== 'all',
+      genderFilter !== 'all',
+      statusFilter !== 'all',
+      !!dateFilter,
+      !!searchTerm
+    ].filter(Boolean).length;
 
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
@@ -366,7 +310,9 @@ const Staffs = () => {
               src={getS3ImageUrl(staff.imageUrl)} 
               alt={staff.name} 
             />
-            <AvatarFallback>{staff.name?.charAt(0)?.toUpperCase() || '?'}</AvatarFallback>
+            <AvatarFallback className="text-xl font-medium">
+              {staff.name?.charAt(0)?.toUpperCase() || '?'}
+            </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-2">
@@ -383,7 +329,9 @@ const Staffs = () => {
           <div><label className="block text-xs font-medium text-gray-500">Email</label><p className="text-sm text-gray-800">{staff.email}</p></div>
           <div><label className="block text-xs font-medium text-gray-500">Joining Date</label><p className="text-sm text-gray-800">{staff.joiningDate}</p></div>
           <div><label className="block text-xs font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-800">{staff.dob}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Status</label><Badge variant={staff.status === 'Active' ? 'success' : 'warning'}>{staff.status}</Badge></div>
+          <div><label className="block text-xs font-medium text-gray-500">Status</label>
+            <Badge variant={staff.status === 'Active' ? 'success' : 'danger'}>{staff.status}</Badge>
+          </div>
           <div className="col-span-2"><label className="block text-xs font-medium text-gray-500">Address</label><p className="text-sm text-gray-800">{staff.address}</p></div>
         </div>
         <div className="flex gap-2 mt-6 pt-4 border-t">
@@ -399,12 +347,7 @@ const Staffs = () => {
     const menuRef = useRef(null);
     useEffect(() => {
       const handleClickOutside = (e) => {
-        if (
-          menuRef.current &&
-          !menuRef.current.contains(e.target)
-        ) {
-          setShowMenu(false);
-        }
+        if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
       };
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -432,16 +375,65 @@ const Staffs = () => {
     );
   };
 
-  const paginationButtonClass = (isDisabled) => {
-    return `px-3 py-1 border rounded-md text-sm transition-all ${
-      isDisabled
-        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-        : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-    }`;
-  };
+  const activeFilterCount = getActiveFilterCount();
 
+  // Skeleton Loading State
   if (loading) {
-    return <StaffsSkeleton />;
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-28 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-100">
+                <tr>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                    <th key={i} className="px-6 py-3">
+                      <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                      <td key={j} className="px-6 py-4">
+                        <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -478,7 +470,7 @@ const Staffs = () => {
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-            <label htmlFor="import-file" className={iconButtonClass} title="Import">
+            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
               <Upload size={16} />
             </label>
             <Button variant="outline" size="sm" onClick={handleExport} title="Export">
@@ -486,9 +478,9 @@ const Staffs = () => {
             </Button>
             <button
               onClick={() => setShowFilters(prev => !prev)}
-              className={`relative ${iconButtonClass} ${
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
                 showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-              }`}
+              } hover:bg-gray-50`}
               title="Toggle Filters"
             >
               <Filter size={16} />
@@ -504,7 +496,7 @@ const Staffs = () => {
           </div>
         </div>
 
-        {/* FILTER SECTION - New UI */}
+        {/* FILTER SECTION */}
         {showFilters && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -526,14 +518,14 @@ const Staffs = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <select
                 value={designationFilter}
                 onChange={(e) => setDesignationFilter(e.target.value)}
                 className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
               >
                 <option value="all">All Designations</option>
-                {designations.map((des) => (
+                {getAllDesignations().map((des) => (
                   <option key={des} value={des}>{des}</option>
                 ))}
               </select>
@@ -546,6 +538,16 @@ const Staffs = () => {
                 <option value="all">All Genders</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
 
               <input
@@ -588,6 +590,7 @@ const Staffs = () => {
                     <th className="px-6 py-3">Designation</th>
                     <th className="px-6 py-3">Phone Number</th>
                     <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -602,7 +605,7 @@ const Staffs = () => {
                               src={getS3ImageUrl(staff.imageUrl)} 
                               alt={staff.name} 
                             />
-                            <AvatarFallback>
+                            <AvatarFallback className="text-sm font-medium">
                               {staff.name?.charAt(0)?.toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
@@ -613,6 +616,11 @@ const Staffs = () => {
                       <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
+                      <td className="px-6 py-4">
+                        <Badge variant={staff.status === 'Active' ? 'success' : 'danger'} className="text-xs">
+                          {staff.status}
+                        </Badge>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end">
                           <RowActionMenu staff={staff} />
@@ -632,7 +640,11 @@ const Staffs = () => {
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className={paginationButtonClass(currentPage === 1)}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === 1
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
                 >
                   Previous
                 </button>
@@ -640,7 +652,11 @@ const Staffs = () => {
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages || totalPages === 0}
-                  className={paginationButtonClass(currentPage === totalPages || totalPages === 0)}
+                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
+                    currentPage === totalPages || totalPages === 0
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+                  }`}
                 >
                   Next
                 </button>
@@ -656,7 +672,7 @@ const Staffs = () => {
       {/* Delete Confirmation Modal */}
       <DeleteModal 
         isOpen={showDeleteModal} 
-        onClose={() => closeDeleteModal(setShowDeleteModal, setStaffToDelete)} 
+        onClose={() => setShowDeleteModal(false)} 
         onConfirm={handleConfirmDelete} 
         title="Delete Staff Member" 
         message="Are you sure you want to delete this staff member? This action cannot be undone." 

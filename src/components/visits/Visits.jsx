@@ -1,33 +1,22 @@
-// src/components/visits/Visits.jsx - Fixed API response handling with delete (RED toast on success)
+// src/components/visits/Visits.jsx - Added Status Filter with S3 Support
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Filter,
-  Download,
-  MoreVertical,
-  Eye,
-  Trash2,
-  RefreshCcw,
-  Upload,
-  Users as UsersIcon,
-  PlayCircle
+import { 
+  ChevronRight, Plus, Filter, Download, MoreVertical, Eye, Edit, 
+  Trash2, RefreshCcw, Upload, Search, Users as UsersIcon, PlayCircle
 } from 'lucide-react';
-import {
-  Button,
-  Card,
-  Badge,
-  SearchBar,
-  Modal
+import { 
+  Button, Card, Table, TableHead, TableBody, TableRow, 
+  TableHeader, TableCell, Badge, Avatar, SearchBar, 
+  Pagination, Modal, Loader 
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
+import EditVisitModal from './EditVisitModal';
+import AddVisitModal from './AddVisitModal';
 import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/service/request';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
-
-// Constants
-const DEFAULT_AVATAR = 'https://randomuser.me/api/portraits/lego/1.jpg';
-const iconButtonClass = 'p-2 border border-gray-200 rounded-md bg-white hover:bg-gray-50';
 
 // Helper functions for date formatting
 const formatDate = (dateString) => {
@@ -60,81 +49,6 @@ const formatDateTime = (date, time) => {
   }
 };
 
-// Skeleton Loader Component - moved outside
-const SkeletonLoader = () => (
-  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-    <div className="mb-6">
-      <div className="flex items-center gap-3 mb-1">
-        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-      </div>
-      <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
-    </div>
-
-    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-      <div className="flex-1 max-w-md">
-        <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
-      </div>
-      <div className="flex gap-2">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-        ))}
-      </div>
-    </div>
-
-    <div className="mb-8">
-      <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
-              <div className="flex-1">
-                <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
-                <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-            </div>
-            <div className="space-y-3 mb-4">
-              <div className="h-4 w-full bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-            <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="h-12 bg-gray-100"></div>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-16 border-b border-gray-100">
-          <div className="flex items-center px-6 py-4">
-            {[1, 2, 3, 4, 5, 6, 7].map((j) => (
-              <div key={j} className="flex-1">
-                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-// Helper function to reset filters
-const resetFilters = (setDepartmentFilter, setDateFilter, setSearchTerm, setCurrentPage) => {
-  setDepartmentFilter('');
-  setDateFilter('');
-  setSearchTerm('');
-  setCurrentPage(1);
-};
-
-// Helper function to close delete modal
-const closeDeleteModal = (setShowDeleteModal, setVisitToDelete) => {
-  setShowDeleteModal(false);
-  setVisitToDelete(null);
-};
-
 const Visits = () => {
   const navigate = useNavigate();
   
@@ -144,26 +58,32 @@ const Visits = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [visitToDelete, setVisitToDelete] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
-  // API Hooks
+  // API Hooks - hospitalId is automatically injected by the API service
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching 
   } = useGetBookingsQuery({
-    status: "accepted"
+    status: "accepted" // Only fetch approved appointments
   });
 
+  // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
 
   // Clean mapping - ONLY approved fields with proper API response handling
   const visitsData = useMemo(() => {
+    // FIX: Properly extract booking list from response
     const bookingList =
       Array.isArray(bookingsResponse)
         ? bookingsResponse
@@ -172,9 +92,15 @@ const Visits = () => {
           bookingsResponse?.result ||
           [];
 
+    console.log("BOOKINGS RESPONSE:", bookingsResponse);
+    console.log("BOOKING LIST:", bookingList);
+
+    // Filter only accepted bookings (already filtered by API, but double-check)
     const acceptedBookings = bookingList.filter(
       (booking) => booking.status?.toLowerCase() === "accepted"
     );
+
+    console.log("ACCEPTED BOOKINGS:", acceptedBookings);
 
     return acceptedBookings.map((booking, index) => {
       // Get patient image key - check multiple possible fields
@@ -196,51 +122,13 @@ const Visits = () => {
           ? "In Progress"
           : "Pending",
         patientImageKey: patientImageKey,
-        patientAvatar: patientImageKey || DEFAULT_AVATAR,
+        patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
         originalBooking: booking
       };
     });
   }, [bookingsResponse]);
 
-  // Memoized departments
-  const departments = useMemo(() => {
-    return [
-      ...new Set(
-        visitsData
-          .map(v => v.department)
-          .filter(Boolean)
-      )
-    ].sort();
-  }, [visitsData]);
-
-  // Memoized filtered visits
-  const filteredVisits = useMemo(() => {
-    let filtered = [...visitsData];
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(visit =>
-        visit.visitId?.toLowerCase().includes(term) ||
-        visit.patientId?.toLowerCase().includes(term) ||
-        visit.patientName?.toLowerCase().includes(term) ||
-        visit.doctorName?.toLowerCase().includes(term) ||
-        visit.department?.toLowerCase().includes(term) ||
-        visit.token?.toLowerCase().includes(term)
-      );
-    }
-
-    if (departmentFilter) {
-      filtered = filtered.filter(visit => visit.department === departmentFilter);
-    }
-
-    if (dateFilter) {
-      filtered = filtered.filter(visit => visit.visitDate === dateFilter);
-    }
-
-    return filtered;
-  }, [visitsData, searchTerm, departmentFilter, dateFilter]);
-
-  // Memoized recent visits
+  // Recent approved visits (first 3 from the list)
   const recentVisits = useMemo(() => {
     return visitsData.slice(0, 3).map(visit => ({
       id: visit.id,
@@ -252,30 +140,73 @@ const Visits = () => {
       startTime: visit.startTime,
       doctorName: visit.doctorName,
       department: visit.department,
-      token: visit.token
+      token: visit.token,
+      status: visit.status
     }));
   }, [visitsData]);
 
+  // Get unique departments from visits data
+  const getAllDepartments = () => {
+    return [...new Set(visitsData.map(v => v.department).filter(Boolean))].sort();
+  };
+
+  // Get unique statuses from visits data
+  const getAllStatuses = () => {
+    return [...new Set(visitsData.map(v => v.status).filter(Boolean))].sort();
+  };
+
+  const getFilteredVisits = () => {
+    let filtered = [...visitsData];
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(visit => 
+        visit.visitId?.toLowerCase().includes(term) ||
+        visit.patientId?.toLowerCase().includes(term) ||
+        visit.patientName?.toLowerCase().includes(term) ||
+        visit.doctorName?.toLowerCase().includes(term) ||
+        visit.department?.toLowerCase().includes(term) ||
+        visit.token?.toLowerCase().includes(term)
+      );
+    }
+    
+    if (departmentFilter) {
+      filtered = filtered.filter(visit => visit.department === departmentFilter);
+    }
+    
+    if (statusFilter) {
+      filtered = filtered.filter(visit => visit.status === statusFilter);
+    }
+    
+    if (dateFilter) {
+      filtered = filtered.filter(visit => visit.visitDate === dateFilter);
+    }
+    
+    return filtered;
+  };
+
+  const filteredVisits = getFilteredVisits();
   const totalPages = Math.ceil(filteredVisits.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedVisits = filteredVisits.slice(startIndex, startIndex + itemsPerPage);
 
-  // Active filter count (simplified)
-  const activeFilterCount = [departmentFilter, dateFilter, searchTerm].filter(Boolean).length;
-
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter]);
+  }, [searchTerm, departmentFilter, statusFilter, dateFilter]);
 
-  const handleRefresh = () => {
-    resetFilters(setDepartmentFilter, setDateFilter, setSearchTerm, setCurrentPage);
-    refetch();
+  const handleRefresh = () => { 
+    setSearchTerm(""); 
+    setDepartmentFilter(""); 
+    setStatusFilter("");
+    setDateFilter("");
+    setCurrentPage(1); 
+    refetch(); 
     showSuccessToast("Refreshed visits", 2000);
   };
   
   const handleExport = () => {
-    const exportData = filteredVisits.map(visit => ({ 
+    const exportData = getFilteredVisits().map(visit => ({ 
       'Visit ID': visit.visitId,
       'Patient ID': visit.patientId,
       'Patient Name': visit.patientName,
@@ -301,8 +232,8 @@ const Visits = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        JSON.parse(e.target.result);
-        showSuccessToast(`Successfully imported visits!`, 3000);
+        const importedData = JSON.parse(e.target.result);
+        showSuccessToast(`Successfully imported ${importedData.length} visits!`, 3000);
         refetch();
       } catch (error) { 
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
@@ -312,9 +243,16 @@ const Visits = () => {
     event.target.value = '';
   };
   
-  const clearAllFilters = () => {
-    resetFilters(setDepartmentFilter, setDateFilter, setSearchTerm, setCurrentPage);
+  const clearAllFilters = () => { 
+    setDepartmentFilter(''); 
+    setStatusFilter('');
+    setDateFilter('');
+    setSearchTerm('');
     showSuccessToast("All filters cleared", 2000);
+  };
+  
+  const getActiveFilterCount = () => {
+    return (departmentFilter ? 1 : 0) + (statusFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
 
   const handleViewDetails = (visit) => { 
@@ -335,6 +273,24 @@ const Visits = () => {
         token: visit.token
       } 
     });
+  };
+  
+  const handleEditClick = (visit) => { 
+    setEditingVisit(visit); 
+    setShowEditModal(true); 
+  };
+  
+  const handleSaveEdit = (updatedData) => {
+    setShowEditModal(false);
+    setEditingVisit(null);
+    refetch();
+    showSuccessToast("Visit updated successfully", 2000);
+  };
+  
+  const handleAddVisit = (newVisit) => { 
+    setShowAddModal(false); 
+    refetch();
+    showSuccessToast("Visit added successfully", 2000);
   };
   
   const handleDeleteClick = (visit) => { 
@@ -360,11 +316,14 @@ const Visits = () => {
         }
       );
       
-      closeDeleteModal(setShowDeleteModal, setVisitToDelete);
+      setShowDeleteModal(false);
+      setVisitToDelete(null);
       
     } catch (error) {
+      console.error('Delete error:', error);
       showErrorToast(error?.data?.message || 'Failed to delete visit. Please try again.', 4000);
-      closeDeleteModal(setShowDeleteModal, setVisitToDelete);
+      setShowDeleteModal(false);
+      setVisitToDelete(null);
     } finally {
       setIsDeleting(false);
     }
@@ -435,7 +394,7 @@ const Visits = () => {
     
     return (
       <div className="relative" ref={menuRef}>
-        <Button variant="ghost" size="sm" onClick={() => setShowMenu(prev => !prev)} className="p-2">
+        <Button variant="ghost" size="sm" onClick={() => setShowMenu(!showMenu)} className="p-2">
           <MoreVertical size={18} />
         </Button>
         {showMenu && (
@@ -464,6 +423,69 @@ const Visits = () => {
       </div>
     );
   };
+
+  const activeFilterCount = getActiveFilterCount();
+
+  // Skeleton Loader Component
+  const SkeletonLoader = () => (
+    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <div className="flex-1 max-w-md">
+          <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
+        </div>
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="flex-1">
+                  <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+                  <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+              <div className="space-y-3 mb-4">
+                <div className="h-4 w-full bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="h-12 bg-gray-100"></div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-16 border-b border-gray-100">
+            <div className="flex items-center px-6 py-4">
+              {[1, 2, 3, 4, 5, 6, 7].map((j) => (
+                <div key={j} className="flex-1">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (loading) {
     return <SkeletonLoader />;
@@ -508,7 +530,7 @@ const Visits = () => {
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </Button>
           <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className={iconButtonClass} title="Import">
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
             <Upload size={16} />
           </label>
           <Button variant="outline" size="sm" onClick={handleExport} title="Export">
@@ -516,9 +538,9 @@ const Visits = () => {
           </Button>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative ${iconButtonClass} ${
+            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
               showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            }`}
+            } hover:bg-gray-50`}
             title="Toggle Filters"
           >
             <Filter size={16} />
@@ -553,15 +575,26 @@ const Visits = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <select 
               value={departmentFilter} 
               onChange={(e) => setDepartmentFilter(e.target.value)} 
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="">All Departments</option>
-              {departments.map((dept) => (
+              {getAllDepartments().map((dept) => (
                 <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)} 
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+            >
+              <option value="">All Status</option>
+              {getAllStatuses().map((status) => (
+                <option key={status} value={status}>{status}</option>
               ))}
             </select>
 
@@ -610,6 +643,10 @@ const Visits = () => {
                       <span className="text-sm font-medium text-gray-800">
                         {formatDateTime(visit.visitDate, visit.startTime)}
                       </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Status</span>
+                      <Badge variant="success">{visit.status}</Badge>
                     </div>
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
@@ -758,7 +795,7 @@ const Visits = () => {
       
       <DeleteModal 
         isOpen={showDeleteModal} 
-        onClose={() => closeDeleteModal(setShowDeleteModal, setVisitToDelete)} 
+        onClose={() => { setShowDeleteModal(false); setVisitToDelete(null); }} 
         onConfirm={handleConfirmDelete} 
         title="Delete Visit" 
         message="Are you sure you want to delete this approved visit? This action cannot be undone." 
