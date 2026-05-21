@@ -1,4 +1,4 @@
-// src/components/staffs/EditStaff.jsx - Fixed to use isActive instead of status
+// src/components/staffs/EditStaff.jsx - Fixed to use isActive instead of status with S3 support
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ChevronRight, Upload, X } from 'lucide-react';
@@ -23,6 +23,18 @@ import {
   useUpdateStaffMutation,
   useDeleteStaffMutation
 } from '../../../app/service/staffApi';
+import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+
+// Helper function to get full image URL from key/filename with URL encoding
+const getFullImageUrl = (imageKey) => {
+  if (!imageKey) return null;
+  
+  if (imageKey.startsWith("http")) {
+    return imageKey;
+  }
+  
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 const EditStaff = () => {
   const navigate = useNavigate();
@@ -72,8 +84,10 @@ const EditStaff = () => {
     country: '',
     place: '',
     pincode: '',
-    isActive: true, // Changed from 'status' to 'isActive' to match API
+    isActive: true,
     profileImage: null,
+    imageUrl: null,
+    imageKey: '',
   });
 
   // Helper function to remove undefined values from an object
@@ -100,22 +114,6 @@ const EditStaff = () => {
     return '';
   };
 
-  // Mock S3 upload function
-  const uploadToS3 = async (file) => {
-    return new Promise((resolve) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress === 100) {
-          clearInterval(interval);
-          const mockS3Url = `https://your-bucket.s3.amazonaws.com/staff-images/${Date.now()}-${file.name}`;
-          resolve(mockS3Url);
-        }
-      }, 200);
-    });
-  };
-
   // Populate form data from API response
   useEffect(() => {
     if (staffData?.data) {
@@ -127,6 +125,13 @@ const EditStaff = () => {
   }, [staffData, location]);
 
   const populateFormData = (staff) => {
+    console.log("🔍 RAW STAFF DATA:", staff);
+    
+    // Prioritize imageUrl, then imageKey, then profileImage
+    const imageKey = staff.imageUrl || staff.imageKey || staff.profileImage || null;
+    
+    console.log("🖼️ Extracted imageKey:", imageKey);
+    
     const address = staff.address || {};
     const place = address.place || '';
     const addressParts = place?.split(' ') || [];
@@ -152,10 +157,21 @@ const EditStaff = () => {
       country: address.country || '',
       place: address.place || '',
       pincode: address.pincode || '',
-      isActive: staff.isActive ?? true, // FIXED: Use isActive from API, default to true
-      profileImage: staff.profileImage || null,
+      isActive: staff.isActive ?? true,
+      profileImage: imageKey,
+      imageUrl: imageKey,
+      imageKey: imageKey,
     });
-    setPreviewImage(staff.profileImage || null);
+    
+    // Set preview image using getFullImageUrl helper
+    if (imageKey) {
+      const fullUrl = getFullImageUrl(imageKey);
+      console.log("🖼️ Setting preview image URL:", fullUrl);
+      setPreviewImage(fullUrl);
+    } else {
+      console.log("❌ No profile image found");
+      setPreviewImage(null);
+    }
   };
 
   // Image upload handler
@@ -170,23 +186,35 @@ const EditStaff = () => {
     }
     
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setUploadProgress(0);
+    setUploadProgress(10);
     
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
     try {
-      const s3Url = await uploadToS3(file);
-      setFormData(prev => ({ ...prev, profileImage: s3Url }));
+      setUploadProgress(30);
+      const uploaded = await uploadToS3(file, formData.imageKey || null, formData.id || null);
       setUploadProgress(100);
+      
+      // Store the key in all three fields
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: uploaded.key,
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      
+      setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 2000);
       return true;
     } catch (error) {
+      console.error("Upload error details:", error);
+      setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
       if (formData.profileImage) {
-        setPreviewImage(formData.profileImage);
+        setPreviewImage(getFullImageUrl(formData.profileImage));
       } else {
         setPreviewImage(null);
       }
@@ -204,7 +232,9 @@ const EditStaff = () => {
     setUploadProgress(0);
     setFormData(prev => ({
       ...prev,
-      profileImage: null
+      profileImage: null,
+      imageUrl: null,
+      imageKey: ''
     }));
     setErrors(prev => ({
       ...prev,
@@ -282,7 +312,6 @@ const EditStaff = () => {
       ...prev,
       isActive: !prev.isActive
     }));
-    // Show toast notification when status changes
     showSuccessToast(`Staff status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
   };
 
@@ -335,7 +364,6 @@ const EditStaff = () => {
     try {
       const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
       
-      // Update data - FIXED: Use isActive instead of status
       const updateData = {
         name: formData.name,
         email: formData.email,
@@ -355,14 +383,21 @@ const EditStaff = () => {
           place: combinedPlace || formData.place || undefined,
           pincode: formData.pincode ? Number(formData.pincode) : undefined
         },
-        isActive: formData.isActive, // FIXED: Send isActive boolean directly
-        profileImage: formData.profileImage
+        isActive: formData.isActive,
+        imageUrl: formData.imageUrl,
+        profileImage: formData.profileImage,
+        imageKey: formData.imageKey,
       };
 
       removeUndefined(updateData);
       if (updateData.address) {
         removeUndefined(updateData.address);
       }
+
+      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
+      console.log("🖼️ imageUrl:", updateData.imageUrl);
+      console.log("🖼️ profileImage:", updateData.profileImage);
+      console.log("🔑 imageKey:", updateData.imageKey);
 
       await updateStaff({
         id: formData.id,
@@ -386,6 +421,7 @@ const EditStaff = () => {
       setSubmitSuccess(true);
       setTimeout(() => navigate('/staffs'), 1500);
     } catch (error) {
+      console.error("Update error:", error);
       showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
       setIsSubmitting(false);
       setSubmitError(error?.data?.message || 'Failed to update staff');
@@ -400,6 +436,7 @@ const EditStaff = () => {
   const tabs = [{ id: 'basic', label: 'Basic Info' }];
 
   const isFormSubmitting = isSubmitting || isUpdateLoading;
+  const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
   // Skeleton Loading State
   if (loading) {
@@ -490,7 +527,21 @@ const EditStaff = () => {
                   <div className="relative">
                     <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                       {previewImage ? (
-                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                        <img 
+                          src={previewImage} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            console.error("❌ Image failed to load:", previewImage);
+                            e.target.style.display = 'none';
+                            const parent = e.target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `<div class="w-full h-full bg-gray-100 flex items-center justify-center">
+                                <span class="text-gray-400 text-2xl font-medium">${formData.name ? formData.name.charAt(0).toUpperCase() : '?'}</span>
+                              </div>`;
+                            }
+                          }}
+                        />
                       ) : (
                         <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                           <span className="text-gray-400 text-2xl font-medium">
@@ -533,7 +584,7 @@ const EditStaff = () => {
                     <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                   </div>
                   
-                  {uploadProgress > 0 && uploadProgress < 100 && (
+                  {isUploading && (
                     <div className="mt-2">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                         <div 
@@ -581,7 +632,6 @@ const EditStaff = () => {
                 <p className="text-xs text-gray-400 mt-1">
                   Toggle to {formData.isActive ? 'deactivate' : 'activate'} this staff member
                 </p>
-                {/* Status indicator badge */}
                 <div className="mt-3">
                   {formData.isActive ? (
                     <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">

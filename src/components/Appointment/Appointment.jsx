@@ -21,6 +21,8 @@ import {
   useDeleteBookingMutation
 } from '../../../app/service/request';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getS3ImageUrl } from '../../../app/service/S3';
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
@@ -308,6 +310,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       const displayStatus = mapStatus(booking.status);
       
+      // Get patient image key - check multiple possible fields
+      const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+      
       // Extract raw values first to avoid operator precedence issues
       // Using ?? for better handling of empty strings and 0 values
       const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
@@ -335,8 +340,9 @@ status: displayStatus,
         reason: booking.reason || "",
         notes: booking.notes || "",
         paymentMethod: booking.payment_method || "Pending",
-        patientAvatar: DEFAULT_PROFILE_IMAGE((index % 10) + 1),
-        avatar: DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
+        patientImageKey: patientImageKey,
+        patientAvatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),
+        avatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
         patientType: booking.patient_type || "Out Patient",
         preferredMode: booking.preferred_mode || "In-person",
         originalStatus: booking.status // Store original backend status
@@ -643,7 +649,15 @@ status: displayStatus,
           <div className="p-5 space-y-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={appointment.avatar} alt="" className="w-10 h-10 rounded-full" />
+                <ShadcnAvatar className="w-10 h-10">
+                  <AvatarImage 
+                    src={getS3ImageUrl(appointment.patientImageKey)} 
+                    alt={appointment.patientName}
+                  />
+                  <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
+                    {appointment.patientName?.charAt(0)?.toUpperCase() || "P"}
+                  </AvatarFallback>
+                </ShadcnAvatar>
                 <div>
                   <p className="font-medium">{appointment.patientName}</p>
                   <p className="text-sm text-gray-500">Patient</p>
@@ -952,7 +966,16 @@ status: displayStatus,
                       <td className="px-6 py-4 text-gray-600">#{apt.patientId}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img src={apt.avatar} alt={apt.patientName} className="w-8 h-8 rounded-full object-cover" />
+                          <ShadcnAvatar className="w-8 h-8">
+                            <AvatarImage 
+                              src={getS3ImageUrl(apt.patientImageKey)} 
+                              alt={apt.patientName}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                              {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
+                            </AvatarFallback>
+                          </ShadcnAvatar>
                           <span className="font-medium text-gray-800">{apt.patientName}</span>
                         </div>
                       </td>

@@ -1,4 +1,4 @@
-// src/components/visits/Visits.jsx - Added Status Filter
+// src/components/visits/Visits.jsx - Added Status Filter with S3 Support
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -15,6 +15,8 @@ import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
 import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/service/request';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
+import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getS3ImageUrl } from '../../../app/service/S3';
 
 // Helper functions for date formatting
 const formatDate = (dateString) => {
@@ -60,7 +62,7 @@ const Visits = () => {
   const [editingVisit, setEditingVisit] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState(''); // NEW: Status filter state
+  const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -100,27 +102,30 @@ const Visits = () => {
 
     console.log("ACCEPTED BOOKINGS:", acceptedBookings);
 
-    return acceptedBookings.map((booking, index) => ({
-      id: booking.id || booking._id,
-      visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
-      patientName: booking.patient_name || booking.patientName || "N/A",
-      patientId: booking.patientId || `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
-      doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
-      department: booking.doctor_department || booking.department || "General",
+    return acceptedBookings.map((booking, index) => {
+      // Get patient image key - check multiple possible fields
+      const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
       
-      // FIX: Correct field mapping for approved data
-      visitDate: booking.booking_date || booking.date || "",
-      startTime: booking.consulting_time || booking.time || "",
-      token: booking.token ?? booking.appointment_token ?? "N/A",
-      
-      status: booking.consultation_status === "completed"
-        ? "Complete"
-        : booking.consultation_status === "ongoing"
-        ? "In Progress"
-        : "Pending",
-      patientAvatar: booking.avatar || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
-      originalBooking: booking
-    }));
+      return {
+        id: booking.id || booking._id,
+        visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
+        patientName: booking.patient_name || booking.patientName || "N/A",
+        patientId: booking.patientId || `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
+        doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
+        department: booking.doctor_department || booking.department || "General",
+        visitDate: booking.booking_date || booking.date || "",
+        startTime: booking.consulting_time || booking.time || "",
+        token: booking.token ?? booking.appointment_token ?? "N/A",
+        status: booking.consultation_status === "completed"
+          ? "Complete"
+          : booking.consultation_status === "ongoing"
+          ? "In Progress"
+          : "Pending",
+        patientImageKey: patientImageKey,
+        patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
+        originalBooking: booking
+      };
+    });
   }, [bookingsResponse]);
 
   // Recent approved visits (first 3 from the list)
@@ -129,6 +134,7 @@ const Visits = () => {
       id: visit.id,
       patientName: visit.patientName,
       patientId: visit.patientId,
+      patientImageKey: visit.patientImageKey,
       patientAvatar: visit.patientAvatar,
       visitDate: visit.visitDate,
       startTime: visit.startTime,
@@ -144,7 +150,7 @@ const Visits = () => {
     return [...new Set(visitsData.map(v => v.department).filter(Boolean))].sort();
   };
 
-  // NEW: Get unique statuses from visits data
+  // Get unique statuses from visits data
   const getAllStatuses = () => {
     return [...new Set(visitsData.map(v => v.status).filter(Boolean))].sort();
   };
@@ -168,7 +174,6 @@ const Visits = () => {
       filtered = filtered.filter(visit => visit.department === departmentFilter);
     }
     
-    // NEW: Status filter
     if (statusFilter) {
       filtered = filtered.filter(visit => visit.status === statusFilter);
     }
@@ -185,7 +190,7 @@ const Visits = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedVisits = filteredVisits.slice(startIndex, startIndex + itemsPerPage);
 
-  // Reset page when filters change (UPDATED: added statusFilter)
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, statusFilter, dateFilter]);
@@ -193,7 +198,7 @@ const Visits = () => {
   const handleRefresh = () => { 
     setSearchTerm(""); 
     setDepartmentFilter(""); 
-    setStatusFilter(""); // NEW: Reset status filter
+    setStatusFilter("");
     setDateFilter("");
     setCurrentPage(1); 
     refetch(); 
@@ -240,7 +245,7 @@ const Visits = () => {
   
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
-    setStatusFilter(''); // NEW: Clear status filter
+    setStatusFilter('');
     setDateFilter('');
     setSearchTerm('');
     showSuccessToast("All filters cleared", 2000);
@@ -293,17 +298,14 @@ const Visits = () => {
     setShowDeleteModal(true); 
   };
   
-  // FIXED: Delete handler with RED toast on success
   const handleConfirmDelete = async () => {
     if (!visitToDelete) return;
     
     setIsDeleting(true);
     
     try {
-      // Call the delete booking API
       await deleteBooking(visitToDelete.id).unwrap();
       
-      // Show RED toast on success (using showErrorToast)
       showErrorToast(
         `Visit ${visitToDelete.visitId} deleted successfully!`,
         4000,
@@ -314,15 +316,11 @@ const Visits = () => {
         }
       );
       
-      // Close modal and clear state
       setShowDeleteModal(false);
       setVisitToDelete(null);
       
-      // Auto-refresh via RTK Query (invalidatesTags handles it)
-      
     } catch (error) {
       console.error('Delete error:', error);
-      // Show RED toast on failure too
       showErrorToast(error?.data?.message || 'Failed to delete visit. Please try again.', 4000);
       setShowDeleteModal(false);
       setVisitToDelete(null);
@@ -336,11 +334,16 @@ const Visits = () => {
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Approved Visit Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
-          <img 
-            src={visit.patientAvatar || 'https://randomuser.me/api/portraits/lego/1.jpg'} 
-            alt={visit.patientName} 
-            className="w-12 h-12 rounded-full object-cover" 
-          />
+          <ShadcnAvatar className="w-12 h-12">
+            <AvatarImage 
+              src={getS3ImageUrl(visit.patientImageKey)} 
+              alt={visit.patientName}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-gray-200 text-gray-600 text-base font-medium">
+              {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
+            </AvatarFallback>
+          </ShadcnAvatar>
           <div>
             <h3 className="font-semibold text-gray-800 text-lg">{visit.patientName}</h3>
             <p className="text-sm text-gray-500">{visit.visitId}</p>
@@ -573,7 +576,6 @@ const Visits = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Department Filter */}
             <select 
               value={departmentFilter} 
               onChange={(e) => setDepartmentFilter(e.target.value)} 
@@ -585,7 +587,6 @@ const Visits = () => {
               ))}
             </select>
 
-            {/* NEW: Status Filter */}
             <select 
               value={statusFilter} 
               onChange={(e) => setStatusFilter(e.target.value)} 
@@ -597,7 +598,6 @@ const Visits = () => {
               ))}
             </select>
 
-            {/* Date Filter */}
             <input 
               type="date" 
               value={dateFilter} 
@@ -617,11 +617,16 @@ const Visits = () => {
               <Card key={visit.id} hover className="overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-                    <img 
-                      src={visit.patientAvatar} 
-                      alt={visit.patientName} 
-                      className="w-12 h-12 rounded-full object-cover" 
-                    />
+                    <ShadcnAvatar className="w-12 h-12">
+                      <AvatarImage 
+                        src={getS3ImageUrl(visit.patientImageKey)} 
+                        alt={visit.patientName}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="bg-gray-200 text-gray-600 text-base font-medium">
+                        {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
+                      </AvatarFallback>
+                    </ShadcnAvatar>
                     <div>
                       <div className="font-semibold text-gray-900">{visit.patientName}</div>
                       <div className="text-xs text-gray-500">Patient ID: {visit.patientId}</div>
@@ -707,11 +712,16 @@ const Visits = () => {
                     <td className="px-6 py-4 text-[#1C62A0] font-medium">{visit.visitId}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img 
-                          src={visit.patientAvatar || 'https://randomuser.me/api/portraits/lego/1.jpg'} 
-                          alt={visit.patientName} 
-                          className="w-8 h-8 rounded-full object-cover" 
-                        />
+                        <ShadcnAvatar className="w-8 h-8">
+                          <AvatarImage 
+                            src={getS3ImageUrl(visit.patientImageKey)} 
+                            alt={visit.patientName}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                            {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
+                          </AvatarFallback>
+                        </ShadcnAvatar>
                         <div>
                           <span className="font-medium text-gray-800">{visit.patientName}</span>
                           <p className="text-xs text-gray-400">{visit.patientId}</p>

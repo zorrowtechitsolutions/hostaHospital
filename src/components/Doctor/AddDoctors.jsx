@@ -20,6 +20,18 @@ import {
 } from "../ui/Toast";
 import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
+import { getHospitalId } from '../../utils/auth';
+import { uploadToS3 } from '../../../app/service/S3';
+
+// Helper function to get S3 image URL
+const getS3ImageUrl = (imageKey) => {
+  if (!imageKey) return null;
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return imageKey;
+  }
+  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 // Constants
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -338,6 +350,7 @@ const AddDoctor = () => {
   
   const [formData, setFormData] = useState({
     profileImage: null,
+    imageKey: '',
     firstName: '',
     lastName: '',
     department: '',
@@ -546,18 +559,44 @@ const AddDoctor = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  const handleImageUpload = (file) => {
+  const handleImageUpload = async (file) => {
     if (!file) return false;
+    
     if (file.size > MAX_FILE_SIZE) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
+      showWarningToast('File size must be less than 5MB', 3000);
       return false;
     }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
+      return false;
+    }
+
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setFormData(prev => ({ ...prev, profileImage: file }));
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    return true;
+
+    try {
+      const uploaded = await uploadToS3(file);
+      setFormData(prev => ({ 
+        ...prev, 
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      showSuccessToast('Image uploaded successfully!', 3000);
+      return true;
+    } catch (error) {
+      console.error('Upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      showErrorToast('Failed to upload image. Please try again.', 3000);
+      setPreviewImage(null);
+      return false;
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -566,10 +605,13 @@ const AddDoctor = () => {
   };
 
   const removeImage = () => {
-    setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
+    setFormData(prev => ({ ...prev, profileImage: null, imageKey: '' }));
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Image removed', 3000);
   };
 
+  // prepareDoctorData function
   const prepareDoctorData = () => {
     const consultingOneArray = [];
     const consultingTwoArray = [];
@@ -627,6 +669,8 @@ const AddDoctor = () => {
       bookingOpen: formData.bookingOpen,
       displayName: formData.displayName || `${formData.firstName} ${formData.lastName}`,
       experience: formData.experience,
+      profileImage: formData.profileImage || undefined,
+      imageKey: formData.imageKey || undefined,
     };
 
     if (formData.registrationNumber) {
@@ -664,7 +708,12 @@ const AddDoctor = () => {
       
       try {
         const doctorData = prepareDoctorData();
-        await addNewDoctor(doctorData).unwrap();
+        
+        console.log("Sending doctor data:", JSON.stringify(doctorData, null, 2));
+        console.log("🖼️ profileImage (key):", doctorData.profileImage);
+        console.log("🔑 imageKey:", doctorData.imageKey);
+        
+        const result = await addNewDoctor(doctorData).unwrap();
         
         showSuccessToast(
           `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`
@@ -783,6 +832,7 @@ const AddDoctor = () => {
                     touched={touched.joiningDate} 
                     required 
                   />
+                  <Input label="Experience" name="experience" icon={Briefcase} placeholder="e.g., 5 years" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
                 <div className={GRID_CLASS}>
@@ -807,9 +857,7 @@ const AddDoctor = () => {
 
                 <div className={GRID_CLASS}>
                   <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
-                  <Input label="Experience" name="experience" icon={Briefcase} placeholder="e.g., 5 years" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
-
 
                 {/* Languages Dropdown */}
                 <div className="space-y-2">
@@ -1068,24 +1116,3 @@ const AddDoctor = () => {
 };
 
 export default AddDoctor;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

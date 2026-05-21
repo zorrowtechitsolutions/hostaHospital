@@ -1,4 +1,4 @@
-// src/components/staffs/Staffs.jsx - Fixed status mapping from API
+// src/components/staffs/Staffs.jsx - Fixed status mapping from API with S3 Support
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -34,8 +34,23 @@ import {
   showErrorToast
 } from '../ui/Toast';
 
-// Default profile image URL
-const DEFAULT_PROFILE_IMAGE = "https://randomuser.me/api/portraits/lego/1.jpg";
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback
+} from "@/components/ui/avatar";
+
+import { getS3ImageUrl } from '../../../app/service/S3';
+
+// Helper function to get S3 image URL
+const getS3ImageUrlHelper = (imageKey) => {
+  if (!imageKey) return "";
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return imageKey;
+  }
+  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 const Staffs = () => {
   const navigate = useNavigate();
@@ -83,8 +98,10 @@ const Staffs = () => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
     return staffList.map((staff, index) => {
+      // Get the image key from the staff object - prioritize imageUrl, then profileImage, then imageKey
+      const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
+      
       // FIXED: Properly map status from API response
-      // The API likely returns status as 'active' or 'inactive'
       let staffStatus = 'Inactive'; // Default to Inactive
       
       // Check status from various possible sources in the API response
@@ -119,7 +136,9 @@ const Staffs = () => {
         appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
         appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         patientsCount: Math.floor(Math.random() * 200) + 10,
-        profileImage: staff.profileImage || null,
+        imageKey: imageKey,
+        profileImage: imageKey,
+        imageUrl: imageKey,
         status: staffStatus,
         jobType: staff.jobType || '',
         dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
@@ -286,11 +305,15 @@ const Staffs = () => {
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
-          <img
-            src={staff.profileImage || DEFAULT_PROFILE_IMAGE}
-            alt={staff.name}
-            className="w-16 h-16 rounded-full border-2 border-white shadow-sm object-cover"
-          />
+          <Avatar className="w-16 h-16">
+            <AvatarImage 
+              src={getS3ImageUrl(staff.imageUrl)} 
+              alt={staff.name} 
+            />
+            <AvatarFallback className="text-xl font-medium">
+              {staff.name?.charAt(0)?.toUpperCase() || '?'}
+            </AvatarFallback>
+          </Avatar>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-gray-800 text-lg">{staff.name}</h3>
@@ -577,11 +600,15 @@ const Staffs = () => {
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.formattedId}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img 
-                            src={staff.profileImage || DEFAULT_PROFILE_IMAGE}
-                            alt={staff.name}
-                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover"
-                          />
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage 
+                              src={getS3ImageUrl(staff.imageUrl)} 
+                              alt={staff.name} 
+                            />
+                            <AvatarFallback className="text-sm font-medium">
+                              {staff.name?.charAt(0)?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           <span className="font-medium text-gray-800">{staff.name}</span>
                         </div>
                       </td>

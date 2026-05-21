@@ -88,6 +88,7 @@ export const api = createApi({
     "Booking",
     "Role",
     "RolePermission",
+    "S3"
   ],
 
   endpoints: () => ({}),

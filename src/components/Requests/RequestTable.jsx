@@ -24,6 +24,8 @@ import {
   useApproveBookingMutation,
   useRejectBookingMutation
 } from "../../../app/service/request";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getS3ImageUrl } from "../../../app/service/S3";
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -66,6 +68,9 @@ const transformBookingsData = (bookingList) => {
   return bookingList.map((booking, index) => {
     const DEFAULT_PROFILE_IMAGE = `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`;
     const bookingId = booking.id || booking._id;
+    
+    // Get patient image - check multiple possible fields
+    const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
 
     // Extract raw values first to avoid operator precedence issues
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
@@ -87,7 +92,8 @@ const rawTime = booking.open || booking.consulting_time || booking.consulting_ti
       consulting_time: rawTime,
       reason: booking.reason || "",
       status: booking.status || "pending",
-      avatar: booking.avatar || DEFAULT_PROFILE_IMAGE,
+      patientImageKey: patientImageKey,
+      avatar: patientImageKey || DEFAULT_PROFILE_IMAGE,
       createdAt: booking.createdAt,
       updatedAt: booking.updatedAt,
     };
@@ -686,15 +692,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={item.avatar}
-                            alt={item.patientName}
-                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = DEFAULT_AVATAR;
-                            }}
-                          />
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage 
+                              src={getS3ImageUrl(item.patientImageKey)} 
+                              alt={item.patientName}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
+                              {item.patientName?.charAt(0)?.toUpperCase() || "P"}
+                            </AvatarFallback>
+                          </Avatar>
                           <span className="font-medium text-gray-800">{item.patientName}</span>
                         </div>
                       </td>
