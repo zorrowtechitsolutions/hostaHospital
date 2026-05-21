@@ -1,5 +1,5 @@
 // src/components/Settings/Settings.jsx - COMPLETE FIXED VERSION WITH SKELETON LOADING
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Button,
@@ -10,13 +10,12 @@ import {
 import Security from './Security';
 import UserPermissions from './UserPermissions';
 import Map from './Map';
-import { showSuccessToast, showWarningToast, showInfoToast, showErrorToast } from '../ui/Toast';
+import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
-import { getHospitalId, clearAuth } from '../../utils/auth';
+import { useAuth } from '../../context/AuthContext';
 
-// Time options constant
 const TIME_OPTIONS = [
   '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
   '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
@@ -24,7 +23,6 @@ const TIME_OPTIONS = [
   '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
 ];
 
-// Default working hours constant
 const DEFAULT_WORKING_HOURS = {
   monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
   tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
@@ -35,7 +33,6 @@ const DEFAULT_WORKING_HOURS = {
   sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
 };
 
-// Days constant
 const DAYS = [
   { key: 'monday', label: 'Monday' },
   { key: 'tuesday', label: 'Tuesday' },
@@ -46,24 +43,11 @@ const DAYS = [
   { key: 'sunday', label: 'Sunday' },
 ];
 
-// Tabs constant
-const TABS = ['General', 'Security', 'User Permissions', 'Map'];
-
-// Hospital types constant
 const HOSPITAL_TYPES = [
   'Allopathy', 'Homeopathy', 'Ayurveda', 'Unani', 
   'Physiotherapy', 'Mental Health', 'Laboratory', 'Other'
 ];
 
-// Tab component map
-const TAB_COMPONENTS = {
-  General: null, // Will be set dynamically
-  Security: Security,
-  'User Permissions': UserPermissions,
-  Map: Map
-};
-
-// SearchableDropdown Component
 const SearchableDropdown = ({ 
   label, 
   options, 
@@ -135,7 +119,7 @@ const SearchableDropdown = ({
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsOpen(prev => !prev)}
         />
       </div>
       
@@ -163,7 +147,6 @@ const SearchableDropdown = ({
   );
 };
 
-// Skeleton Loader Component
 const SettingsSkeleton = () => {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -196,28 +179,6 @@ const SettingsSkeleton = () => {
                   </div>
                 ))}
               </div>
-
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-3"></div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2"></div>
-                    <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[...Array(4)].map((_, i) => (
-                      <div key={i}>
-                        <div className="h-4 w-16 bg-gray-200 rounded animate-pulse mb-2"></div>
-                        <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
-              </div>
             </div>
           </div>
         </div>
@@ -227,20 +188,17 @@ const SettingsSkeleton = () => {
 };
 
 const Settings = () => {
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
-  // Get hospitalId from auth utility
-  const hospitalId = getHospitalId();
-
-  // API hooks
+  const hospitalId = user?.id;
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
   const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
 
-  // State hooks - simplified to use editForm only
   const [hospitalInfo, setHospitalInfo] = useState({
     name: '',
     email: '',
@@ -269,40 +227,37 @@ const Settings = () => {
     pincode: '',
   });
 
-  // Non-hook computed values
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(editForm.countryCode);
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
+  const isFormSaving = isSaving || isUpdating;
 
-  // Check for fetch errors (401 etc)
   useEffect(() => {
     if (fetchError?.status === 401) {
       showErrorToast('Session expired. Redirecting to login...', 2000);
       setTimeout(() => {
-        clearAuth();
+        logout();
         navigate('/sign-in');
       }, 2000);
     }
-  }, [fetchError, navigate]);
+  }, [fetchError, logout, navigate]);
 
-  // Check for update errors
   useEffect(() => {
     if (updateError) {
       const status = updateError?.status || updateError?.originalStatus;
       if (status === 401) {
         showErrorToast('Authentication failed. Please log in again.', 3000);
         setTimeout(() => {
-          clearAuth();
+          logout();
           navigate('/sign-in');
         }, 2000);
       } else {
         showErrorToast(updateError?.data?.message || 'Failed to update hospital information', 4000);
       }
-      resetUpdate?.();
+      resetUpdate();
     }
-  }, [updateError, navigate, resetUpdate]);
+  }, [updateError, logout, navigate, resetUpdate]);
 
-  // Handle hospital data extraction
   useEffect(() => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
@@ -332,7 +287,7 @@ const Settings = () => {
         }));
       }
     }
-  }, [hospitalData, countries]);
+  }, [hospitalData]);
 
   useEffect(() => {
     if (location.state?.tab) setActiveTab(location.state.tab);
@@ -341,17 +296,6 @@ const Settings = () => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      showErrorToast('No authentication token found. Please log in again.', 4000);
-      setTimeout(() => {
-        clearAuth();
-        navigate('/sign-in');
-      }, 2000);
-      setIsSaving(false);
-      return;
-    }
     
     try {
       const updateData = {
@@ -395,7 +339,7 @@ const Settings = () => {
       if (error.status === 401) {
         showErrorToast('Session expired. Redirecting to login...', 3000);
         setTimeout(() => {
-          clearAuth();
+          logout();
           navigate('/sign-in');
         }, 2000);
       } else {
@@ -451,21 +395,16 @@ const Settings = () => {
       ...prev,
       [day]: { ...prev[day], [field]: value }
     }));
-    showInfoToast(`${day} ${field} updated to ${value}`, 1500);
   };
 
   const handleToggleClosed = (day) => {
-    setWorkingHours(prev => {
-      const updated = {
-        ...prev,
-        [day]: {
-          ...prev[day],
-          closed: !prev[day].closed
-        }
-      };
-      showInfoToast(`${day} is now ${updated[day].closed ? 'closed' : 'open'}`, 2000);
-      return updated;
-    });
+    setWorkingHours(prev => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        closed: !prev[day].closed
+      }
+    }));
   };
 
   const handleSet24HourMode = () => {
@@ -473,14 +412,20 @@ const Settings = () => {
       setWorkingHours(DEFAULT_WORKING_HOURS);
       showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
     } else {
-      const newHours = {};
-      DAYS.forEach(day => {
-        newHours[day.key] = { open: '00:00 AM', close: '11:59 PM', closed: false };
-      });
+      const newHours = Object.fromEntries(
+        DAYS.map(day => [
+          day.key,
+          {
+            open: '00:00 AM',
+            close: '11:59 PM',
+            closed: false
+          }
+        ])
+      );
       setWorkingHours(newHours);
       showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
     }
-    setIs24HourMode(!is24HourMode);
+    setIs24HourMode(prev => !prev);
   };
 
   const handleCancelEdit = () => {
@@ -499,21 +444,48 @@ const Settings = () => {
           {!isEditing ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700">Hospital Name</label><p className="mt-1 text-gray-900 font-medium">{hospitalInfo.name}</p></div>
-                <div><label className="block text-sm font-medium text-gray-700">Email Address</label><p className="mt-1 text-gray-900">{hospitalInfo.email}</p></div>
-                <div><label className="block text-sm font-medium text-gray-700">Hospital Type</label><p className="mt-1 text-gray-900">{hospitalInfo.hospitalType}</p></div>
-                <div><label className="block text-sm font-medium text-gray-700">Mobile Number</label><p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p></div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hospital Name</label>
+                  <p className="mt-1 text-gray-900 font-medium">{hospitalInfo.name}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                  <p className="mt-1 text-gray-900">{hospitalInfo.email}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hospital Type</label>
+                  <p className="mt-1 text-gray-900">{hospitalInfo.hospitalType}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Mobile Number</label>
+                  <p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p>
+                </div>
               </div>
               
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  <div><label className="block text-sm font-medium text-gray-700">Street Address</label><p className="mt-1 text-gray-900">{editForm.streetAddress || 'Not provided'}</p></div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Street Address</label>
+                    <p className="mt-1 text-gray-900">{editForm.streetAddress || 'Not provided'}</p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700">Country</label><p className="mt-1 text-gray-900">{editForm.countryName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">State</label><p className="mt-1 text-gray-900">{editForm.stateName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">District</label><p className="mt-1 text-gray-900">{editForm.cityName || 'Not provided'}</p></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Pincode</label><p className="mt-1 text-gray-900">{editForm.pincode || 'Not provided'}</p></div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Country</label>
+                      <p className="mt-1 text-gray-900">{editForm.countryName || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">State</label>
+                      <p className="mt-1 text-gray-900">{editForm.stateName || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">District</label>
+                      <p className="mt-1 text-gray-900">{editForm.cityName || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Pincode</label>
+                      <p className="mt-1 text-gray-900">{editForm.pincode || 'Not provided'}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -601,8 +573,8 @@ const Settings = () => {
               </div>
               
               <div className="flex space-x-3 pt-4">
-                <Button type="submit" variant="primary" disabled={isSaving} loading={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save Changes'}
+                <Button type="submit" variant="primary" disabled={isFormSaving} loading={isFormSaving}>
+                  {isFormSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancel</Button>
               </div>
@@ -703,9 +675,18 @@ const Settings = () => {
   );
 
   const renderTabContent = () => {
-    if (activeTab === 'General') return GeneralTab;
-    const Component = TAB_COMPONENTS[activeTab];
-    return Component ? <Component /> : null;
+    switch (activeTab) {
+      case 'General':
+        return GeneralTab;
+      case 'Security':
+        return <Security />;
+      case 'User Permissions':
+        return <UserPermissions />;
+      case 'Map':
+        return <Map />;
+      default:
+        return null;
+    }
   };
 
   if (isLoadingHospital) {
@@ -720,7 +701,7 @@ const Settings = () => {
           <p className="text-gray-500 mt-1">Manage your account settings</p>
         </div>
         
-        <Tabs tabs={TABS.map(tab => ({ id: tab, label: tab }))} activeTab={activeTab} onTabChange={setActiveTab} className="mb-6" />
+        <Tabs tabs={['General', 'Security', 'User Permissions', 'Map'].map(tab => ({ id: tab, label: tab }))} activeTab={activeTab} onTabChange={setActiveTab} className="mb-6" />
         
         <div className="mt-6">{renderTabContent()}</div>
         

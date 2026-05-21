@@ -23,6 +23,17 @@ import {
 import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
 import { getHospitalId } from '../../utils/auth';
+import { uploadToS3 } from '../../../app/service/S3';
+
+// Helper function to get S3 image URL
+const getS3ImageUrl = (imageKey) => {
+  if (!imageKey) return null;
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return imageKey;
+  }
+  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
@@ -314,6 +325,7 @@ const AddDoctor = () => {
   
   const [formData, setFormData] = useState({
     profileImage: null,
+    imageKey: '',
     firstName: '',
     lastName: '',
     department: '',
@@ -339,7 +351,6 @@ const AddDoctor = () => {
     password: '',
     confirmPassword: '',
     joiningDate: '',
-    // hospitalId is NOT stored in state - auto-injected by API
     experience: '',
     appointmentCount: '',
     weeklySchedule: {
@@ -643,18 +654,43 @@ const AddDoctor = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  const handleImageUpload = (file) => {
-    if (!file) return false;
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+
     if (file.size > 5 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-      return false;
+      showWarningToast('File size must be less than 5MB', 3000);
+      return;
     }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
+      return;
+    }
+
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setFormData(prev => ({ ...prev, profileImage: file }));
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    return true;
+
+    try {
+      const uploaded = await uploadToS3(file);
+      // Store only the key
+      setFormData(prev => ({ 
+        ...prev, 
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      showSuccessToast('Image uploaded successfully!', 3000);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      showErrorToast('Failed to upload image. Please try again.', 3000);
+      setPreviewImage(null);
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -663,11 +699,13 @@ const AddDoctor = () => {
   };
 
   const removeImage = () => {
-    setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
+    setFormData(prev => ({ ...prev, profileImage: null, imageKey: '' }));
+    setErrors(prev => ({ ...prev, profileImage: '' }));
+    showSuccessToast('Image removed', 3000);
   };
 
-  // PERFECT prepareDoctorData function - hospitalId auto-injected by API
+  // prepareDoctorData function - hospitalId auto-injected by API
   const prepareDoctorData = () => {
     // Build consultingOne array (days without break)
     const consultingOneArray = [];
@@ -705,7 +743,6 @@ const AddDoctor = () => {
       email: formData.email,
       password: formData.password,
       phone: formData.phoneNumber,
-      // hospitalId is NOT included here - API will auto-inject from JWT
       joiningDate: formData.joiningDate,
       dob: formData.dob,
       gender: formData.gender?.toLowerCase(),
@@ -728,6 +765,8 @@ const AddDoctor = () => {
       bookingOpen: formData.bookingOpen,
       displayName: formData.displayName || `${formData.firstName} ${formData.lastName}`,
       experience: formData.experience,
+      profileImage: formData.profileImage || undefined,
+      imageKey: formData.imageKey || undefined,
     };
 
     // Add registrationNumber if provided (as regNo to match Postman)
@@ -777,6 +816,8 @@ const AddDoctor = () => {
         
         console.log("Sending doctor data:", JSON.stringify(doctorData, null, 2));
         console.log("Hospital ID from auth:", hospitalId);
+        console.log("🖼️ profileImage (key):", doctorData.profileImage);
+        console.log("🔑 imageKey:", doctorData.imageKey);
         
         const result = await addNewDoctor(doctorData).unwrap();
         

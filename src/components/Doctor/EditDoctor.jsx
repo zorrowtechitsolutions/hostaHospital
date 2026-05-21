@@ -16,10 +16,18 @@ import {
 } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
 import { getHospitalId } from '../../utils/auth';
+import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// Lazy load heavy components
-const SearchableDropdown = lazy(() => import('./SearchableDropdown'));
-const DayScheduleRow = lazy(() => import('./DayScheduleRow'));
+// Helper function to get full image URL from key/filename with URL encoding
+const getFullImageUrl = (imageKey) => {
+  if (!imageKey) return null;
+  
+  if (imageKey.startsWith("http")) {
+    return imageKey;
+  }
+  
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 // Fallback loading component
 const LoadingFallback = () => (
@@ -283,9 +291,11 @@ const EditDoctor = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
   
-  // Form state - profileImage stores the File object for uploads
+  // Form state - profileImage stores the S3 key for existing images
   const [formData, setFormData] = useState({
-    profileImage: null, // This stores the actual File object when new image is selected
+    profileImage: null, // This stores the S3 key for existing image
+    imageUrl: null,
+    imageKey: null,
     firstName: '',
     lastName: '',
     department: '',
@@ -333,8 +343,8 @@ const EditDoctor = () => {
 
   console.log("Doctor API Response:", doctorResponse);
 
-  // Extract doctor from response
-  const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
+  // Extract doctor from response with multiple possible paths
+  const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
 
   console.log("Extracted Doctor:", doctor);
 
@@ -389,6 +399,19 @@ const EditDoctor = () => {
       console.log("=== INITIALIZING FORM WITH DOCTOR DATA ===");
       console.log("Doctor object:", doctor);
       
+      // Get image key from doctor - check ALL possible paths in the response
+      const imageKey = 
+        doctor?.imageUrl ||
+        doctor?.profileImage ||
+        doctor?.image ||
+        doctor?.data?.imageUrl ||
+        doctor?.doctor?.imageUrl ||
+        doctor?.doctor?.image ||
+        doctor?.data?.doctor?.imageUrl ||
+        null;
+      
+      console.log("🖼️ Extracted imageKey:", imageKey);
+      
       // Find country and state
       const country = countries.find(c => 
         c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
@@ -437,7 +460,9 @@ const EditDoctor = () => {
       }
       
       const newFormData = {
-        profileImage: null, // Don't store file object in state
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
         firstName: doctor.firstName || "",
         lastName: doctor.lastName || "",
         department: doctor.department || "",
@@ -475,8 +500,14 @@ const EditDoctor = () => {
       console.log("Setting form data:", newFormData);
       setFormData(newFormData);
       
-      if (doctor.image) {
-        setPreviewImage(doctor.image);
+      // Set preview image using getFullImageUrl helper
+      if (imageKey) {
+        const fullUrl = getFullImageUrl(imageKey);
+        console.log("🖼️ Setting preview image URL:", fullUrl);
+        setPreviewImage(fullUrl);
+      } else {
+        console.log("❌ No profile image found");
+        setPreviewImage(null);
       }
       
       // Update states and cities
@@ -496,6 +527,8 @@ const EditDoctor = () => {
     setFormInitialized(false);
     setFormData({
       profileImage: null,
+      imageUrl: null,
+      imageKey: null,
       firstName: '',
       lastName: '',
       department: '',
@@ -542,36 +575,63 @@ const EditDoctor = () => {
     }));
   };
 
-  // FIXED: Store the actual File object, NOT a blob URL
+  // Handle image upload to S3
   const handleImageUpload = async (file) => {
-    if (!file) return false;
+    if (!file) return;
     
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-      showWarningToast('File size must be less than 5MB', 3000);
-      return false;
-    }
-    
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
-      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
-      return false;
+    const imageError = validateImage(file);
+    if (imageError) {
+      setErrors(prev => ({ ...prev, profileImage: imageError }));
+      showWarningToast(imageError, 3000);
+      return;
     }
     
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setUploadProgress(0);
+    setUploadProgress(10);
     
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
-    // Store the actual File object, not a blob URL
-    setFormData(prev => ({ ...prev, profileImage: file }));
-    setUploadProgress(100);
-    showSuccessToast('Image uploaded successfully!', 2000);
-    
-    return true;
+    try {
+      setUploadProgress(30);
+      // FIXED: Pass doctorId instead of formData.id which doesn't exist
+      const uploaded = await uploadToS3(file, formData.imageKey || null, doctorId);
+      setUploadProgress(100);
+      
+      // Store the key in all three fields
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: uploaded.key,
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      
+      setTimeout(() => setUploadProgress(0), 1000);
+      showSuccessToast('Image uploaded successfully!', 3000);
+    } catch (error) {
+      console.error("Upload error details:", error);
+      setUploadProgress(0);
+      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
+      showErrorToast('Failed to upload image. Please try again.', 3000);
+      if (formData.profileImage) {
+        setPreviewImage(getFullImageUrl(formData.profileImage));
+      } else {
+        setPreviewImage(null);
+      }
+    }
+  };
+
+  const validateImage = (file) => {
+    if (!file) return '';
+    if (file.size > 5 * 1024 * 1024) {
+      return 'File size must be less than 5MB';
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
+    }
+    return '';
   };
 
   const handleFileSelect = (e) => {
@@ -580,9 +640,10 @@ const EditDoctor = () => {
   };
 
   const removeImage = () => {
-    setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
     setUploadProgress(0);
+    setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
+    setErrors(prev => ({ ...prev, profileImage: '' }));
     showSuccessToast('Image removed', 2000);
   };
 
@@ -671,8 +732,9 @@ const EditDoctor = () => {
         knowLanguages: formData.knownLanguages,
         about: formData.about,
         displayName: formData.displayName,
-        // FIXED: Only send image if it's a string URL (from previewImage or existing doctor image)
-        image: typeof previewImage === "string" ? previewImage : "",
+        imageUrl: formData.imageUrl,
+        profileImage: formData.profileImage,
+        imageKey: formData.imageKey,
         experience: formData.experience,
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
@@ -728,7 +790,10 @@ const EditDoctor = () => {
         updatedDoctorData.password = formData.password;
       }
 
-      console.log('Updating doctor:', updatedDoctorData);
+      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updatedDoctorData, null, 2));
+      console.log("🖼️ imageUrl:", updatedDoctorData.imageUrl);
+      console.log("🖼️ profileImage:", updatedDoctorData.profileImage);
+      console.log("🔑 imageKey:", updatedDoctorData.imageKey);
 
       await updateDoctor({
         id: String(doctorId),
@@ -801,6 +866,8 @@ const EditDoctor = () => {
     return <CenteredLoader text="Loading form data..." />;
   }
 
+  const isUploading = uploadProgress > 0 && uploadProgress < 100;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
@@ -847,9 +914,27 @@ const EditDoctor = () => {
                     <div className="relative">
                       <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                         {previewImage ? (
-                          <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                          <img 
+                            src={previewImage} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error("❌ Image failed to load:", previewImage);
+                              e.target.style.display = 'none';
+                              const parent = e.target.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<div class="w-full h-full bg-gray-100 flex items-center justify-center">
+                                  <span class="text-gray-400 text-2xl font-medium">${formData.firstName ? formData.firstName.charAt(0).toUpperCase() : 'D'}</span>
+                                </div>`;
+                              }
+                            }}
+                          />
                         ) : (
-                          <Image className="h-8 w-8 text-gray-400" />
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <span className="text-gray-400 text-2xl font-medium">
+                              {formData.firstName ? formData.firstName.charAt(0).toUpperCase() : 'D'}
+                            </span>
+                          </div>
                         )}
                       </div>
                       {previewImage && (
@@ -868,12 +953,12 @@ const EditDoctor = () => {
                       </Button>
                       <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                     </div>
-                    {uploadProgress > 0 && uploadProgress < 100 && (
+                    {isUploading && (
                       <div className="mt-2">
                         <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                           <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress}%</p>
+                        <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
                       </div>
                     )}
                     {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}

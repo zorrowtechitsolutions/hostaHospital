@@ -64,6 +64,47 @@ const PageLoader = () => (
   </div>
 );
 
+// export const getPresignedUrl = async ({
+//   filename,
+//   contentType,
+//   size,
+//   role,
+//   id,
+// }) => {
+//   try {
+//     const response = await fetch(
+//       "https://zorrowtek.in/api/presignurl",
+//       {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//         },
+
+//         body: JSON.stringify({
+//           filename,
+//           contentType,
+//           size,
+//           role,
+//           id,
+//         }),
+//       }
+//     );
+
+//     const data = await response.json();
+
+//     console.log("Presigned URL:", data);
+
+//     return data;
+
+//   } catch (error) {
+//     console.error(
+//       "Presign URL Error:",
+//       error
+//     );
+//   }
+// };
+
+
 function App() {
   const { isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -169,18 +210,19 @@ function App() {
     console.log("Rendering PUBLIC routes");
     return (  
       <ToastProvider>
-<Suspense
-  fallback={
-    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {[...Array(8)].map((_, i) => (
-        <div
-          key={i}
-          className="h-64 rounded-2xl bg-white border border-gray-100 animate-pulse"
-        />
-      ))}
-    </div>
-  }
->          <Routes>
+        <Suspense
+          fallback={
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-64 rounded-2xl bg-white border border-gray-100 animate-pulse"
+                />
+              ))}
+            </div>
+          }
+        >
+          <Routes>
             <Route path="/register" element={<Register />} />
             <Route path="/sign-in" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -190,7 +232,7 @@ function App() {
       </ToastProvider>
     );
   }
-
+ 
   // If authenticated, show main app
   console.log("Rendering PROTECTED routes");
   return (
@@ -279,7 +321,7 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/patients" element={<Patients />} />
-                <Route path="/add-patient" element={<AddPatient />}  />
+                <Route path="/add-patient" element={<AddPatient />} />
                 <Route path="/edit-patient/:id" element={<EditPatientModal />} />
                 <Route path="/patients/:id" element={<PatientDetails />} />
                 <Route path="/requests" element={<RequestsTable />} />
@@ -303,13 +345,13 @@ function App() {
                 <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
                 <Route path="/roles" element={<UserPermissions />} />
                 <Route path="/permissions/:roleId" element={<PermissionList />} /> 
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/visits" element={<Visits />} />
                 <Route path="/appointments" element={<Appointments />} />
                 <Route path="/email" element={<EmailTemplates />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/ambulance" element={<Ambulance />} />
                 <Route path="/blood" element={<BloodBank />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Suspense>
           </div>
@@ -326,3 +368,16 @@ export default function AppWrapper() {
     </AuthProvider>
   );
 }
+
+// import React from 'react'
+// import { Uploader } from './components/web/Uploader'
+
+// function App() {
+//   return (
+//     <div>
+//       <Uploader />
+//     </div>
+//   )
+// }
+
+// export default App

@@ -18,6 +18,19 @@ import {
   Modal
 } from '../ui';
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+
+const getS3ImageUrl = (imageKey) => {
+  if (!imageKey) return "";
+
+  if (imageKey.startsWith("http")) {
+    return imageKey;
+  }
+
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 // Skeleton Loader Component
 const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
@@ -130,7 +143,11 @@ const Doctors = () => {
     refetch,
   } = useGetDoctorsQuery();
 
-  const doctors = response?.data || [];
+  // Normalize doctor data with imageUrl
+  const doctors = (response?.data || []).map((doctor) => ({
+    ...doctor,
+    imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
+  }));
 
   console.log("Doctors count:", doctors.length);
 
@@ -540,7 +557,19 @@ const Doctors = () => {
                   </div>
                 </div>
                 <div className="relative mb-3">
-                  <img src={doctor.photo} alt={doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`} className="w-16 h-16 rounded-full border-2 border-white shadow-sm object-cover" />
+                  <Avatar className="w-16 h-16">
+                    <AvatarImage
+                      src={getS3ImageUrl(
+                        doctor.imageUrl ||
+                        doctor.profileImage ||
+                        doctor.photo
+                      )}
+                      alt={doctor.displayName || doctor.firstName}
+                    />
+                    <AvatarFallback>
+                      {(doctor.firstName?.[0] || "D").toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                 </div>
                 <h3 onClick={() => handleViewDetails(doctor)} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0]">
@@ -635,7 +664,18 @@ const Doctors = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img src={doctor.photo} className="w-8 h-8 rounded-full object-cover" alt={doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`} />
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage
+                            src={getS3ImageUrl(
+                              doctor.imageUrl ||
+                              doctor.profileImage ||
+                              doctor.photo
+                            )}
+                          />
+                          <AvatarFallback>
+                            {(doctor.firstName?.[0] || "D").toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <span onClick={() => handleViewDetails(doctor)} className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]">
                           {doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`}
                         </span>
@@ -725,7 +765,19 @@ const Doctors = () => {
         {selectedDoctor && (
           <>
             <div className="flex flex-col items-center mb-4">
-              <img src={selectedDoctor.photo} alt={selectedDoctor.name} className="w-24 h-24 rounded-full object-cover mb-2" />
+              <Avatar className="w-24 h-24">
+                <AvatarImage
+                  src={getS3ImageUrl(
+                    selectedDoctor.imageUrl ||
+                    selectedDoctor.profileImage ||
+                    selectedDoctor.photo
+                  )}
+                  alt={selectedDoctor.name}
+                />
+                <AvatarFallback>
+                  {(selectedDoctor.firstName?.[0] || "D").toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
               <p className="text-sm text-gray-500">{selectedDoctor.specialty}</p>
             </div>
             <div className="space-y-3">

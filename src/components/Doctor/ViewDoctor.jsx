@@ -9,6 +9,19 @@ import {
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+// Helper function to get S3 image URL
+const getS3ImageUrl = (imageKey) => {
+  if (!imageKey) return "";
+  
+  if (imageKey.startsWith("http")) {
+    return imageKey;
+  }
+  
+  const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+};
 
 const ViewDoctor = () => {
   const { id } = useParams();
@@ -38,6 +51,10 @@ const ViewDoctor = () => {
   const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
   
   console.log("Extracted doctor:", doctor);
+  
+  // Get image key - prioritize imageUrl, then profileImage, then imageKey, then image
+  const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
+  console.log("🖼️ Image key:", imageKey);
   
   const doctorName = doctor?.displayName || `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim() || "Doctor";
 
@@ -151,14 +168,16 @@ const ViewDoctor = () => {
         {/* Doctor Profile Header */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="flex items-start gap-6">
-            <img 
-              src={doctor?.image || `https://randomuser.me/api/portraits/${Math.random() > 0.5 ? 'men' : 'women'}/1.jpg`} 
-              className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" 
-              alt={doctorName}
-              onError={(e) => {
-                e.target.src = `https://randomuser.me/api/portraits/men/1.jpg`;
-              }}
-            />
+            <Avatar className="w-20 h-20">
+              <AvatarImage 
+                src={getS3ImageUrl(imageKey)} 
+                alt={doctorName}
+                className="object-cover"
+              />
+              <AvatarFallback className="text-2xl font-medium bg-gray-200">
+                {doctor?.firstName?.[0]?.toUpperCase() || doctor?.displayName?.[0]?.toUpperCase() || "D"}
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
