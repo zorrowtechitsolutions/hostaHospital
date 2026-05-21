@@ -1,6 +1,23 @@
 // src/components/Settings/UserPermissions.jsx - With search functionality
-import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Check,
+  X,
+  Calendar,
+  Stethoscope,
+  Filter,
+  RefreshCcw,
+  Download,
+  Upload,
+  Users as UsersIcon,
+  Phone,
+  Trash2,
+  MoreVertical,
+  Eye,
+  Edit,
+  Shield
+} from "lucide-react";
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
   TableCell, Modal, Badge, SearchBar 
@@ -12,6 +29,8 @@ import {
   useUpdateRoleMutation,
   useDeleteRoleMutation,
 } from "../../../app/service/role";
+
+import { getHospitalId } from '@/utils/auth';
 
 // Constants
 const ADMIN_ROLE_ID = 2;
@@ -168,7 +187,7 @@ const RoleDropdown = memo(({ role, onView, onEdit, onDelete, onPermissions }) =>
   }, []);
 
   if (isAdminRole(role)) {
-    return;
+    return null;
   }
 
   return (
@@ -207,6 +226,44 @@ const RoleSkeleton = () => (
   </Card>
 );
 
+// ADDED: NewRoleModal Component
+const NewRoleModal = memo(({ showNewRoleModal, setShowNewRoleModal, newRole, setNewRole, handleNewRoleSubmit, isSubmitting }) => {
+  const updateNewRoleField = (field) => (value) => {
+    setNewRole(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <RoleFormModal
+      isOpen={showNewRoleModal}
+      onClose={() => setShowNewRoleModal(false)}
+      title="Create New Role"
+      roleData={newRole}
+      onFieldChange={updateNewRoleField}
+      onSubmit={handleNewRoleSubmit}
+      isSubmitting={isSubmitting}
+    />
+  );
+});
+
+// ADDED: EditRoleModal Component
+const EditRoleModal = memo(({ showEditRoleModal, setShowEditRoleModal, editRole, setEditRole, handleEditRoleSubmit, isSubmitting }) => {
+  const updateEditRoleField = (field) => (value) => {
+    setEditRole(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <RoleFormModal
+      isOpen={showEditRoleModal}
+      onClose={() => setShowEditRoleModal(false)}
+      title="Edit Role"
+      roleData={editRole}
+      onFieldChange={updateEditRoleField}
+      onSubmit={handleEditRoleSubmit}
+      isSubmitting={isSubmitting}
+    />
+  );
+});
+
 const UserPermissions = () => {
   const navigate = useNavigate();
 
@@ -237,6 +294,11 @@ const UserPermissions = () => {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ADDED: Missing state variables for dropdown and delete modal
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const dropdownRefs = useRef({});
+
   // Form states
   const [newRole, setNewRole] = useState({ name: '', description: '' });
   const [editRole, setEditRole] = useState({ name: '', description: '' });
@@ -254,6 +316,7 @@ const UserPermissions = () => {
 
   const closeDeleteModal = () => {
     setRoleToDelete(null);
+    setShowDeleteModal(false);
   };
 
   // Normalized roles list
@@ -364,12 +427,13 @@ const UserPermissions = () => {
 
   const handleOpenDeleteModal = useCallback((role) => {
     setRoleToDelete(role);
+    setShowDeleteModal(true);
   }, []);
 
   const handleOpenPermissionsPage = useCallback((role) => {
     navigate(`/permissions/${role.id}`, { state: { from: "User Permissions" } });
     setOpenDropdown(null);
-  };
+  }, [navigate]);
 
   const toggleDropdown = useCallback((roleId) => setOpenDropdown(openDropdown === roleId ? null : roleId), [openDropdown]);
 
@@ -395,6 +459,8 @@ const UserPermissions = () => {
     searchTerm
   );
 
+  // NOTE: The duplicate RoleDropdown definition inside the component has been kept as is
+  // but now the missing state variables above will make it work
   const RoleDropdown = ({ role }) => {
     // Don't show dropdown for admin role
     if (role.id === ADMIN_ROLE_ID) {
