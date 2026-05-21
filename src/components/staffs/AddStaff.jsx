@@ -1,4 +1,4 @@
-// src/components/staffs/AddStaff.jsx - WITH hospitalId included
+// src/components/staffs/AddStaff.jsx - WITH hospitalId auto-injected by API
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,11 +21,10 @@ import {
 } from '../ui';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
-import { useAuth } from '../../context/AuthContext';
+import { getAuthUser } from '../../utils/auth';
 
 const AddStaff = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
   const [createStaff, { isLoading: isApiLoading }] = useCreateStaffMutation();
   const [activeTab, setActiveTab] = useState('basic');
   const [errors, setErrors] = useState({});
@@ -74,15 +73,14 @@ const AddStaff = () => {
     return obj;
   };
 
-  // Handle API errors - DON'T redirect on 400 validation errors
+  // Handle API errors
   const handleApiError = (error) => {
     console.error("API Error Details:", error);
     
     if (error?.status === 401 || error?.originalStatus === 401) {
       showErrorToast('Session expired. Please login again.', 3000);
       setTimeout(() => {
-        logout();
-        navigate('/sign-in');
+        window.location.href = '/sign-in';
       }, 2000);
       return;
     }
@@ -306,8 +304,9 @@ const AddStaff = () => {
     try {
       const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
       
+      // Prepare staff data - hospitalId is AUTO-INJECTED by the API!
       const staffData = {
-        hospitalId: user?.id,
+        // hospitalId is NOT included here - API will auto-inject from JWT
         name: formData.name,
         email: formData.email,
         password: formData.password,

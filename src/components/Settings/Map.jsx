@@ -12,7 +12,7 @@ import {
   showInfoToast
 } from '../ui/Toast';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
-import { useAuth } from '../../context/AuthContext';
+import { getHospitalId, getAuthUser } from '../../utils/auth';
 
 // Constants
 const DATE_FORMAT_OPTIONS = {
@@ -106,8 +106,9 @@ const clearStatusAfterDelay = (setStatus, delay = STATUS_CLEAR_DELAY) => {
 };
 
 const Map = () => {
-  const { user } = useAuth();
-  const hospitalId = user?.id;
+  // Get hospitalId from auth utility
+  const hospitalId = getHospitalId();
+  const authUser = getAuthUser();
 
   // Fetch hospital data
   const { data: hospitalData, isLoading: isLoadingHospital, refetch } = useGetHospitalByIdQuery(hospitalId, {
@@ -315,6 +316,26 @@ const Map = () => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', DATE_FORMAT_OPTIONS);
   };
+
+  // Show authentication error if no hospital ID
+  if (!hospitalId && !isLoadingHospital) {
+    return (
+      <Card>
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-full bg-red-100">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Authentication Error</h3>
+          <p className="text-gray-500 mb-4">Unable to retrieve hospital information. Please log in again.</p>
+          <Button variant="primary" onClick={() => window.location.href = '/sign-in'}>
+            Go to Login
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   // Loading state
   if (isLoadingHospital) {

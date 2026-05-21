@@ -1,18 +1,16 @@
 // src/components/Doctor/AddDoctors.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
-  DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users
+  DollarSign, IdCard, ArrowLeft, Upload, X, GraduationCap,
+  Home, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users
 } from 'lucide-react';
 import {
   Button,
   Input,
-  Select,
   Textarea,
   Card,
-  Alert,
 } from "../ui";
 
 import {
@@ -22,6 +20,73 @@ import {
 } from "../ui/Toast";
 import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
+
+// Constants
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
+
+const DEFAULT_SCHEDULE = {
+  isHoliday: false,
+  hasBreak: false,
+  morningOpen: '09:00',
+  morningClose: '18:00',
+  eveningOpen: '16:00',
+  eveningClose: '20:00'
+};
+
+const TABS = [
+  { id: 'basic', label: 'Basic Info' },
+  { id: 'professional', label: 'Professional Info' },
+];
+
+const REQUIRED_FIELDS = [
+  'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
+  'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
+  'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
+  'password', 'confirmPassword', 'experience'
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'mal', label: 'Malayalam' },
+  { value: 'eng', label: 'English' },
+  { value: 'hin', label: 'Hindi' },
+  { value: 'tam', label: 'Tamil' },
+  { value: 'tel', label: 'Telugu' },
+  { value: 'kan', label: 'Kannada' },
+  { value: 'ben', label: 'Bengali' },
+  { value: 'mar', label: 'Marathi' },
+  { value: 'guj', label: 'Gujarati' },
+  { value: 'pun', label: 'Punjabi' },
+  { value: 'urd', label: 'Urdu' },
+  { value: 'spa', label: 'Spanish' },
+  { value: 'fre', label: 'French' },
+  { value: 'ger', label: 'German' },
+  { value: 'chi', label: 'Chinese' },
+  { value: 'ara', label: 'Arabic' },
+  { value: 'rus', label: 'Russian' },
+  { value: 'jap', label: 'Japanese' }
+];
+
+const WEEK_DAYS = [
+  { key: 'monday', label: 'Monday' },
+  { key: 'tuesday', label: 'Tuesday' },
+  { key: 'wednesday', label: 'Wednesday' },
+  { key: 'thursday', label: 'Thursday' },
+  { key: 'friday', label: 'Friday' },
+  { key: 'saturday', label: 'Saturday' },
+  { key: 'sunday', label: 'Sunday' }
+];
+
+// Helper functions
+const requiredField = (value, message) => {
+  if (!value) return message;
+  return '';
+};
+
+const getLanguageLabel = (value) => {
+  const lang = LANGUAGE_OPTIONS.find(l => l.value === value);
+  return lang ? lang.label : value;
+};
 
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
@@ -46,7 +111,7 @@ const SearchableDropdown = ({
     return label.includes(searchTerm.toLowerCase());
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -129,10 +194,6 @@ const SearchableDropdown = ({
 const DayScheduleRow = ({ day, schedule, onUpdate }) => {
   const [isHoliday, setIsHoliday] = useState(schedule.isHoliday || false);
   const [hasBreak, setHasBreak] = useState(schedule.hasBreak || false);
-  const [morningOpen, setMorningOpen] = useState(schedule.morningOpen || '09:00');
-  const [morningClose, setMorningClose] = useState(schedule.morningClose || '12:00');
-  const [eveningOpen, setEveningOpen] = useState(schedule.eveningOpen || '16:00');
-  const [eveningClose, setEveningClose] = useState(schedule.eveningClose || '20:00');
 
   const formatTimeDisplay = (time) => {
     if (!time) return '';
@@ -141,6 +202,15 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  const updateTime = (field, value) => {
+    onUpdate({
+      ...schedule,
+      [field]: value,
+      isHoliday,
+      hasBreak
+    });
   };
 
   const handleHolidayChange = (checked) => {
@@ -157,47 +227,7 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
     onUpdate({
       ...schedule,
       hasBreak: checked,
-      isHoliday: isHoliday
-    });
-  };
-
-  const updateMorningOpenTime = (value) => {
-    setMorningOpen(value);
-    onUpdate({
-      ...schedule,
-      morningOpen: value,
-      isHoliday: isHoliday,
-      hasBreak: hasBreak
-    });
-  };
-
-  const updateMorningCloseTime = (value) => {
-    setMorningClose(value);
-    onUpdate({
-      ...schedule,
-      morningClose: value,
-      isHoliday: isHoliday,
-      hasBreak: hasBreak
-    });
-  };
-
-  const updateEveningOpenTime = (value) => {
-    setEveningOpen(value);
-    onUpdate({
-      ...schedule,
-      eveningOpen: value,
-      isHoliday: isHoliday,
-      hasBreak: hasBreak
-    });
-  };
-
-  const updateEveningCloseTime = (value) => {
-    setEveningClose(value);
-    onUpdate({
-      ...schedule,
-      eveningClose: value,
-      isHoliday: isHoliday,
-      hasBreak: hasBreak
+      isHoliday
     });
   };
 
@@ -210,9 +240,9 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
             type="checkbox"
             checked={isHoliday}
             onChange={(e) => handleHolidayChange(e.target.checked)}
-            className="h-4 w-4 text-red-500 focus:ring-red-500 rounded"
+            className="h-4 w-4 text-gray-500 focus:ring-gray-500 rounded"
           />
-          <span className={`text-sm ${isHoliday ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+          <span className={`text-sm ${isHoliday ? 'text-gray-100 font-medium' : 'text-gray-500'}`}>
             Holiday
           </span>
         </label>
@@ -222,28 +252,27 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
         <>
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
-              <Sun className="h-4 w-4 text-yellow-500" />
               <span className="text-sm font-medium text-gray-700">Morning Session</span>
             </div>
             <div className="flex flex-wrap items-center gap-3 pl-6">
               <div className="flex-1 min-w-[120px]">
                 <input
                   type="time"
-                  value={morningOpen}
-                  onChange={(e) => updateMorningOpenTime(e.target.value)}
+                  value={schedule.morningOpen}
+                  onChange={(e) => updateTime('morningOpen', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(morningOpen)}</p>
+                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(schedule.morningOpen)}</p>
               </div>
               <span className="text-gray-400">to</span>
               <div className="flex-1 min-w-[120px]">
                 <input
                   type="time"
-                  value={morningClose}
-                  onChange={(e) => updateMorningCloseTime(e.target.value)}
+                  value={schedule.morningClose}
+                  onChange={(e) => updateTime('morningClose', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(morningClose)}</p>
+                <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(schedule.morningClose)}</p>
               </div>
             </div>
           </div>
@@ -251,28 +280,27 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
           {hasBreak && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <Moon className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Evening Session</span>
               </div>
               <div className="flex flex-wrap items-center gap-3 pl-6">
                 <div className="flex-1 min-w-[120px]">
                   <input
                     type="time"
-                    value={eveningOpen}
-                    onChange={(e) => updateEveningOpenTime(e.target.value)}
+                    value={schedule.eveningOpen}
+                    onChange={(e) => updateTime('eveningOpen', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
-                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(eveningOpen)}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(schedule.eveningOpen)}</p>
                 </div>
                 <span className="text-gray-400">to</span>
                 <div className="flex-1 min-w-[120px]">
                   <input
                     type="time"
-                    value={eveningClose}
-                    onChange={(e) => updateEveningCloseTime(e.target.value)}
+                    value={schedule.eveningClose}
+                    onChange={(e) => updateTime('eveningClose', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
-                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(eveningClose)}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatTimeDisplay(schedule.eveningClose)}</p>
                 </div>
               </div>
             </div>
@@ -335,65 +363,20 @@ const AddDoctor = () => {
     password: '',
     confirmPassword: '',
     joiningDate: '',
-    hospitalId: localStorage.getItem("hospitalId") || '',
     experience: '',
     appointmentCount: '',
     weeklySchedule: {
-      monday: { 
-        isHoliday: false, 
-        hasBreak: true,
-        morningOpen: '09:00', 
-        morningClose: '12:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      tuesday: { 
-        isHoliday: false, 
-        hasBreak: false,
-        morningOpen: '09:00', 
-        morningClose: '18:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      wednesday: { 
-        isHoliday: false, 
-        hasBreak: false,
-        morningOpen: '09:00', 
-        morningClose: '18:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      thursday: { 
-        isHoliday: false, 
-        hasBreak: true,
-        morningOpen: '09:00', 
-        morningClose: '12:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      friday: { 
-        isHoliday: false, 
-        hasBreak: true,
-        morningOpen: '09:00', 
-        morningClose: '12:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      saturday: { 
-        isHoliday: false, 
-        hasBreak: false,
-        morningOpen: '09:00', 
-        morningClose: '14:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
-      },
-      sunday: { 
-        isHoliday: true, 
-        hasBreak: false,
-        morningOpen: '10:00', 
-        morningClose: '13:00', 
-        eveningOpen: '16:00', 
-        eveningClose: '20:00'
+      monday: { ...DEFAULT_SCHEDULE, hasBreak: true, morningClose: '12:00' },
+      tuesday: { ...DEFAULT_SCHEDULE },
+      wednesday: { ...DEFAULT_SCHEDULE },
+      thursday: { ...DEFAULT_SCHEDULE, hasBreak: true, morningClose: '12:00' },
+      friday: { ...DEFAULT_SCHEDULE, hasBreak: true, morningClose: '12:00' },
+      saturday: { ...DEFAULT_SCHEDULE, morningClose: '14:00' },
+      sunday: {
+        ...DEFAULT_SCHEDULE,
+        isHoliday: true,
+        morningOpen: '10:00',
+        morningClose: '13:00'
       }
     },
     outDoorConsultingOpen: '',
@@ -414,37 +397,6 @@ const AddDoctor = () => {
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(formData.countryCode);
   const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
-
-  const languageOptions = [
-    { value: 'mal', label: 'Malayalam' },
-    { value: 'eng', label: 'English' },
-    { value: 'hin', label: 'Hindi' },
-    { value: 'tam', label: 'Tamil' },
-    { value: 'tel', label: 'Telugu' },
-    { value: 'kan', label: 'Kannada' },
-    { value: 'ben', label: 'Bengali' },
-    { value: 'mar', label: 'Marathi' },
-    { value: 'guj', label: 'Gujarati' },
-    { value: 'pun', label: 'Punjabi' },
-    { value: 'urd', label: 'Urdu' },
-    { value: 'spa', label: 'Spanish' },
-    { value: 'fre', label: 'French' },
-    { value: 'ger', label: 'German' },
-    { value: 'chi', label: 'Chinese' },
-    { value: 'ara', label: 'Arabic' },
-    { value: 'rus', label: 'Russian' },
-    { value: 'jap', label: 'Japanese' }
-  ];
-
-  const weekDays = [
-    { key: 'monday', label: 'Monday' },
-    { key: 'tuesday', label: 'Tuesday' },
-    { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
-    { key: 'saturday', label: 'Saturday' },
-    { key: 'sunday', label: 'Sunday' }
-  ];
 
   const updateScheduleForDay = (day, newSchedule) => {
     setFormData(prev => ({
@@ -484,14 +436,12 @@ const AddDoctor = () => {
   };
 
   const handleLanguageSelect = (languageValue) => {
-    setFormData(prev => {
-      const currentLanguages = [...prev.knownLanguages];
-      if (currentLanguages.includes(languageValue)) {
-        return { ...prev, knownLanguages: currentLanguages.filter(lang => lang !== languageValue) };
-      } else {
-        return { ...prev, knownLanguages: [...currentLanguages, languageValue] };
-      }
-    });
+    setFormData(prev => ({
+      ...prev,
+      knownLanguages: prev.knownLanguages.includes(languageValue)
+        ? prev.knownLanguages.filter(lang => lang !== languageValue)
+        : [...prev.knownLanguages, languageValue]
+    }));
   };
 
   const removeLanguage = (languageValue) => {
@@ -501,102 +451,65 @@ const AddDoctor = () => {
     }));
   };
 
-  const getLanguageLabel = (value) => {
-    const lang = languageOptions.find(l => l.value === value);
-    return lang ? lang.label : value;
-  };
-
   const validateField = (name, value) => {
     switch (name) {
       case 'firstName':
         if (!value) return 'First name is required';
         if (value.length < 2) return 'First name must be at least 2 characters';
         return '';
-
       case 'lastName':
         if (!value) return 'Last name is required';
         if (value.length < 2) return 'Last name must be at least 2 characters';
         return '';
-
       case 'department':
-        if (!value) return 'Department is required';
-        return '';
-
+        return requiredField(value, 'Department is required');
       case 'specialist':
-        if (!value) return 'Specialist field is required';
-        return '';
-
+        return requiredField(value, 'Specialist field is required');
       case 'qualification':
-        if (!value) return 'Qualification is required';
-        return '';
-
+        return requiredField(value, 'Qualification is required');
       case 'fees':
         if (!value) return 'Fees are required';
         if (isNaN(value) || value <= 0) return 'Fees must be a positive number';
         return '';
-
       case 'phoneNumber':
-        if (!value) return 'Phone number is required';
-        return '';
-
+        return requiredField(value, 'Phone number is required');
       case 'email':
         if (!value) return 'Email address is required';
         const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
         if (!emailRegex.test(value)) return 'Please enter a valid email address';
         return '';
-
       case 'dob':
-        if (!value) return 'Date of birth is required';
-        return '';
-
+        return requiredField(value, 'Date of birth is required');
       case 'gender':
-        if (!value) return 'Gender is required';
-        return '';
-
+        return requiredField(value, 'Gender is required');
       case 'registrationNumber':
-        if (!value) return 'Registration number is required';
-        return '';
-
+        return requiredField(value, 'Registration number is required');
       case 'knownLanguages':
         if (!value || value.length === 0) return 'At least one language is required';
         return '';
-
       case 'countryName':
-        if (!value) return 'Country is required';
-        return '';
-
+        return requiredField(value, 'Country is required');
       case 'stateName':
-        if (!value) return 'State is required';
-        return '';
-
+        return requiredField(value, 'State is required');
       case 'district':
-        if (!value) return 'District is required';
-        return '';
-
+        return requiredField(value, 'District is required');
       case 'displayName':
         if (!value) return 'Display name is required';
         if (value.length < 4) return 'Display name must be at least 4 characters';
         return '';
-
       case 'password':
         if (!value) return 'Password is required';
         if (value.length < 8) return 'Password must be at least 8 characters';
         return '';
-
       case 'confirmPassword':
         if (!formData.password && !value) return '';
         if (formData.password && !value) return 'Please confirm your password';
         if (formData.password && value !== formData.password) return 'Passwords do not match';
         return '';
-
       case 'joiningDate':
-        if (!value) return 'Joining date is required';
-        return '';
-
+        return requiredField(value, 'Joining date is required');
       case 'experience':
-        if (!value) return 'Experience is required';
-        return '';
-
+        return requiredField(value, 'Experience is required');
       default:
         return '';
     }
@@ -604,14 +517,8 @@ const AddDoctor = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    const fieldsToValidate = [
-      'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
-      'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 'password', 
-      'confirmPassword', 'experience'
-    ];
     
-    fieldsToValidate.forEach(field => {
+    REQUIRED_FIELDS.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
@@ -641,7 +548,7 @@ const AddDoctor = () => {
 
   const handleImageUpload = (file) => {
     if (!file) return false;
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
       return false;
     }
@@ -663,16 +570,8 @@ const AddDoctor = () => {
     setPreviewImage(null);
   };
 
-  // PERFECT prepareDoctorData function matching Postman payload
   const prepareDoctorData = () => {
-    let hospitalId = Number(formData.hospitalId);
-    if (isNaN(hospitalId) || hospitalId <= 0) {
-      hospitalId = 5;
-    }
-
-    // Build consultingOne array (days without break)
     const consultingOneArray = [];
-    // Build consultingTwo array (days with break)
     const consultingTwoArray = [];
 
     Object.entries(formData.weeklySchedule).forEach(([day, schedule]) => {
@@ -706,7 +605,6 @@ const AddDoctor = () => {
       email: formData.email,
       password: formData.password,
       phone: formData.phoneNumber,
-      hospitalId: hospitalId,
       joiningDate: formData.joiningDate,
       dob: formData.dob,
       gender: formData.gender?.toLowerCase(),
@@ -731,17 +629,14 @@ const AddDoctor = () => {
       experience: formData.experience,
     };
 
-    // Add registrationNumber if provided (as regNo to match Postman)
     if (formData.registrationNumber) {
       doctorData.regNo = formData.registrationNumber;
     }
 
-    // Add appointmentCount if provided (as appoimentCount to match Postman typo)
     if (formData.appointmentCount && formData.appointmentCount !== '') {
       doctorData.appoimentCount = Number(formData.appointmentCount);
     }
 
-    // Add outDoorConsulting if all fields are present
     if (formData.outDoorConsultingOpen && 
         formData.outDoorConsultingClose && 
         formData.outDoorConsultingPlace) {
@@ -760,14 +655,8 @@ const AddDoctor = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const allFields = [
-      'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
-      'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
-      'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
-      'password', 'confirmPassword', 'experience'
-    ];
     const touchedFields = {};
-    allFields.forEach(field => touchedFields[field] = true);
+    REQUIRED_FIELDS.forEach(field => touchedFields[field] = true);
     setTouched(touchedFields);
     
     if (validateForm()) {
@@ -775,24 +664,17 @@ const AddDoctor = () => {
       
       try {
         const doctorData = prepareDoctorData();
-        
-        console.log( JSON.stringify(doctorData, null, 2));
-        
-        const result = await addNewDoctor(doctorData).unwrap();
+        await addNewDoctor(doctorData).unwrap();
         
         showSuccessToast(
           `Dr. ${formData.firstName} ${formData.lastName} has been added successfully!`
         );
-        
-        setIsSubmitting(false);
         
         setTimeout(() => {
           navigate('/doctors');
         }, 2000);
         
       } catch (error) {
-        console.error('Error adding doctor:', error);
-        
         if (error.status === 409) {
           showErrorToast('❌ Email already exists! Please use a different email address.');
         } else if (error.data?.message) {
@@ -800,7 +682,7 @@ const AddDoctor = () => {
         } else {
           showErrorToast('❌ Failed to add doctor. Please try again.');
         }
-        
+      } finally {
         setIsSubmitting(false);
       }
     } else {
@@ -814,11 +696,6 @@ const AddDoctor = () => {
   const handleGoBack = () => {
     navigate('/doctors');
   };
-
-  const tabs = [
-    { id: 'basic', label: 'Basic Info' },
-    { id: 'professional', label: 'Professional Info' },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -839,7 +716,7 @@ const AddDoctor = () => {
           <Card>
             <div className="border-b border-gray-200 px-6">
               <nav className="-mb-px flex space-x-8">
-                {tabs.map((tab) => (
+                {TABS.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
@@ -884,24 +761,16 @@ const AddDoctor = () => {
                       </Button>
                       <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                     </div>
-                    {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                    {errors.profileImage && <p className="text-sm text-red-600 mt-2">{errors.profileImage}</p>}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input label="First Name" name="firstName" icon={User} placeholder="Enter first name" value={formData.firstName} onChange={handleChange} onBlur={handleBlur} error={errors.firstName} touched={touched.firstName} required />
                   <Input label="Last Name" name="lastName" icon={User} placeholder="Enter last name" value={formData.lastName} onChange={handleChange} onBlur={handleBlur} error={errors.lastName} touched={touched.lastName} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input
-                    label="Hospital ID"
-                    name="hospitalId"
-                    type="number"
-                    icon={Building}
-                    value={formData.hospitalId}
-                    readOnly
-                  />
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Joining Date" 
                     name="joiningDate" 
@@ -916,34 +785,31 @@ const AddDoctor = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select label="Department" name="department" options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'ENT']} value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
+                <div className={GRID_CLASS}>
+                  <Input label="Department" name="department" placeholder="Enter department" icon={Briefcase} value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
                   <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input label="Qualification" name="qualification" icon={GraduationCap} placeholder="e.g., MBBS, MD" value={formData.qualification} onChange={handleChange} onBlur={handleBlur} error={errors.qualification} touched={touched.qualification} required />
                   <Input label="Fees ($)" name="fees" type="number" icon={DollarSign} placeholder="0.00" value={formData.fees} onChange={handleChange} onBlur={handleBlur} error={errors.fees} touched={touched.fees} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input label="Phone Number" name="phoneNumber" icon={Phone} placeholder="+1 234 567 8900" value={formData.phoneNumber} onChange={handleChange} onBlur={handleBlur} error={errors.phoneNumber} touched={touched.phoneNumber} required />
                   <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                  <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
+                  <Input label="Gender" name="gender" placeholder="Select gender" icon={User} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
                   <Input label="Experience" name="experience" icon={Briefcase} placeholder="e.g., 5 years" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input label="Appointment Count (Optional)" name="appointmentCount" type="number" icon={Users} placeholder="Number of appointments" value={formData.appointmentCount} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentCount} touched={touched.appointmentCount} />
-                </div>
 
                 {/* Languages Dropdown */}
                 <div className="space-y-2">
@@ -978,7 +844,7 @@ const AddDoctor = () => {
                     
                     {isLanguageDropdownOpen && (
                       <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {languageOptions.map(lang => (
+                        {LANGUAGE_OPTIONS.map(lang => (
                           <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
                             <input
                               type="checkbox"
@@ -1038,7 +904,7 @@ const AddDoctor = () => {
                     />
                     {touched.district && errors.district && <p className="text-sm text-red-600">{errors.district}</p>}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className={GRID_CLASS}>
                       <Input label="Place" name="place" placeholder="Place/Locality" value={formData.place} onChange={handleChange} />
                       <Input label="Pincode" name="pincode" placeholder="Postal code" value={formData.pincode} onChange={handleChange} />
                     </div>
@@ -1048,9 +914,8 @@ const AddDoctor = () => {
                 {/* Account Details */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className={GRID_CLASS}>
                     <Input label="Display Name" name="displayName" icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} required />
-                    {/* <Input label="Username" name="userName" icon={User} placeholder="Unique username" value={formData.userName} onChange={handleChange} onBlur={handleBlur} error={errors.userName} touched={touched.userName} required /> */}
                     
                     <div className="relative">
                       <Input label="Password" name="password" type={showPassword ? "text" : "password"} required icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
@@ -1075,7 +940,7 @@ const AddDoctor = () => {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
                 
                 <div className="space-y-4">
-                  {weekDays.map((day) => (
+                  {WEEK_DAYS.map((day) => (
                     <DayScheduleRow
                       key={day.key}
                       day={day.label}
@@ -1085,43 +950,105 @@ const AddDoctor = () => {
                   ))}
                 </div>
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Home className="h-5 w-5" /> Out Door Consulting
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input label="Open Time" name="outDoorConsultingOpen" type="time" value={formData.outDoorConsultingOpen} onChange={handleChange} />
-                      <Input label="Close Time" name="outDoorConsultingClose" type="time" value={formData.outDoorConsultingClose} onChange={handleChange} />
-                    </div>
+                {/* Out Door Consulting Section */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden mt-6">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+                      <Home className="h-5 w-5 text-blue-600" /> 
+                      Out Door Consulting
+                    </h3>
                   </div>
-                  <Input label="Consulting Place" name="outDoorConsultingPlace" icon={MapPin} placeholder="Enter consulting location" value={formData.outDoorConsultingPlace} onChange={handleChange} />
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Video className="h-5 w-5" /> Booking Status
-                </h3>
-                
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  
+                  <div className="p-5 space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Booking Availability</label>
-                      <p className="text-xs text-gray-500">Allow patients to book appointments with this doctor</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Consulting Time
+                      </label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Open Time</label>
+                          <input
+                            type="time"
+                            name="outDoorConsultingOpen"
+                            value={formData.outDoorConsultingOpen}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Close Time</label>
+                          <input
+                            type="time"
+                            name="outDoorConsultingClose"
+                            value={formData.outDoorConsultingClose}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, bookingOpen: !prev.bookingOpen }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  <div className="mt-2">
-                    {formData.bookingOpen ? <span className="text-xs text-green-600">Bookings Open</span> : <span className="text-xs text-red-600">Bookings Closed</span>}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Consulting Place
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="text"
+                          name="outDoorConsultingPlace"
+                          placeholder="Enter consulting location"
+                          value={formData.outDoorConsultingPlace}
+                          onChange={handleChange}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        e.g., City Hospital, Room 204, Main Building
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Booking Status
+                      </label>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Booking Availability</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Allow patients to book appointments with this doctor
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, bookingOpen: !prev.bookingOpen }))}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                              formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <div className="mt-3">
+                          {formData.bookingOpen ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="text-xs font-medium">Bookings Open</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-red-600">
+                              <XCircle className="h-4 w-4" />
+                              <span className="text-xs font-medium">Bookings Closed</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1141,3 +1068,24 @@ const AddDoctor = () => {
 };
 
 export default AddDoctor;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

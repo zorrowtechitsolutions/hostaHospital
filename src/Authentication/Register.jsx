@@ -10,8 +10,8 @@ import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
 import { Input, Select, Textarea, Button, Alert, Card } from '../components/ui';
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import { useRegisterMutation } from '../../app/service/hospitalApi'; // CHANGED: useRegisterMutation instead of useAddNewHospitalMutation
-import { useAuth } from '../context/AuthContext'; // ADDED: import useAuth
+import { useRegisterMutation } from '../../app/service/hospitalApi';  
+import { useAuth } from '../context/AuthContext'; 
 
 const SearchableDropdown = ({ 
   label, 

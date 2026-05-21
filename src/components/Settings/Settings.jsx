@@ -14,7 +14,7 @@ import { showSuccessToast, showWarningToast, showInfoToast, showErrorToast } fro
 import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
-import { useAuth } from '../../context/AuthContext';
+import { getHospitalId, clearAuth } from '../../utils/auth';
 
 // Time options constant
 const TIME_OPTIONS = [
@@ -227,13 +227,14 @@ const SettingsSkeleton = () => {
 };
 
 const Settings = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
+  // Get hospitalId from auth utility
+  const hospitalId = getHospitalId();
+
   // API hooks
-  const hospitalId = user?.id;
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
@@ -278,11 +279,11 @@ const Settings = () => {
     if (fetchError?.status === 401) {
       showErrorToast('Session expired. Redirecting to login...', 2000);
       setTimeout(() => {
-        logout();
+        clearAuth();
         navigate('/sign-in');
       }, 2000);
     }
-  }, [fetchError, logout, navigate]);
+  }, [fetchError, navigate]);
 
   // Check for update errors
   useEffect(() => {
@@ -291,7 +292,7 @@ const Settings = () => {
       if (status === 401) {
         showErrorToast('Authentication failed. Please log in again.', 3000);
         setTimeout(() => {
-          logout();
+          clearAuth();
           navigate('/sign-in');
         }, 2000);
       } else {
@@ -299,7 +300,7 @@ const Settings = () => {
       }
       resetUpdate?.();
     }
-  }, [updateError, logout, navigate, resetUpdate]);
+  }, [updateError, navigate, resetUpdate]);
 
   // Handle hospital data extraction
   useEffect(() => {
@@ -345,7 +346,7 @@ const Settings = () => {
     if (!token) {
       showErrorToast('No authentication token found. Please log in again.', 4000);
       setTimeout(() => {
-        logout();
+        clearAuth();
         navigate('/sign-in');
       }, 2000);
       setIsSaving(false);
@@ -394,7 +395,7 @@ const Settings = () => {
       if (error.status === 401) {
         showErrorToast('Session expired. Redirecting to login...', 3000);
         setTimeout(() => {
-          logout();
+          clearAuth();
           navigate('/sign-in');
         }, 2000);
       } else {
@@ -711,12 +712,6 @@ const Settings = () => {
     return <SettingsSkeleton />;
   }
 
-  // Loading state with skeleton (similar to RequestTable pattern)
-  if (isLoadingHospital) {
-    return <TabSkeletonLoader />;
-  }
-
-  // ==================== FINAL RETURN ====================
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

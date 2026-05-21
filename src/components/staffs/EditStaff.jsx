@@ -1,4 +1,4 @@
-// src/components/staffs/EditStaff.jsx - Connected to API with skeleton loading
+// src/components/staffs/EditStaff.jsx - Fixed to use isActive instead of status
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ChevronRight, Upload, X } from 'lucide-react';
@@ -39,13 +39,13 @@ const EditStaff = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // API hooks
+  // API hooks - hospitalId is automatically injected by the API service
   const {
     data: staffData,
     isLoading: loading,
     refetch
   } = useGetStaffQuery(
-    { id },
+    { id }, // Only need id - hospitalId is auto-injected
     { skip: !id }
   );
   const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
@@ -72,7 +72,7 @@ const EditStaff = () => {
     country: '',
     place: '',
     pincode: '',
-    status: true,
+    isActive: true, // Changed from 'status' to 'isActive' to match API
     profileImage: null,
   });
 
@@ -102,7 +102,7 @@ const EditStaff = () => {
 
   // Mock S3 upload function
   const uploadToS3 = async (file) => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       let progress = 0;
       const interval = setInterval(() => {
         progress += 10;
@@ -152,7 +152,7 @@ const EditStaff = () => {
       country: address.country || '',
       place: address.place || '',
       pincode: address.pincode || '',
-      status: staff.status === 'active',
+      isActive: staff.isActive ?? true, // FIXED: Use isActive from API, default to true
       profileImage: staff.profileImage || null,
     });
     setPreviewImage(staff.profileImage || null);
@@ -280,8 +280,10 @@ const EditStaff = () => {
   const handleStatusToggle = () => {
     setFormData(prev => ({
       ...prev,
-      status: !prev.status
+      isActive: !prev.isActive
     }));
+    // Show toast notification when status changes
+    showSuccessToast(`Staff status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
   };
 
   const validateForm = () => {
@@ -333,6 +335,7 @@ const EditStaff = () => {
     try {
       const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
       
+      // Update data - FIXED: Use isActive instead of status
       const updateData = {
         name: formData.name,
         email: formData.email,
@@ -352,7 +355,7 @@ const EditStaff = () => {
           place: combinedPlace || formData.place || undefined,
           pincode: formData.pincode ? Number(formData.pincode) : undefined
         },
-        status: formData.status ? 'active' : 'inactive',
+        isActive: formData.isActive, // FIXED: Send isActive boolean directly
         profileImage: formData.profileImage
       };
 
@@ -375,7 +378,7 @@ const EditStaff = () => {
           'Name': formData.name,
           'ID': formData.id,
           'Designation': formData.designation,
-          'Status': formData.status ? 'Active' : 'Inactive'
+          'Status': formData.isActive ? 'Active' : 'Inactive'
         }
       );
       
@@ -572,10 +575,26 @@ const EditStaff = () => {
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
                 <div className="flex items-center">
-                  <Switch checked={formData.status} onChange={handleStatusToggle} />
-                  <span className="ml-3 text-sm text-gray-600">{formData.status ? 'Active' : 'Inactive'}</span>
+                  <Switch checked={formData.isActive} onChange={handleStatusToggle} />
+                  <span className="ml-3 text-sm text-gray-600">{formData.isActive ? 'Active' : 'Inactive'}</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Toggle to {formData.isActive ? 'deactivate' : 'activate'} this staff member
+                </p>
+                {/* Status indicator badge */}
+                <div className="mt-3">
+                  {formData.isActive ? (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      Staff is currently ACTIVE
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-md text-xs">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      Staff is currently INACTIVE
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

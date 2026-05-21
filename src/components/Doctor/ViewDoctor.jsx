@@ -1,56 +1,101 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { Button, Badge, Loader } from "../ui";
-import { 
-  Mail, Phone, MapPin, Calendar, Building, GraduationCap, 
-  DollarSign, IdCard, Briefcase, Users, Home, Video, 
-  CheckCircle, XCircle, Clock, Sun, Moon 
+import {
+  Mail,
+  Phone,
+  Video,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Home,
+  MapPin,
+  Calendar as CalendarIcon,
+  Building
 } from "lucide-react";
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
-import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
+import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 
-// Mock doctor data for when API is unavailable
-const MOCK_DOCTOR = {
-  id: 7,
-  hospitalId: 27,
-  firstName: "Michael",
-  lastName: "Brown",
-  displayName: "Dr. Michael Brown",
-  userName: "drbrown",
-  email: "brown@gmail.com",
-  phone: "8714239987",
-  specialist: "Cardiologist",
-  department: "Cardiology",
-  qualification: "MD, FACC",
-  experience: "15+ years",
-  fees: 350,
-  about: "Experienced cardiologist specializing in heart disease prevention and treatment.",
-  bookingOpen: true,
-  image: "https://randomuser.me/api/portraits/men/32.jpg",
-  address: {
-    country: "USA",
-    state: "California",
-    district: "Los Angeles",
-    place: "Beverly Hills",
-    pincode: "90210"
-  },
-  knowLanguages: ["English", "Spanish"],
-  consultingOne: [
-    { day: "monday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "tuesday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "wednesday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "thursday", opening_time: "09:00 AM", closing_time: "05:00 PM" },
-    { day: "friday", opening_time: "09:00 AM", closing_time: "05:00 PM" }
-  ],
-  consultingTwo: [
-    { 
-      day: "saturday", 
-      morning_session: { open: "10:00 AM", close: "01:00 PM" },
-      evening_session: { open: "02:00 PM", close: "05:00 PM" }
-    }
-  ]
+// ==================== CONSTANTS ====================
+const TABS = [
+  { id: "basic", label: "Basic Information" },
+  { id: "schedule", label: "Schedule & Consulting" },
+  { id: "appointments", label: "Appointments" },
+  { id: "requests", label: "Requests" }
+];
+
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-4";
+const CARD_CLASS = "bg-white rounded-lg border border-gray-200";
+
+const DAY_ORDER = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sunday: 7
 };
+
+// ==================== HELPER FUNCTIONS ====================
+const getValue = (value, fallback = "N/A") => value || fallback;
+const isBookingOpen = (doctor) => doctor?.bookingOpen !== false;
+
+const getDoctorName = (doctor) =>
+  doctor?.displayName ||
+  `${doctor?.firstName || ""} ${doctor?.lastName || ""}`.trim() ||
+  "Doctor";
+
+const getDoctorImage = (doctor) =>
+  doctor?.image || "https://randomuser.me/api/portraits/men/1.jpg";
+
+const hasAddress = (address) =>
+  address && Object.values(address).some(Boolean);
+
+// Format time from 24h to 12h format
+const formatTime = (time) => {
+  if (!time || time === 'N/A') return 'N/A';
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
+// Format day name to display
+const formatDay = (day) => {
+  if (!day) return '';
+  return day.charAt(0).toUpperCase() + day.slice(1);
+};
+
+// ==================== REUSABLE COMPONENTS ====================
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
+    {Icon && <Icon className="h-5 w-5" />}
+    {title}
+  </h3>
+);
+
+const EmptyState = ({ text, icon: Icon }) => (
+  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+    {Icon && <Icon className="h-8 w-8 mx-auto mb-2 text-gray-300" />}
+    {text}
+  </div>
+);
+
+const SmallBadge = ({ children, variant = "outline" }) => (
+  <Badge variant={variant} className="text-xs">
+    {children}
+  </Badge>
+);
+
+const DetailRow = ({ label, value }) => (
+  <div className="flex justify-between py-2">
+    <span className="text-gray-500">{label}</span>
+    <span className="text-gray-800 font-medium">{getValue(value)}</span>
+  </div>
+);
 
 const ViewDoctor = () => {
   const { id } = useParams();
@@ -59,63 +104,87 @@ const ViewDoctor = () => {
   // Clean the ID
   const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
   
-  const [useMockData, setUseMockData] = useState(false);
+  const [activeTab, setActiveTab] = useState("basic");
   
+  // Handle tab change
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+  };
+  
+  // Use getDoctorById query for single doctor
   const {
     data: doctorResponse,
     isLoading,
     error,
     refetch,
-  } = useGetDoctorsQuery({ doctorId: doctorId }, {
-    skip: useMockData // Skip API call if using mock data
+  } = useGetDoctorByIdQuery(doctorId, {
+    skip: !doctorId
   });
   
-  console.log("=== VIEW DOCTOR DEBUG ===");
-  console.log("Doctor ID:", doctorId);
-  console.log("API Response:", doctorResponse);
-  console.log("API Error:", error);
-  console.log("Using Mock Data:", useMockData);
-  
-  // Extract doctor from API response or use mock data
-  let doctor = null;
-  if (!useMockData && doctorResponse?.data) {
-    const doctors = doctorResponse.data || [];
-    doctor = doctors.find(doc => String(doc.id) === String(doctorId));
-  }
-  
-  // If API failed or doctor not found, use mock data
-  useEffect(() => {
-    if (error || (!doctor && !isLoading)) {
-      console.log("API failed, switching to mock data");
-      setUseMockData(true);
-    }
-  }, [error, doctor, isLoading]);
-  
-  // Use mock doctor if API fails
-  if (useMockData && !doctor) {
-    doctor = { ...MOCK_DOCTOR, id: parseInt(doctorId) || 7 };
-  }
-  
-  console.log("Extracted doctor:", doctor);
-  
-  const [activeTab, setActiveTab] = useState("requests");
+  // Extract doctor from response
+  const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
+  const doctorName = getDoctorName(doctor);
 
-  // Loading state (only show if using API and loading)
-  if (!useMockData && isLoading) {
+  // Helper to format consulting hours - memoized
+  const consultingHours = useMemo(() => {
+    const hours = [];
+    
+    // Process consultingOne (single session days)
+    if (doctor?.consultingOne && Array.isArray(doctor.consultingOne)) {
+      doctor.consultingOne.forEach(item => {
+        hours.push({
+          day: item.day,
+          morningOpen: item.opening_time,
+          morningClose: item.closing_time,
+          hasBreak: false
+        });
+      });
+    }
+    
+    // Process consultingTwo (split session days)
+    if (doctor?.consultingTwo && Array.isArray(doctor.consultingTwo)) {
+      doctor.consultingTwo.forEach(item => {
+        const morning = item.morning_session;
+        const evening = item.evening_session;
+        hours.push({
+          day: item.day,
+          morningOpen: morning?.open,
+          morningClose: morning?.close,
+          eveningOpen: evening?.open,
+          eveningClose: evening?.close,
+          hasBreak: true
+        });
+      });
+    }
+    
+    return hours;
+  }, [doctor]);
+
+  const sortedHours = [...consultingHours].sort(
+    (a, b) => (DAY_ORDER[a.day] || 99) - (DAY_ORDER[b.day] || 99)
+  );
+
+  // Get Out Door Consulting data
+  const outDoorConsulting = doctor?.outDoorConsulting;
+  const hasOutDoorConsulting = outDoorConsulting?.time?.open && 
+                                outDoorConsulting?.time?.close && 
+                                outDoorConsulting?.place;
+
+  // Loading state
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader centered />
+        <Loader centered text="Loading doctor details..." />
       </div>
     );
   }
   
-  // Error state with option to use mock data
-  if (error && !useMockData) {
-    console.error("Error fetching doctor:", error);
+  // Error state
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
             <div className="text-red-500 mb-4">
               <XCircle size={48} className="mx-auto" />
             </div>
@@ -125,18 +194,11 @@ const ViewDoctor = () => {
             </p>
             <div className="flex gap-3 justify-center mt-6">
               <Button onClick={() => refetch()} className="px-4 py-2">
-                Retry API
-              </Button>
-              <Button 
-                onClick={() => setUseMockData(true)} 
-                variant="outline"
-                className="px-4 py-2"
-              >
-                Use Demo Data
+                Retry
               </Button>
               <Button 
                 onClick={() => navigate('/doctors')} 
-                variant="ghost"
+                variant="outline"
                 className="px-4 py-2"
               >
                 Back to Doctors
@@ -148,16 +210,14 @@ const ViewDoctor = () => {
     );
   }
   
+  // Doctor not found
   if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
             <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
             <div className="flex gap-3 justify-center mt-6">
-              <Button onClick={() => setUseMockData(true)} className="px-4 py-2">
-                Use Demo Data
-              </Button>
               <Button onClick={() => navigate('/doctors')} variant="outline" className="px-4 py-2">
                 Back to Doctors
               </Button>
@@ -168,71 +228,47 @@ const ViewDoctor = () => {
     );
   }
 
-  const doctorName = doctor?.displayName || `${doctor?.firstName} ${doctor?.lastName}`;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6">
-        {/* Mock Data Banner */}
-        {useMockData && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-yellow-600">⚠️</span>
-                <span className="text-sm text-yellow-800">
-                  Using demo data. API is currently unavailable.
-                </span>
-              </div>
-              <Button 
-                onClick={() => {
-                  setUseMockData(false);
-                  refetch();
-                }} 
-                size="sm"
-                variant="outline"
-                className="text-xs"
-              >
-                Try API Again
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-800">Doctor Details</h1>
-          <Button variant="outline" onClick={() => navigate(-1)} className="text-sm">
+          <Button variant="outline" onClick={() => navigate('/doctors')} className="text-sm">
             ← Back to Doctors
           </Button>
         </div>
 
         {/* Doctor Profile Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className={`${CARD_CLASS} p-6 mb-6`}>
           <div className="flex items-start gap-6">
             <img 
-              src={doctor?.image || MOCK_DOCTOR.image} 
+              src={getDoctorImage(doctor)} 
               className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" 
               alt={doctorName}
-              onError={(e) => e.target.src = MOCK_DOCTOR.image}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "https://randomuser.me/api/portraits/men/1.jpg";
+              }}
             />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
-                <Badge variant="outline" className="text-xs">ID: DR{String(doctor?.id).padStart(5, "0")}</Badge>
-                <Badge variant={doctor?.bookingOpen !== false ? "success" : "danger"} className="text-xs">
-                  {doctor?.bookingOpen !== false ? "Bookings Open" : "Bookings Closed"}
-                </Badge>
+                <SmallBadge>ID: DR{String(doctor?.id).padStart(4, '0')}</SmallBadge>
+                <SmallBadge variant={isBookingOpen(doctor) ? "success" : "danger"}>
+                  {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
+                </SmallBadge>
               </div>
-              <p className="text-gray-600 text-sm mb-2">{doctor?.specialist || doctor?.department || "Cardiology"}</p>
-              <p className="text-gray-500 text-sm mb-3">{doctor?.about || "No description available"}</p>
+              <p className="text-gray-600 text-sm mb-2">{doctor?.specialist || doctor?.department || "General Physician"}</p>
+              <p className="text-gray-500 text-sm mb-3">{getValue(doctor?.about, "No description available")}</p>
               <div className="flex items-center gap-4 text-gray-500 text-sm">
                 <div className="flex items-center gap-2">
                   <Phone size={14} />
-                  <span>{doctor?.phone || "N/A"}</span>
+                  <span>{getValue(doctor?.phone)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail size={14} />
-                  <span>{doctor?.email || "N/A"}</span>
+                  <span>{getValue(doctor?.email)}</span>
                 </div>
               </div>
             </div>
@@ -240,49 +276,22 @@ const ViewDoctor = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg border border-gray-200">
+        <div className={CARD_CLASS}>
           <div className="border-b border-gray-200 px-6">
             <div className="flex gap-8 overflow-x-auto">
-              <button
-                onClick={() => setActiveTab("basic")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "basic"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Basic Information
-              </button>
-              <button
-                onClick={() => setActiveTab("schedule")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "schedule"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Schedule & Consulting
-              </button>
-              <button
-                onClick={() => setActiveTab("appointments")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "appointments"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Appointments
-              </button>
-              <button
-                onClick={() => setActiveTab("requests")}
-                className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === "requests"
-                    ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Requests
-              </button>
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -291,79 +300,50 @@ const ViewDoctor = () => {
             {activeTab === "basic" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Personal Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">First Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.firstName || "Michael"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Last Name</span>
-                      <span className="text-gray-800 font-medium">{doctor?.lastName || "Brown"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Display Name</span>
-                      <span className="text-gray-800 font-medium">{doctorName}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Hospital ID</span>
-                      <span className="text-gray-800">{doctor?.hospitalId || "HOS027"}</span>
-                    </div>
+                  <SectionTitle title="Personal Information" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="First Name" value={doctor?.firstName} />
+                    <DetailRow label="Last Name" value={doctor?.lastName} />
+                    <DetailRow label="Display Name" value={doctorName} />
+                    <DetailRow label="Hospital ID" value={doctor?.hospitalId} />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Professional Details
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Department</span>
-                      <span className="text-gray-800 font-medium">{doctor?.department || "Cardiology"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Specialist</span>
-                      <span className="text-gray-800 font-medium">{doctor?.specialist || "Cardiologist"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Qualification</span>
-                      <span className="text-gray-800 font-medium">{doctor?.qualification || "MD, FACC"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Experience</span>
-                      <span className="text-gray-800 font-medium text-green-600">{doctor?.experience || "15+ years"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Fees</span>
-                      <span className="text-gray-800 font-medium text-green-600">
-                        ${doctor?.fees || "350"}
-                      </span>
-                    </div>
+                  <SectionTitle title="Professional Details" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="Department" value={doctor?.department} />
+                    <DetailRow label="Specialist" value={doctor?.specialist} />
+                    <DetailRow label="Qualification" value={doctor?.qualification} />
+                    <DetailRow label="Experience" value={doctor?.experience} />
+                    <DetailRow label="Fees" value={doctor?.fees ? `$${doctor.fees}` : null} />
+                    <DetailRow label="Registration Number" value={doctor?.regNo || doctor?.registrationNumber} />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Contact Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Email</span>
-                      <span className="text-gray-800">{doctor?.email || "brown@gmail.com"}</span>
-                    </div>
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-500">Phone</span>
-                      <span className="text-gray-800">{doctor?.phone || "8714239987"}</span>
-                    </div>
+                  <SectionTitle title="Contact Information" />
+                  <div className={GRID_CLASS}>
+                    <DetailRow label="Email" value={doctor?.email} />
+                    <DetailRow label="Phone" value={doctor?.phone} />
                   </div>
                 </div>
 
+                {hasAddress(doctor?.address) && (
+                  <div>
+                    <SectionTitle title="Address" />
+                    <div className={GRID_CLASS}>
+                      <DetailRow label="Country" value={doctor.address?.country} />
+                      <DetailRow label="State" value={doctor.address?.state} />
+                      <DetailRow label="District" value={doctor.address?.district} />
+                      <DetailRow label="Place" value={doctor.address?.place} />
+                      <DetailRow label="Pincode" value={doctor.address?.pincode} />
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Languages Known
-                  </h3>
+                  <SectionTitle title="Languages Known" />
                   <div className="flex flex-wrap gap-2">
                     {doctor?.knowLanguages && doctor.knowLanguages.length > 0 ? (
                       doctor.knowLanguages.map((lang, index) => (
@@ -372,46 +352,129 @@ const ViewDoctor = () => {
                         </span>
                       ))
                     ) : (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">English</span>
+                      <EmptyState text="No languages specified" />
                     )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Schedule Tab */}
+            {/* Schedule Tab - Enhanced UI for Out Door Consulting */}
             {activeTab === "schedule" && (
               <div className="space-y-6">
+                {/* Consulting Hours Section */}
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    <Clock className="inline-block h-5 w-5 mr-2" />
-                    Consulting Hours
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Monday - Friday</span>
-                      <span className="text-gray-600">9:00 AM - 5:00 PM</span>
+                  <SectionTitle icon={Clock} title="Consulting Hours" />
+                  {sortedHours.length > 0 ? (
+                    <div className="bg-white rounded-lg overflow-hidden">
+                      {sortedHours.map((item, index) => (
+                        <div 
+                          key={index} 
+                          className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 ${
+                            index !== sortedHours.length - 1 ? 'border-b border-gray-100' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-2 sm:mb-0">
+                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                            <span className="font-semibold text-gray-800 capitalize min-w-[100px]">
+                              {formatDay(item.day)}
+                            </span>
+                          </div>
+                          <div className="text-gray-600">
+                            {item.hasBreak ? (
+                              <div className="flex flex-wrap gap-2">
+                                <span className="bg-blue-50 px-2 py-1 rounded text-sm">
+                                  {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                                </span>
+                                <span className="text-gray-400">&</span>
+                                <span className="bg-blue-50 px-2 py-1 rounded text-sm">
+                                  {formatTime(item.eveningOpen)} - {formatTime(item.eveningClose)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                                {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Saturday</span>
-                      <span className="text-gray-600">10:00 AM - 2:00 PM</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">Sunday</span>
-                      <span className="text-gray-600">Closed</span>
-                    </div>
-                  </div>
+                  ) : (
+                    <EmptyState text="No consulting hours configured" />
+                  )}
                 </div>
 
+                {/* Out Door Consulting Section - Enhanced UI */}
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    <Video className="inline-block h-5 w-5 mr-2" />
-                    Booking Status
-                  </h3>
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                      <CheckCircle className="h-4 w-4" /> Bookings Open
-                    </span>
+                  <SectionTitle icon={Building} title="Out Door Consulting" />
+                  {hasOutDoorConsulting ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-5 border border-blue-100 shadow-sm">
+                      {/* Consulting Time */}
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-500" />
+                          Consulting Time
+                        </p>
+                        <div className="grid grid-cols-2 gap-4 max-w-md">
+                          <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                            <span className="text-xs text-gray-500 block mb-1">Open Time</span>
+                            <p className="text-lg font-semibold text-gray-800">
+                              {formatTime(outDoorConsulting.time.open)}
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                            <span className="text-xs text-gray-500 block mb-1">Close Time</span>
+                            <p className="text-lg font-semibold text-gray-800">
+                              {formatTime(outDoorConsulting.time.close)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Consulting Place */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-blue-500" />
+                          Consulting Place
+                        </p>
+                        <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                          <p className="text-gray-700 flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-gray-400" />
+                            {outDoorConsulting.place}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState icon={Building} text="No out door consulting configured" />
+                  )}
+                </div>
+
+                {/* Booking Status Section - Enhanced UI */}
+                <div>
+                  <SectionTitle icon={Video} title="Booking Status" />
+                  <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-5 border border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Booking Availability</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Allow patients to book appointments with this doctor
+                        </p>
+                      </div>
+                      {isBookingOpen(doctor) ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200 w-fit">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700">Bookings Open</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-full border border-red-200 w-fit">
+                          <XCircle className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-700">Bookings Closed</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -430,7 +493,6 @@ const ViewDoctor = () => {
               <RequestTable 
                 doctorId={doctor?.id}
                 doctorName={doctorName}
-                useMockData={true}
               />
             )}
           </div>

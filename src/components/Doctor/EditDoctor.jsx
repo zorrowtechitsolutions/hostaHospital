@@ -1,23 +1,164 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Rewrite
+// src/components/Doctor/EditDoctor.jsx - Status Toggle at End of Basic Info
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users
+  Home, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase,
+  Power
 } from 'lucide-react';
 import { 
-  Button, Input, Select, Textarea, Card, Alert, Loader 
+  Button, Input, Select, Textarea, Card, Alert 
 } from '../ui';
-import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
+import { showUpdateToast, showErrorToast, showSuccessToast } from '../ui/Toast';
 import {
-  useGetDoctorsQuery,
+  useGetDoctorByIdQuery,
   useUpdateDoctorMutation
 } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
 
-// SearchableDropdown Component (keep as is)
-const SearchableDropdown = ({ 
+// ==================== CONSTANTS ====================
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const VALID_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'mal', label: 'Malayalam' },
+  { value: 'eng', label: 'English' },
+  { value: 'hin', label: 'Hindi' },
+  { value: 'tam', label: 'Tamil' },
+  { value: 'tel', label: 'Telugu' },
+  { value: 'kan', label: 'Kannada' },
+  { value: 'ben', label: 'Bengali' },
+  { value: 'mar', label: 'Marathi' },
+  { value: 'guj', label: 'Gujarati' },
+  { value: 'pun', label: 'Punjabi' },
+  { value: 'urd', label: 'Urdu' }
+];
+
+const WEEK_DAYS = [
+  { key: 'monday', label: 'Monday' },
+  { key: 'tuesday', label: 'Tuesday' },
+  { key: 'wednesday', label: 'Wednesday' },
+  { key: 'thursday', label: 'Thursday' },
+  { key: 'friday', label: 'Friday' },
+  { key: 'saturday', label: 'Saturday' },
+  { key: 'sunday', label: 'Sunday' }
+];
+
+const TABS = [
+  { id: 'basic', label: 'Basic Info' },
+  { id: 'professional', label: 'Professional Info' }
+];
+
+const INITIAL_FORM_STATE = {
+  profileImage: null,
+  firstName: '',
+  lastName: '',
+  department: '',
+  specialist: '',
+  qualification: '',
+  fees: '',
+  phoneNumber: '',
+  email: '',
+  dob: '',
+  gender: '',
+  registrationNumber: '',
+  knownLanguages: [],
+  about: '',
+  countryCode: '',
+  countryName: '',
+  stateCode: '',
+  stateName: '',
+  district: '',
+  place: '',
+  pincode: '',
+  displayName: '',
+  userName: '',
+  password: '',
+  confirmPassword: '',
+  joiningDate: '',
+  experience: '',
+  weeklySchedule: {},
+  outDoorConsultingOpen: '',
+  outDoorConsultingClose: '',
+  outDoorConsultingPlace: '',
+bookingOpen: true,
+isActive: true
+};
+
+const getDefaultSchedule = () => ({
+  monday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  tuesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  wednesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  thursday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  friday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  saturday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '14:00', eveningOpen: '16:00', eveningClose: '20:00' },
+  sunday: { isHoliday: true, hasBreak: false, morningOpen: '10:00', morningClose: '13:00', eveningOpen: '16:00', eveningClose: '20:00' }
+});
+
+// ==================== HELPER FUNCTIONS ====================
+const getLanguageLabel = (value) => {
+  const lang = LANGUAGE_OPTIONS.find(l => l.value === value);
+  return lang ? lang.label : value;
+};
+
+// ==================== COMPONENTS ====================
+// Lazy loaded image component
+const LazyImage = ({ src, alt, className, fallbackSrc = "/placeholder-avatar.png" }) => {
+  const [imageSrc, setImageSrc] = useState(src || fallbackSrc);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    if (!src) {
+      setImageSrc(fallbackSrc);
+      setIsLoaded(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            setImageSrc(src);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '100px' }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [src, fallbackSrc]);
+
+  const handleLoad = () => setIsLoaded(true);
+
+  return (
+    <div ref={imgRef} className="relative w-full h-full">
+      {!isLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">
+          <div className="h-8 w-8 rounded-full border-2 border-gray-300 border-t-blue-500 animate-spin" />
+        </div>
+      )}
+      <img
+        src={imageSrc}
+        alt={alt}
+        className={`${className} ${!isLoaded ? 'opacity-0' : 'opacity-100 transition-opacity duration-300'}`}
+        onLoad={handleLoad}
+        loading="lazy"
+      />
+    </div>
+  );
+};
+
+// SearchableDropdown Component
+const SearchableDropdownComponent = ({ 
   label, 
   options, 
   value, 
@@ -51,14 +192,14 @@ const SearchableDropdown = ({
   }, []);
 
   const handleSelect = (option) => {
-    onChange(getOptionValue(option), getOptionLabel(option));
+    onChange(String(getOptionValue(option)), String(getOptionLabel(option)));
     setSearchTerm("");
     setIsOpen(false);
   };
 
   const displayValue = () => {
     if (!value) return "";
-    const selected = options.find(opt => getOptionValue(opt) === value);
+    const selected = options.find(opt => String(getOptionValue(opt)) === String(value));
     return selected ? getOptionLabel(selected) : "";
   };
 
@@ -118,8 +259,8 @@ const SearchableDropdown = ({
   );
 };
 
-// Day Schedule Row Component (simplified)
-const DayScheduleRow = ({ day, schedule, onUpdate }) => {
+// Day Schedule Row Component
+const DayScheduleRowComponent = ({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
   useEffect(() => {
@@ -162,7 +303,6 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
         <>
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
-              <Sun className="h-4 w-4 text-yellow-500" />
               <span className="text-sm font-medium text-gray-700">Morning Session</span>
             </div>
             <div className="flex flex-wrap items-center gap-3 pl-6">
@@ -191,7 +331,6 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
           {localSchedule.hasBreak && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <Moon className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Evening Session</span>
               </div>
               <div className="flex flex-wrap items-center gap-3 pl-6">
@@ -241,17 +380,69 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
   );
 };
 
+// Centered Loader Component
+const CenteredLoader = ({ text = "Loading..." }) => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">{text}</p>
+    </div>
+  </div>
+);
+
+// Status Toggle Component
+const StatusToggle = ({ status, onToggle, disabled }) => {
+const isActive = status;
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+        <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+          <Power className="h-5 w-5 text-blue-600" /> 
+          Doctor Status
+        </h3>
+      </div>
+      <div className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {isActive ? 'Active' : 'Inactive'}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isActive 
+                ? 'Doctor is currently active and can receive appointments' 
+                : 'Doctor is inactive and will not appear in search results'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={disabled}
+            className={`
+              relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+              ${isActive ? 'bg-green-500' : 'bg-gray-300'}
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            <span
+              className={`
+                inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-md
+                ${isActive ? 'translate-x-6' : 'translate-x-1'}
+              `}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
 const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
-  
-  // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  console.log("=== EDIT DOCTOR DEBUG ===");
-  console.log("Doctor ID from URL:", doctorId);
-  
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('basic');
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -259,120 +450,50 @@ const EditDoctor = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
-  
-  // Form state - initialize with empty values
-  const [formData, setFormData] = useState({
-    profileImage: null,
-    firstName: '',
-    lastName: '',
-    department: '',
-    specialist: '',
-    qualification: '',
-    fees: '',
-    phoneNumber: '',
-    email: '',
-    dob: '',
-    gender: '',
-    registrationNumber: '',
-    knownLanguages: [],
-    about: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
-    stateName: '',
-    district: '',
-    place: '',
-    pincode: '',
-    displayName: '',
-    userName: '',
-    password: '',
-    confirmPassword: '',
-    joiningDate: '',
-    hospitalId: '',
-    experience: '',
-    appointmentCount: '',
-    weeklySchedule: {},
-    outDoorConsultingOpen: '',
-    outDoorConsultingClose: '',
-    outDoorConsultingPlace: '',
-    bookingOpen: true
-  });
-
+  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [errors, setErrors] = useState({});
+  const [availableStates, setAvailableStates] = useState([]);
+  const [availableCities, setAvailableCities] = useState([]);
 
-  // Fetch doctor data
-  const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorsQuery({
-    doctorId: doctorId,
+  const { data: doctorResponse, isLoading, error } = useGetDoctorByIdQuery(doctorId, {
+    skip: !doctorId
   });
   
   const [updateDoctor] = useUpdateDoctorMutation();
 
-console.log("Doctor API Response:", doctorResponse);
-
-// Extract doctor from response
-const doctors = Array.isArray(doctorResponse)
-  ? doctorResponse
-  : doctorResponse?.data || [];
-
-const doctor = doctors.find(
-  (doc) => String(doc.id) === String(doctorId)
-);
-
-console.log("Extracted Doctor:", doctor);
-
-
+  const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
   const countries = Country.getAllCountries();
-  const [availableStates, setAvailableStates] = useState([]);
-  const [availableCities, setAvailableCities] = useState([]);
 
-  const languageOptions = [
-    { value: 'mal', label: 'Malayalam' },
-    { value: 'eng', label: 'English' },
-    { value: 'hin', label: 'Hindi' },
-    { value: 'tam', label: 'Tamil' },
-    { value: 'tel', label: 'Telugu' },
-    { value: 'kan', label: 'Kannada' },
-    { value: 'ben', label: 'Bengali' },
-    { value: 'mar', label: 'Marathi' },
-    { value: 'guj', label: 'Gujarati' },
-    { value: 'pun', label: 'Punjabi' },
-    { value: 'urd', label: 'Urdu' }
-  ];
-
-  const weekDays = [
-    { key: 'monday', label: 'Monday' },
-    { key: 'tuesday', label: 'Tuesday' },
-    { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
-    { key: 'saturday', label: 'Saturday' },
-    { key: 'sunday', label: 'Sunday' }
-  ];
-
-  const tabs = [
-    { id: 'basic', label: 'Basic Info' },
-    { id: 'professional', label: 'Professional Info' }
-  ];
-
-  const getDefaultSchedule = () => {
-    return {
-      monday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      tuesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      wednesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      thursday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      friday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      saturday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '14:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      sunday: { isHoliday: true, hasBreak: false, morningOpen: '10:00', morningClose: '13:00', eveningOpen: '16:00', eveningClose: '20:00' }
-    };
+  // Helper for creating change handlers
+  const createChangeHandler = (field) => (e) => {
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
   };
+
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleBookingStatus = () => {
+    setFormData(prev => ({
+      ...prev,
+      bookingOpen: !prev.bookingOpen
+    }));
+  };
+
+const toggleDoctorStatus = () => {
+  setFormData(prev => ({
+    ...prev,
+    isActive: !prev.isActive
+  }));
+
+  showSuccessToast(
+    `Doctor status changed`
+  );
+};
 
   // Initialize form with doctor data
   useEffect(() => {
     if (doctor && doctor.id && !formInitialized) {
-      console.log("=== INITIALIZING FORM WITH DOCTOR DATA ===");
-      console.log("Doctor object:", doctor);
-      
-      // Find country and state
       const country = countries.find(c => 
         c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
       );
@@ -382,10 +503,8 @@ console.log("Extracted Doctor:", doctor);
         s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
       );
       
-      // Build schedule from consulting data
       const schedule = getDefaultSchedule();
       
-      // Update schedule with consultingOne data
       if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
         doctor.consultingOne.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -401,7 +520,6 @@ console.log("Extracted Doctor:", doctor);
         });
       }
       
-      // Update schedule with consultingTwo data
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
         doctor.consultingTwo.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -420,7 +538,8 @@ console.log("Extracted Doctor:", doctor);
       }
       
       const newFormData = {
-        profileImage: doctor.image || null,
+        ...INITIAL_FORM_STATE,
+        profileImage: null,
         firstName: doctor.firstName || "",
         lastName: doctor.lastName || "",
         department: doctor.department || "",
@@ -431,7 +550,7 @@ console.log("Extracted Doctor:", doctor);
         email: doctor.email || "",
         dob: doctor.dob ? new Date(doctor.dob).toISOString().split('T')[0] : "",
         gender: doctor.gender ? doctor.gender.charAt(0).toUpperCase() + doctor.gender.slice(1) : "",
-        registrationNumber: doctor.registrationNumber || "",
+        registrationNumber: doctor.regNo || doctor.registrationNumber || "",
         knownLanguages: doctor.knowLanguages || [],
         about: doctor.about || "",
         place: doctor.address?.place || "",
@@ -443,27 +562,22 @@ console.log("Extracted Doctor:", doctor);
         pincode: doctor.address?.pincode || "",
         displayName: doctor.displayName || "",
         userName: doctor.userName || "",
-        password: "",
-        confirmPassword: "",
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
-        hospitalId: doctor.hospitalId || localStorage.getItem("hospitalId") || '',
         experience: doctor.experience || "",
-        appointmentCount: doctor.appointmentCount || "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
         outDoorConsultingPlace: doctor.outDoorConsulting?.place || "",
-        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true
+        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
+        isActive: doctor.isActive ?? true
       };
       
-      console.log("Setting form data:", newFormData);
       setFormData(newFormData);
       
       if (doctor.image) {
         setPreviewImage(doctor.image);
       }
       
-      // Update states and cities
       if (country?.isoCode) {
         setAvailableStates(State.getStatesOfCountry(country.isoCode));
         if (state?.isoCode) {
@@ -479,42 +593,12 @@ console.log("Extracted Doctor:", doctor);
   useEffect(() => {
     setFormInitialized(false);
     setFormData({
-      profileImage: null,
-      firstName: '',
-      lastName: '',
-      department: '',
-      specialist: '',
-      qualification: '',
-      fees: '',
-      phoneNumber: '',
-      email: '',
-      dob: '',
-      gender: '',
-      registrationNumber: '',
-      knownLanguages: [],
-      about: '',
-      countryCode: '',
-      countryName: '',
-      stateCode: '',
-      stateName: '',
-      district: '',
-      place: '',
-      pincode: '',
-      displayName: '',
-      userName: '',
-      password: '',
-      confirmPassword: '',
-      joiningDate: '',
-      hospitalId: '',
-      experience: '',
-      appointmentCount: '',
-      weeklySchedule: getDefaultSchedule(),
-      outDoorConsultingOpen: '',
-      outDoorConsultingClose: '',
-      outDoorConsultingPlace: '',
-      bookingOpen: true
+      ...INITIAL_FORM_STATE,
+      weeklySchedule: getDefaultSchedule()
     });
     setPreviewImage(null);
+    setAvailableStates([]);
+    setAvailableCities([]);
   }, [doctorId]);
 
   const updateScheduleForDay = (day, newSchedule) => {
@@ -530,33 +614,24 @@ console.log("Extracted Doctor:", doctor);
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE) {
       setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-      showWarningToast('File size must be less than 5MB', 3000);
       return false;
     }
     
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    if (!VALID_IMAGE_TYPES.includes(file.type)) {
       setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
-      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return false;
     }
     
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    setUploadProgress(0);
     
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
-    // Simulate upload (replace with actual S3 upload)
-    setTimeout(() => {
-      const fakeUrl = URL.createObjectURL(file);
-      setFormData(prev => ({ ...prev, profileImage: fakeUrl }));
-      setUploadProgress(100);
-      showSuccessToast('Image uploaded successfully!', 2000);
-    }, 1000);
+    setFormData(prev => ({ ...prev, profileImage: file }));
+    showSuccessToast('Image uploaded successfully!');
     
     return true;
   };
@@ -569,15 +644,14 @@ console.log("Extracted Doctor:", doctor);
   const removeImage = () => {
     setFormData(prev => ({ ...prev, profileImage: null }));
     setPreviewImage(null);
-    setUploadProgress(0);
-    showSuccessToast('Image removed', 2000);
+    showSuccessToast('Image removed');
   };
 
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
       ...prev,
-      countryCode: code,
-      countryName: name,
+      countryCode: String(code),
+      countryName: String(name),
       stateCode: '',
       stateName: '',
       district: ''
@@ -589,47 +663,33 @@ console.log("Extracted Doctor:", doctor);
   const handleStateChange = (code, name) => {
     setFormData(prev => ({
       ...prev,
-      stateCode: code,
-      stateName: name,
+      stateCode: String(code),
+      stateName: String(name),
       district: ''
     }));
     setAvailableCities(City.getCitiesOfState(formData.countryCode, code));
   };
 
-  const handleCityChange = (name) => {
+  const handleCityChange = (value, name) => {
     setFormData(prev => ({
       ...prev,
-      district: name
+      district: String(name)
     }));
   };
 
   const handleLanguageSelect = (languageValue) => {
-    setFormData(prev => {
-      const currentLanguages = [...prev.knownLanguages];
-      if (currentLanguages.includes(languageValue)) {
-        return { ...prev, knownLanguages: currentLanguages.filter(lang => lang !== languageValue) };
-      } else {
-        return { ...prev, knownLanguages: [...currentLanguages, languageValue] };
-      }
-    });
+    setFormData(prev => ({
+      ...prev,
+      knownLanguages: prev.knownLanguages.includes(languageValue)
+        ? prev.knownLanguages.filter(lang => lang !== languageValue)
+        : [...prev.knownLanguages, languageValue]
+    }));
   };
 
   const removeLanguage = (languageValue) => {
     setFormData(prev => ({
       ...prev,
       knownLanguages: prev.knownLanguages.filter(lang => lang !== languageValue)
-    }));
-  };
-
-  const getLanguageLabel = (value) => {
-    const lang = languageOptions.find(l => l.value === value);
-    return lang ? lang.label : value;
-  };
-
-  const handleFieldChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
     }));
   };
 
@@ -650,16 +710,15 @@ console.log("Extracted Doctor:", doctor);
         email: formData.email,
         dob: formData.dob,
         gender: formData.gender?.toLowerCase(),
-        registrationNumber: formData.registrationNumber,
+        regNo: formData.registrationNumber,
         knowLanguages: formData.knownLanguages,
         about: formData.about,
         displayName: formData.displayName,
-        userName: formData.userName,
-        image: formData.profileImage || previewImage,
+        image: typeof previewImage === "string" ? previewImage : "",
         experience: formData.experience,
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
-        hospitalId: Number(formData.hospitalId),
+       isActive: formData.isActive,
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -692,10 +751,6 @@ console.log("Extracted Doctor:", doctor);
           })),
       };
 
-      if (formData.appointmentCount && formData.appointmentCount !== '') {
-        updatedDoctorData.appointmentCount = Number(formData.appointmentCount);
-      }
-
       if (formData.outDoorConsultingOpen && 
           formData.outDoorConsultingClose && 
           formData.outDoorConsultingPlace) {
@@ -712,8 +767,6 @@ console.log("Extracted Doctor:", doctor);
         updatedDoctorData.password = formData.password;
       }
 
-      console.log('Updating doctor:', updatedDoctorData);
-
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
@@ -726,7 +779,6 @@ console.log("Extracted Doctor:", doctor);
       }, 1500);
 
     } catch (error) {
-      console.error("Update Error:", error);
       showErrorToast(error.data?.message || "Failed to update doctor");
     } finally {
       setIsSubmitting(false);
@@ -737,12 +789,12 @@ console.log("Extracted Doctor:", doctor);
     navigate('/doctors');
   };
 
+  // Loading and error states
   if (isLoading) {
-    return <Loader centered text="Loading doctor data..." />;
+    return <CenteredLoader text="Loading doctor data..." />;
   }
 
   if (error) {
-    console.error("Error fetching doctor:", error);
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -760,20 +812,16 @@ console.log("Extracted Doctor:", doctor);
     );
   }
 
-  if (!doctor && !isLoading && doctors.length > 0) {
+  if (!doctor && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="bg-yellow-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-yellow-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mt-4">No Doctor Data</h2>
-          <p className="text-gray-600 mt-2">No doctor data received from the server.</p>
-          <p className="text-gray-500 text-sm mt-1">ID: {doctorId}</p>
-          <Button variant="primary" onClick={() => refetch()} className="mt-6 mr-2">
-            Retry
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/doctors')} className="mt-6">
+          <h2 className="text-2xl font-bold text-gray-900 mt-4">Doctor Not Found</h2>
+          <p className="text-gray-600 mt-2">No doctor found with ID: {doctorId}</p>
+          <Button variant="primary" onClick={() => navigate('/doctors')} className="mt-6">
             Back to Doctors List
           </Button>
         </div>
@@ -781,9 +829,8 @@ console.log("Extracted Doctor:", doctor);
     );
   }
 
-  // Show loading if form is not initialized yet
   if (!formInitialized && doctor) {
-    return <Loader centered text="Loading form data..." />;
+    return <CenteredLoader text="Loading form data..." />;
   }
 
   return (
@@ -807,7 +854,7 @@ console.log("Extracted Doctor:", doctor);
           <Card>
             <div className="border-b border-gray-200 px-6">
               <nav className="-mb-px flex space-x-8">
-                {tabs.map((tab) => (
+                {TABS.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
@@ -826,13 +873,18 @@ console.log("Extracted Doctor:", doctor);
 
             {activeTab === 'basic' && (
               <div className="p-6 space-y-6">
-                {/* Profile Image Section */}
+                {/* Profile Image Section with Lazy Loading */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                   <div className="flex-shrink-0">
                     <div className="relative">
                       <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                         {previewImage ? (
-                          <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                          <LazyImage 
+                            src={previewImage} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                            fallbackSrc="/placeholder-avatar.png"
+                          />
                         ) : (
                           <Image className="h-8 w-8 text-gray-400" />
                         )}
@@ -853,19 +905,11 @@ console.log("Extracted Doctor:", doctor);
                       </Button>
                       <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                     </div>
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                      <div className="mt-2">
-                        <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress}%</p>
-                      </div>
-                    )}
                     {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">Doctor ID:</span>
                     <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
@@ -874,14 +918,14 @@ console.log("Extracted Doctor:", doctor);
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input 
                     label="First Name" 
                     name="firstName" 
                     icon={User} 
                     placeholder="Enter first name" 
                     value={formData.firstName} 
-                    onChange={(e) => handleFieldChange('firstName', e.target.value)} 
+                    onChange={createChangeHandler('firstName')} 
                     required 
                   />
                   <Input 
@@ -890,38 +934,30 @@ console.log("Extracted Doctor:", doctor);
                     icon={User} 
                     placeholder="Enter last name" 
                     value={formData.lastName} 
-                    onChange={(e) => handleFieldChange('lastName', e.target.value)} 
+                    onChange={createChangeHandler('lastName')} 
                     required 
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Hospital ID" 
-                    name="hospitalId" 
-                    type="number" 
-                    icon={Building} 
-                    value={formData.hospitalId} 
-                    readOnly 
-                  />
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Joining Date" 
                     name="joiningDate" 
                     type="date" 
                     icon={Calendar} 
                     value={formData.joiningDate} 
-                    onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
+                    onChange={createChangeHandler('joiningDate')} 
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Select 
                     label="Department" 
                     name="department" 
                     options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'ENT']} 
                     placeholder="Select Department" 
                     value={formData.department} 
-                    onChange={(value) => handleFieldChange('department', value)} 
+                    onChange={(e) => handleFieldChange('department', e.target.value)} 
                     required 
                   />
                   <Input 
@@ -930,19 +966,19 @@ console.log("Extracted Doctor:", doctor);
                     icon={IdCard} 
                     placeholder="e.g., Cardiologist" 
                     value={formData.specialist} 
-                    onChange={(e) => handleFieldChange('specialist', e.target.value)} 
+                    onChange={createChangeHandler('specialist')} 
                     required 
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Qualification" 
                     name="qualification" 
                     icon={GraduationCap} 
                     placeholder="e.g., MBBS, MD, PhD, MS" 
                     value={formData.qualification} 
-                    onChange={(e) => handleFieldChange('qualification', e.target.value)} 
+                    onChange={createChangeHandler('qualification')} 
                     required 
                   />
                   <Input 
@@ -952,19 +988,19 @@ console.log("Extracted Doctor:", doctor);
                     icon={DollarSign} 
                     placeholder="0.00" 
                     value={formData.fees} 
-                    onChange={(e) => handleFieldChange('fees', e.target.value)} 
+                    onChange={createChangeHandler('fees')} 
                     required 
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Phone Number" 
                     name="phoneNumber" 
                     icon={Phone} 
                     placeholder="+1 234 567 8900" 
                     value={formData.phoneNumber} 
-                    onChange={(e) => handleFieldChange('phoneNumber', e.target.value)} 
+                    onChange={createChangeHandler('phoneNumber')} 
                     required 
                   />
                   <Input 
@@ -974,19 +1010,19 @@ console.log("Extracted Doctor:", doctor);
                     icon={Mail} 
                     placeholder="doctor@example.com" 
                     value={formData.email} 
-                    onChange={(e) => handleFieldChange('email', e.target.value)} 
+                    onChange={createChangeHandler('email')} 
                     required 
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Date of Birth" 
                     name="dob" 
                     type="date" 
                     icon={Calendar} 
                     value={formData.dob} 
-                    onChange={(e) => handleFieldChange('dob', e.target.value)} 
+                    onChange={createChangeHandler('dob')} 
                     required 
                   />
                   <Select 
@@ -1000,14 +1036,14 @@ console.log("Extracted Doctor:", doctor);
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className={GRID_CLASS}>
                   <Input 
                     label="Registration Number" 
                     name="registrationNumber" 
                     icon={IdCard} 
                     placeholder="Medical license number" 
                     value={formData.registrationNumber} 
-                    onChange={(e) => handleFieldChange('registrationNumber', e.target.value)} 
+                    onChange={createChangeHandler('registrationNumber')} 
                   />
                   <Input 
                     label="Experience" 
@@ -1015,20 +1051,8 @@ console.log("Extracted Doctor:", doctor);
                     icon={Briefcase} 
                     placeholder="e.g., 5 years" 
                     value={formData.experience} 
-                    onChange={(e) => handleFieldChange('experience', e.target.value)} 
+                    onChange={createChangeHandler('experience')} 
                     required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Appointment Count (Optional)" 
-                    name="appointmentCount" 
-                    type="number" 
-                    icon={Users} 
-                    placeholder="Number of appointments handled" 
-                    value={formData.appointmentCount} 
-                    onChange={(e) => handleFieldChange('appointmentCount', e.target.value)} 
                   />
                 </div>
 
@@ -1067,7 +1091,7 @@ console.log("Extracted Doctor:", doctor);
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setIsLanguageDropdownOpen(false)} />
                         <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {languageOptions.map(lang => (
+                          {LANGUAGE_OPTIONS.map(lang => (
                             <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -1090,14 +1114,14 @@ console.log("Extracted Doctor:", doctor);
                   rows={3} 
                   placeholder="Write a brief description about the doctor's experience..." 
                   value={formData.about} 
-                  onChange={(e) => handleFieldChange('about', e.target.value)} 
+                  onChange={createChangeHandler('about')} 
                 />
 
                 {/* Address Section */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="Country"
                       options={countries}
                       value={formData.countryCode}
@@ -1107,7 +1131,7 @@ console.log("Extracted Doctor:", doctor);
                       required={true}
                     />
                     
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="State"
                       options={availableStates}
                       value={formData.stateCode}
@@ -1118,7 +1142,7 @@ console.log("Extracted Doctor:", doctor);
                       required={true}
                     />
 
-                    <SearchableDropdown
+                    <SearchableDropdownComponent
                       label="District"
                       options={availableCities}
                       value={formData.district}
@@ -1131,20 +1155,20 @@ console.log("Extracted Doctor:", doctor);
                       getOptionValue={(option) => option.name}
                     />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className={GRID_CLASS}>
                       <Input 
                         label="Place" 
                         name="place" 
                         placeholder="Place/Locality" 
                         value={formData.place} 
-                        onChange={(e) => handleFieldChange('place', e.target.value)} 
+                        onChange={createChangeHandler('place')} 
                       />
                       <Input 
                         label="Pincode" 
                         name="pincode" 
                         placeholder="Postal code" 
                         value={formData.pincode} 
-                        onChange={(e) => handleFieldChange('pincode', e.target.value)} 
+                        onChange={createChangeHandler('pincode')} 
                       />
                     </div>
                   </div>
@@ -1153,23 +1177,15 @@ console.log("Extracted Doctor:", doctor);
                 {/* Account Details */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className={GRID_CLASS}>
                     <Input 
                       label="Display Name" 
                       name="displayName" 
                       icon={User} 
                       placeholder="How name appears on profile" 
                       value={formData.displayName} 
-                      onChange={(e) => handleFieldChange('displayName', e.target.value)} 
+                      onChange={createChangeHandler('displayName')} 
                     />
-                    {/* <Input 
-                      label="Username" 
-                      name="userName" 
-                      icon={User} 
-                      placeholder="Unique username" 
-                      value={formData.userName} 
-                      onChange={(e) => handleFieldChange('userName', e.target.value)} 
-                    /> */}
                     
                     <div className="relative">
                       <Input 
@@ -1179,7 +1195,7 @@ console.log("Extracted Doctor:", doctor);
                         icon={Lock} 
                         placeholder="Leave blank to keep current" 
                         value={formData.password} 
-                        onChange={(e) => handleFieldChange('password', e.target.value)} 
+                        onChange={createChangeHandler('password')} 
                       />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -1194,13 +1210,22 @@ console.log("Extracted Doctor:", doctor);
                         icon={Lock} 
                         placeholder="Confirm new password" 
                         value={formData.confirmPassword} 
-                        onChange={(e) => handleFieldChange('confirmPassword', e.target.value)} 
+                        onChange={createChangeHandler('confirmPassword')} 
                       />
                       <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                         {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                   </div>
+                </div>
+
+                {/* Status Toggle - Placed at the end of Basic Info */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+<StatusToggle 
+  status={formData.isActive} 
+  onToggle={toggleDoctorStatus}
+  disabled={isSubmitting}
+/>
                 </div>
               </div>
             )}
@@ -1210,8 +1235,8 @@ console.log("Extracted Doctor:", doctor);
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
                 
                 <div className="space-y-4">
-                  {weekDays.map((day) => (
-                    <DayScheduleRow
+                  {WEEK_DAYS.map((day) => (
+                    <DayScheduleRowComponent
                       key={day.key}
                       day={day.label}
                       schedule={formData.weeklySchedule[day.key] || { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '17:00', eveningOpen: '', eveningClose: '' }}
@@ -1220,66 +1245,105 @@ console.log("Extracted Doctor:", doctor);
                   ))}
                 </div>
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Home className="h-5 w-5" /> Out Door Consulting
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input 
-                        label="Open Time" 
-                        name="outDoorConsultingOpen" 
-                        type="time" 
-                        value={formData.outDoorConsultingOpen} 
-                        onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)} 
-                      />
-                      <Input 
-                        label="Close Time" 
-                        name="outDoorConsultingClose" 
-                        type="time" 
-                        value={formData.outDoorConsultingClose} 
-                        onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)} 
-                      />
-                    </div>
+                {/* Out Door Consulting Section */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden mt-6">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+                      <Home className="h-5 w-5 text-blue-600" /> 
+                      Out Door Consulting
+                    </h3>
                   </div>
-                  <Input 
-                    label="Consulting Place" 
-                    name="outDoorConsultingPlace" 
-                    icon={MapPin} 
-                    placeholder="Enter consulting location" 
-                    value={formData.outDoorConsultingPlace} 
-                    onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)} 
-                  />
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Video className="h-5 w-5" /> Booking Status
-                </h3>
-                
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  
+                  <div className="p-5 space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Booking Availability</label>
-                      <p className="text-xs text-gray-500">Allow patients to book appointments with this doctor</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Consulting Time
+                      </label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Open Time</label>
+                          <input
+                            type="time"
+                            name="outDoorConsultingOpen"
+                            value={formData.outDoorConsultingOpen}
+                            onChange={createChangeHandler('outDoorConsultingOpen')}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Close Time</label>
+                          <input
+                            type="time"
+                            name="outDoorConsultingClose"
+                            value={formData.outDoorConsultingClose}
+                            onChange={createChangeHandler('outDoorConsultingClose')}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, bookingOpen: !prev.bookingOpen }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    {formData.bookingOpen ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600"><CheckCircle className="h-3 w-3" /> Bookings Open</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle className="h-3 w-3" /> Bookings Closed</span>
-                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Consulting Place
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="text"
+                          name="outDoorConsultingPlace"
+                          placeholder="Enter consulting location"
+                          value={formData.outDoorConsultingPlace}
+                          onChange={createChangeHandler('outDoorConsultingPlace')}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        e.g., City Hospital, Room 204, Main Building
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Booking Status
+                      </label>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Booking Availability</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Allow patients to book appointments with this doctor
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={toggleBookingStatus}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                              formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <div className="mt-3">
+                          {formData.bookingOpen ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="text-xs font-medium">Bookings Open</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-red-600">
+                              <XCircle className="h-4 w-4" />
+                              <span className="text-xs font-medium">Bookings Closed</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

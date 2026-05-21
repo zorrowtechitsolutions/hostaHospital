@@ -119,31 +119,32 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     
     setIsSubmitting(true);
 
+          
+
     try {
+
+      console.log(formData.consulting_time);
       // EXACT PAYLOAD MATCHING BACKEND EXPECTATIONS
-      const appointmentData = {
-        // User identification - TEMPORARY HARDCODED FOR TESTING
-        userId: 109,        // temporary hardcoded test
-        hospitalId: 27,     // temporary hardcoded test
+const appointmentData = {
+  userId: 109,
+  hospitalId: 27,
 
-        // Patient details
-        patient_dob: formData.patient_dob,
-        patient_name: formData.patient_name,
-        patient_place: formData.patient_place,
-        patient_phone: formData.patient_phone,
+  patient_dob: formData.patient_dob,
+  patient_name: formData.patient_name,
+  patient_place: formData.patient_place,
+  patient_phone: formData.patient_phone,
 
-        // Doctor details - CONVERT TO NUMBER
-        doctorId: Number(formData.doctorId),
+  doctorId: Number(formData.doctorId),
 
-        // Appointment details
-        booking_date: formData.booking_date,
+  booking_date: formData.booking_date,
 
-        // Department mapping
-        department: formData.speciality,
+  consulting_time: formData.consulting_time, // ADD THIS
 
-        // Doctor display name
-        displayName: formData.displayName,
-      };
+  department: formData.speciality,
+
+  displayName: formData.displayName,
+};
+
 
       console.log( JSON.stringify(appointmentData, null, 2));
       console.log("✅ doctorId type:", typeof appointmentData.doctorId, "value:", appointmentData.doctorId);
@@ -155,6 +156,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
       if (onSave) {
         onSave(response.data);
       }
+
 
       showAddToast(
         `New appointment scheduled for ${formData.patient_name}!`,
@@ -331,15 +333,26 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
           />
 
           {/* Consulting Time - Optional, not sent to backend */}
-          <Select
-            label="Consulting Time (Optional)"
-            name="consulting_time"
-            options={timeSlots}
-            value={formData.consulting_time}
-            onChange={handleChange}
-            placeholder="Select Time (Optional)"
-            icon={Clock}
-          />
+<div>
+  <label className="block text-sm font-medium mb-1">
+    Consulting Time
+  </label>
+
+  <select
+    name="consulting_time"
+    value={formData.consulting_time}
+    onChange={handleChange}
+    className="w-full border rounded-lg px-3 py-2"
+  >
+    <option value="">Select Time</option>
+
+    {timeSlots.map((consulting_time) => (
+      <option key={consulting_time} value={consulting_time}>
+        {consulting_time}
+      </option>
+    ))}
+  </select>
+</div>
 
           {/* Reason - UI only, not sent to backend */}
           <div className="md:col-span-2">

@@ -3,20 +3,72 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import {
-  Button,
-  Badge,
-  Loader,
-  Pagination,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableHeader,
-  TableCell,
-  Modal
-} from '../ui';
+import { Badge, Modal } from '../ui';
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
+
+// Helper functions
+const getDoctorName = (doctor) =>
+  doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`;
+
+const getAppointmentValue = (doctor) =>
+  doctor.autoDecline
+    ? `${doctor.autoDecline} min`
+    : Number(
+        doctor.appointmentCount ??
+        doctor.appoimentCount ??
+        doctor.appointments ??
+        0
+      );
+
+const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
+
+// Reusable Doctor Action Menu Component
+const DoctorActionMenu = ({ doctor, activeMenu, toggleMenu, onView, onEdit, onDelete, onAppointment }) => {
+  if (activeMenu !== doctor.id) return null;
+  
+  return (
+    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+      <button 
+        onClick={() => onView(doctor)} 
+        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        View Details
+      </button>
+      <button 
+        onClick={() => onAppointment(doctor)} 
+        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        Appointment Settings
+      </button>
+      <button 
+        onClick={() => onEdit(doctor)} 
+        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Edit
+      </button>
+      <div className="border-t border-gray-100 my-1"></div>
+      <button 
+        onClick={() => onDelete(doctor)} 
+        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        Delete
+      </button>
+    </div>
+  );
+};
 
 // Skeleton Loader Component
 const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
@@ -50,7 +102,6 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
     );
   }
 
-  // List view skeleton
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -73,9 +124,9 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
+                   </td>
                 ))}
-              </tr>
+               </tr>
             ))}
           </tbody>
         </table>
@@ -100,22 +151,16 @@ const Doctors = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSpecialty, setFilterSpecialty] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All'); // NEW: Status filter state
   const [viewMode, setViewMode] = useState('grid');
-  const [loading, setLoading] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [doctorToDelete, setDoctorToDelete] = useState(null);
   const [showAppointmentManagement, setShowAppointmentManagement] = useState(false);
   const [selectedDoctorForManagement, setSelectedDoctorForManagement] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const hospitalId = localStorage.getItem("hospitalId");
-
   const [specialityFilter, setSpecialityFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -127,27 +172,22 @@ const Doctors = () => {
     isLoading,
     isFetching,
     refetch,
-  } = useGetDoctorsQuery({
-    hospitalId,
-  });
+  } = useGetDoctorsQuery();
 
   const doctors = response?.data || [];
-
-  console.log("Hospital ID:", hospitalId);
-  console.log("Doctors:", doctors);
 
   useEffect(() => {
     if (location.state?.speciality) {
       setSpecialityFilter(location.state.speciality);
       setFilterSpecialty(location.state.speciality);
-      setShowFilters(true);
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
+  // Reset pagination when filters change (UPDATED: added filterStatus)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterSpecialty, specialityFilter, refreshKey]);
+  }, [searchTerm, filterSpecialty, filterStatus, specialityFilter, refreshKey]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -161,9 +201,14 @@ const Doctors = () => {
 
   const specialties = [
     "All",
-    ...new Set(doctors.map((d) => d.specialist || d.specialty)),
+    ...new Set(
+      doctors
+        .map((d) => d.specialist || d.specialty)
+        .filter(Boolean)
+    ),
   ];
 
+  // UPDATED: Filter logic with status filter
   const filteredDoctors = doctors.filter(doctor => {
     const matchesSearch = `${doctor.firstName} ${doctor.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (doctor.specialist || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -174,7 +219,13 @@ const Doctors = () => {
       matchesFilter = doctor.specialist?.toLowerCase() === specialityFilter.toLowerCase();
     }
 
-    return matchesSearch && matchesFilter;
+    // NEW: Status filter
+    const matchesStatus =
+      filterStatus === "All" ||
+      (filterStatus === "Active" && doctor.isActive) ||
+      (filterStatus === "Inactive" && !doctor.isActive);
+
+    return matchesSearch && matchesFilter && matchesStatus;
   });
 
   const totalPages = Math.ceil(filteredDoctors.length / itemsPerPage);
@@ -184,7 +235,6 @@ const Doctors = () => {
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      // Optional: Scroll to top when changing pages
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -237,12 +287,10 @@ const Doctors = () => {
   const handleExport = () => {
     const exportData = filteredDoctors.map(doctor => ({
       'ID': doctor.id,
-      'Name': `${doctor.firstName} ${doctor.lastName}`,
+      'Name': getDoctorName(doctor),
       'Specialty': doctor.specialist,
       'Experience': doctor.experience,
-      'Appointments': doctor.autoDecline
-        ? `${doctor.autoDecline} min`
-        : Number(doctor.appointmentCount ?? doctor.appoimentCount ?? doctor.appointments ?? 0),
+      'Appointments': getAppointmentValue(doctor),
       'Email': doctor.email,
       'Phone': doctor.phone,
       'DOB': doctor.dob,
@@ -266,16 +314,13 @@ const Doctors = () => {
   };
 
   const handleRefresh = () => {
-    setLoading(true);
     setSearchTerm('');
     setFilterSpecialty('All');
+    setFilterStatus('All'); // NEW: Reset status filter on refresh
     setSpecialityFilter('');
     setActiveMenu(null);
     setCurrentPage(1);
     refetch();
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
   };
 
   const handleViewDetails = (doctor) => {
@@ -285,11 +330,6 @@ const Doctors = () => {
 
   const handleEdit = (doctor) => {
     navigate(`/edit-doctor/${doctor.id}`);
-    setActiveMenu(null);
-  };
-
-  const handleViewAppointments = (doctor) => {
-    navigate(`/doctor/${doctor.id}?tab=appointments`);
     setActiveMenu(null);
   };
 
@@ -307,7 +347,6 @@ const Doctors = () => {
   };
 
   const handleDeleteDoctor = async (deletedDoctorId) => {
-    console.log(`Doctor ${deletedDoctorId} deleted, refreshing list...`);
     await refetch();
     setRefreshKey(prev => prev + 1);
     setActiveMenu(null);
@@ -315,12 +354,9 @@ const Doctors = () => {
   };
 
   const handleSaveAppointmentSettings = async (settings) => {
-    console.log("Saved appointment settings:", settings);
-
     const existingSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
     existingSettings[settings.doctorId] = settings;
     localStorage.setItem('appointmentSettings', JSON.stringify(existingSettings));
-
     await refetch();
     setRefreshKey(prev => prev + 1);
   };
@@ -335,11 +371,9 @@ const Doctors = () => {
     setFilterSpecialty('All');
   };
 
-  // Show skeleton loader while loading or fetching
   if (isLoading || (isFetching && doctors.length === 0)) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-        {/* Breadcrumb Skeleton */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -348,7 +382,6 @@ const Doctors = () => {
           <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
         </div>
 
-        {/* Search and Filter Skeleton */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex flex-1 gap-3 w-full lg:w-auto">
             <div className="relative flex-1 max-w-sm">
@@ -437,6 +470,17 @@ const Doctors = () => {
               </option>
             ))}
           </select>
+
+          {/* NEW: Status Filter Dropdown */}
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+          >
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -488,7 +532,6 @@ const Doctors = () => {
         </div>
       </div>
 
-      {/* Loading indicator for background refetch */}
       {isFetching && doctors.length > 0 && (
         <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-md px-4 py-2 flex items-center gap-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
@@ -504,50 +547,35 @@ const Doctors = () => {
               <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
                 <div className="w-full flex justify-between items-start mb-4">
                   <Badge variant="info" className="text-[10px]">
-                    {`#DR${String(doctor.id).padStart(4, '0')}`}
+                    {getDoctorId(doctor.id)}
                   </Badge>
                   <div className="relative menu-container">
                     <button onClick={(e) => toggleMenu(doctor.id, e)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold">
                       ⋮
                     </button>
-                    {activeMenu === doctor.id && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                        <button onClick={() => handleViewDetails(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          View Details
-                        </button>
-                        <button onClick={() => handleAppointmentManagement(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          Appointment Settings
-                        </button>
-                        <button onClick={() => handleEdit(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Edit
-                        </button>
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <button onClick={() => handleDeleteClick(doctor)} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                    <DoctorActionMenu
+                      doctor={doctor}
+                      activeMenu={activeMenu}
+                      toggleMenu={toggleMenu}
+                      onView={handleViewDetails}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteClick}
+                      onAppointment={handleAppointmentManagement}
+                    />
                   </div>
                 </div>
                 <div className="relative mb-3">
-                  <img src={doctor.photo} alt={doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`} className="w-16 h-16 rounded-full border-2 border-white shadow-sm object-cover" />
-                  <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                  <img src={doctor.photo} alt={getDoctorName(doctor)} className="w-16 h-16 rounded-full border-2 border-white shadow-sm object-cover" />
+                  <div
+                    className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                      doctor.isActive
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                    }`}
+                  ></div>
                 </div>
                 <h3 onClick={() => handleViewDetails(doctor)} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0]">
-                  {doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`}
+                  {getDoctorName(doctor)}
                 </h3>
                 <p className="text-[11px] text-gray-500 mb-4">{doctor.specialist}</p>
                 <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
@@ -560,14 +588,7 @@ const Doctors = () => {
                       {doctor.autoDecline ? "Auto Decline" : "Appointments"}
                     </p>
                     <p className="text-xs font-bold text-gray-700">
-                      {doctor.autoDecline
-                        ? `${doctor.autoDecline} min`
-                        : Number(
-                            doctor.appointmentCount ??
-                            doctor.appoimentCount ??
-                            doctor.appointments ??
-                            0
-                          )}
+                      {getAppointmentValue(doctor)}
                     </p>
                   </div>
                 </div>
@@ -575,7 +596,6 @@ const Doctors = () => {
             ))}
           </div>
 
-          {/* Pagination for Grid View */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <div className="flex gap-2">
@@ -634,59 +654,41 @@ const Doctors = () => {
                 {paginatedDoctors.map((doctor) => (
                   <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
                     <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                      #DR{String(doctor.id).padStart(4, "0")}
+                      {getDoctorId(doctor.id)}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img src={doctor.photo} className="w-8 h-8 rounded-full object-cover" alt={doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`} />
+                        <img src={doctor.photo} className="w-8 h-8 rounded-full object-cover" alt={getDoctorName(doctor)} />
                         <span onClick={() => handleViewDetails(doctor)} className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]">
-                          {doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`}
+                          {getDoctorName(doctor)}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-gray-600">{doctor.specialist}</td>
                     <td className="px-6 py-4 text-gray-600">MBBS</td>
                     <td className="px-6 py-4 text-gray-600">{doctor.experience}</td>
-                    <td className="px-6 py-4 text-gray-600">{doctor.autoDecline
-                      ? `${doctor.autoDecline} min`
-                      : Number(doctor.appointmentCount ?? doctor.appoimentCount ?? doctor.appointments ?? 0)}</td>
+                    <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
                     <td className="px-6 py-4">
-                      <Badge variant="success" className="text-xs">Active</Badge>
+                      <Badge
+                        variant={doctor.isActive ? "success" : "danger"}
+                        className="text-xs"
+                      >
+                        {doctor.isActive ? "Active" : "Inactive"}
+                      </Badge>
                     </td>
                     <td className="px-6 py-4 text-right relative menu-container">
                       <button onClick={(e) => toggleMenu(doctor.id, e)} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold">
                         ⋮
                       </button>
-                      {activeMenu === doctor.id && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                          <button onClick={() => handleViewDetails(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            View Details
-                          </button>
-                          <button onClick={() => handleAppointmentManagement(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Appointment Settings
-                          </button>
-                          <button onClick={() => handleEdit(doctor)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Edit
-                          </button>
-                          <div className="border-t border-gray-100 my-1"></div>
-                          <button onClick={() => handleDeleteClick(doctor)} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Delete
-                          </button>
-                        </div>
-                      )}
+                      <DoctorActionMenu
+                        doctor={doctor}
+                        activeMenu={activeMenu}
+                        toggleMenu={toggleMenu}
+                        onView={handleViewDetails}
+                        onEdit={handleEdit}
+                        onDelete={handleDeleteClick}
+                        onAppointment={handleAppointmentManagement}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -724,28 +726,6 @@ const Doctors = () => {
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={selectedDoctor?.name}>
-        {selectedDoctor && (
-          <>
-            <div className="flex flex-col items-center mb-4">
-              <img src={selectedDoctor.photo} alt={selectedDoctor.name} className="w-24 h-24 rounded-full object-cover mb-2" />
-              <p className="text-sm text-gray-500">{selectedDoctor.specialty}</p>
-            </div>
-            <div className="space-y-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase">Doctor ID</label><p className="text-sm text-gray-800">#DR{String(selectedDoctor.id).padStart(4, '0')}</p></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase">Email</label><p className="text-sm text-gray-800">{selectedDoctor.email}</p></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase">Phone</label><p className="text-sm text-gray-800">{selectedDoctor.phone}</p></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase">Experience</label><p className="text-sm text-gray-800">{selectedDoctor.experience}</p></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase">Appointments</label><p className="text-sm text-gray-800">{selectedDoctor.appointmentCount || selectedDoctor.appoimentCount || selectedDoctor.appointments || 0}</p></div>
-            </div>
-            <div className="flex gap-2 mt-6 pt-4 border-t">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Close</button>
-              <button onClick={() => { navigate(`/edit-doctor/${selectedDoctor.id}`); setShowModal(false); }} className="flex-1 px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D]">Edit Doctor</button>
-            </div>
-          </>
-        )}
-      </Modal>
-
       <DeleteDoctor
         isOpen={showDelete}
         onClose={() => {
@@ -754,7 +734,7 @@ const Doctors = () => {
           setDoctorToDelete(null);
         }}
         doctorId={deleteId}
-        doctorName={doctorToDelete ? `${doctorToDelete.firstName} ${doctorToDelete.lastName}` : ''}
+        doctorName={doctorToDelete ? getDoctorName(doctorToDelete) : ''}
         doctorSpecialty={doctorToDelete?.specialist || doctorToDelete?.specialty}
         onDelete={handleDeleteDoctor}
       />

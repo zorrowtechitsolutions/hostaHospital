@@ -1,4 +1,4 @@
-// src/components/visits/Visits.jsx - Fixed API response handling with delete (RED toast on success)
+// src/components/visits/Visits.jsx - Added Status Filter
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -14,7 +14,6 @@ import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
 import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/service/request';
-import { useAuth } from '../../context/AuthContext';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // Helper functions for date formatting
@@ -50,7 +49,6 @@ const formatDateTime = (date, time) => {
 
 const Visits = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -62,24 +60,21 @@ const Visits = () => {
   const [editingVisit, setEditingVisit] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(''); // NEW: Status filter state
   const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
-  // Fetch accepted bookings from API (only approved appointments)
+  // API Hooks - hospitalId is automatically injected by the API service
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching 
-  } = useGetBookingsQuery(
-    { 
-      hospitalId: user?.id,
-      status: "accepted" // Only fetch approved appointments
-    },
-    { skip: !user?.id }
-  );
+  } = useGetBookingsQuery({
+    status: "accepted" // Only fetch approved appointments
+  });
 
   // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
@@ -98,7 +93,7 @@ const Visits = () => {
     console.log("BOOKINGS RESPONSE:", bookingsResponse);
     console.log("BOOKING LIST:", bookingList);
 
-    // Filter only accepted bookings
+    // Filter only accepted bookings (already filtered by API, but double-check)
     const acceptedBookings = bookingList.filter(
       (booking) => booking.status?.toLowerCase() === "accepted"
     );
@@ -139,13 +134,19 @@ const Visits = () => {
       startTime: visit.startTime,
       doctorName: visit.doctorName,
       department: visit.department,
-      token: visit.token
+      token: visit.token,
+      status: visit.status
     }));
   }, [visitsData]);
 
   // Get unique departments from visits data
   const getAllDepartments = () => {
     return [...new Set(visitsData.map(v => v.department).filter(Boolean))].sort();
+  };
+
+  // NEW: Get unique statuses from visits data
+  const getAllStatuses = () => {
+    return [...new Set(visitsData.map(v => v.status).filter(Boolean))].sort();
   };
 
   const getFilteredVisits = () => {
@@ -167,6 +168,11 @@ const Visits = () => {
       filtered = filtered.filter(visit => visit.department === departmentFilter);
     }
     
+    // NEW: Status filter
+    if (statusFilter) {
+      filtered = filtered.filter(visit => visit.status === statusFilter);
+    }
+    
     if (dateFilter) {
       filtered = filtered.filter(visit => visit.visitDate === dateFilter);
     }
@@ -179,17 +185,19 @@ const Visits = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedVisits = filteredVisits.slice(startIndex, startIndex + itemsPerPage);
 
-  // Reset page when filters change
+  // Reset page when filters change (UPDATED: added statusFilter)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter]);
+  }, [searchTerm, departmentFilter, statusFilter, dateFilter]);
 
   const handleRefresh = () => { 
     setSearchTerm(""); 
     setDepartmentFilter(""); 
+    setStatusFilter(""); // NEW: Reset status filter
     setDateFilter("");
     setCurrentPage(1); 
     refetch(); 
+    showSuccessToast("Refreshed visits", 2000);
   };
   
   const handleExport = () => {
@@ -209,6 +217,7 @@ const Visits = () => {
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `approved_visits_export_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
+    showSuccessToast(`Exported ${exportData.length} visits`, 2000);
   };
   
   const handleImport = (event) => {
@@ -219,10 +228,10 @@ const Visits = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        alert(`Successfully imported ${importedData.length} visits!`);
+        showSuccessToast(`Successfully imported ${importedData.length} visits!`, 3000);
         refetch();
       } catch (error) { 
-        alert('Error parsing JSON file.'); 
+        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     reader.readAsText(file);
@@ -231,12 +240,14 @@ const Visits = () => {
   
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
+    setStatusFilter(''); // NEW: Clear status filter
     setDateFilter('');
-    setSearchTerm(''); 
+    setSearchTerm('');
+    showSuccessToast("All filters cleared", 2000);
   };
   
   const getActiveFilterCount = () => {
-    return (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
+    return (departmentFilter ? 1 : 0) + (statusFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
 
   const handleViewDetails = (visit) => { 
@@ -268,11 +279,13 @@ const Visits = () => {
     setShowEditModal(false);
     setEditingVisit(null);
     refetch();
+    showSuccessToast("Visit updated successfully", 2000);
   };
   
   const handleAddVisit = (newVisit) => { 
     setShowAddModal(false); 
     refetch();
+    showSuccessToast("Visit added successfully", 2000);
   };
   
   const handleDeleteClick = (visit) => { 
@@ -559,7 +572,8 @@ const Visits = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Department Filter */}
             <select 
               value={departmentFilter} 
               onChange={(e) => setDepartmentFilter(e.target.value)} 
@@ -571,6 +585,19 @@ const Visits = () => {
               ))}
             </select>
 
+            {/* NEW: Status Filter */}
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)} 
+              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+            >
+              <option value="">All Status</option>
+              {getAllStatuses().map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+
+            {/* Date Filter */}
             <input 
               type="date" 
               value={dateFilter} 
@@ -611,6 +638,10 @@ const Visits = () => {
                       <span className="text-sm font-medium text-gray-800">
                         {formatDateTime(visit.visitDate, visit.startTime)}
                       </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Status</span>
+                      <Badge variant="success">{visit.status}</Badge>
                     </div>
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">

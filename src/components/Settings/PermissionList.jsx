@@ -7,99 +7,69 @@ import {
   useCreateRolePermissionMutation,
   useGetRolePermissionsQuery,
 } from "../../../app/service/rolePermission";
-
+import { getHospitalId } from '../../utils/auth';
 
 const PermissionList = () => {
   const { roleId } = useParams();
   const navigate = useNavigate();
 
-
-const [mainModules, setMainModules] = useState([
-  {
-    id: "Staff",
-    name: "Staff",
-
-    createId: 11,
-    editId: 12,
-    deleteId: 13,
-    viewId: 10,
-
-    create: false,
-    edit: false,
-    delete: false,
-    view: false,
-  },
-
-  {
-    id: "doctors",
-    name: "Doctors",
-
-    createId: 3,
-    editId: 4,
-    deleteId: 5,
-    viewId: 2,
-
-    create: false,
-    edit: false,
-    delete: false,
-    view: false,
-  },
-]);
-
+  const [mainModules, setMainModules] = useState([
+    {
+      id: "Staff",
+      name: "Staff",
+      createId: 11,
+      editId: 12,
+      deleteId: 13,
+      viewId: 10,
+      create: false,
+      edit: false,
+      delete: false,
+      view: false,
+    },
+    {
+      id: "doctors",
+      name: "Doctors",
+      createId: 3,
+      editId: 4,
+      deleteId: 5,
+      viewId: 2,
+      create: false,
+      edit: false,
+      delete: false,
+      view: false,
+    },
+  ]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Get hospitalId from auth utility (no localStorage)
+  const hospitalId = getHospitalId();
 
+  const [createRolePermission] = useCreateRolePermissionMutation();
 
- 
-const hospitalId = localStorage.getItem("hospitalId");
-
-const [createRolePermission] =
-  useCreateRolePermissionMutation();
-
-const { data: permissionData } =
-  useGetRolePermissionsQuery({
+  const { data: permissionData } = useGetRolePermissionsQuery({
     roleId,
-    hospitalId,
+    // No need to pass hospitalId - auto-injected by API
   });
 
+  useEffect(() => {
+    if (permissionData?.data) {
+      const assignedPermissions = permissionData.data.map(
+        (item) => Number(item.permissionId)
+      );
 
-
-useEffect(() => {
-
-  if (permissionData?.data) {
-
-    const assignedPermissions = permissionData.data.map(
-      (item) => Number(item.permissionId)
-    );
-
-    setMainModules((prev) =>
-      prev.map((module) => ({
-        ...module,
-
-        // compare permission ids
-        create: assignedPermissions.includes(
-          Number(module.createId)
-        ),
-
-        edit: assignedPermissions.includes(
-          Number(module.editId)
-        ),
-
-        delete: assignedPermissions.includes(
-          Number(module.deleteId)
-        ),
-
-        view: assignedPermissions.includes(
-          Number(module.viewId)
-        ),
-      }))
-    );
-  }
-
-}, [permissionData]);
-
+      setMainModules((prev) =>
+        prev.map((module) => ({
+          ...module,
+          create: assignedPermissions.includes(Number(module.createId)),
+          edit: assignedPermissions.includes(Number(module.editId)),
+          delete: assignedPermissions.includes(Number(module.deleteId)),
+          view: assignedPermissions.includes(Number(module.viewId)),
+        }))
+      );
+    }
+  }, [permissionData]);
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -121,53 +91,35 @@ useEffect(() => {
 
   const filteredMainModules = mainModules.filter(module => module.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-const handleSave = async () => {
-  try {
-    setIsSaving(true);
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
 
-let permissionIds = [];
+      let permissionIds = [];
 
-mainModules.forEach((module) => {
+      mainModules.forEach((module) => {
+        if (module.create) permissionIds.push(module.createId);
+        if (module.edit) permissionIds.push(module.editId);
+        if (module.delete) permissionIds.push(module.deleteId);
+        if (module.view) permissionIds.push(module.viewId);
+      });
 
-  if (module.create) {
-    permissionIds.push(module.createId);
-  }
+      const payload = {
+        roleId: Number(roleId),
+        permissionIds,
+        // No need to pass hospitalId - auto-injected by API
+      };
 
-  if (module.edit) {
-    permissionIds.push(module.editId);
-  }
+      await createRolePermission(payload).unwrap();
 
-  if (module.delete) {
-    permissionIds.push(module.deleteId);
-  }
-
-  if (module.view) {
-    permissionIds.push(module.viewId);
-  }
-});
-
-const payload = {
-  roleId: Number(roleId),
-  hospitalId: Number(hospitalId),
-  permissionIds,
-};
-
-
-await createRolePermission(payload).unwrap();
-
-    showSuccessToast("Permission saved successfully");
-
-  } catch (error) {
-
-    console.error(error);
-
-    showErrorToast("Failed to save permission");
-
-  } finally {
-
-    setIsSaving(false);
-  }
-};
+      showSuccessToast("Permission saved successfully");
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Failed to save permission");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCancel = () => {
     if (window.confirm("Are you sure you want to discard your changes?")) {
@@ -236,8 +188,6 @@ await createRolePermission(payload).unwrap();
         <SearchBar placeholder="Search modules..." value={searchTerm} onChange={setSearchTerm} className="mb-5 w-80" />
 
         <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} filteredModules={filteredMainModules} />
-        {/* <PermissionsTable title="MEDICAL" modules={medicalModules} setter={setMedicalModules} filteredModules={filteredMedicalModules} />
-        <PermissionsTable title="MANAGE" modules={manageModules} setter={setManageModules} filteredModules={filteredManageModules} /> */}
 
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>

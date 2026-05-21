@@ -9,7 +9,7 @@ const RejectRequestModal = ({
   onConfirm, 
   reason, 
   setReason,
-  isLoading = false  // Add loading prop
+  isLoading = false  // Loading prop from parent
 }) => {
   const handleConfirm = () => {
     if (!reason.trim()) {
@@ -41,6 +41,7 @@ const RejectRequestModal = ({
           required
           disabled={isLoading}
         />
+        <p className="text-xs text-gray-400 mt-1">This reason will be shared with the patient.</p>
       </div>
 
       <div className="flex justify-center gap-3 mt-5">

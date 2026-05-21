@@ -1,4 +1,4 @@
-// src/components/staffs/Staffs.jsx - With formatted Staff IDs, skeleton loading
+// src/components/staffs/Staffs.jsx - Fixed status mapping from API
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,19 +29,16 @@ import {
   useDeleteStaffMutation
 } from '../../../app/service/staffApi';
 
-import { useAuth } from '../../context/AuthContext';
-
 import {
   showSuccessToast,
   showErrorToast
 } from '../ui/Toast';
 
 // Default profile image URL
-const DEFAULT_PROFILE_IMAGE = "https://randomuser.me/api/portraits/lego/${index}.jpg";
+const DEFAULT_PROFILE_IMAGE = "https://randomuser.me/api/portraits/lego/1.jpg";
 
 const Staffs = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -52,20 +49,20 @@ const Staffs = () => {
   
   const [designationFilter, setDesignationFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fetch staff data filtered by hospital ID
+  // API Hooks
   const {
     data: staffApiResponse,
     isLoading: loading,
-    refetch
-  } = useGetStaffQuery(
-    { hospitalId: user?.id },
-    { skip: !user?.id }
-  );
+    refetch,
+    isFetching
+  } = useGetStaffQuery();
+
   const [deleteStaff] = useDeleteStaffMutation();
 
   // Helper function to format staff ID
@@ -83,38 +80,65 @@ const Staffs = () => {
 
   // Transform API response to match the expected format
   const transformStaffData = (staffList) => {
-  if (!staffList || !Array.isArray(staffList)) return [];
-  
-  return staffList.map((staff, index) => ({
-    id: staff.id,
-    formattedId: formatStaffId(staff.id || index + 1),
-    originalId: staff.id || staff._id,
-    name: staff.name || '',
-    firstName: staff.name?.split(' ')[0] || '',
-    lastName: staff.name?.split(' ').slice(1).join(' ') || '',
-    gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
-    designation: staff.designation || '',
-    phone: staff.phone || '',
-    email: staff.email || '',
-    appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
-    appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-    patientsCount: Math.floor(Math.random() * 200) + 10,
-    profileImage: staff.profileImage || null,
-    status: staff.status === 'inactive' ? 'Inactive' : 'Active',
-    jobType: staff.jobType || '',
-    dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
-    address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
-    joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-    department: staff.designation || '',
-    staffType: staff.staffType || ''
-  }));
-};
+    if (!staffList || !Array.isArray(staffList)) return [];
+    
+    return staffList.map((staff, index) => {
+      // FIXED: Properly map status from API response
+      // The API likely returns status as 'active' or 'inactive'
+      let staffStatus = 'Inactive'; // Default to Inactive
+      
+      // Check status from various possible sources in the API response
+      if (staff.status === 'active') {
+        staffStatus = 'Active';
+      } else if (staff.status === 'inactive') {
+        staffStatus = 'Inactive';
+      } else if (staff.isActive === true) {
+        staffStatus = 'Active';
+      } else if (staff.isActive === false) {
+        staffStatus = 'Inactive';
+      } else if (staff.active === true) {
+        staffStatus = 'Active';
+      } else if (staff.active === false) {
+        staffStatus = 'Inactive';
+      }
+      
+      // Debug: log the status to console to see what the API returns
+      console.log(`Staff ${staff.name || staff.id}: status from API = ${staff.status}, mapped to = ${staffStatus}`);
+      
+      return {
+        id: staff.id,
+        formattedId: formatStaffId(staff.id || index + 1),
+        originalId: staff.id || staff._id,
+        name: staff.name || '',
+        firstName: staff.name?.split(' ')[0] || '',
+        lastName: staff.name?.split(' ').slice(1).join(' ') || '',
+        gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : '',
+        designation: staff.designation || '',
+        phone: staff.phone || '',
+        email: staff.email || '',
+        appointmentDate: staff.createdAt?.split('T')[0] || staff.joiningDate || new Date().toISOString().split('T')[0],
+        appointmentDateDisplay: staff.createdAt ? new Date(staff.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        patientsCount: Math.floor(Math.random() * 200) + 10,
+        profileImage: staff.profileImage || null,
+        status: staffStatus,
+        jobType: staff.jobType || '',
+        dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
+        address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
+        joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        department: staff.designation || '',
+        staffType: staff.staffType || '',
+        isActive: staffStatus === 'Active',
+        // Keep original status for debugging
+        originalStatus: staff.status
+      };
+    });
+  };
 
   const staffsData = transformStaffData(staffApiResponse?.data || []);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter, dateFilter]);
+  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
   const getAllDesignations = () => {
     const designations = [...new Set(staffsData.map(s => s.designation).filter(Boolean))];
@@ -123,6 +147,7 @@ const Staffs = () => {
 
   const getFilteredStaffs = () => {
     let filtered = [...staffsData];
+    
     if (searchTerm) {
       filtered = filtered.filter(staff => 
         staff.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -132,15 +157,24 @@ const Staffs = () => {
         staff.email?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+    
     if (designationFilter !== 'all') {
       filtered = filtered.filter(staff => staff.designation === designationFilter);
     }
+    
     if (genderFilter !== 'all') {
       filtered = filtered.filter(staff => staff.gender.toLowerCase() === genderFilter.toLowerCase());
     }
+    
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(staff => staff.status === statusFilter);
+    }
+    
     if (dateFilter) {
       filtered = filtered.filter(staff => staff.appointmentDate === dateFilter);
     }
+    
     return filtered;
   };
 
@@ -152,6 +186,7 @@ const Staffs = () => {
   const clearAllFilters = () => {
     setDesignationFilter('all');
     setGenderFilter('all');
+    setStatusFilter('all');
     setDateFilter('');
     setSearchTerm('');
     setCurrentPage(1);
@@ -160,6 +195,7 @@ const Staffs = () => {
   const handleRefresh = () => {
     clearAllFilters();
     refetch();
+    showSuccessToast("Refreshed staff list", 2000);
   };
 
   const handleExport = () => {
@@ -195,8 +231,9 @@ const Staffs = () => {
       try {
         const importedData = JSON.parse(e.target.result);
         showSuccessToast(`Successfully imported ${importedData.length} staff members! (Note: Import to API requires additional implementation)`, 3000);
+        refetch();
       } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.');
+        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     reader.readAsText(file);
@@ -239,6 +276,7 @@ const Staffs = () => {
     [
       designationFilter !== 'all',
       genderFilter !== 'all',
+      statusFilter !== 'all',
       !!dateFilter,
       !!searchTerm
     ].filter(Boolean).length;
@@ -268,7 +306,9 @@ const Staffs = () => {
           <div><label className="block text-xs font-medium text-gray-500">Email</label><p className="text-sm text-gray-800">{staff.email}</p></div>
           <div><label className="block text-xs font-medium text-gray-500">Joining Date</label><p className="text-sm text-gray-800">{staff.joiningDate}</p></div>
           <div><label className="block text-xs font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-800">{staff.dob}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Status</label><Badge variant={staff.status === 'Active' ? 'success' : 'warning'}>{staff.status}</Badge></div>
+          <div><label className="block text-xs font-medium text-gray-500">Status</label>
+            <Badge variant={staff.status === 'Active' ? 'success' : 'danger'}>{staff.status}</Badge>
+          </div>
           <div className="col-span-2"><label className="block text-xs font-medium text-gray-500">Address</label><p className="text-sm text-gray-800">{staff.address}</p></div>
         </div>
         <div className="flex gap-2 mt-6 pt-4 border-t">
@@ -318,7 +358,6 @@ const Staffs = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-        {/* Breadcrumb Skeleton */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -327,7 +366,6 @@ const Staffs = () => {
           <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
         </div>
 
-        {/* Search and Filters Skeleton */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex flex-1 gap-3 w-full lg:w-auto">
             <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
@@ -342,7 +380,6 @@ const Staffs = () => {
           </div>
         </div>
 
-        {/* Table Skeleton */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -351,7 +388,7 @@ const Staffs = () => {
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100">
                 <tr>
-                  {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                     <th key={i} className="px-6 py-3">
                       <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                     </th>
@@ -361,7 +398,7 @@ const Staffs = () => {
               <tbody>
                 {[...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-gray-100">
-                    {[1, 2, 3, 4, 5, 6, 7].map((j) => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                       <td key={j} className="px-6 py-4">
                         <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
                       </td>
@@ -406,8 +443,8 @@ const Staffs = () => {
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
-              <RefreshCcw size={16} />
+            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
+              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
             <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
@@ -436,7 +473,7 @@ const Staffs = () => {
           </div>
         </div>
 
-        {/* FILTER SECTION - New UI */}
+        {/* FILTER SECTION */}
         {showFilters && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -458,7 +495,7 @@ const Staffs = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <select
                 value={designationFilter}
                 onChange={(e) => setDesignationFilter(e.target.value)}
@@ -480,6 +517,16 @@ const Staffs = () => {
                 <option value="Female">Female</option>
               </select>
 
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+
               <input
                 type="date"
                 value={dateFilter}
@@ -495,6 +542,12 @@ const Staffs = () => {
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
+            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+            {(activeFilterCount > 0 || searchTerm) && (
+              <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
+                Clear all filters
+              </button>
+            )}
           </div>
         ) : (
           <Card>
@@ -514,6 +567,7 @@ const Staffs = () => {
                     <th className="px-6 py-3">Designation</th>
                     <th className="px-6 py-3">Phone Number</th>
                     <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -535,6 +589,11 @@ const Staffs = () => {
                       <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
                       <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
+                      <td className="px-6 py-4">
+                        <Badge variant={staff.status === 'Active' ? 'success' : 'danger'} className="text-xs">
+                          {staff.status}
+                        </Badge>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end">
                           <RowActionMenu staff={staff} />

@@ -14,7 +14,6 @@ import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
 import ApproveRequestModal from "../Requests/ApproveRequestModel";
 import RejectRequestModal from "../Requests/RejectRequestModel";
-import { useAuth } from '../../context/AuthContext';
 import { 
   useGetBookingsQuery,
   useApproveBookingMutation,
@@ -119,7 +118,7 @@ const SkeletonFilters = () => (
   </div>
 );
 
-// Skeleton Loader Component (same style as Visits.jsx)
+// Skeleton Loader Component
 const SkeletonLoader = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
     <div className="mb-6">
@@ -186,7 +185,6 @@ const SkeletonLoader = () => (
 
 const Appointments = ({ doctorId = null, doctorName = null }) => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -205,23 +203,22 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllData, setShowAllData] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
   // API Hooks
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
-    refetch 
-  } = useGetBookingsQuery(
-    { 
-      hospitalId: user?.id,
-      ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() })
-    },
-    { skip: !user?.id }
-  );
+    refetch,
+    isFetching
+  } = useGetBookingsQuery({
+    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() })
+  });
 
-  const [approveBooking, { isLoading: isApproving }] = useApproveBookingMutation();
-  const [rejectBooking, { isLoading: isRejecting }] = useRejectBookingMutation();
+  const [approveBooking] = useApproveBookingMutation();
+  const [rejectBooking] = useRejectBookingMutation();
   const [deleteBooking] = useDeleteBookingMutation();
 
   // Helper function to format ID for display
@@ -284,7 +281,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Transform API response to match appointment format
+  // Transform API response with proper operator precedence
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -304,13 +301,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       // Format date for display
       const formatDate = (dateString) => {
-        if (!dateString) return "N/A";
+        if (!dateString || dateString === "N/A") return "N/A";
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
       };
 
       const displayStatus = mapStatus(booking.status);
       
+      // Extract raw values first to avoid operator precedence issues
+      // Using ?? for better handling of empty strings and 0 values
+      const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
+    
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
@@ -322,13 +323,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
-        appointmentDate: booking.booking_date || booking.appointmentDate 
-          ? (booking.booking_date || booking.appointmentDate).split('T')[0] 
-          : "N/A",
-        appointmentDateDisplay: formatDate(booking.booking_date || booking.appointmentDate),
-        startTime: booking.consulting_time || booking.time || "N/A",
-        endTime: booking.consulting_time || booking.time ? addHour(booking.consulting_time || booking.time) : "N/A",
-        status: displayStatus,
+        appointmentDate: rawDate && rawDate !== "N/A" ? rawDate.split('T')[0] : "N/A",
+        appointmentDateDisplay: formatDate(rawDate),
+        consulting_time: booking.consulting_time || "N/A",
+        
+
+status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
         fee: booking.fee || "$0",
         duration: "1 hour",
@@ -337,7 +337,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         paymentMethod: booking.payment_method || "Pending",
         patientAvatar: DEFAULT_PROFILE_IMAGE((index % 10) + 1),
         avatar: DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
-         patientType: booking.patient_type || "Out Patient",
+        patientType: booking.patient_type || "Out Patient",
         preferredMode: booking.preferred_mode || "In-person",
         originalStatus: booking.status // Store original backend status
       };
@@ -366,7 +366,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return departments.sort();
   };
 
-  // Updated filter function to use originalStatus
+  // Filter function
   const getFilteredAppointments = () => {
     let filtered;
     
@@ -389,7 +389,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       );
     }
     
-    // Use originalStatus for filtering (backend status)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(apt => apt.originalStatus === statusFilter);
     }
@@ -419,6 +418,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setDateFilter("");
     setCurrentPage(1);
     refetch();
+    showSuccessToast("Refreshed appointments", 2000);
   };
 
   const handleExport = () => {
@@ -431,7 +431,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
-      'Time': apt.startTime,
+      'Consulting Time': apt.startTime,
       'Status': apt.status,
       'Original Status': apt.originalStatus,
       'Reason': apt.reason
@@ -468,7 +468,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorName: appointment.doctorName,
         department: appointment.department,
         appointmentDate: appointment.appointmentDateDisplay,
-        reason: appointment.reason,
+        reason: appointment.reason, 
         notes: appointment.notes
       } 
     });
@@ -490,36 +490,40 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleConfirmApprove = async (appointmentData) => {
-    if (selectedRequest) {
-      try {
-        await approveBooking({
-          id: selectedRequest.id,
-          data: {
-            date: appointmentData.date,
-            time: appointmentData.time,
-            token: appointmentData.token,
-            notes: appointmentData.notes
-          }
-        }).unwrap();
-        
-        showSuccessToast(
-          `Appointment ${selectedRequest.formattedId} approved successfully!`,
-          4000,
-          {
-            'Patient': selectedRequest.patientName,
-            'Date': appointmentData.date,
-            'Time': appointmentData.time,
-            'Token': `#${appointmentData.token}`
-          }
-        );
-        refetch();
-      } catch (error) {
-        console.error('Approve error:', error);
-        showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
-      }
+    if (!selectedRequest) return;
+    
+    setIsApproving(true);
+    
+    try {
+      await approveBooking({
+        id: selectedRequest.id,
+        data: {
+          date: appointmentData.date,
+          consulting_time: appointmentData.consulting_time,
+          token: appointmentData.token,
+          notes: appointmentData.notes
+        }
+      }).unwrap();
+      
+      showSuccessToast(
+        `Appointment ${selectedRequest.formattedId} approved successfully!`,
+        4000,
+        {
+          'Patient': selectedRequest.patientName,
+          'Date': appointmentData.date,
+          'Consulting Time': appointmentData.consulting_time,
+          'Token': `#${appointmentData.token}`
+        }
+      );
+      
+      refetch();
+    } catch (error) {
+      showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
+    } finally {
+      setIsApproving(false);
+      setShowApproveModal(false);
+      setSelectedRequest(null);
     }
-    setShowApproveModal(false);
-    setSelectedRequest(null);
   };
 
   const handleRejectClick = (appointment) => {
@@ -529,31 +533,35 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleConfirmReject = async () => {
-    if (selectedRequest) {
-      try {
-        await rejectBooking({
-          id: selectedRequest.id,
-          data: { reason: rejectReason }
-        }).unwrap();
-        
-        showErrorToast(
-          `Appointment ${selectedRequest.formattedId} rejected successfully!`,
-          4000,
-          {
-            'Patient': selectedRequest.patientName,
-            'Doctor': selectedRequest.doctorName,
-            'Reason': rejectReason || "No reason provided"
-          }
-        );
-        refetch();
-      } catch (error) {
-        console.error('Reject error:', error);
-        showErrorToast(error?.data?.message || 'Failed to reject appointment', 3000);
-      }
+    if (!selectedRequest) return;
+    
+    setIsRejecting(true);
+    
+    try {
+      await rejectBooking({
+        id: selectedRequest.id,
+        data: { reason: rejectReason }
+      }).unwrap();
+      
+      showErrorToast(
+        `Appointment ${selectedRequest.formattedId} rejected successfully!`,
+        4000,
+        {
+          'Patient': selectedRequest.patientName,
+          'Doctor': selectedRequest.doctorName,
+          'Reason': rejectReason || "No reason provided"
+        }
+      );
+      
+      refetch();
+    } catch (error) {
+      showErrorToast(error?.data?.message || 'Failed to reject appointment', 3000);
+    } finally {
+      setIsRejecting(false);
+      setShowRejectModal(false);
+      setSelectedRequest(null);
+      setRejectReason("");
     }
-    setShowRejectModal(false);
-    setSelectedRequest(null);
-    setRejectReason("");
   };
 
   const handleSaveEdit = (updatedData) => {
@@ -566,17 +574,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowDeleteModal(true);
   };
 
-  // FIXED: Delete handler with RED toast on success
   const handleConfirmDelete = async () => {
     if (!appointmentToDelete) return;
     
     setIsDeleting(true);
     
     try {
-      // Call the delete booking API
       await deleteBooking(appointmentToDelete.id).unwrap();
       
-      // Show RED toast on success (using showErrorToast)
       showErrorToast(
         `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
         4000,
@@ -587,16 +592,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         }
       );
       
-      // Close modal and clear state
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
-      
-      // Auto-refresh via RTK Query (invalidatesTags handles it)
       refetch();
       
     } catch (error) {
-      console.error('Delete error:', error);
-      // Show RED toast on failure too
       showErrorToast(error?.data?.message || 'Failed to delete appointment. Please try again.', 4000);
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
@@ -610,6 +610,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setDepartmentFilter('');
     setDateFilter('');
     setSearchTerm('');
+    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
@@ -758,7 +759,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // Loading state with skeleton (same style as Visits.jsx)
+  // Loading state with skeleton
   if (loading) {
     return <SkeletonLoader />;
   }
@@ -958,7 +959,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                       <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
                       <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
                       <td className="px-6 py-4 text-gray-600">{apt.department}</td>
-                      <td className="px-6 py-4 text-gray-600">{apt.appointmentDateDisplay}<br/><span className="text-xs">{apt.startTime}</span></td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {apt.appointmentDateDisplay}
+                        <br />
+                        <span className="text-xs">
+  {apt.consulting_time}
+</span>
+                      </td>
                       <td className="px-6 py-4">
                         <span className={apt.statusClass}>{apt.status}</span>
                       </td>
@@ -966,8 +973,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                         <div className="flex justify-end">
                           <RowActionMenu appointment={apt} />
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))}
                 </tbody>
               </table>
@@ -1028,13 +1035,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
           initialTime={selectedRequest.startTime !== "N/A" ? selectedRequest.startTime : ""}
           initialToken=""
+          isLoading={isApproving}
         />
       )}
       
       {showRejectModal && selectedRequest && (
         <RejectRequestModal 
-          bookingId={selectedRequest.id}
-          requestData={selectedRequest}
           onClose={() => { 
             setShowRejectModal(false); 
             setSelectedRequest(null); 
@@ -1042,7 +1048,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           }} 
           onConfirm={handleConfirmReject} 
           reason={rejectReason} 
-          setReason={setRejectReason} 
+          setReason={setRejectReason}
+          isLoading={isRejecting}
         />
       )}
 
