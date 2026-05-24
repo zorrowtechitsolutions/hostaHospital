@@ -1,4 +1,5 @@
-// doctorApi.ts
+// src/app/service/doctorApi.ts (add this new endpoint)
+
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
 
@@ -43,9 +44,22 @@ export interface DoctorAuthResponse {
   error?: string;
 }
 
-// ==============================
-// DOCTOR API
-// ==============================
+// Add Department interface
+export interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  hospitalId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface SpecialityResponse {
+  data: {
+    count: number;
+    rows: Department[];
+  };
+}
 
 export const doctorApi = api.injectEndpoints({
   endpoints: (builder) => ({
@@ -58,22 +72,43 @@ export const doctorApi = api.injectEndpoints({
       query: (params) => {
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
-        
-        // Automatically add hospitalId from authenticated user
+
+        // hospitalId
         if (auth?.id) {
           queryParams.append("hospitalId", String(auth.id));
         }
-        
-        // Optional speciality filter (can be passed from component)
+
+        // search
+        if (params?.search) {
+          queryParams.append("search", params.search);
+        }
+
+        // speciality
         if (params?.speciality) {
           queryParams.append("speciality", params.speciality);
         }
-        
-        const queryString = queryParams.toString();
-        return `/doctor${queryString ? `?${queryString}` : ""}`;
+
+        // status
+        if (params?.status) {
+          queryParams.append("status", params.status);
+        }
+
+        return `/doctor?${queryParams.toString()}`;
       },
       providesTags: ["Doctor"],
     }),
+
+// ==============================
+// GET SPECIALITIES
+// ==============================
+getSpecialities: builder.query<SpecialityResponse, void>({
+  query: () => {
+    const queryParams = new URLSearchParams();
+
+    return `/speciality?${queryParams.toString()}`;
+  },
+  providesTags: ["speciality"],
+}),
 
     // ==============================
     // GET DOCTOR BY ID
@@ -159,10 +194,10 @@ export const doctorApi = api.injectEndpoints({
         method: "PUT",
         body: updateDoctor,
       }),
-invalidatesTags: (result, error, { id }) => [
-  { type: "Doctor", id },
-  "Doctor",
-],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Doctor", id },
+        "Doctor",
+      ],
     }),
 
     // ==============================
@@ -195,4 +230,5 @@ export const {
   useAddNewDoctorMutation,
   useUpdateDoctorMutation,
   useDeleteDoctorMutation,
+  useGetSpecialitiesQuery, // Add this export
 } = doctorApi;

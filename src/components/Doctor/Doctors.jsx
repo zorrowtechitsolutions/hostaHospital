@@ -34,6 +34,33 @@ const getAppointmentValue = (doctor) =>
 
 const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
 
+// NEW: Helper function to get department display
+const getDepartmentDisplay = (doctor) => {
+  // Priority: department field first
+  if (doctor.department) {
+    return doctor.department;
+  }
+  // Fallback to specialty if department not available
+  if (doctor.specialist) {
+    return doctor.specialist;
+  }
+  if (doctor.specialty) {
+    return doctor.specialty;
+  }
+  return 'Department not specified';
+};
+
+// Helper function to get specialty (for secondary display if needed)
+const getSpecialtyDisplay = (doctor) => {
+  if (doctor.specialist && doctor.specialist !== doctor.department) {
+    return doctor.specialist;
+  }
+  if (doctor.specialty && doctor.specialty !== doctor.department) {
+    return doctor.specialty;
+  }
+  return null;
+};
+
 // Reusable Doctor Action Menu Component
 const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment }) => {
   if (activeMenu !== doctor.id) return null;
@@ -136,7 +163,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
+                   </td>
                 ))}
                </tr>
             ))}
@@ -200,20 +227,20 @@ const Doctors = () => {
     }));
   }, [response?.data]);
 
-  // Get unique specialties
-  const specialties = useMemo(() => {
-    const specialtySet = new Set(
+  // Get unique departments (changed from specialties)
+  const departments = useMemo(() => {
+    const departmentSet = new Set(
       doctors
-        .map((d) => d.specialist || d.specialty)
+        .map((d) => d.department)
         .filter(Boolean)
     );
-    return ['All', ...Array.from(specialtySet)];
+    return ['All', ...Array.from(departmentSet)];
   }, [doctors]);
 
-  // Handle location state for specialty filter
+  // Handle location state for department filter (changed from speciality)
   useEffect(() => {
-    if (location.state?.speciality) {
-      setSelectedSpecialty(location.state.speciality);
+    if (location.state?.department) {
+      setSelectedSpecialty(location.state.department);
       // Clear location state to prevent re-filtering on re-render
       window.history.replaceState({}, document.title);
     }
@@ -235,28 +262,29 @@ const Doctors = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // Filter doctors based on all criteria
+  // Filter doctors based on all criteria - Updated to use department
   const filteredDoctors = useMemo(() => {
     return doctors.filter(doctor => {
-      // Search filter
+      // Search filter - search by name, department, and specialty
       const doctorName = getDoctorName(doctor).toLowerCase();
+      const doctorDepartment = (doctor.department || '').toLowerCase();
       const doctorSpecialty = (doctor.specialist || doctor.specialty || '').toLowerCase();
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
         doctorName.includes(searchLower) || 
+        doctorDepartment.includes(searchLower) ||
         doctorSpecialty.includes(searchLower);
 
-      // Specialty filter
-      const matchesSpecialty = selectedSpecialty === 'All' || 
-        (doctor.specialist === selectedSpecialty) || 
-        (doctor.specialty === selectedSpecialty);
+      // Department filter (changed from specialty)
+      const matchesDepartment = selectedSpecialty === 'All' || 
+        doctor.department === selectedSpecialty;
 
       // Status filter
       const matchesStatus = filterStatus === "All" ||
         (filterStatus === "Active" && doctor.isActive) ||
         (filterStatus === "Inactive" && !doctor.isActive);
 
-      return matchesSearch && matchesSpecialty && matchesStatus;
+      return matchesSearch && matchesDepartment && matchesStatus;
     });
   }, [doctors, searchTerm, selectedSpecialty, filterStatus]);
 
@@ -305,6 +333,7 @@ const Doctors = () => {
     const exportData = filteredDoctors.map(doctor => ({
       'ID': doctor.id,
       'Name': getDoctorName(doctor),
+      'Department': doctor.department,
       'Specialty': doctor.specialist || doctor.specialty,
       'Experience': doctor.experience,
       'Appointments': getAppointmentValue(doctor),
@@ -383,7 +412,7 @@ const Doctors = () => {
     setActiveMenu(prevActive => prevActive === id ? null : id);
   }, []);
 
-  const clearSpecialtyFilter = useCallback(() => {
+  const clearDepartmentFilter = useCallback(() => {
     setSelectedSpecialty('All');
   }, []);
 
@@ -465,8 +494,8 @@ const Doctors = () => {
         <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
         {selectedSpecialty !== 'All' && (
           <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">
-            <span>Filtering by: <strong>{selectedSpecialty}</strong></span>
-            <button onClick={clearSpecialtyFilter} className="hover:text-blue-900" aria-label="Clear filter">
+            <span>Filtering by department: <strong>{selectedSpecialty}</strong></span>
+            <button onClick={clearDepartmentFilter} className="hover:text-blue-900" aria-label="Clear filter">
               ✕
             </button>
           </div>
@@ -479,7 +508,7 @@ const Doctors = () => {
           <div className="relative flex-1 max-w-sm">
             <input
               type="text"
-              placeholder="Search by name, specialty..."
+              placeholder="Search by name, department, specialty..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
@@ -500,15 +529,16 @@ const Doctors = () => {
             </button>
           </div>
 
+          {/* Department Filter Dropdown - Changed from Specialty */}
           <select
             value={selectedSpecialty}
             onChange={(e) => setSelectedSpecialty(e.target.value)}
             className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            aria-label="Filter by specialty"
+            aria-label="Filter by department"
           >
-            {specialties.map(s => (
-              <option key={s} value={s}>
-                {s === 'All' ? 'All Specialties' : s}
+            {departments.map(dept => (
+              <option key={dept} value={dept}>
+                {dept === 'All' ? 'All Departments' : dept}
               </option>
             ))}
           </select>
@@ -584,7 +614,7 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* GRID VIEW */}
+      {/* GRID VIEW - Updated to show Department instead of Specialty */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -634,7 +664,8 @@ const Doctors = () => {
                 >
                   {getDoctorName(doctor)}
                 </h3>
-                <p className="text-[11px] text-gray-500 mb-4">{doctor.specialist || doctor.specialty}</p>
+                {/* CHANGED: Display Department instead of Specialty */}
+                <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
                 <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                   <div className="text-center">
                     <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
@@ -687,7 +718,7 @@ const Doctors = () => {
         </>
       )}
 
-      {/* LIST VIEW */}
+      {/* LIST VIEW - Updated to show Department instead of Specialty */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -742,8 +773,9 @@ const Doctors = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{doctor.specialist || doctor.specialty}</td>
-                    <td className="px-6 py-4 text-gray-600">MBBS</td>
+                    {/* CHANGED: Display Department instead of Specialty */}
+                    <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
+                    <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
                     <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
                     <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
                     <td className="px-6 py-4">

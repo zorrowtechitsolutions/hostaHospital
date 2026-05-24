@@ -1,5 +1,5 @@
 // src/components/Doctor/AddDoctors.jsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
@@ -18,20 +18,10 @@ import {
   showErrorToast,
   showWarningToast,
 } from "../ui/Toast";
-import { useAddNewDoctorMutation } from "../../../app/service/doctorApi";
+import { useAddNewDoctorMutation, useGetSpecialitiesQuery } from "../../../app/service/doctorApi";
 import { Country, State, City } from 'country-state-city';
 import { getHospitalId } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
-
-// Helper function to get S3 image URL
-const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return null;
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return imageKey;
-  }
-  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
 
 // Constants
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -52,7 +42,7 @@ const TABS = [
 ];
 
 const REQUIRED_FIELDS = [
-  'firstName', 'lastName', 'department', 'specialist', 'qualification', 'fees', 
+  'firstName', 'lastName', 'department', 'qualification', 'fees', 
   'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
   'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
   'password', 'confirmPassword', 'experience'
@@ -79,6 +69,12 @@ const LANGUAGE_OPTIONS = [
   { value: 'jap', label: 'Japanese' }
 ];
 
+const GENDER_OPTIONS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' }
+];
+
 const WEEK_DAYS = [
   { key: 'monday', label: 'Monday' },
   { key: 'tuesday', label: 'Tuesday' },
@@ -100,6 +96,17 @@ const getLanguageLabel = (value) => {
   return lang ? lang.label : value;
 };
 
+// Validate Password Strength
+const validatePasswordStrength = (password) => {
+  if (!password) return 'Password is required';
+  if (password.length < 8) return 'Password must be at least 8 characters long';
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password must contain at least one special character';
+  return '';
+};
+
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
   label, 
@@ -112,7 +119,8 @@ const SearchableDropdown = ({
   required = false,
   getOptionLabel = (option) => option.name || option,
   getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index
+  optionKey = (option, index) => option.isoCode || index,
+  isLoading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -164,21 +172,21 @@ const SearchableDropdown = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={placeholder}
-          disabled={disabled}
+          placeholder={isLoading ? "Loading departments..." : placeholder}
+          disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+            (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
         <ChevronDown 
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
       
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
             <div
@@ -186,18 +194,89 @@ const SearchableDropdown = ({
               className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => handleSelect(option)}
             >
-              <MapPin className="h-4 w-4 text-gray-400" />
+              <Briefcase className="h-4 w-4 text-gray-400" />
               <span className="text-gray-700">{getOptionLabel(option)}</span>
             </div>
           ))}
         </div>
       )}
       
-      {isOpen && filteredOptions.length === 0 && (
+      {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          No results found
+          No departments found
         </div>
       )}
+
+      {isLoading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <span>Loading departments...</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Gender Dropdown Component
+const GenderDropdown = ({ value, onChange, error, touched, required, onBlur }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedGender = GENDER_OPTIONS.find(option => option.value === value);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Gender {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          onBlur={onBlur}
+          className={`w-full pl-10 pr-10 py-2 text-left border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between ${
+            error && touched ? 'border-red-500' : 'border-gray-300'
+          }`}
+        >
+          <span className={!selectedGender ? 'text-gray-400' : 'text-gray-700'}>
+            {selectedGender ? selectedGender.label : 'Select gender'}
+          </span>
+          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+          {GENDER_OPTIONS.map((option) => (
+            <div
+              key={option.value}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => {
+                onChange({ target: { name: 'gender', value: option.value } });
+                setIsOpen(false);
+              }}
+            >
+              <Users className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {touched && error && <p className="text-sm text-red-600 mt-1">{error}</p>}
     </div>
   );
 };
@@ -348,6 +427,20 @@ const AddDoctor = () => {
   const navigate = useNavigate();
   const [addNewDoctor] = useAddNewDoctorMutation();
   
+  // Fetch specialities from backend
+  const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
+
+  // Transform specialities to department options (store the name, not ID)
+  const departmentOptions = React.useMemo(() => {
+    const rows = specialitiesData?.data || [];
+    return rows.map((spec) => ({
+      id: spec.id,
+      name: spec.name.toUpperCase(), // Convert to uppercase
+      value: spec.name.toUpperCase(), // Store uppercase name
+      label: spec.name.toUpperCase()
+    }));
+  }, [specialitiesData]);
+
   const [formData, setFormData] = useState({
     profileImage: null,
     imageKey: '',
@@ -406,6 +499,7 @@ const AddDoctor = () => {
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState('');
 
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(formData.countryCode);
@@ -448,6 +542,18 @@ const AddDoctor = () => {
     }));
   };
 
+  const handleDepartmentChange = (departmentValue, departmentLabel) => {
+    setFormData(prev => ({
+      ...prev,
+      department: departmentValue // Store the uppercase department name
+    }));
+    
+    if (touched.department) {
+      const error = validateField('department', departmentValue);
+      setErrors(prev => ({ ...prev, department: error }));
+    }
+  };
+
   const handleLanguageSelect = (languageValue) => {
     setFormData(prev => ({
       ...prev,
@@ -475,54 +581,65 @@ const AddDoctor = () => {
         if (value.length < 2) return 'Last name must be at least 2 characters';
         return '';
       case 'department':
-        return requiredField(value, 'Department is required');
+        if (!value) return 'Department is required';
+        return '';
       case 'specialist':
-        return requiredField(value, 'Specialist field is required');
+        return '';
       case 'qualification':
-        return requiredField(value, 'Qualification is required');
+        if (!value) return 'Qualification is required';
+        return '';
       case 'fees':
         if (!value) return 'Fees are required';
         if (isNaN(value) || value <= 0) return 'Fees must be a positive number';
         return '';
       case 'phoneNumber':
-        return requiredField(value, 'Phone number is required');
+        if (!value) return 'Phone number is required';
+        if (!/^[\+]?[0-9]{10,15}$/.test(value)) return 'Please enter a valid phone number';
+        return '';
       case 'email':
         if (!value) return 'Email address is required';
         const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
         if (!emailRegex.test(value)) return 'Please enter a valid email address';
         return '';
       case 'dob':
-        return requiredField(value, 'Date of birth is required');
+        if (!value) return 'Date of birth is required';
+        return '';
       case 'gender':
-        return requiredField(value, 'Gender is required');
+        if (!value) return 'Gender is required';
+        return '';
       case 'registrationNumber':
-        return requiredField(value, 'Registration number is required');
+        if (!value) return 'Registration number is required';
+        return '';
       case 'knownLanguages':
         if (!value || value.length === 0) return 'At least one language is required';
         return '';
       case 'countryName':
-        return requiredField(value, 'Country is required');
+        if (!value) return 'Country is required';
+        return '';
       case 'stateName':
-        return requiredField(value, 'State is required');
+        if (!value) return 'State is required';
+        return '';
       case 'district':
-        return requiredField(value, 'District is required');
+        if (!value) return 'District is required';
+        return '';
       case 'displayName':
         if (!value) return 'Display name is required';
         if (value.length < 4) return 'Display name must be at least 4 characters';
         return '';
       case 'password':
-        if (!value) return 'Password is required';
-        if (value.length < 8) return 'Password must be at least 8 characters';
-        return '';
+        return validatePasswordStrength(value);
       case 'confirmPassword':
         if (!formData.password && !value) return '';
         if (formData.password && !value) return 'Please confirm your password';
         if (formData.password && value !== formData.password) return 'Passwords do not match';
         return '';
       case 'joiningDate':
-        return requiredField(value, 'Joining date is required');
+        if (!value) return 'Joining date is required';
+        return '';
       case 'experience':
-        return requiredField(value, 'Experience is required');
+        if (!value) return 'Experience is required';
+        if (isNaN(value) || value < 0) return 'Experience must be a valid number';
+        return '';
       default:
         return '';
     }
@@ -546,6 +663,13 @@ const AddDoctor = () => {
       ...prev, 
       [name]: type === 'checkbox' ? checked : value 
     }));
+    
+    // Check password strength in real-time
+    if (name === 'password') {
+      const strength = validatePasswordStrength(value);
+      setPasswordStrength(strength);
+    }
+    
     if (touched[name]) {
       const error = validateField(name, type === 'checkbox' ? (checked ? 'true' : 'false') : value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -611,7 +735,7 @@ const AddDoctor = () => {
     showSuccessToast('Image removed', 3000);
   };
 
-  // prepareDoctorData function
+  // prepareDoctorData function - matches the API payload structure
   const prepareDoctorData = () => {
     const consultingOneArray = [];
     const consultingTwoArray = [];
@@ -662,8 +786,8 @@ const AddDoctor = () => {
       firstName: formData.firstName,
       lastName: formData.lastName,
       fees: Number(formData.fees),
-      department: formData.department,
-      specialist: formData.specialist,
+      department: formData.department, // This will be the uppercase department name
+      specialist: formData.specialist || "", // Optional field
       consultingOne: consultingOneArray,
       consultingTwo: consultingTwoArray,
       bookingOpen: formData.bookingOpen,
@@ -710,8 +834,6 @@ const AddDoctor = () => {
         const doctorData = prepareDoctorData();
         
         console.log("Sending doctor data:", JSON.stringify(doctorData, null, 2));
-        console.log("🖼️ profileImage (key):", doctorData.profileImage);
-        console.log("🔑 imageKey:", doctorData.imageKey);
         
         const result = await addNewDoctor(doctorData).unwrap();
         
@@ -724,6 +846,7 @@ const AddDoctor = () => {
         }, 2000);
         
       } catch (error) {
+        console.error("Error adding doctor:", error);
         if (error.status === 409) {
           showErrorToast('❌ Email already exists! Please use a different email address.');
         } else if (error.data?.message) {
@@ -744,6 +867,13 @@ const AddDoctor = () => {
 
   const handleGoBack = () => {
     navigate('/doctors');
+  };
+
+  // Get password strength color
+  const getPasswordStrengthColor = () => {
+    if (!formData.password) return '';
+    if (passwordStrength === '') return 'text-green-600';
+    return 'text-red-600';
   };
 
   return (
@@ -832,12 +962,44 @@ const AddDoctor = () => {
                     touched={touched.joiningDate} 
                     required 
                   />
-                  <Input label="Experience" name="experience" icon={Briefcase} placeholder="e.g., 5 years" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
+                  <Input label="Experience (years)" name="experience" icon={Briefcase} placeholder="e.g., 5" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
                 <div className={GRID_CLASS}>
-                  <Input label="Department" name="department" placeholder="Enter department" icon={Briefcase} value={formData.department} onChange={handleChange} onBlur={handleBlur} error={errors.department} touched={touched.department} required />
-                  <Input label="Specialist" name="specialist" icon={IdCard} placeholder="e.g., Cardiologist" value={formData.specialist} onChange={handleChange} onBlur={handleBlur} error={errors.specialist} touched={touched.specialist} required />
+                  {/* Department Dropdown - Fetched from Backend - Uppercase */}
+                  <SearchableDropdown
+                    label="Department"
+                    options={departmentOptions}
+                    value={formData.department}
+                    onChange={(value, label) => handleDepartmentChange(value, label)}
+                    placeholder={
+                      isLoadingSpecialities
+                        ? "Loading departments..."
+                        : "Search for a department..."
+                    }
+                    icon={Briefcase}
+                    required={true}
+                    isLoading={isLoadingSpecialities}
+                    getOptionLabel={(option) => option.name}
+                    getOptionValue={(option) => option.value}
+                    optionKey={(option) => option.id}
+                  />
+                  {touched.department && errors.department && (
+                    <p className="text-sm text-red-600 -mt-4">{errors.department}</p>
+                  )}
+                  
+                  {/* Specialist Field - Optional */}
+                  <Input 
+                    label="Specialist" 
+                    name="specialist" 
+                    icon={IdCard} 
+                    placeholder="e.g., Cardiologist (Optional)" 
+                    value={formData.specialist} 
+                    onChange={handleChange} 
+                    onBlur={handleBlur} 
+                    error={errors.specialist} 
+                    touched={touched.specialist} 
+                  />
                 </div>
 
                 <div className={GRID_CLASS}>
@@ -852,7 +1014,14 @@ const AddDoctor = () => {
 
                 <div className={GRID_CLASS}>
                   <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                  <Input label="Gender" name="gender" placeholder="Select gender" icon={User} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} required />
+                  <GenderDropdown 
+                    value={formData.gender}
+                    onChange={handleChange}
+                    error={errors.gender}
+                    touched={touched.gender}
+                    required={true}
+                    onBlur={handleBlur}
+                  />
                 </div>
 
                 <div className={GRID_CLASS}>
@@ -970,6 +1139,15 @@ const AddDoctor = () => {
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400">
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
+                      {formData.password && !errors.password && (
+                        <p className="text-xs text-green-600 mt-1">✓ Password is strong</p>
+                      )}
+                      {formData.password && errors.password && (
+                        <p className="text-xs text-red-600 mt-1">{errors.password}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">
+                        Password must contain: 8+ chars, uppercase, lowercase, number & special character
+                      </p>
                     </div>
                     
                     <div className="relative">

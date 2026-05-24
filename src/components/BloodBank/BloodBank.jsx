@@ -290,7 +290,6 @@ const BloodBank = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   
@@ -313,7 +312,7 @@ const BloodBank = () => {
     isLoading: loading, 
     refetch,
     isFetching
-  } = useGetBloodBankQuery(); // No need to pass hospitalId!
+  } = useGetBloodBankQuery();
 
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
@@ -343,7 +342,6 @@ const BloodBank = () => {
       const stockToAdd = {
         bloodGroup: newBloodStock.bloodGroup,
         count: newBloodStock.count
-        // No hospitalId needed - API auto-injects it
       };
       
       await createBloodBank(stockToAdd).unwrap();
@@ -465,7 +463,6 @@ const BloodBank = () => {
             await createBloodBank({
               bloodGroup: stock['Blood Group'] || stock.bloodGroup,
               count: stock['Count (Units)'] || stock.count || 0
-              // No hospitalId needed - API auto-injects it
             }).unwrap();
             successCount++;
           } catch (error) {
@@ -499,7 +496,6 @@ const BloodBank = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Loading state with skeleton
   if (loading) {
     return <BloodBankSkeleton />;
   }
@@ -552,6 +548,7 @@ const BloodBank = () => {
             </button>
           </div>
 
+          {/* Blood Group Dropdown - Only filter remaining */}
           <select
             value={bloodGroupFilter}
             onChange={(e) => setBloodGroupFilter(e.target.value)}
@@ -582,62 +579,11 @@ const BloodBank = () => {
             <Download size={16} />
           </button>
 
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
           <button onClick={() => setShowAddModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D]">
             <Plus size={16} /> Add Blood Stock
           </button>
         </div>
       </div>
-
-      {/* FILTER SECTION */}
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
-              Clear All Filters
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-1 gap-5">
-            <select
-              value={bloodGroupFilter}
-              onChange={(e) => setBloodGroupFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Blood Groups</option>
-              {BLOOD_GROUPS.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
 
       {/* Blood Stock Grid View */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

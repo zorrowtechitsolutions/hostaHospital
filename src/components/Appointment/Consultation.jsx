@@ -245,56 +245,37 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-  const handleEndConsultation = async () => {
-    const isComplaintValid = validateComplaint();
-    const isMedicationsValid = validateAllMedications();
+const handleEndConsultation = async () => {
+  const isComplaintValid = validateComplaint();
+  const isMedicationsValid = validateAllMedications();
 
-    if (!isComplaintValid) {
-      showWarningToast("Please enter the patient's complaint", 3000);
-      return;
-    }
+  if (!isComplaintValid || !isMedicationsValid) return;
 
-    if (!isMedicationsValid) {
-      showWarningToast("Please fill in all required medication fields (*)", 3000);
-      return;
-    }
+  setIsSubmitting(true);
 
-    setIsSubmitting(true);
+  try {
+    // 1. save consultation
+    await createPrescription(consultationData);
 
-    // Simulate API call
-    setTimeout(() => {
-      const consultationData = {
-        patient: appointmentData.patientName || "Reyan Verol",
-        complaint: complaint,
-        vitals: vitals,
-        medications: medications.filter(m => m.name),
-        investigations: investigations,
-        advice: advice,
-        nextConsultationDate: nextConsultationDate,
-        emptyStomach: emptyStomach,
-        date: new Date().toISOString()
-      };
+    // 2. update appointment/patient status
+    await updateAppointmentStatus(appointmentData.id, {
+      status: "Completed",
+      consultationCompleted: true,
+    });
 
-      console.log("Consultation data:", consultationData);
-      
-      showSuccessToast(
-        "Consultation ended successfully!",
-        4000,
-        {
-          'Patient': consultationData.patient,
-          'Medications': `${medications.filter(m => m.name).length} prescribed`,
-          'Follow-up': nextConsultationDate || "Not scheduled"
-        }
-      );
-      
-      setIsSubmitting(false);
-      
-      // Navigate back to appointments after 2 seconds
-      setTimeout(() => {
-        navigate("/appointments");
-      }, 2000);
-    }, 1000);
-  };
+    showSuccessToast("Consultation completed successfully");
+
+    // 3. go to patient list
+    navigate("/patients");
+
+  } catch (error) {
+    console.error(error);
+    showErrorToast("Failed to complete consultation");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-sans">
@@ -461,7 +442,7 @@ const Consultation = () => {
             <div className="flex gap-2 mb-3">
               <input 
                 className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" 
-                placeholder="Enter investigation or procedure" 
+                placeholder="Enter " 
                 value={newInvestigation} 
                 onChange={(e) => setNewInvestigation(e.target.value)} 
                 onKeyPress={(e) => e.key === 'Enter' && addInvestigation()} 
