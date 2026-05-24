@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Calendar, Heart, Clock, Microscope, Pill, ClipboardList, FileText, ShieldIcon } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon } from "lucide-react";
 import EditAppointmentModal from "./EditAppointmentModal";
 import EditVisitHistory from "./EditVisitHistoryModal";
 import DeleteModal from "./DeleteModel";
@@ -10,24 +10,27 @@ import ProfileTab from "./tabs/ProfileTab";
 import AppointmentsTab from "./tabs/AppointmentsTab";
 import VitalsTab from "./tabs/VitalsTab";
 import VisitHistoryTab from "./tabs/VisitHistoryTab";
-// import LabResultsTab from "./tabs/LabResultsTab"; // COMMENTED OUT
 import PrescriptionTab from "./tabs/PrescriptionTab";
 import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
 import DocumentsTab from "./tabs/DocumentsTab";
-import InsuranceTab from "./tabs/InsuranceTab";
 
 // Import Modals
 import AppointmentDetailsModal from "./modals/AppointmentDetailsModal";
 import VitalDetailsModal from "./modals/VitalDetailsModal";
 import VisitDetailsModal from "./modals/VisitDetailsModal";
 import MedicalDetailsModal from "./modals/MedicalDetailsModal";
-import LaboratoryReportModal from "./modals/LaboratoryReportModal";
 import AddAppointmentModal from "./AddAppointmentModal";
 import PrescriptionReportModal from "./modals/PrecriptionReportModal";
+
+// Import API hooks
+import { useGetPatientByIdQuery } from "../../../app/service/patients";
+import { useGetBookingsQuery } from "../../../app/service/request";
+import { Loader } from "../ui";
 
 const PatientDetails = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { id } = useParams();
   const passedPatient = location.state?.patient;
 
   const [tab, setTab] = useState("profile");
@@ -39,8 +42,6 @@ const PatientDetails = () => {
   const [showVisitDetailsModal, setShowVisitDetailsModal] = useState(false);
   const [showMedicalDetailsModal, setShowMedicalDetailsModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
-  const [showLaboratoryModal, setShowLaboratoryModal] = useState(false);
-  const [selectedLabResult, setSelectedLabResult] = useState(null);
   
   // Prescription Modal States
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
@@ -72,151 +73,167 @@ const PatientDetails = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const [patient, setPatient] = useState({
-    id: passedPatient?.id || "PT0025",
-    name: passedPatient?.name || "James Carter",
-    image: passedPatient?.imageUrl || "https://randomuser.me/api/portraits/men/32.jpg",
-    gender: passedPatient?.gender || "Male",
-    phone: passedPatient?.phone || "+1 123 456 7890",
-    email: passedPatient?.email || "james.carter@example.com",
-    department: passedPatient?.department || "Cardiology",
-    lastVisit: passedPatient?.lastVisitDisplay || "21 Dec 2024",
-    addedOn: "24 May 2024",
-    dob: "10 Jan 1991",
-    age: 34,
-    maritalStatus: "Married",
-    blood: "O+ve",
-    address: "2557 Tanglewood Road, Jackson, MS 39213",
-    referredBy: "Dr Antonio",
-    totalBookings: 12,
-    heartRate: 89,
-    respiratoryRate: 24,
-    spo2: 98,
-    weight: 100,
-    temperature: 98.6,
-    bloodPressure: "128/84",
-    
-    appointmentsList: [
-      { id: "APT001", doctorName: "Dr. Andrew Clark", department: "Anaesthesiology", appointmentDate: "17 Jun 2025", startTime: "09:00 AM", endTime: "10:00 AM", status: "Upcoming", fee: "$500", duration: "1 hour", reason: "Fever, Stomach pain, Drowsiness", notes: "Provide detailed instructions on how to use prescribed medications.", paymentMethod: "Card", patientName: "James Carter", avatar: "https://randomuser.me/api/portraits/men/32.jpg" },
-      { id: "APT002", doctorName: "Dr. Katherine Brooks", department: "Dental Surgery", appointmentDate: "10 Jun 2025", startTime: "10:30 AM", endTime: "11:30 AM", status: "Upcoming", fee: "$350", duration: "1 hour", reason: "Tooth pain, Gum swelling", notes: "X-ray recommended before procedure", paymentMethod: "Cash", patientName: "James Carter", avatar: "https://randomuser.me/api/portraits/men/32.jpg" },
-      { id: "APT003", doctorName: "Dr. Benjamin Harris", department: "Dermatology", appointmentDate: "22 May 2025", startTime: "01:15 PM", endTime: "02:15 PM", status: "Completed", fee: "$400", duration: "1 hour", reason: "Skin rash, Itching", notes: "Avoid using scented products", paymentMethod: "Insurance", patientName: "James Carter", avatar: "https://randomuser.me/api/portraits/men/32.jpg" },
-      { id: "APT004", doctorName: "Dr. Laura Mitchell", department: "ENT Surgery", appointmentDate: "15 May 2025", startTime: "11:30 AM", endTime: "12:30 PM", status: "Inprogress", fee: "$450", duration: "1 hour", reason: "Ear infection, Sore throat", notes: "Antibiotics prescribed for 7 days", paymentMethod: "Card", patientName: "James Carter", avatar: "https://randomuser.me/api/portraits/men/32.jpg" },
-      { id: "APT005", doctorName: "Dr. Christopher Lewis", department: "General Medicine", appointmentDate: "30 Apr 2025", startTime: "12:20 PM", endTime: "01:20 PM", status: "Completed", fee: "$300", duration: "1 hour", reason: "Chest pain, Shortness of breath", notes: "ECG done. Follow up in 2 weeks", paymentMethod: "Insurance", patientName: "James Carter", avatar: "https://randomuser.me/api/portraits/men/32.jpg" }
-    ],
-    
-    vitalsList: [
-      { id: 1, doctorName: "Dr. Andrew Clark", department: "Cardiology", date: "17 Jun 2025", bloodPressure: "128/84", heartRate: "89", temperature: "98.6", spo2: "98", respiratoryRate: "24", weight: "100" },
-      { id: 2, doctorName: "Dr. Katherine Brooks", department: "Dental Surgery", date: "10 Jun 2025", bloodPressure: "118/76", heartRate: "72", temperature: "98.4", spo2: "99", respiratoryRate: "18", weight: "65" },
-      { id: 3, doctorName: "Dr. Benjamin Harris", department: "Dermatology", date: "22 May 2025", bloodPressure: "135/88", heartRate: "94", temperature: "99.1", spo2: "97", respiratoryRate: "22", weight: "80" },
-      { id: 4, doctorName: "Dr. Laura Mitchell", department: "ENT Surgery", date: "15 May 2025", bloodPressure: "142/90", heartRate: "78", temperature: "100.2", spo2: "96", respiratoryRate: "26", weight: "72" },
-      { id: 5, doctorName: "Dr. Christopher Lewis", department: "General Medicine", date: "30 Apr 2025", bloodPressure: "125/82", heartRate: "85", temperature: "98.7", spo2: "98", respiratoryRate: "20", weight: "85" }
-    ],
-    
-    visitHistoryList: [
-      { id: "VIS001", visitId: "VIS001", doctorName: "Dr. Samuel Turner", department: "Cardiology", visitDate: "21 Dec 2024", startTime: "07:00 AM", endTime: "08:00 AM", status: "Completed", reason: "Chest pain and shortness of breath", diagnosis: "Mild hypertension", prescription: "Metoprolol 25mg", notes: "Follow-up in 2 weeks", followUpDate: "After 15 Days" },
-      { id: "VIS002", visitId: "VIS002", doctorName: "Dr. Natalie Foster", department: "Neurology", visitDate: "08 Jan 2024", startTime: "09:55 AM", endTime: "10:55 AM", status: "Completed", reason: "Severe headaches", diagnosis: "Chronic migraines", prescription: "Sumatriptan 50mg", notes: "Avoid stress and lack of sleep", followUpDate: "After 12 Days" }
-    ],
-    
-    // labResultsList - COMMENTED OUT
-    // labResultsList: [
-    //   { id: "#TE0025", appointmentDate: "17 Jun 2025", referredBy: "Dr. Andrew Clark", testName: "Blood Test", status: "Received", reportedOn: "17 Jun 2025, 02:00 PM" },
-    //   { id: "#TE0024", appointmentDate: "10 Jun 2025", referredBy: "Dr. Katherine Brooks", testName: "Urinalysis", status: "In Progress" },
-    //   { id: "#TE0023", appointmentDate: "22 May 2025", referredBy: "Dr. Benjamin Harris", testName: "Throat Culture", status: "Pending" },
-    //   { id: "#TE0022", appointmentDate: "15 May 2025", referredBy: "Dr. Laura Mitchell", testName: "Iron Panel", status: "Received", reportedOn: "16 May 2025, 10:30 AM" },
-    //   { id: "#TE0021", appointmentDate: "30 Apr 2025", referredBy: "Dr. Christopher Lewis", testName: "Vitamin D Test", status: "In Progress" }
-    // ],
-    
-    prescriptionsList: [
-      { 
-        id: 1, 
-        type: "Tablet", 
-        quantity: "30", 
-        date: "17 Jun 2025", 
-        prescribedBy: "Dr. Andrew Clark", 
-        amount: "$50", 
-        paymentMethod: "Insurance", 
-        status: "Active",
-        medicines: [
-          { name: "Metoprolol", dosage: "25mg", duration: "30 days", frequency: "1x/day", timing: "Morning" },
-          { name: "Lisinopril", dosage: "10mg", duration: "30 days", frequency: "1x/day", timing: "Evening" }
-        ]
-      },
-      { 
-        id: 2, 
-        type: "Syrup", 
-        quantity: "1 Bottle", 
-        date: "10 Jun 2025", 
-        prescribedBy: "Dr. Katherine Brooks", 
-        amount: "$25", 
-        paymentMethod: "Cash", 
-        status: "Active",
-        medicines: [
-          { name: "Cough Syrup", dosage: "10ml", duration: "5 days", frequency: "3x/day", timing: "After meals" }
-        ]
-      },
-      { 
-        id: 3, 
-        type: "Capsule", 
-        quantity: "20", 
-        date: "22 May 2025", 
-        prescribedBy: "Dr. Benjamin Harris", 
-        amount: "$40", 
-        paymentMethod: "Card", 
-        status: "Completed",
-        medicines: [
-          { name: "Amoxicillin", dosage: "500mg", duration: "7 days", frequency: "2x/day", timing: "After food" }
-        ]
-      },
-      { 
-        id: 4, 
-        type: "Injection", 
-        quantity: "2", 
-        date: "15 May 2025", 
-        prescribedBy: "Dr. Laura Mitchell", 
-        amount: "$100", 
-        paymentMethod: "Insurance", 
-        status: "Completed",
-        medicines: [
-          { name: "Vitamin B12", dosage: "1000mcg", duration: "2 days", frequency: "1x/day", timing: "As directed" }
-        ]
-      },
-      { 
-        id: 5, 
-        type: "Tablet", 
-        quantity: "15", 
-        date: "30 Apr 2025", 
-        prescribedBy: "Dr. Christopher Lewis", 
-        amount: "$35", 
-        paymentMethod: "Cash", 
-        status: "Expired",
-        medicines: [
-          { name: "Ibuprofen", dosage: "400mg", duration: "5 days", frequency: "2x/day", timing: "After meals" }
-        ]
-      }
-    ],
-    
-    medicalHistoryList: [
-      { id: 1, illnessName: "Hypertension", illnessDate: "15 Mar 2020", yearsAgo: "5 years ago", assessment: ["Blood pressure consistently elevated", "Started on Lisinopril 10mg", "Lifestyle modifications recommended"], notes: "Patient has been managing well with medication." },
-      { id: 2, illnessName: "Migraine", illnessDate: "22 Jul 2019", yearsAgo: "6 years ago", assessment: ["Recurring headaches with aura", "Triggers identified: stress, lack of sleep", "Sumatriptan prescribed for acute attacks"], notes: "Preventive medication taken daily." },
-      { id: 3, illnessName: "Diabetes Type 2", illnessDate: "10 Jan 2021", yearsAgo: "4 years ago", assessment: ["HbA1c elevated at diagnosis", "Metformin prescribed", "Diet and exercise plan created"], notes: "Blood sugar levels well controlled." }
-    ],
-    
-    documentsList: [
-      { id: 1, documentName: "Blood Report.pdf", date: "17 Jun 2025", fileSize: "2.5 MB", type: "PDF" },
-      { id: 2, documentName: "X-Ray Report.pdf", date: "10 Jun 2025", fileSize: "1.8 MB", type: "PDF" },
-      { id: 3, documentName: "Prescription.pdf", date: "22 May 2025", fileSize: "0.5 MB", type: "PDF" }
-    ],
-    
-    insuranceList: [
-      { id: 1, policyNo: "MED-INS-87452", provider: "United Healthcare", planType: "Gold Plan", coverageAmount: "$150,000", startDate: "01 Jan 2025", expiryDate: "31 Dec 2025", status: "Active" },
-      { id: 2, policyNo: "MED-INS-96541", provider: "Cigna", planType: "Silver Plan", coverageAmount: "$100,000", startDate: "15 Feb 2025", expiryDate: "20 Oct 2025", status: "Expired" }
-    ],
-    
-    appointments: [
-      { id: 1, department: "Cardiology", doctor: "Dr. Andrew Clark", date: "21 Dec 2024", time: "07:00 AM", bookedOn: "20 Dec 2024", status: "completed" },
-      { id: 2, department: "Radiology", doctor: "Dr. Laura Mitchell", date: "15 Jan 2025", time: "10:35 AM", bookedOn: "13 Jan 2025", status: "upcoming" }
-    ]
+  // Get patient ID from URL params or passed state
+  const patientId = id || passedPatient?.id || passedPatient?._id;
+
+  // Fetch patient data from API
+  const { 
+    data: patientResponse, 
+    isLoading: isLoadingPatient,
+    refetch: refetchPatient 
+  } = useGetPatientByIdQuery(patientId, {
+    skip: !patientId
   });
+  
+  // Fetch all bookings for appointments and visits
+  const {
+    data: bookingResponse,
+    refetch: refetchBookings,
+    isLoading: isLoadingBookings
+  } = useGetBookingsQuery({});
+
+  const patientData = patientResponse?.data || patientResponse || passedPatient;
+  
+  // Filter appointments for current patient
+  const patientAppointments = React.useMemo(() => {
+    const bookingList = Array.isArray(bookingResponse) 
+      ? bookingResponse 
+      : bookingResponse?.data || bookingResponse?.bookings || bookingResponse?.result || [];
+    
+    return bookingList
+      .filter((booking) => {
+        const bookingPatientName = booking.patient_name || booking.patientName;
+        const currentPatientName = patientData?.name;
+        return String(bookingPatientName || '').toLowerCase() === String(currentPatientName || '').toLowerCase();
+      })
+      .map((booking, index) => ({
+        id: booking.id || booking._id || index,
+        doctorName: booking.displayName || booking.doctor_name || "N/A",
+        doctor: booking.displayName || booking.doctor_name || "N/A",
+        department: booking.department || "N/A",
+        appointmentDate: booking.booking_date,
+        date: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : "N/A",
+        time: booking.consulting_time || "N/A",
+        bookedOn: booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : "Today",
+        consulting_time: booking.consulting_time,
+        status: booking.status || "pending",
+        reason: booking.reason || '',
+        notes: booking.notes || '',
+        token: booking.token,
+        consultingTime: booking.consulting_time || 'N/A',
+        originalStatus: booking.status
+      }));
+  }, [bookingResponse, patientData]);
+
+  // Filter visits (accepted/completed appointments) for current patient
+  const patientVisits = React.useMemo(() => {
+    const bookingList = Array.isArray(bookingResponse) 
+      ? bookingResponse 
+      : bookingResponse?.data || bookingResponse?.bookings || bookingResponse?.result || [];
+    
+    // Filter by patient name AND status (accepted or completed)
+    return bookingList
+      .filter((booking) => {
+        const bookingPatientName = booking.patient_name || booking.patientName;
+        const currentPatientName = patientData?.name;
+        const isAcceptedOrCompleted = booking.status === "accepted" || booking.status === "completed";
+        return String(bookingPatientName || '').toLowerCase() === String(currentPatientName || '').toLowerCase() && isAcceptedOrCompleted;
+      })
+      .map((booking, index) => {
+        // Get patient image key
+        const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+        
+        return {
+          id: booking.id || booking._id || index,
+          visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
+          patientName: booking.patient_name || booking.patientName || patientData?.name || "N/A",
+          patientId: `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
+          doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
+          department: booking.doctor_department || booking.department || "General",
+          visitDate: booking.booking_date || "",
+          startTime: booking.consulting_time || "",
+          token: booking.token || "N/A",
+          status: booking.status === "completed" ? "Completed" : "In Progress",
+          patientImageKey: patientImageKey,
+          patientAvatar: patientImageKey || null,
+          reason: booking.reason || "",
+          notes: booking.notes || "",
+          originalBooking: booking
+        };
+      });
+  }, [bookingResponse, patientData]);
+
+  // Combined patient state - initialized with empty values
+  const [patient, setPatient] = useState({
+    id: '',
+    name: '',
+    gender: '',
+    phone: '',
+    email: '',
+    department: '',
+    lastVisit: '',
+    addedOn: '',
+    dob: '',
+    age: '',
+    maritalStatus: '',
+    blood: '',
+    address: '',
+    referredBy: '',
+    totalBookings: 0,
+    heartRate: '',
+    respiratoryRate: '',
+    spo2: '',
+    weight: '',
+    temperature: '',
+    bloodPressure: '',
+    appointmentsList: [],
+    vitalsList: [],
+    visitHistoryList: [],
+    prescriptionsList: [],
+    medicalHistoryList: [],
+    documentsList: [],
+    insuranceList: [],
+    appointments: [],
+    visits: []
+  });
+
+  // Update patient state when API data loads
+  useEffect(() => {
+    if (patientData) {
+      setPatient({
+        id: patientData.id || patientData._id,
+        name: patientData.name || '',
+        gender: patientData.gender || '',
+        phone: patientData.mobileNumber || patientData.phone || '',
+        email: patientData.email || '',
+        department: patientData.department || '',
+        lastVisit: patientData.lastVisit || '',
+        addedOn: patientData.createdAt ? new Date(patientData.createdAt).toLocaleDateString() : '',
+        dob: patientData.dob || '',
+        age: patientData.age || '',
+        maritalStatus: patientData.maritalStatus || '',
+        blood: patientData.bloodGroup || '',
+        address: patientData.addressLine || patientData.address || '',
+        referredBy: patientData.referredBy || '',
+        totalBookings: patientData.totalBookings || 0,
+        heartRate: patientData.heartRate || '',
+        respiratoryRate: patientData.respiratoryRate || '',
+        spo2: patientData.spo2 || '',
+        weight: patientData.weight || '',
+        temperature: patientData.temperature || '',
+        bloodPressure: patientData.bloodPressure || '',
+        appointmentsList: patientAppointments,
+        visitHistoryList: patientVisits,  // Use patientVisits for visit history
+        vitalsList: patientData.vitals || [],
+        prescriptionsList: patientData.prescriptions || [],
+        medicalHistoryList: patientData.medicalHistory || [],
+        documentsList: patientData.documents || [],
+        insuranceList: patientData.insurance || [],
+        appointments: patientAppointments,
+        visits: patientVisits
+      });
+    }
+  }, [patientData, patientAppointments, patientVisits]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -232,16 +249,16 @@ const PatientDetails = () => {
   }, [openMenu]);
 
   const getFilteredAppointments = () => {
-    let filtered = [...patient.appointmentsList];
+    let filtered = [...patientAppointments];
     if (searchTerm) {
       filtered = filtered.filter(apt => 
-        apt.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.department.toLowerCase().includes(searchTerm.toLowerCase())
+        apt.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.department?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(apt => apt.status.toLowerCase() === statusFilter.toLowerCase());
+      filtered = filtered.filter(apt => apt.status?.toLowerCase() === statusFilter.toLowerCase());
     }
     return filtered;
   };
@@ -263,20 +280,25 @@ const PatientDetails = () => {
 
   const getStatusBadge = (status) => {
     const statusMap = {
+      'accepted': 'bg-green-100 text-green-700',
+      'pending': 'bg-yellow-100 text-yellow-600',
+      'declined': 'bg-red-100 text-red-700',
+      'rejected': 'bg-red-100 text-red-700',
+      'completed': 'bg-blue-100 text-blue-700',
+      'cancel': 'bg-gray-100 text-gray-700',
       'upcoming': 'bg-purple-100 text-purple-700',
       'inprogress': 'bg-blue-100 text-blue-700',
-      'completed': 'bg-green-100 text-green-700',
+      'in progress': 'bg-blue-100 text-blue-700',
       'active': 'bg-green-100 text-green-700',
       'expired': 'bg-red-100 text-red-700',
       'received': 'bg-green-100 text-green-700',
-      'in progress': 'bg-blue-100 text-blue-700',
-      'pending': 'bg-yellow-100 text-yellow-600'
+      'In Progress': 'bg-blue-100 text-blue-700',
+      'Completed': 'bg-green-100 text-green-700'
     };
-    return `px-2 py-1 rounded-full text-xs font-medium ${statusMap[status.toLowerCase()] || 'bg-gray-100 text-gray-700'}`;
+    return `px-2 py-1 rounded-full text-xs font-medium ${statusMap[status] || 'bg-gray-100 text-gray-700'}`;
   };
 
-  // ========== VIEW MODAL HANDLERS ==========
-  const handleBackToPatients = () => navigate(-1);
+  const handleBackToPatients = () => navigate('/patients');
   
   const handleViewAppointmentDetails = (appointment) => {
     setSelectedAppointment(appointment);
@@ -302,14 +324,6 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
-  // COMMENTED OUT - Lab Result handlers
-  // const handleViewLaboratoryReport = (labResult) => {
-  //   setSelectedLabResult(labResult);
-  //   setShowLaboratoryModal(true);
-  //   setOpenMenu(null);
-  // };
-
-  // ========== PRESCRIPTION HANDLERS ==========
   const handleViewPrescriptionDetails = (prescription) => {
     setSelectedPrescription(prescription);
     setShowPrescriptionModal(true);
@@ -319,6 +333,7 @@ const PatientDetails = () => {
   const handleSavePrescription = (prescriptionData) => {
     setShowPrescriptionModal(false);
     setSelectedPrescription(null);
+    refetchPatient();
   };
 
   const handleEditAppointmentClick = (appointment) => {
@@ -340,22 +355,19 @@ const PatientDetails = () => {
     setPatient({...patient, visitHistoryList: updatedList});
     setShowEditVisitHistoryModal(false);
     setVisitToEdit(null);
-    alert("Visit history updated successfully!");
   };
 
   const handleSaveEditedAppointment = (updatedData) => {
     const updatedList = patient.appointmentsList.map(apt => 
       apt.id === appointmentToEdit.id 
-        ? { ...apt, department: updatedData.department, doctorName: updatedData.doctor, appointmentDate: updatedData.date, startTime: updatedData.startTime, endTime: updatedData.endTime, reason: updatedData.reason, notes: updatedData.notes, paymentMethod: updatedData.paymentMethod }
+        ? { ...apt, ...updatedData }
         : apt
     );
     setPatient({...patient, appointmentsList: updatedList});
     setShowEditAppointmentModal(false);
     setAppointmentToEdit(null);
-    alert("Appointment updated successfully!");
   };
 
-  // ========== DELETE HANDLERS ==========
   const handleDeleteClick = (type, id, index, name) => {
     setDeleteConfig({
       type,
@@ -374,43 +386,30 @@ const PatientDetails = () => {
       case 'appointment':
         const updatedAppointments = patient.appointmentsList.filter((_, i) => i !== index);
         setPatient({...patient, appointmentsList: updatedAppointments});
-        alert("Appointment deleted successfully!");
         break;
       case 'vital':
         const updatedVitals = patient.vitalsList.filter((_, i) => i !== index);
         setPatient({...patient, vitalsList: updatedVitals});
-        alert("Vital record deleted successfully!");
         break;
       case 'visit':
         const updatedVisits = patient.visitHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, visitHistoryList: updatedVisits});
-        alert("Visit history deleted successfully!");
         break;
-      // COMMENTED OUT - Lab result delete case
-      // case 'lab':
-      //   const updatedLabResults = patient.labResultsList.filter((_, i) => i !== index);
-      //   setPatient({...patient, labResultsList: updatedLabResults});
-      //   alert("Lab result deleted successfully!");
-      //   break;
       case 'prescription':
         const updatedPrescriptions = patient.prescriptionsList.filter((_, i) => i !== index);
         setPatient({...patient, prescriptionsList: updatedPrescriptions});
-        alert("Prescription deleted successfully!");
         break;
       case 'medical':
         const updatedMedicalHistory = patient.medicalHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, medicalHistoryList: updatedMedicalHistory});
-        alert("Medical history deleted successfully!");
         break;
       case 'document':
         const updatedDocuments = patient.documentsList.filter((_, i) => i !== index);
         setPatient({...patient, documentsList: updatedDocuments});
-        alert("Document deleted successfully!");
         break;
       case 'insurance':
         const updatedInsurance = patient.insuranceList.filter(item => item.id !== id);
         setPatient({...patient, insuranceList: updatedInsurance});
-        alert("Insurance policy deleted successfully!");
         break;
       default:
         break;
@@ -420,23 +419,23 @@ const PatientDetails = () => {
   };
 
   const handleDownloadDocument = (item) => {
-    alert(`Downloading ${item.documentName}...`);
+    if (item.fileUrl) {
+      window.open(item.fileUrl, '_blank');
+    }
   };
 
   const handleEditPatient = () => setShowEditModal(true);
   const handleAddAppointment = () => setShowAppointmentModal(true);
 
-  // COMMENTED OUT - Lab tab from tabs array
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
     { id: "appointments", label: "Appointments", icon: Calendar },
     { id: "vitals", label: "Vitals", icon: Heart },
     { id: "visits", label: "Visit History", icon: Clock },
-    // { id: "lab", label: "Lab Results", icon: Microscope }, // COMMENTED OUT
     { id: "prescription", label: "Prescription", icon: Pill },
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
-    { id: "insurance", label: "Insurance", icon: ShieldIcon }
+    // { id: "insurance", label: "Insurance", icon: ShieldIcon }
   ];
 
   const renderTabContent = () => {
@@ -452,15 +451,16 @@ const PatientDetails = () => {
       itemsPerPage,
       totalPages,
       startIndex,
-      paginatedAppointments,
-      filteredAppointments,
+      paginatedAppointments: patientAppointments,
+      filteredAppointments: patientAppointments,
+      paginatedVisits: patientVisits,
+      filteredVisits: patientVisits,
       handlePageChange,
       getStatusBadge,
       handleViewAppointmentDetails,
       handleViewVisitDetails,
       handleViewMedicalDetails,
       handleViewVitalDetails,
-      // handleViewLaboratoryReport, // COMMENTED OUT
       handleEditAppointmentClick,
       handleEditVisitClick,
       handleDeleteClick,
@@ -478,9 +478,7 @@ const PatientDetails = () => {
       case "vitals": 
         return <VitalsTab patient={patient} handleViewVitalDetails={handleViewVitalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "visits": 
-        return <VisitHistoryTab patient={patient} handleViewVisitDetails={handleViewVisitDetails} handleEditVisitClick={handleEditVisitClick} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
-      // case "lab": // COMMENTED OUT
-      //   return <LabResultsTab patient={patient} handleViewLaboratoryReport={handleViewLaboratoryReport} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
+        return <VisitHistoryTab {...tabProps} />;
       case "prescription": 
         return (
           <PrescriptionTab 
@@ -502,6 +500,36 @@ const PatientDetails = () => {
         return <ProfileTab patient={patient} handleEditPatient={handleEditPatient} handleAddAppointment={handleAddAppointment} handleViewAppointmentDetails={handleViewAppointmentDetails} handleViewVisitDetails={handleViewVisitDetails} handleViewVitalDetails={handleViewVitalDetails} setTab={setTab} getStatusBadge={getStatusBadge} />;
     }
   };
+
+  // Loading state
+  if (isLoadingPatient && !patientData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader centered text="Loading patient details..." />
+      </div>
+    );
+  }
+
+  // Patient not found state
+  if (!patientData && !isLoadingPatient) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="text-center py-12">
+          <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+            <User size={48} className="text-gray-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Patient not found</h2>
+          <p className="text-gray-500 mb-6">The patient you're looking for doesn't exist or has been removed.</p>
+          <button 
+            onClick={handleBackToPatients} 
+            className="px-6 py-2.5 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154f7a] transition-colors"
+          >
+            Back to Patients
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -543,17 +571,16 @@ const PatientDetails = () => {
       )}
       
       {showVisitDetailsModal && selectedVisit && (
-        <VisitDetailsModal data={selectedVisit} patientName={patient.name} onClose={() => setShowVisitDetailsModal(false)} />
+        <VisitDetailsModal 
+          data={selectedVisit} 
+          patientName={patient.name} 
+          onClose={() => setShowVisitDetailsModal(false)} 
+        />
       )}
       
       {showMedicalDetailsModal && selectedMedical && (
         <MedicalDetailsModal data={selectedMedical} onClose={() => setShowMedicalDetailsModal(false)} />
       )}
-      
-      {/* COMMENTED OUT - Laboratory Report Modal */}
-      {/* {showLaboratoryModal && selectedLabResult && (
-        <LaboratoryReportModal data={selectedLabResult} patient={patient} onClose={() => setShowLaboratoryModal(false)} />
-      )} */}
       
       {showPrescriptionModal && (
         <PrescriptionReportModal
@@ -576,7 +603,7 @@ const PatientDetails = () => {
         <AddAppointmentModal patient={patient} setPatient={setPatient} onClose={() => setShowAppointmentModal(false)} />
       )}
       
-      {showEditAppointmentModal && (
+      {showEditAppointmentModal && appointmentToEdit && (
         <EditAppointmentModal 
           isOpen={showEditAppointmentModal} 
           onClose={() => setShowEditAppointmentModal(false)} 
@@ -586,7 +613,7 @@ const PatientDetails = () => {
         />
       )}
       
-      {showEditVisitHistoryModal && (
+      {showEditVisitHistoryModal && visitToEdit && (
         <EditVisitHistory 
           isOpen={showEditVisitHistoryModal} 
           onClose={() => { 
@@ -608,6 +635,88 @@ const PatientDetails = () => {
         message={`Are you sure you want to delete this ${deleteConfig.type}? This action cannot be undone.`} 
         itemName={deleteConfig.name} 
       />
+    </div>
+  );
+};
+
+// EditPatientModal component
+const EditPatientModal = ({ patient, setPatient, onClose }) => {
+  const navigate = useNavigate();
+  
+  const handleEdit = () => {
+    navigate(`/edit-patient/${patient.id}`, { state: { patient } });
+    onClose();
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <h3 className="text-xl font-semibold mb-4">Edit Patient</h3>
+        <p className="text-gray-600 mb-6">You are about to edit {patient.name}'s profile.</p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={handleEdit} className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#154f7a]">
+            Continue to Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// InsuranceTab component
+const InsuranceTab = ({ patient, handleDeleteClick, getStatusBadge }) => {
+  if (!patient.insuranceList || patient.insuranceList.length === 0) {
+    return (
+      <div className="bg-white rounded-xl p-6 text-center">
+        <p className="text-gray-500">No insurance records found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
+            <tr>
+              <th className="px-6 py-3">Policy No</th>
+              <th className="px-6 py-3">Provider</th>
+              <th className="px-6 py-3">Plan Type</th>
+              <th className="px-6 py-3">Coverage</th>
+              <th className="px-6 py-3">Start Date</th>
+              <th className="px-6 py-3">Expiry Date</th>
+              <th className="px-6 py-3">Status</th>
+              <th className="px-6 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {patient.insuranceList.map((item, idx) => (
+              <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-6 py-4 font-medium">{item.policyNo}</td>
+                <td className="px-6 py-4">{item.provider}</td>
+                <td className="px-6 py-4">{item.planType}</td>
+                <td className="px-6 py-4">{item.coverageAmount}</td>
+                <td className="px-6 py-4">{item.startDate}</td>
+                <td className="px-6 py-4">{item.expiryDate}</td>
+                <td className="px-6 py-4">
+                  <span className={getStatusBadge(item.status)}>{item.status}</span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <button
+                    onClick={() => handleDeleteClick('insurance', item.id, idx, item.policyNo)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

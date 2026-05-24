@@ -331,9 +331,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         appointmentDate: rawDate && rawDate !== "N/A" ? rawDate.split('T')[0] : "N/A",
         appointmentDateDisplay: formatDate(rawDate),
         consulting_time: booking.consulting_time || "N/A",
-        
-
-status: displayStatus,
+        status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
         fee: booking.fee || "$0",
         duration: "1 hour",
@@ -495,6 +493,7 @@ status: displayStatus,
     setShowApproveModal(true);
   };
 
+  // UPDATED handleConfirmApprove with navigate after refetch
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) return;
     
@@ -522,7 +521,8 @@ status: displayStatus,
         }
       );
       
-      refetch();
+      await refetch();
+      navigate("/appointments");
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
     } finally {
@@ -633,6 +633,11 @@ status: displayStatus,
 
   const showDoctorBanner = doctorId && !showAllData;
   const activeFilterCount = getActiveFilterCount();
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
@@ -986,8 +991,8 @@ status: displayStatus,
                         {apt.appointmentDateDisplay}
                         <br />
                         <span className="text-xs">
-  {apt.consulting_time}
-</span>
+                          {apt.consulting_time}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={apt.statusClass}>{apt.status}</span>
@@ -996,44 +1001,22 @@ status: displayStatus,
                         <div className="flex justify-end">
                           <RowActionMenu appointment={apt} />
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredAppointments.length)} of {filteredAppointments.length} appointments
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === 1
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-                  {currentPage}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === totalPages || totalPages === 0
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
+            
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={filteredAppointments.length}
+                itemsPerPage={itemsPerPage}
+                itemLabel="appointments"
+              />
             </div>
           </Card>
         )}

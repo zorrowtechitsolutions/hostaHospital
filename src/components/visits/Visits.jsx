@@ -750,41 +750,17 @@ const Visits = () => {
             </table>
           </div>
           
-          {totalPages > 1 && (
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredVisits.length)} of {filteredVisits.length} approved visits
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === 1
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-                  {currentPage}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === totalPages || totalPages === 0
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
+          <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalItems={filteredVisits.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="approved visits"
+            />
+          </div>
         </Card>
       )}
 

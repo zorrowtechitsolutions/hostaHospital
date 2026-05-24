@@ -16,6 +16,7 @@ export type BookingStatus =
 export interface BookingRequest {
   id?: string | number;
   _id?: string;
+  userId?: number | string;
   
   // Patient fields (snake_case for backend)
   patient_name?: string;
@@ -136,22 +137,23 @@ export const bookingApi = api.injectEndpoints({
         return {
           url: "/booking",
           method: "POST",
-          body: {
-            // Use snake_case to match backend
-            patient_name: data.patient_name,
-            patient_dob: data.patient_dob,
-            patient_place: data.patient_place,
-            patient_phone: data.patient_phone,
-            doctorId: data.doctorId,
-            displayName: data.displayName,
-            department: data.department,
-            booking_date: data.booking_date,
-            consulting_time: data.consulting_time,
-            reason: data.reason,
-            status: data.status || "pending",
-            hospitalId: hospitalId, // Auto-inject from auth
-          },
-        };
+body: {
+  userId: data.userId,
+  patient_name: data.patient_name,
+  patient_dob: data.patient_dob,
+  patient_place: data.patient_place,
+  patient_phone: data.patient_phone,
+  doctorId: data.doctorId,
+  displayName: data.displayName,
+  department: data.department,
+  booking_date: data.booking_date,
+  consulting_time: data.consulting_time,  // ✅ This is included
+  token: data.token,                       // ✅ This is included
+  reason: data.reason,
+  status: data.status || "accepted",
+  hospitalId: hospitalId
+},
+};
       },
       invalidatesTags: ["Booking"],
     }),

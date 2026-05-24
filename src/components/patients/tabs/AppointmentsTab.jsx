@@ -1,4 +1,4 @@
-// src/components/patients/tabs/AppointmentsTab.jsx - Refactored
+// src/components/patients/tabs/AppointmentsTab.jsx - Fixed to show Appointment ID instead of Patient ID
 import React from "react";
 import { Search, MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
 import { Button, Input, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Pagination, SearchBar } from "../../ui";
@@ -24,6 +24,45 @@ const AppointmentsTab = ({
 }) => {
   const totalItems = filteredAppointments.length;
 
+  // Helper function to format appointment ID
+  const formatAppointmentId = (id) => {
+    if (!id) return '#APT0000';
+    let numericId;
+    if (typeof id === 'string') {
+      const match = id.match(/\d+/);
+      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
+    } else {
+      numericId = parseInt(id) || 0;
+    }
+    return `#APT${String(numericId).padStart(4, '0')}`;
+  };
+
+  // Get badge variant based on status
+  const getBadgeVariant = (status) => {
+    const statusMap = {
+      'accepted': 'success',
+      'pending': 'warning',
+      'completed': 'info',
+      'cancelled': 'danger',
+      'declined': 'danger',
+      'rejected': 'danger'
+    };
+    return statusMap[status?.toLowerCase()] || 'default';
+  };
+
+  // Get display text for status
+  const getStatusText = (status) => {
+    const statusMap = {
+      'accepted': 'Accepted',
+      'pending': 'Pending',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+      'declined': 'Declined',
+      'rejected': 'Rejected'
+    };
+    return statusMap[status?.toLowerCase()] || status || 'Pending';
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -33,7 +72,7 @@ const AppointmentsTab = ({
         </h2>
         <div className="flex gap-2">
           <SearchBar
-            placeholder="Search Keyword"
+            placeholder="Search by Doctor, Department..."
             value={searchTerm}
             onChange={setSearchTerm}
             className="w-64"
@@ -44,9 +83,10 @@ const AppointmentsTab = ({
             className="border border-gray-200 rounded-md px-3 py-1.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
           >
             <option value="all">All Status</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="inprogress">Inprogress</option>
+            <option value="accepted">Accepted</option>
+            <option value="pending">Pending</option>
             <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
       </div>
@@ -55,7 +95,7 @@ const AppointmentsTab = ({
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
             <tr>
-              <TableHeader>Patient ID</TableHeader>
+              <TableHeader>Appointment ID</TableHeader>
               <TableHeader>Doctor Name</TableHeader>
               <TableHeader>Department</TableHeader>
               <TableHeader>Appointment Date</TableHeader>
@@ -71,7 +111,7 @@ const AppointmentsTab = ({
                     className="text-[#1C62A0] font-medium cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
-                    #{patient.id}
+                    {formatAppointmentId(apt.id)}
                   </TableCell>
                   <TableCell 
                     className="cursor-pointer"
@@ -96,13 +136,15 @@ const AppointmentsTab = ({
                     className="text-gray-600 cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
-                    {apt.appointmentDate}
+                    {apt.date || apt.appointmentDate}
                   </TableCell>
                   <TableCell 
                     className="cursor-pointer"
                     onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                   >
-                    <Badge variant={getStatusBadge(apt.status)}>{apt.status}</Badge>
+                    <Badge variant={getBadgeVariant(apt.status)}>
+                      {getStatusText(apt.status)}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right relative action-menu-container">
                     <Button
@@ -141,7 +183,7 @@ const AppointmentsTab = ({
                         <button
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            handleDeleteClick('appointment', apt.id, startIndex + index, `Appointment with ${apt.doctorName} on ${apt.appointmentDate}`);
+                            handleDeleteClick('appointment', apt.id, startIndex + index, `Appointment with ${apt.doctorName} on ${apt.date || apt.appointmentDate}`);
                             setOpenMenu(null);
                           }}
                           className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
@@ -164,32 +206,17 @@ const AppointmentsTab = ({
         </table>
       </div>
 
-      {totalItems > 0 && (
-        <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center">
-          <div className="text-sm text-gray-500">
-            Showing {paginatedAppointments.length} of {totalItems} appointments
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-              {currentPage}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages || totalPages === 0}
-            >
-              Next
-            </Button>
-          </div>
+      {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
+      {totalItems > 0 && totalPages > 1 && (
+        <div className="px-6 py-3 border-t bg-gray-50">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={totalItems}
+            itemsPerPage={10}
+            itemLabel="appointments"
+          />
         </div>
       )}
     </div>

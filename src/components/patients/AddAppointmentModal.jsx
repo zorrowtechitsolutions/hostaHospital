@@ -1,57 +1,50 @@
-// src/components/patients/AddAppointmentModal.jsx - With toast notifications
+// src/components/patients/AddAppointmentModal.jsx - Updated with callback prop
 import React, { useState } from "react";
-import { X, Calendar, Clock, DollarSign, FileText } from "lucide-react";
-import { Modal, Input, Select, Textarea, Button, Avatar, Badge } from "../ui";
-import { showAddToast, showWarningToast } from "../ui/Toast";
+import { Calendar, FileText } from "lucide-react";
+import { Modal, Textarea, Button, Avatar, Badge, Loader } from "../ui";
+import { showWarningToast } from "../ui/Toast";
+import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 
-const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
+const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => {
   const [formData, setFormData] = useState({
-    patientType: "",
-    preferredMode: "",
     date: "",
-    startTime: "",
-    endTime: "",
-    reason: "",
     quickNotes: "",
-    paymentMethod: "",
-    selectDoctor: ""
+    selectDoctor: null,
+    doctorId: null,
+    doctorDepartment: null,
+    doctorDisplayName: null
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Fetch doctors using RTK Query
+  const { 
+    data: doctorsResponse, 
+    isLoading: isLoadingDoctors,
+    isFetching: isFetchingDoctors
+  } = useGetDoctorsQuery({}, { skip: !isOpen });
+
+  // Transform doctors data
+  const doctorsList = React.useMemo(() => {
+    if (!doctorsResponse?.data) return [];
+    
+    return doctorsResponse.data.map(doc => ({
+      id: doc.id,
+      name: doc.displayName || `${doc.firstName || ''} ${doc.lastName || ''}`.trim() || doc.name,
+      department: doc.specialist || doc.specialty || doc.department || 'General',
+      displayName: doc.displayName || doc.name
+    }));
+  }, [doctorsResponse]);
 
   if (!isOpen) return null;
 
   const validateForm = () => {
-    if (!formData.patientType) {
-      showWarningToast('Please select patient type', 3000);
-      return false;
-    }
-    if (!formData.preferredMode) {
-      showWarningToast('Please select consultation mode', 3000);
-      return false;
-    }
     if (!formData.selectDoctor) {
       showWarningToast('Please select doctor', 3000);
       return false;
     }
-    if (!formData.reason) {
-      showWarningToast('Please select reason for visit', 3000);
-      return false;
-    }
     if (!formData.date) {
       showWarningToast('Please select appointment date', 3000);
-      return false;
-    }
-    if (!formData.startTime) {
-      showWarningToast('Please select start time', 3000);
-      return false;
-    }
-    if (!formData.endTime) {
-      showWarningToast('Please select end time', 3000);
-      return false;
-    }
-    if (!formData.paymentMethod) {
-      showWarningToast('Please select payment method', 3000);
       return false;
     }
     return true;
@@ -64,117 +57,127 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave }) => {
     
     setIsSubmitting(true);
     
-    setTimeout(() => {
-      const appointmentData = {
-        id: `APT${Math.floor(Math.random() * 10000)}`,
-        patientId: patient?.id || "PT0025",
-        patientName: patient?.name || "James Carter",
-        doctorName: formData.selectDoctor,
-        department: patient?.department || "Cardiology",
-        appointmentDate: formData.date,
-        appointmentDateDisplay: new Date(formData.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        status: "Upcoming",
-        fee: "$350",
-        duration: "1 hour",
-        reason: formData.reason,
-        notes: formData.quickNotes,
-        paymentMethod: formData.paymentMethod,
-        patientType: formData.patientType,
-        preferredMode: formData.preferredMode,
-        avatar: patient?.imageUrl || "https://randomuser.me/api/portraits/men/32.jpg"
-      };
-      
-      if (onSave) onSave(appointmentData);
-      
-      showAddToast(
-        `Appointment scheduled for ${appointmentData.patientName}!`,
-        4000,
-        {
-          'Patient': appointmentData.patientName,
-          'Date': appointmentData.appointmentDateDisplay,
-          'Time': `${appointmentData.startTime} - ${appointmentData.endTime}`,
-          'Doctor': appointmentData.doctorName,
-          'Payment': appointmentData.paymentMethod
-        }
-      );
-      
-      setIsSubmitting(false);
-      onClose();
-    }, 500);
+    // Call the callback prop with booking data
+    if (onProceedApprove) {
+      onProceedApprove({
+        userId: patient?.userId || patient?.id,
+        patient_dob: patient?.dob || "",
+        patient_name: patient?.name || "",
+        patient_place: patient?.location?.place || patient?.address || "",
+        patient_phone: patient?.mobileNumber || patient?.phone || "",
+        hospitalId: patient?.hospitalId || null,
+        doctorId: formData.doctorId,
+        booking_date: formData.date,
+        department: formData.doctorDepartment,
+        displayName: formData.doctorDisplayName,
+        notes: formData.quickNotes
+      });
+    }
+    
+    setIsSubmitting(false);
+    onClose();
   };
 
-  const doctorsList = [
-    "Dr. Andrew Clark (Cardiology)", "Dr. Sarah Wilson (Cardiology)", "Dr. Michael Lee (Neurology)",
-    "Dr. Emily Chen (Pulmonology)", "Dr. Robert Johnson (Surgery)", "Dr. Maria Garcia (Pulmonology)",
-    "Dr. James Wilson (Cardiology)", "Dr. Katherine Brooks (Dental)", "Dr. Benjamin Harris (Dermatology)",
-    "Dr. Laura Mitchell (ENT)"
-  ];
+  const handleDoctorSelect = (e) => {
+    const doctorId = e.target.value;
+    const selectedDoctor = doctorsList.find(doc => doc.id == doctorId);
+    setFormData({
+      ...formData,
+      selectDoctor: selectedDoctor?.name || "",
+      doctorId: selectedDoctor?.id,
+      doctorDepartment: selectedDoctor?.department,
+      doctorDisplayName: selectedDoctor?.displayName
+    });
+  };
 
-  const reasonsList = ["General Checkup", "Follow-up Visit", "Emergency", "Consultation", "Vaccination", "Test Results Review", "Surgery Follow-up", "New Symptoms"];
-  const paymentMethods = ["Cash", "Card", "Insurance", "Online Transfer", "Check"];
-  const patientTypes = ["Out Patient", "In Patient", "Emergency", "New Patient", "Follow-up Patient"];
-  const consultationModes = ["In-person", "Video Call", "Phone Call", "Home Visit"];
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Schedule Appointment" size="lg" showCloseButton={false}>
+    <Modal isOpen={isOpen} onClose={onClose} title="Schedule Appointment" size="md" showCloseButton={false}>
       {/* Patient Info Summary */}
       <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 -mt-4 -mx-6 mb-4">
         <div className="flex items-center gap-4">
           <Avatar src={patient?.imageUrl || "https://randomuser.me/api/portraits/men/32.jpg"} alt={patient?.name} size="md" rounded="full" />
           <div>
             <div className="flex items-center gap-2">
-              <Badge variant="default" className="text-xs font-mono bg-white">{patient?.id || "PT0025"}</Badge>
-              <Badge variant="success" className="text-xs">Last Visit: {patient?.lastVisitDisplay || "17 Jun 2025"}</Badge>
+              <Badge variant="default" className="text-xs font-mono bg-white">#{patient?.id || "PT0025"}</Badge>
+              <Badge variant="success" className="text-xs">Last Visit: {patient?.lastVisitDisplay || "N/A"}</Badge>
             </div>
-            <h3 className="font-semibold text-gray-900">{patient?.name || "James Carter"}</h3>
-            <p className="text-xs text-gray-600">{patient?.gender || "Male"} • {patient?.age || 45} years</p>
+            <h3 className="font-semibold text-gray-900">{patient?.name || "Patient Name"}</h3>
+            <p className="text-xs text-gray-600">{patient?.gender || "N/A"} • {patient?.age || "N/A"} years</p>
           </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Select label="Patient Type" name="patientType" options={patientTypes} placeholder="Select Patient Type" value={formData.patientType} onChange={(e) => setFormData({...formData, patientType: e.target.value})} required />
-          <Select label="Preferred Mode of Consultation" name="preferredMode" options={consultationModes} placeholder="Select Mode" value={formData.preferredMode} onChange={(e) => setFormData({...formData, preferredMode: e.target.value})} required />
-          <Select label="Select Doctor" name="selectDoctor" options={doctorsList} placeholder="Select Doctor" value={formData.selectDoctor} onChange={(e) => setFormData({...formData, selectDoctor: e.target.value})} required />
-          <Select label="Reason for Visit" name="reason" options={reasonsList} placeholder="Select Reason" value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} required />
-          
+        <div className="grid grid-cols-1 gap-5">
+          {/* Doctor Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Appointment Date <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Doctor <span className="text-red-500">*</span>
+            </label>
+            <select
+              required
+              value={formData.doctorId || ""}
+              onChange={handleDoctorSelect}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              disabled={isLoadingDoctors || isFetchingDoctors}
+            >
+              <option value="">
+                {isLoadingDoctors || isFetchingDoctors ? "Loading doctors..." : "Select Doctor"}
+              </option>
+              {doctorsList.map(doctor => (
+                <option key={doctor.id} value={doctor.id}>
+                  {doctor.name} - {doctor.department}
+                </option>
+              ))}
+            </select>
+            {(isLoadingDoctors || isFetchingDoctors) && (
+              <div className="mt-2 flex items-center gap-2">
+                <Loader size="small" />
+                <span className="text-xs text-gray-500">Loading doctors...</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Appointment Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Appointment Date <span className="text-red-500">*</span>
+            </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input type="date" required min={today} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              <input 
+                type="date" 
+                required 
+                min={today} 
+                value={formData.date} 
+                onChange={(e) => setFormData({...formData, date: e.target.value})} 
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+              />
             </div>
           </div>
           
+          {/* Quick Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Time <span className="text-red-500">*</span></label>
-            <div className="relative"><Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><input type="time" required value={formData.startTime} onChange={(e) => setFormData({...formData, startTime: e.target.value})} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Time <span className="text-red-500">*</span></label>
-            <div className="relative"><Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><input type="time" required value={formData.endTime} onChange={(e) => setFormData({...formData, endTime: e.target.value})} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Mode of Payment <span className="text-red-500">*</span></label>
-            <div className="relative"><DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><select required value={formData.paymentMethod} onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"><option value="">Select Payment Method</option>{paymentMethods.map(method => <option key={method} value={method}>{method}</option>)}</select></div>
-          </div>
-          
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Quick Notes</label>
-            <div className="relative"><FileText className="absolute left-3 top-3 text-gray-400 w-4 h-4" /><textarea rows="3" value={formData.quickNotes} onChange={(e) => setFormData({...formData, quickNotes: e.target.value})} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Additional information about the appointment..." /></div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Quick Notes (Optional)</label>
+            <div className="relative">
+              <FileText className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
+              <textarea 
+                rows="3" 
+                value={formData.quickNotes} 
+                onChange={(e) => setFormData({...formData, quickNotes: e.target.value})} 
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="Additional information about the appointment..." 
+              />
+            </div>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-            {isSubmitting ? 'Scheduling...' : 'Add Appointment'}
+            {isSubmitting ? 'Processing...' : 'Proceed to Approve'}
           </Button>
         </div>
       </form>

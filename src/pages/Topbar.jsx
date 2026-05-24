@@ -10,7 +10,7 @@ import { useLogoutHospitalMutation } from '../../app/service/hospitalApi';
 
 const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -19,6 +19,21 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   
   // API hook for logout
   const [logoutHospital, { isLoading: isLoggingOut }] = useLogoutHospitalMutation();
+  
+  // Get from auth OR localStorage fallback (prevents crashes when user is undefined)
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  
+  const hospitalName = user?.name || storedUser?.name || "Dreams EMR";
+  const hospitalEmail = user?.email || storedUser?.email || "";
+  const hospitalType = user?.type || storedUser?.type || "Administrator";
+  
+  // Safe initials calculation with optional chaining to prevent crashes
+  const initials = hospitalName
+    ?.split(" ")
+    ?.map((word) => word[0])
+    ?.join("")
+    ?.slice(0, 2)
+    ?.toUpperCase() || "DE";
   
   const notifications = [
     { id: 1, title: 'New leave request', message: 'John Doe requested sick leave', time: '5 mins ago', read: false },
@@ -52,14 +67,11 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const handleLogout = async () => {
     console.log("Logout button clicked");
     try {
-      // Call the logout API endpoint
       await logoutHospital().unwrap();
       console.log("Logout API call successful");
     } catch (error) {
       console.error("Logout API error:", error);
-      // Even if API fails, we still want to clear local state
     } finally {
-      // Clear auth context and localStorage (already handled by logoutHospital mutation)
       logout();
       navigate("/sign-in");
     }
@@ -157,11 +169,18 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
             className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-lg transition-colors hover:bg-slate-700"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-              <span className="text-white font-medium text-sm">SS</span>
+              <span className="text-white font-medium text-sm">
+                {initials}
+              </span>
             </div>
+            
             <div className="hidden lg:block text-left">
-              <p className="text-sm font-medium text-white">Sarah Smith</p>
-              <p className="text-xs text-slate-300">Administrator</p>
+              <p className="text-sm font-medium text-white truncate max-w-[160px]">
+                {hospitalName}
+              </p>
+              <p className="text-xs text-slate-300">
+                {hospitalType}
+              </p>
             </div>
             <ChevronDown size={16} className="!text-white hidden lg:block" stroke="white" />
           </button>
@@ -169,8 +188,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Sarah Smith</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">sarah.smith@dreamsemr.com</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  {hospitalName}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {hospitalEmail}
+                </p>
               </div>
               <div className="py-2">
                 <button 
