@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx - With proper parent/child active states
+// src/components/Sidebar.jsx - With proper parent/child active states and hospital name
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -21,6 +21,7 @@ import {
   Droplet,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext"; // 1. Import useAuth
 
 const menu = [
   {
@@ -73,6 +74,7 @@ const menu = [
 export default function Sidebar({ sidebarOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth(); // 2. Get logged-in hospital data
   const [openDropdowns, setOpenDropdowns] = useState({});
 
   const toggleDropdown = (label) => {
@@ -118,12 +120,16 @@ export default function Sidebar({ sidebarOpen }) {
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-      {/* Logo */}
+      {/* 3. Updated Logo Section with dynamic hospital name */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
-          <h1 className="text-lg font-semibold">Dreams EMR</h1>
+          <h1 className="text-lg font-semibold truncate">
+            {user?.name || "Dreams EMR"}
+          </h1>
         ) : (
-          <h1 className="text-lg font-semibold text-center">D</h1>
+          <h1 className="text-lg font-semibold text-center">
+            {(user?.name || "D").charAt(0).toUpperCase()}
+          </h1>
         )}
       </div>
 

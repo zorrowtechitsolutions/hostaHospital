@@ -23,6 +23,7 @@ const PrescriptionTab = ({
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -147,33 +148,17 @@ const PrescriptionTab = ({
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalItems > 0 && (
-        <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center">
-          <div className="text-sm text-gray-500">
-            Showing {paginatedPrescriptions.length} of {totalItems} prescriptions
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-              {currentPage}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages || totalPages === 0}
-            >
-              Next
-            </Button>
-          </div>
+      {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
+      {totalItems > 0 && totalPages > 1 && (
+        <div className="px-6 py-3 border-t bg-gray-50">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            itemLabel="prescriptions"
+          />
         </div>
       )}
     </div>

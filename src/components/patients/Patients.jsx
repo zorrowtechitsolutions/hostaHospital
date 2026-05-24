@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - With filter search bar removed
+// src/components/patients/Patients.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,17 +13,16 @@ import {
   Eye,
   Edit,
   Users as UsersIcon,
-  Stethoscope,
   LayoutGrid,
   List,
   RefreshCcw,
   Upload,
   Trash2,
-  Filter,
-  Search
+  Filter
 } from 'lucide-react';
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
+import ApproveRequestModal from '../Requests/ApproveRequestModel';
 import { 
   Button, 
   Badge, 
@@ -32,11 +31,13 @@ import {
   SearchBar,
   Card
 } from '../ui';
+import { useGetPatientsQuery, useDeletePatientMutation } from '../../../app/service/patients';
+import { useCreateBookingMutation } from '../../../app/service/request';
+import { getAuthUser } from '../../utils/auth';
 
 const Patients = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -50,6 +51,10 @@ const Patients = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
   
+  // Approve Modal State
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [bookingData, setBookingData] = useState(null);
+  
   // Filter states
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -60,234 +65,50 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Patient data state
-  const [patientsData, setPatientsData] = useState({
-    outpatient: [],
-    inpatient: []
+  // Get hospitalId from auth
+  const authUser = getAuthUser();
+  const hospitalId = authUser?.id;
+
+  // API hooks
+  const { 
+    data: patientsResponse, 
+    isLoading: isLoadingPatients,
+    refetch: refetchPatients
+  } = useGetPatientsQuery({
+    hospitalId: hospitalId,
+    search: searchTerm || undefined,
+    page: currentPage,
+    limit: itemsPerPage
   });
 
-  // Load patients from localStorage on component mount
-  useEffect(() => {
-    loadPatientsFromStorage();
-  }, []);
+  const [deletePatient] = useDeletePatientMutation();
+  const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter, dateFilter, genderFilter]);
+  // Get patients array from response
+  const allPatients = patientsResponse?.data?.patients || patientsResponse?.data || [];
+  const totalPatients = patientsResponse?.data?.total || allPatients.length;
+  const totalPages = patientsResponse?.data?.totalPages || Math.ceil(totalPatients / itemsPerPage);
 
-  const loadPatientsFromStorage = () => {
-    setLoading(true);
-    const storedPatients = localStorage.getItem('patients');
-    if (storedPatients) {
-      const parsedPatients = JSON.parse(storedPatients);
-      const newOutpatient = [];
-      const newInpatient = [];
-      parsedPatients.forEach(patient => {
-        if (patient.roomNumber) {
-          newInpatient.push(patient);
-        } else {
-          newOutpatient.push(patient);
-        }
-      });
-      setPatientsData({
-        outpatient: newOutpatient,
-        inpatient: newInpatient
-      });
-    } else {
-      // Load default mock data if no patients in storage
-      const defaultPatients = {
-        outpatient: [
-          {
-            id: 'PT0025',
-            name: 'James Carter',
-            firstName: 'James',
-            lastName: 'Carter',
-            lastVisit: '2025-06-17',
-            lastVisitDisplay: '17 Jun 2025',
-            gender: 'Male',
-            location: 'California',
-            age: 45,
-            phone: '+1 (555) 123-4567',
-            email: 'james.carter@email.com',
-            bloodType: 'O+',
-            condition: 'Hypertension',
-            doctor: 'Dr. Sarah Wilson',
-            nextAppointment: '15 Jul 2025',
-            imageUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
-            status: 'Stable',
-            insurance: 'Blue Cross',
-            lastPrescription: 'Lisinopril 10mg',
-            department: 'Cardiology'
-          },
-          {
-            id: 'PT0026',
-            name: 'Emily Rodriguez',
-            firstName: 'Emily',
-            lastName: 'Rodriguez',
-            lastVisit: '2025-06-15',
-            lastVisitDisplay: '15 Jun 2025',
-            gender: 'Female',
-            location: 'New York',
-            age: 32,
-            phone: '+1 (555) 234-5678',
-            email: 'emily.r@email.com',
-            bloodType: 'A-',
-            condition: 'Migraine',
-            doctor: 'Dr. Michael Lee',
-            nextAppointment: '20 Jul 2025',
-            imageUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
-            status: 'Improving',
-            insurance: 'Aetna',
-            lastPrescription: 'Sumatriptan 50mg',
-            department: 'Neurology'
-          },
-          {
-            id: 'PT0029',
-            name: 'Sophia Martinez',
-            firstName: 'Sophia',
-            lastName: 'Martinez',
-            lastVisit: '2025-06-10',
-            lastVisitDisplay: '10 Jun 2025',
-            gender: 'Female',
-            location: 'Texas',
-            age: 28,
-            phone: '+1 (555) 567-8901',
-            email: 'sophia.m@email.com',
-            bloodType: 'B+',
-            condition: 'Asthma',
-            doctor: 'Dr. Emily Chen',
-            nextAppointment: '25 Jul 2025',
-            imageUrl: 'https://randomuser.me/api/portraits/women/68.jpg',
-            status: 'Controlled',
-            insurance: 'UnitedHealth',
-            lastPrescription: 'Albuterol Inhaler',
-            department: 'Pulmonology'
-          }
-        ],
-        inpatient: [
-          {
-            id: 'PT0027',
-            name: 'Michael Chen',
-            firstName: 'Michael',
-            lastName: 'Chen',
-            lastVisit: '2025-06-18',
-            lastVisitDisplay: '18 Jun 2025',
-            gender: 'Male',
-            location: 'Florida',
-            age: 58,
-            phone: '+1 (555) 345-6789',
-            email: 'michael.chen@email.com',
-            bloodType: 'AB+',
-            condition: 'Post-Surgery Recovery',
-            doctor: 'Dr. Robert Johnson',
-            nextAppointment: '22 Jun 2025',
-            imageUrl: 'https://randomuser.me/api/portraits/men/45.jpg',
-            status: 'Critical',
-            insurance: 'Medicare',
-            roomNumber: '304-A',
-            admissionDate: '10 Jun 2025',
-            dischargeDate: '25 Jun 2025',
-            department: 'Surgery'
-          },
-          {
-            id: 'PT0028',
-            name: 'Lisa Wong',
-            firstName: 'Lisa',
-            lastName: 'Wong',
-            lastVisit: '2025-06-16',
-            lastVisitDisplay: '16 Jun 2025',
-            gender: 'Female',
-            location: 'Washington',
-            age: 42,
-            phone: '+1 (555) 456-7890',
-            email: 'lisa.wong@email.com',
-            bloodType: 'O-',
-            condition: 'Pneumonia',
-            doctor: 'Dr. Maria Garcia',
-            nextAppointment: '24 Jun 2025',
-            imageUrl: 'https://randomuser.me/api/portraits/women/55.jpg',
-            status: 'Stable',
-            insurance: 'Kaiser Permanente',
-            roomNumber: '412-B',
-            admissionDate: '14 Jun 2025',
-            dischargeDate: '28 Jun 2025',
-            department: 'Pulmonology'
-          }
-        ]
-      };
-      setPatientsData(defaultPatients);
-      localStorage.setItem('patients', JSON.stringify([...defaultPatients.outpatient, ...defaultPatients.inpatient]));
-    }
-    setLoading(false);
+  // Separate patients into outpatient and inpatient based on patientType
+  const outpatientPatients = allPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
+  const inpatientPatients = allPatients.filter(p => p.patientType === 'Inpatient');
+
+  // Get active patients based on tab
+  const getActivePatients = () => {
+    if (activeTab === 'outpatient') return outpatientPatients;
+    if (activeTab === 'inpatient') return inpatientPatients;
+    return allPatients;
   };
 
-  // Navigation handler for View Details
-  const handleViewDetails = (patient) => {
-    navigate(`/patients/${patient.id}`, { state: { patient } });
-  };
+  const activePatients = getActivePatients();
 
-  // Navigation handler for Add Patient
-  const handleAddPatient = () => {
-    navigate('/add-patient');
-  };
-
-  // Navigation handler for Edit Patient - Navigate to edit page
-  const handleEditPatient = (patient) => {
-    navigate(`/edit-patient/${patient.id}`, { state: { patient } });
-  };
-
-  // Updated delete handler to use modal
-  const handleDeleteClick = (patient) => {
-    setPatientToDelete(patient);
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (patientToDelete) {
-      const existingPatients = JSON.parse(localStorage.getItem('patients') || '[]');
-      const updatedPatients = existingPatients.filter(p => p.id !== patientToDelete.id);
-      localStorage.setItem('patients', JSON.stringify(updatedPatients));
-      loadPatientsFromStorage();
-      
-      // Close modal and clear selection
-      setShowDeleteModal(false);
-      setPatientToDelete(null);
-    }
-  };
-
-  // Get unique departments for filter dropdown
-  const getAllDepartments = () => {
-    const allPatients = [...patientsData.outpatient, ...patientsData.inpatient];
-    const departments = [...new Set(allPatients.map(p => p.department).filter(Boolean))];
-    return departments.sort();
-  };
-
+  // Filter by gender and department
   const getFilteredPatients = () => {
-    let patients = [...patientsData.outpatient, ...patientsData.inpatient];
+    let patients = [...activePatients];
     
-    if (searchTerm) {
+    if (genderFilter) {
       patients = patients.filter(patient => 
-        patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (patient.location && patient.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (patient.firstName && patient.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (patient.lastName && patient.lastName.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
-    
-    if (statusFilter !== 'all') {
-      patients = patients.filter(patient => {
-        const isInPatient = patient.roomNumber ? true : false;
-        if (statusFilter === 'inpatient') return isInPatient === true;
-        if (statusFilter === 'outpatient') return isInPatient === false;
-        return true;
-      });
-    }
-    
-    if (dateFilter) {
-      patients = patients.filter(patient => 
-        patient.lastVisit === dateFilter
+        patient.gender === genderFilter
       );
     }
     
@@ -297,23 +118,46 @@ const Patients = () => {
       );
     }
     
-    if (genderFilter) {
-      patients = patients.filter(patient => 
-        patient.gender === genderFilter
-      );
-    }
-    
     return patients;
   };
 
   const filteredPatients = getFilteredPatients();
-  const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedPatients = filteredPatients.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedPatients = filteredPatients.slice(0, itemsPerPage);
 
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, departmentFilter, dateFilter, genderFilter, activeTab]);
+
+  // Navigation handlers
+  const handleViewDetails = (patient) => {
+    navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
+  };
+
+  const handleAddPatient = () => {
+    navigate('/add-patient');
+  };
+
+  const handleEditPatient = (patient) => {
+    navigate(`/edit-patient/${patient.id || patient._id}`, { state: { patient } });
+  };
+
+  const handleDeleteClick = (patient) => {
+    setPatientToDelete(patient);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (patientToDelete) {
+      try {
+        await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
+        refetchPatients();
+        setShowDeleteModal(false);
+        setPatientToDelete(null);
+      } catch (error) {
+        console.error('Error deleting patient:', error);
+        alert('Failed to delete patient. Please try again.');
+      }
     }
   };
 
@@ -324,24 +168,20 @@ const Patients = () => {
     setDateFilter("");
     setGenderFilter("");
     setCurrentPage(1);
-    loadPatientsFromStorage();
+    refetchPatients();
   };
 
   const handleExport = () => {
-    const filteredPatients = getFilteredPatients();
     const exportData = filteredPatients.map(patient => ({
-      'ID': patient.id,
+      'ID': patient.id || patient._id,
       'Name': patient.name,
       'Gender': patient.gender,
       'Age': patient.age,
-      'Location': patient.location || patient.city || '',
-      'Phone': patient.phone,
+      'Phone': patient.mobileNumber,
       'Email': patient.email || '',
-      'Condition': patient.condition,
-      'Status': patient.status,
-      'Blood Group': patient.bloodType || patient.bloodGroup,
-      'Last Visit': patient.lastVisitDisplay,
-      'Next Appointment': patient.nextAppointment || 'N/A'
+      'Blood Group': patient.bloodGroup,
+      'Patient Type': patient.patientType || 'Outpatient',
+      'Created At': patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : ''
     }));
     
     const dataStr = JSON.stringify(exportData, null, 2);
@@ -362,11 +202,7 @@ const Patients = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        const existingPatients = JSON.parse(localStorage.getItem('patients') || '[]');
-        const updatedPatients = [...existingPatients, ...importedData];
-        localStorage.setItem('patients', JSON.stringify(updatedPatients));
-        loadPatientsFromStorage();
-        alert(`Successfully imported ${importedData.length} patients!`);
+        alert(`Import functionality requires bulk create endpoint. Found ${importedData.length} records.`);
       } catch (error) {
         alert('Error parsing JSON file. Please make sure it\'s a valid JSON file.');
       }
@@ -381,12 +217,51 @@ const Patients = () => {
     setShowAppointmentModal(true);
   };
 
+  // Handle proceed from AddAppointmentModal
+  const handleProceedApprove = (data) => {
+    setBookingData(data);
+    setShowAppointmentModal(false);
+    setShowApproveModal(true);
+  };
+
+  // Handle confirm appointment - FINAL VERSION with correct payload (no userId/hospitalId)
+ // Handle confirm appointment - ALTERNATIVE PAYLOAD VERSION
+const handleConfirmAppointment = async (approveData) => {
+  try {
+    const payload = {
+      userId: bookingData?.userId,
+      patient_name: bookingData?.patient_name,
+      patient_dob: bookingData?.patient_dob,
+      patient_place: bookingData?.patient_place,
+      patient_phone: bookingData?.patient_phone,
+      hospitalId: bookingData?.hospitalId,
+      doctorId: bookingData?.doctorId,
+      booking_date: approveData?.booking_date,
+      department: bookingData?.department,
+      displayName: bookingData?.displayName,
+      status: "accepted"
+    };
+
+    console.log("CREATE APPOINTMENT", payload);
+
+    await createBooking(payload).unwrap();
+
+    setShowApproveModal(false);
+    setBookingData(null);
+
+    navigate("/appointments");
+  } catch (error) {
+    console.log("BOOKING ERROR", error);
+  }
+};
+
   const clearAllFilters = () => {
     setStatusFilter('all');
     setDateFilter('');
     setDepartmentFilter('');
     setGenderFilter('');
     setSearchTerm('');
+    setActiveTab('all');
   };
 
   const getActiveFilterCount = () => {
@@ -396,139 +271,21 @@ const Patients = () => {
     if (departmentFilter) count++;
     if (genderFilter) count++;
     if (searchTerm) count++;
+    if (activeTab !== 'all') count++;
     return count;
   };
 
-  // PatientCard for Grid View - ALL BUTTONS AT SAME POSITION
-  const PatientCard = ({ patient, type }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
-    const isOutpatient = type === 'outpatient';
+  // Get unique departments for filter dropdown
+  const getAllDepartments = () => {
+    const departments = [...new Set(allPatients.map(p => p.department).filter(Boolean))];
+    return departments.sort();
+  };
 
-    useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (menuRef.current && !menuRef.current.contains(e.target)) {
-          setShowMenu(false);
-        }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    return (
-      <Card hover className="overflow-hidden">
-        {/* Fixed height container - ensures all cards are identical height */}
-        <div className="p-5" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
-          
-          {/* Header Section - Fixed at top */}
-          <div style={{ flexShrink: 0 }}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <img 
-                  src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
-                  alt={patient.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-100"
-                  onError={(e) => {
-                    e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
-                  }}
-                />
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="default" className="text-xs font-mono">
-                      {patient.id}
-                    </Badge>
-                    {!isOutpatient && (
-                      <Badge variant="danger" className="text-xs">
-                        Room {patient.roomNumber}
-                      </Badge>
-                    )}
-                    <Badge variant={patient.status === 'Critical' ? 'danger' : 'success'} className="text-xs">
-                      {patient.status || 'Active'}
-                    </Badge>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
-                  <p className="text-xs text-gray-500">{patient.age} years • {patient.gender}</p>
-                </div>
-              </div>
-              
-              <div className="relative" ref={menuRef}>
-                <button onClick={() => setShowMenu(!showMenu)} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                  <MoreVertical className="w-4 h-4 text-gray-500" />
-                </button>
-                {showMenu && (
-                  <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                    <button onClick={() => { handleViewDetails(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
-                      <Eye size={16} /> View Details
-                    </button>
-                    <button onClick={() => { handleEditPatient(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100">
-                      <Calendar size={16} /> Appointment
-                    </button>
-                    <button onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Content Section - Takes remaining space but scrollable if needed */}
-          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Stethoscope className="w-4 h-4" />
-                <span>Department</span>
-              </div>
-              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.department || 'General'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <User className="w-4 h-4" />
-                <span>Doctor</span>
-              </div>
-              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.doctor || 'Not Assigned'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Calendar className="w-4 h-4" />
-                <span>Last Visit</span>
-              </div>
-              <span className="font-medium text-gray-900">{patient.lastVisitDisplay || 'N/A'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Phone className="w-4 h-4" />
-                <span>Phone</span>
-              </div>
-              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.phone || patient.mobileNumber}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Activity className="w-4 h-4" />
-                <span>Blood Type</span>
-              </div>
-              <span className="font-medium text-gray-900">{patient.bloodType || patient.bloodGroup || 'N/A'}</span>
-            </div>
-          </div>
-          
-          {/* Button Section - ALWAYS AT BOTTOM */}
-          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: '1rem' }}>
-            <div className="flex gap-2 border-t border-gray-100 pt-4">
-              <button 
-                onClick={() => handleAddAppointmentModal(patient)} 
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-              >
-                <Calendar className="w-4 h-4" /> 
-                Add Appointment
-              </button>
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
+  // Helper function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   // Row Action Menu Component for List View
@@ -572,7 +329,93 @@ const Patients = () => {
     );
   };
 
+  // Patient Card Component for Grid View
+  const PatientCard = ({ patient }) => {
+    return (
+      <Card hover className="overflow-hidden cursor-pointer" onClick={() => handleViewDetails(patient)}>
+        <div className="p-5" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flexShrink: 0 }}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <User className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="default" className="text-xs font-mono">
+                      #PT00{patient.id || patient._id?.slice(-6)}
+                    </Badge>
+                    <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
+                      {patient.patientType || 'Outpatient'}
+                    </Badge>
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
+                  <p className="text-xs text-gray-500">{patient.age || 'N/A'} years • {patient.gender || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Phone className="w-4 h-4" />
+                <span>Mobile</span>
+              </div>
+              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.mobileNumber}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Mail className="w-4 h-4" />
+                <span>Email</span>
+              </div>
+              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.email || 'N/A'}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Activity className="w-4 h-4" />
+                <span>Blood Group</span>
+              </div>
+              <span className="font-medium text-gray-900">{patient.bloodGroup || 'N/A'}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Calendar className="w-4 h-4" />
+                <span>Created</span>
+              </div>
+              <span className="font-medium text-gray-900">{formatDate(patient.createdAt)}</span>
+            </div>
+          </div>
+          
+          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: '1rem' }}>
+            <div className="flex gap-2 border-t border-gray-100 pt-4">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddAppointmentModal(patient);
+                }} 
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+              >
+                <Calendar className="w-4 h-4" /> 
+                Add Appointment
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   const activeFilterCount = getActiveFilterCount();
+
+  // Centered loader
+  if (isLoadingPatients && !allPatients.length) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -595,11 +438,45 @@ const Patients = () => {
         <h1 className="text-xl font-bold text-gray-800">Patients</h1>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'all' 
+              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          All Patients ({allPatients.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('outpatient')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'outpatient' 
+              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Outpatients ({outpatientPatients.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('inpatient')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'inpatient' 
+              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Inpatients ({inpatientPatients.length})
+        </button>
+      </div>
+
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex-1 max-w-md">
           <SearchBar 
-            placeholder="Search by name, ID..." 
+            placeholder="Search by name, mobile..." 
             value={searchTerm} 
             onChange={setSearchTerm} 
             onClear={() => setSearchTerm('')} 
@@ -649,20 +526,16 @@ const Patients = () => {
         </div>
       </div>
 
-      {/* FILTER SECTION - Without Search Bar */}
+      {/* FILTER SECTION */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          
-          {/* HEADER */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
                 <Filter size={18} className="text-[#1C62A0]" />
               </div>
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">
-                  Filters
-                </h2>
+                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
                 {activeFilterCount > 0 && (
                   <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
                     {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
@@ -670,29 +543,12 @@ const Patients = () => {
                 )}
               </div>
             </div>
-            <button
-              onClick={clearAllFilters}
-              className="text-sm font-medium text-red-500 hover:text-red-600"
-            >
+            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
               Clear All Filters
             </button>
           </div>
 
-          {/* FILTER GRID - Without Search */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-
-            {/* STATUS */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Status</option>
-              <option value="outpatient">Out Patient</option>
-              <option value="inpatient">In Patient</option>
-            </select>
-
-            {/* GENDER */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <select
               value={genderFilter}
               onChange={(e) => setGenderFilter(e.target.value)}
@@ -701,9 +557,9 @@ const Patients = () => {
               <option value="">All Genders</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
+              <option value="Other">Other</option>
             </select>
 
-            {/* DEPARTMENT */}
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
@@ -711,42 +567,43 @@ const Patients = () => {
             >
               <option value="">All Departments</option>
               {getAllDepartments().map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
+                <option key={dept} value={dept}>{dept}</option>
               ))}
             </select>
-
-            {/* LAST VISIT DATE */}
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            />
           </div>
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && <Loader centered />}
-
       {/* Patients View */}
-      {!loading && filteredPatients.length === 0 ? (
+      {filteredPatients.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
           <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-          <Button onClick={clearAllFilters}>Clear All Filters</Button>
         </div>
-      ) : !loading && viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredPatients.map((patient, index) => {
-            const isOutpatient = patientsData.outpatient.some(p => p.id === patient.id);
-            return <PatientCard key={patient.id || index} patient={patient} type={isOutpatient ? 'outpatient' : 'inpatient'} />;
-          })}
-        </div>
-      ) : !loading && viewMode === 'list' ? (
+      ) : viewMode === 'grid' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {paginatedPatients.map((patient) => (
+              <PatientCard key={patient.id || patient._id} patient={patient} />
+            ))}
+          </div>
+          
+          {totalPages > 1 && (
+            <div className="mt-6">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalPatients}
+                itemsPerPage={itemsPerPage}
+                itemLabel="patients"
+                variant="centered"
+              />
+            </div>
+          )}
+        </>
+      ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
@@ -762,105 +619,86 @@ const Patients = () => {
                   <th className="px-6 py-3">Patient ID</th>
                   <th className="px-6 py-3">Patient Name</th>
                   <th className="px-6 py-3">Gender</th>
-                  <th className="px-6 py-3">Department</th>
-                  <th className="px-6 py-3">Doctor Name</th>
-                  <th className="px-6 py-3">Last Visit</th>
-                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Mobile Number</th>
+                  <th className="px-6 py-3">Blood Group</th>
+                  <th className="px-6 py-3">Type</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedPatients.map((patient, index) => {
-                  const isInPatient = patient.roomNumber ? true : false;
-                  return (
-                    <tr key={patient.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">#{patient.id}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={patient.imageUrl || `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`} 
-                            alt={patient.name} 
-                            className="w-8 h-8 rounded-full object-cover"
-                            onError={(e) => { 
-                              e.target.src = `https://randomuser.me/api/portraits/${patient.gender === 'Male' ? 'men' : 'women'}/1.jpg`;
-                            }}
-                          />
-                          <span 
-                            onClick={() => handleViewDetails(patient)} 
-                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
-                          >
-                            {patient.name}
-                          </span>
+                {paginatedPatients.map((patient) => (
+                  <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
+                    <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                      #PT00{patient.id || patient._id?.slice(-6)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <User className="w-4 h-4 text-blue-600" />
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{patient.gender}</td>
-                      <td className="px-6 py-4 text-gray-600">{patient.department || 'General'}</td>
-                      <td className="px-6 py-4 text-gray-600">{patient.doctor || 'Not Assigned'}</td>
-                      <td className="px-6 py-4 text-gray-600">{patient.lastVisitDisplay || 'N/A'}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant={isInPatient ? 'warning' : 'info'} className="text-xs">
-                          {isInPatient ? "In Patient" : "Out Patient"}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <RowActionMenu patient={patient} />
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <span 
+                          onClick={() => handleViewDetails(patient)} 
+                          className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                        >
+                          {patient.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
+                    <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
+                    <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
+                        {patient.patientType || 'Outpatient'}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <RowActionMenu patient={patient} />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination */}
-          {filteredPatients.length > 0 && (
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredPatients.length)} of {filteredPatients.length} patients
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === 1
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-                  {currentPage}
-                </span>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === totalPages || totalPages === 0
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
+          {filteredPatients.length > 0 && totalPages > 1 && (
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalPatients}
+                itemsPerPage={itemsPerPage}
+                itemLabel="patients"
+              />
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
-      {/* Modals */}
+      {/* Add Appointment Modal */}
       {showAppointmentModal && (
         <AddAppointmentModal
           isOpen={showAppointmentModal}
-          onClose={() => setShowAppointmentModal(false)}
           patient={appointmentPatient}
-          onSave={(appointmentData) => {
-            console.log('Appointment saved:', appointmentData);
-            alert(`Appointment scheduled for ${appointmentPatient?.name} on ${appointmentData.appointmentDate} at ${appointmentData.startTime}`);
+          onClose={() => {
+            setShowAppointmentModal(false);
+            setAppointmentPatient(null);
           }}
+          onProceedApprove={handleProceedApprove}
+        />
+      )}
+
+      {/* Approve Request Modal - No bookingId prop needed */}
+      {showApproveModal && bookingData && (
+        <ApproveRequestModal
+          requestData={bookingData}
+          onClose={() => {
+            setShowApproveModal(false);
+            setBookingData(null);
+          }}
+          onConfirm={handleConfirmAppointment}
+          isLoading={isCreatingBooking}
         />
       )}
 

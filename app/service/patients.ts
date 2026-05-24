@@ -17,71 +17,47 @@ export interface Location {
 export interface Patient {
   id?: string;
   _id?: string;
-  firstName: string;
-  lastName: string;
-  middleName?: string | null;
-  bloodGroup: string;
+  name: string; // Changed from firstName + lastName
+  bloodGroup?: string;
   gender: string;
   maritalStatus?: string;
   patientType?: string;
-  age: number;
-  dob: string;
+  age?: number;
+  dob?: string;
   mobileNumber: string;
   emergencyNumber?: string;
   guardianName?: string;
   guardianRelation?: string | null;
-  addressLine1: string;
-  addressLine2?: string;
+  addressLine: string; // Changed from addressLine1
   location: Location;
   hospitalId: string | number;
-  referredBy?: string | null;
-  department?: string;
-  referredOn?: string | null;
-  notes?: string;
   email?: string;
   userId: string | number;
   profileImage?: string | null;
-  height?: number | null;
-  weight?: number | null;
-  bloodPressure?: string | null;
-  allergies?: string | null;
-  chronicConditions?: string | null;
   occupation?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreatePatientData {
-  firstName: string;
-  lastName: string;
-  bloodGroup: string;
+  name: string;
+  bloodGroup?: string;
   gender: string;
   maritalStatus?: string;
   patientType?: string;
-  age: number;
-  dob: string;
+  age?: number;
+  dob?: string;
   mobileNumber: string;
   emergencyNumber?: string;
   guardianName?: string;
-  addressLine1: string;
-  addressLine2?: string;
+  guardianRelation?: string | null;
+  addressLine: string;
   location: Location;
   hospitalId: string | number;
-  referredBy?: string | null;
-  department?: string;
-  referredOn?: string | null;
-  notes?: string;
   email?: string;
   userId: string | number;
   profileImage?: string | null;
-  height?: number | null;
-  weight?: number | null;
-  bloodPressure?: string | null;
-  allergies?: string | null;
-  chronicConditions?: string | null;
   occupation?: string | null;
-  guardianRelation?: string | null;
-  middleName?: string | null;
 }
 
 export interface PatientResponse {
@@ -195,58 +171,13 @@ export const patientsApi = api.injectEndpoints({
       invalidatesTags: ["Patient"],
     }),
 
-    // ==============================
-    // LOGIN PATIENT (for patient portal)
-    // ==============================
 
-    loginPatient: builder.mutation<PatientAuthResponse, LoginPatientData>({
-      query: (loginData) => ({
-        url: "/patients/login",
-        method: "POST",
-        body: loginData,
-      }),
 
-      transformResponse: (response: PatientAuthResponse) => {
-        const token = response.token || response.accessToken;
 
-        if (token) {
-          localStorage.setItem("patientAccessToken", token);
-        }
-
-        if (response.refreshToken) {
-          localStorage.setItem("patientRefreshToken", response.refreshToken);
-        }
-
-        return response;
-      },
-
-      invalidatesTags: ["Patient"],
-    }),
-
-    // ==============================
-    // LOGOUT PATIENT
-    // ==============================
-
-    logoutPatient: builder.mutation<{ message: string }, { patientId: string }>({
-      query: ({ patientId }) => ({
-        url: `/patients/logout/${patientId}`,
-        method: "PUT",
-      }),
-
-      onQueryStarted: async (_arg, { queryFulfilled }) => {
-        try {
-          await queryFulfilled;
-          localStorage.removeItem("patientAccessToken");
-          localStorage.removeItem("patientRefreshToken");
-        } catch (error) {
-          console.error("Logout error:", error);
-        }
-      },
-    }),
 
   }),
 
-  overrideExisting: false,
+
 });
 
 // ==============================
@@ -259,6 +190,4 @@ export const {
   useCreatePatientMutation,
   useUpdatePatientMutation,
   useDeletePatientMutation,
-  useLoginPatientMutation,
-  useLogoutPatientMutation,
 } = patientsApi;

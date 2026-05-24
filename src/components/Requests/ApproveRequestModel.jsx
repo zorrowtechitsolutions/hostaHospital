@@ -1,11 +1,9 @@
-// ApproveRequestModal.jsx
-import { useState, useEffect } from "react";
+// src/components/Requests/ApproveRequestModal.jsx - Updated (no booking ID required)
+import { useState } from "react";
 import { CalendarCheck, Hash } from "lucide-react";
 import { Modal, Button, Input, Select } from "../ui";
-import { showWarningToast, showErrorToast } from "../ui/Toast";
-import { useUpdateBookingMutation } from "../../../app/service/request";
+import { showWarningToast } from "../ui/Toast";
 
-// Constants moved outside component
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
   "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -22,15 +20,11 @@ const getDefaultTime = () => {
   const now = new Date();
   let hours = now.getHours();
   const minutes = now.getMinutes();
-
   hours += minutes > 30 ? 2 : 1;
-
   if (hours >= 24) hours = 9;
-
   return `${hours.toString().padStart(2, "0")}:00`;
 };
 
-// Reusable Info Row Component
 const InfoRow = ({ icon: Icon, label, value }) => (
   <div className="flex items-center gap-2">
     <Icon size={16} className="text-green-600" />
@@ -40,73 +34,48 @@ const InfoRow = ({ icon: Icon, label, value }) => (
   </div>
 );
 
-// Validation helper
 const validateForm = (date, consulting_time, token, showWarningToast) => {
   if (!date) {
     showWarningToast('Please select appointment date', 3000);
     return false;
   }
-
   if (!consulting_time) {
     showWarningToast('Please select appointment time', 3000);
     return false;
   }
-
   if (!token?.trim()) {
     showWarningToast('Please enter token number', 3000);
     return false;
   }
-
   return true;
 };
 
 const ApproveRequestModal = ({
   onClose,
   onConfirm,
-  bookingId,
   requestData,
   initialDate = "",
   initialTime = "",
   initialToken = "",
-  isLoading = false, // Add loading prop from parent
+  isLoading = false,
 }) => {
-  // States
   const [date, setDate] = useState(initialDate || getDefaultDate());
   const [consulting_time, setConsultingTime] = useState(initialTime || getDefaultTime());
   const [token, setToken] = useState(initialToken || "");
   const [isEditing, setIsEditing] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
-    const [updateBooking] = useUpdateBookingMutation();
 
-
-  // Validate bookingId on mount (only for warning, not API call)
-  useEffect(() => {
-    if (!bookingId) {
-      showErrorToast("Booking ID is missing. Cannot approve appointment.", 5000);
-    }
-  }, [bookingId]);
-
-  // Handle confirm - only calls parent's onConfirm (no API here)
   const handleConfirm = async () => {
-    if (!bookingId) {
-      showErrorToast("Booking ID is missing. Please refresh and try again.", 5000);
-      return;
-    }
-
     if (!validateForm(date, consulting_time, token, showWarningToast)) return;
 
-    // Pass data to parent component to handle API call
-    // if (onConfirm) {
-    //   onConfirm({
-    //     date,
-    //     consulting_time,
-    //     token: token.trim(),
-    //   });
-
-    // }
-      await updateBooking({ id: bookingId, data: { date, consulting_time, token: token.trim(), status: "accepted" } }).unwrap();
-
+    if (onConfirm) {
+      onConfirm({
+        booking_date: date,
+        consulting_time,
+        token: token.trim(),
+      });
+    }
 
     onClose();
   };
@@ -115,13 +84,12 @@ const ApproveRequestModal = ({
     setIsEditing(false);
   };
 
-  // Preview Mode
   const PreviewMode = () => (
     <>
       <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-green-800">
-            Suggested Schedule
+            Schedule Details
           </span>
           <Button
             variant="ghost"
@@ -172,7 +140,6 @@ const ApproveRequestModal = ({
     </>
   );
 
-  // Edit Mode
   const EditMode = () => (
     <div className="mt-4 space-y-4">
       <Input
@@ -208,20 +175,10 @@ const ApproveRequestModal = ({
       />
 
       <div className="flex gap-2 pt-2">
-        <Button 
-          variant="outline" 
-          onClick={() => setIsEditing(false)} 
-          fullWidth
-          disabled={isLoading}
-        >
+        <Button variant="outline" onClick={() => setIsEditing(false)} fullWidth disabled={isLoading}>
           Cancel Edit
         </Button>
-        <Button 
-          variant="success" 
-          onClick={handleSaveEdit} 
-          fullWidth
-          disabled={isLoading}
-        >
+        <Button variant="success" onClick={handleSaveEdit} fullWidth disabled={isLoading}>
           Save Changes
         </Button>
       </div>
@@ -229,14 +186,7 @@ const ApproveRequestModal = ({
   );
 
   return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title="Approve Appointment Request"
-      size="sm"
-      showCloseButton={false}
-    >
-      {/* HEADER */}
+    <Modal isOpen={true} onClose={onClose} title="Confirm Appointment" size="sm" showCloseButton={false}>
       <div className="text-center">
         <div className="flex justify-center mb-4">
           <div className="bg-green-100 p-3 rounded-full">
@@ -244,30 +194,28 @@ const ApproveRequestModal = ({
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          Review and confirm appointment details
+          Confirm appointment details
         </p>
-        {requestData?.patientName && (
+        {requestData?.patient_name && (
           <p className="text-xs text-gray-400 mt-2">
-            Patient: {requestData.patientName}
+            Patient: {requestData.patient_name}
           </p>
         )}
-        {bookingId && (
+        {requestData?.displayName && (
           <p className="text-xs text-gray-400 mt-1">
-            Booking ID: {bookingId}
+            Doctor: {requestData.displayName}
           </p>
         )}
       </div>
 
-      {/* MODE SELECTION */}
       {!isEditing ? <PreviewMode /> : <EditMode />}
 
-      {/* FOOTER BUTTONS */}
       <div className="flex justify-center gap-3 mt-5">
         <Button variant="outline" onClick={onClose} disabled={isLoading}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleConfirm} disabled={isLoading} loading={isLoading}>
-          {isLoading ? 'Confirming...' : 'Confirm Appointment'}
+          {isLoading ? 'Creating...' : 'Confirm Appointment'}
         </Button>
       </div>
     </Modal>

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import {
   Mail,
   Phone,
@@ -16,7 +18,12 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { showErrorToast, showSuccessToast, showWarningToast } from '../ui/Toast';
+
+import { useAuth } from '../../context/AuthContext';
+import {
+  useGetHospitalByIdQuery,
+  useUpdateHospitalMutation
+} from '../../../app/service/hospitalApi';
 
 // ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -29,119 +36,154 @@ const SECTION_TITLE_CLASS = 'text-lg font-semibold text-gray-900 mb-4 flex items
 const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
 const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
 
-const INITIAL_PROFILE = {
-  fullName: 'Alex Morgan',
-  username: '@alexmorgan',
-  email: 'alex.morgan@example.com',
-  phoneNumber: '+1 (555) 123-4567',
-  profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-  bio: 'Passionate full-stack developer with 8+ years of experience. React enthusiast, open-source contributor, and tech blogger. Love building meaningful applications that make a difference.',
-  websiteLink: 'https://alexmorgan.dev',
-  location: 'San Francisco, California, USA',
-  dateOfBirth: '1990-05-15',
-  gender: 'Male',
-  occupation: 'Senior Software Engineer',
-  education: 'M.S. in Computer Science'
-};
-
 // ==================== HELPER FUNCTIONS ====================
 const formatFileSize = (size) => `${(size / (1024 * 1024)).toFixed(2)}MB`;
 
-// ==================== REUSABLE COMPONENTS ====================
-const SectionTitle = ({ icon: Icon, title }) => (
-  <h3 className={SECTION_TITLE_CLASS}>
-    <Icon className={SECTION_ICON_CLASS} />
-    {title}
-  </h3>
-);
-
-const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
-    {isEditing ? (
-      <input
-        type={type}
-        value={value || ''}
-        onChange={onChange}
-        className={INPUT_CLASS}
-      />
-    ) : (
-      <div className="flex items-center space-x-2">
-        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
-        <span className="text-gray-900">{value || 'Not specified'}</span>
+// ==================== SKELETON LOADER ====================
+const ProfileSkeleton = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <div className="h-9 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+        <div className="h-5 w-64 bg-gray-200 rounded animate-pulse"></div>
       </div>
-    )}
-  </div>
-);
 
-const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
-    {isEditing ? (
-      <textarea
-        value={value || ''}
-        onChange={onChange}
-        rows={3}
-        className={INPUT_CLASS}
-        placeholder={`Enter ${label.toLowerCase()}`}
-      />
-    ) : (
-      <p className="text-gray-900 leading-relaxed">{value || 'Not specified'}</p>
-    )}
-  </div>
-);
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column Skeleton */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className={CARD_CLASS}>
+            <div className="flex flex-col items-center">
+              <div className="w-32 h-32 rounded-full bg-gray-200 animate-pulse"></div>
+              <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mt-4"></div>
+              <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+            </div>
+            <div className="mt-6">
+              <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </div>
 
-const ProfileSelect = ({ label, value, isEditing, onChange, options }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
-    {isEditing ? (
-      <select
-        value={value || ''}
-        onChange={onChange}
-        className={INPUT_CLASS}
-      >
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    ) : (
-      <div className="flex items-center space-x-2">
-        <Users className="w-4 h-4 text-gray-400" />
-        <span className="text-gray-900">{value || 'Not specified'}</span>
+        {/* Right Column Skeleton */}
+        <div className="lg:col-span-2 space-y-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={CARD_CLASS}>
+              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
+              <div className="space-y-4">
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    )}
+    </div>
   </div>
 );
 
+// ==================== MAIN PROFILE COMPONENT ====================
 const Profile = () => {
-  const [profile, setProfile] = useState(INITIAL_PROFILE);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const hospitalId = user?.id;
+  const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
+    skip: !hospitalId,
+  });
+  const [updateHospital, { isLoading: isUpdating }] = useUpdateHospitalMutation();
+
+  const [profile, setProfile] = useState({
+    fullName: '',
+    username: '',
+    email: '',
+    phoneNumber: '',
+    profilePicture: '',
+    bio: '',
+    websiteLink: '',
+    location: '',
+    occupation: '',
+    education: 'Hospital',
+    gender: '',
+    dateOfBirth: ''
+  });
+  
+  const [editForm, setEditForm] = useState({});
   const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState(profile);
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Handle fetch error (401 unauthorized)
+  useEffect(() => {
+    if (fetchError?.status === 401) {
+      showErrorToast('Session expired. Redirecting to login...', 2000);
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
+    }
+  }, [fetchError, logout, navigate]);
+
+  // Populate profile from API data
+  useEffect(() => {
+    if (hospitalData) {
+      const hospital = hospitalData.data || hospitalData;
+      
+      // Build location string from address
+      const locationParts = [
+        hospital.address?.place,
+        hospital.address?.district,
+        hospital.address?.state,
+        hospital.address?.country
+      ].filter(Boolean);
+      
+      const locationString = locationParts.join(', ');
+      
+      setProfile({
+        fullName: hospital.name || '',
+        username: '@' + (hospital.name || '').replace(/\s+/g, '').toLowerCase(),
+        email: hospital.email || '',
+        phoneNumber: hospital.phone || '',
+        profilePicture: hospital.profilePicture || '',
+        bio: hospital.about || '',
+        websiteLink: hospital.website || '',
+        location: locationString,
+        occupation: hospital.type || '',
+        education: 'Hospital',
+        gender: hospital.gender || '',
+        dateOfBirth: hospital.dateOfBirth || ''
+      });
+      
+      setEditForm({
+        fullName: hospital.name || '',
+        email: hospital.email || '',
+        phoneNumber: hospital.phone || '',
+        bio: hospital.about || '',
+        websiteLink: hospital.website || '',
+        location: locationString,
+        occupation: hospital.type || '',
+        education: 'Hospital'
+      });
+    }
+  }, [hospitalData]);
 
   const resetUploadState = () => {
     setPreviewImage(null);
     setUploadProgress(0);
   };
 
-  const updateProfile = (field, value) => {
-    setEditedProfile(prev => ({
+  const updateEditForm = (field, value) => {
+    setEditForm(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
   const getUpdatedFieldsCount = () => {
-    return Object.keys(profile).filter(key => profile[key] !== editedProfile[key]).length;
+    return Object.keys(profile).filter(key => profile[key] !== editForm[key]).length;
   };
 
   // Mock S3 upload function - replace with actual AWS SDK implementation
   const uploadToS3 = async (file) => {
-    // This is a mock implementation. Replace with actual S3 upload logic.
-    // For production, you would typically:
-    // 1. Get a pre-signed URL from your backend
-    // 2. Upload directly to S3 using that URL
     return new Promise((resolve, reject) => {
       let progress = 0;
       const interval = setInterval(() => {
@@ -160,18 +202,12 @@ const Profile = () => {
     if (!file) return false;
     
     if (file.size > MAX_FILE_SIZE) {
-      showErrorToast('File size must be less than 5MB', 3000, {
-        'Selected file': formatFileSize(file.size),
-        'Maximum size': '5MB'
-      });
+      showErrorToast('File size must be less than 5MB', 3000);
       return false;
     }
     
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
-      showErrorToast('Invalid file type', 3000, {
-        'Allowed types': 'JPEG, PNG, GIF, WEBP',
-        'Selected type': file.type
-      });
+      showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP', 3000);
       return false;
     }
     
@@ -185,13 +221,9 @@ const Profile = () => {
     
     try {
       const s3Url = await uploadToS3(file);
-      updateProfile('profilePicture', s3Url);
+      updateEditForm('profilePicture', s3Url);
       setUploadProgress(100);
-      showSuccessToast('Profile picture updated successfully!', 3000, {
-        'File name': file.name,
-        'File size': formatFileSize(file.size),
-        'Type': file.type.split('/')[1].toUpperCase()
-      });
+      showSuccessToast('Profile picture updated successfully!', 3000);
       return true;
     } catch (error) {
       showErrorToast('Failed to upload image. Please try again.', 4000);
@@ -206,30 +238,72 @@ const Profile = () => {
   };
 
   const removeImage = () => {
-    updateProfile('profilePicture', '');
+    updateEditForm('profilePicture', '');
     resetUploadState();
     showWarningToast('Profile picture removed', 2000);
   };
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedProfile({ ...profile });
+    setEditForm({ ...profile });
     resetUploadState();
     showSuccessToast('Edit mode activated', 2000);
   };
 
-  const handleSave = () => {
-    setProfile({ ...editedProfile });
-    setIsEditing(false);
-    resetUploadState();
-    showSuccessToast('Profile updated successfully', 3000, {
-      'Updated fields': getUpdatedFieldsCount(),
-      'Time': new Date().toLocaleTimeString()
-    });
+  const handleSave = async () => {
+    setIsSaving(true);
+    
+    try {
+      // Prepare update data
+      const updateData = {
+        name: editForm.fullName,
+        email: editForm.email,
+        phone: editForm.phoneNumber,
+        type: editForm.occupation,
+        about: editForm.bio,
+        website: editForm.websiteLink,
+      };
+      
+      // Call API to update hospital
+      await updateHospital({ 
+        id: hospitalId, 
+        updateHospital: updateData 
+      }).unwrap();
+      
+      // Update local profile state
+      setProfile({ ...editForm });
+      setIsEditing(false);
+      resetUploadState();
+      
+      // Update localStorage user data
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = { ...storedUser, ...updateData };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      showSuccessToast('Profile updated successfully!', 3000, {
+        'Updated fields': getUpdatedFieldsCount(),
+        'Time': new Date().toLocaleTimeString()
+      });
+      
+      refetch(); // Refresh data from API
+      
+    } catch (error) {
+      if (error.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(error.data?.message || 'Failed to update profile', 4000);
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
-    setEditedProfile({ ...profile });
+    setEditForm({ ...profile });
     setIsEditing(false);
     resetUploadState();
     showWarningToast('Changes discarded', 2000);
@@ -237,18 +311,23 @@ const Profile = () => {
 
   const getProfileImage = () => {
     if (previewImage) return previewImage;
-    if (isEditing && editedProfile.profilePicture) return editedProfile.profilePicture;
+    if (isEditing && editForm.profilePicture) return editForm.profilePicture;
     if (profile.profilePicture) return profile.profilePicture;
     return FALLBACK_IMAGE;
   };
+
+  // Loading state
+  if (isLoadingHospital) {
+    return <ProfileSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Profile</h1>
-          <p className="text-gray-600 mt-1">Manage your personal information and preferences</p>
+          <h1 className="text-3xl font-bold text-gray-900">Hospital Profile</h1>
+          <p className="text-gray-600 mt-1">Manage your hospital information and preferences</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -261,7 +340,7 @@ const Profile = () => {
                   <div className="relative group">
                     <img
                       src={getProfileImage()}
-                      alt="Profile"
+                      alt="Hospital Profile"
                       className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-100"
                       onError={(e) => {
                         e.currentTarget.onerror = null;
@@ -312,15 +391,15 @@ const Profile = () => {
                 </div>
                 
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
-                  {isEditing ? editedProfile.fullName : profile.fullName}
+                  {isEditing ? editForm.fullName : profile.fullName}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {isEditing ? editedProfile.username : profile.username}
+                  {isEditing ? editForm.username : profile.username}
                 </p>
                 <div className="flex items-center space-x-2 mt-2">
                   <div className="flex items-center text-sm text-gray-500">
                     <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-                    Verified Member
+                    Verified Hospital
                   </div>
                 </div>
               </div>
@@ -339,10 +418,11 @@ const Profile = () => {
                   <>
                     <button
                       onClick={handleSave}
-                      className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88]`}
+                      disabled={isSaving}
+                      className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88] disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Save className="w-4 h-4" />
-                      <span>Save Changes</span>
+                      <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                     </button>
                     <button
                       onClick={handleCancel}
@@ -360,13 +440,13 @@ const Profile = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* About Section */}
             <div className={CARD_CLASS}>
-              <SectionTitle icon={Heart} title="About Me" />
+              <SectionTitle icon={Heart} title="About Hospital" />
               
               <ProfileTextarea
                 label="Bio"
-                value={isEditing ? editedProfile.bio : profile.bio}
+                value={isEditing ? editForm.bio : profile.bio}
                 isEditing={isEditing}
-                onChange={(e) => updateProfile('bio', e.target.value)}
+                onChange={(e) => updateEditForm('bio', e.target.value)}
               />
 
               <div className="mt-4">
@@ -376,8 +456,8 @@ const Profile = () => {
                     <LinkIcon className="w-4 h-4 text-gray-400" />
                     <input
                       type="text"
-                      value={editedProfile.websiteLink || ''}
-                      onChange={(e) => updateProfile('websiteLink', e.target.value)}
+                      value={editForm.websiteLink || ''}
+                      onChange={(e) => updateEditForm('websiteLink', e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter website link"
                     />
@@ -405,73 +485,48 @@ const Profile = () => {
               <SectionTitle icon={Briefcase} title="Basic Information" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <ProfileField
-                  label="Full Name"
-                  value={isEditing ? editedProfile.fullName : profile.fullName}
+                  label="Hospital Name"
+                  value={isEditing ? editForm.fullName : profile.fullName}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('fullName', e.target.value)}
+                  onChange={(e) => updateEditForm('fullName', e.target.value)}
                 />
                 
                 <ProfileField
                   label="Username"
-                  value={isEditing ? editedProfile.username : profile.username}
+                  value={isEditing ? editForm.username : profile.username}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('username', e.target.value)}
+                  onChange={(e) => updateEditForm('username', e.target.value)}
                 />
                 
                 <ProfileField
                   label="Email"
-                  value={isEditing ? editedProfile.email : profile.email}
+                  value={isEditing ? editForm.email : profile.email}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('email', e.target.value)}
+                  onChange={(e) => updateEditForm('email', e.target.value)}
                   type="email"
                   icon={Mail}
                 />
                 
                 <ProfileField
                   label="Phone Number"
-                  value={isEditing ? editedProfile.phoneNumber : profile.phoneNumber}
+                  value={isEditing ? editForm.phoneNumber : profile.phoneNumber}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('phoneNumber', e.target.value)}
+                  onChange={(e) => updateEditForm('phoneNumber', e.target.value)}
                   icon={Phone}
                 />
               </div>
             </div>
 
-            {/* Personal Information */}
+            {/* Location Information */}
             <div className={CARD_CLASS}>
-              <SectionTitle icon={Heart} title="Personal Information" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <SectionTitle icon={Heart} title="Location Information" />
+              <div className="grid grid-cols-1 gap-4">
                 <ProfileField
                   label="Location"
-                  value={isEditing ? editedProfile.location : profile.location}
+                  value={isEditing ? editForm.location : profile.location}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('location', e.target.value)}
+                  onChange={(e) => updateEditForm('location', e.target.value)}
                   icon={MapPin}
-                />
-                
-                <ProfileField
-                  label="Date of Birth"
-                  value={isEditing ? editedProfile.dateOfBirth : profile.dateOfBirth}
-                  isEditing={isEditing}
-                  onChange={(e) => updateProfile('dateOfBirth', e.target.value)}
-                  type="date"
-                  icon={Calendar}
-                />
-                
-                <ProfileSelect
-                  label="Gender"
-                  value={isEditing ? editedProfile.gender : profile.gender}
-                  isEditing={isEditing}
-                  onChange={(e) => updateProfile('gender', e.target.value)}
-                  options={['Male', 'Female', 'Other', 'Prefer not to say']}
-                />
-                
-                <ProfileField
-                  label="Occupation"
-                  value={isEditing ? editedProfile.occupation : profile.occupation}
-                  isEditing={isEditing}
-                  onChange={(e) => updateProfile('occupation', e.target.value)}
-                  icon={Briefcase}
                 />
               </div>
             </div>
@@ -481,11 +536,11 @@ const Profile = () => {
               <SectionTitle icon={School} title="Additional Information" />
               <div className="grid grid-cols-1 gap-4">
                 <ProfileField
-                  label="Education"
-                  value={isEditing ? editedProfile.education : profile.education}
+                  label="Hospital Type"
+                  value={isEditing ? editForm.occupation : profile.occupation}
                   isEditing={isEditing}
-                  onChange={(e) => updateProfile('education', e.target.value)}
-                  icon={School}
+                  onChange={(e) => updateEditForm('occupation', e.target.value)}
+                  icon={Briefcase}
                 />
               </div>
             </div>
@@ -495,5 +550,49 @@ const Profile = () => {
     </div>
   );
 };
+
+// ==================== REUSABLE COMPONENTS ====================
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className={SECTION_TITLE_CLASS}>
+    <Icon className={SECTION_ICON_CLASS} />
+    {title}
+  </h3>
+);
+
+const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+    {isEditing ? (
+      <input
+        type={type}
+        value={value || ''}
+        onChange={onChange}
+        className={INPUT_CLASS}
+      />
+    ) : (
+      <div className="flex items-center space-x-2">
+        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
+        <span className="text-gray-900">{value || 'Not specified'}</span>
+      </div>
+    )}
+  </div>
+);
+
+const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+    {isEditing ? (
+      <textarea
+        value={value || ''}
+        onChange={onChange}
+        rows={3}
+        className={INPUT_CLASS}
+        placeholder={`Enter ${label.toLowerCase()}`}
+      />
+    ) : (
+      <p className="text-gray-900 leading-relaxed">{value || 'Not specified'}</p>
+    )}
+  </div>
+);
 
 export default Profile;

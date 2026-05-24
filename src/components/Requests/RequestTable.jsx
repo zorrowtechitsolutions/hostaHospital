@@ -646,11 +646,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               {filteredRequests.length}
             </span>
           </h2>
-          {filteredRequests.length > 0 && (
-            <p className="text-xs text-gray-500">
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
-            </p>
-          )}
         </div>
 
         {filteredRequests.length === 0 ? (
@@ -756,6 +751,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               </table>
             </div>
 
+            {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
             {totalPages > 1 && (
               <div className="px-6 py-4 border-t">
                 <Pagination
@@ -764,13 +760,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                   onPageChange={setCurrentPage}
                   totalItems={filteredRequests.length}
                   itemsPerPage={itemsPerPage}
+                  itemLabel="pending requests"
                 />
               </div>
             )}
           </>
         )}
       </Card>
-
 
       {/* Approve Modal */}
       {showApproveModal && selectedRequest && (
@@ -784,12 +780,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           initialTime={selectedRequest.consulting_time && selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}          
           initialToken=""
           isLoading={isApproving}
-          
         />
-        )}
-
-
-      
+      )}
 
       {/* Reject Modal */}
       {showRejectModal && selectedRequest && (

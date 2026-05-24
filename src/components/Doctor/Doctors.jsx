@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Modal } from '../ui';
+import { Badge, Modal, Pagination } from '../ui';
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
@@ -138,7 +138,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
                   </td>
                 ))}
-               </tr>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -653,35 +653,18 @@ const Doctors = () => {
             ))}
           </div>
 
+          {/* REPLACED GRID PAGINATION WITH REUSABLE COMPONENT */}
           {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handlePageChange(currentPage - 1)} 
-                  disabled={currentPage === 1} 
-                  className={`px-4 py-2 border rounded-md text-sm transition-all ${
-                    currentPage === 1 
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-4 py-2 bg-[#1C62A0] text-white rounded-md text-sm font-medium">
-                  {currentPage} of {totalPages}
-                </span>
-                <button 
-                  onClick={() => handlePageChange(currentPage + 1)} 
-                  disabled={currentPage === totalPages} 
-                  className={`px-4 py-2 border rounded-md text-sm transition-all ${
-                    currentPage === totalPages 
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
+            <div className="mt-6">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={filteredDoctors.length}
+                itemsPerPage={itemsPerPage}
+                itemLabel="doctors"
+                variant="centered"
+              />
             </div>
           )}
         </>
@@ -697,11 +680,6 @@ const Doctors = () => {
                 {filteredDoctors.length}
               </span>
             </h2>
-            {filteredDoctors.length > 0 && (
-              <p className="text-xs text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredDoctors.length)} of {filteredDoctors.length} doctors
-              </p>
-            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -777,39 +755,17 @@ const Doctors = () => {
             </table>
           </div>
 
+          {/* REPLACED LIST PAGINATION WITH REUSABLE COMPONENT */}
           {filteredDoctors.length > 0 && totalPages > 1 && (
-            <div className="px-6 py-3 border-t bg-gray-50 flex justify-between items-center flex-wrap gap-2">
-              <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredDoctors.length)} of {filteredDoctors.length} doctors
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handlePageChange(currentPage - 1)} 
-                  disabled={currentPage === 1} 
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === 1 
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-                  {currentPage} of {totalPages}
-                </span>
-                <button 
-                  onClick={() => handlePageChange(currentPage + 1)} 
-                  disabled={currentPage === totalPages} 
-                  className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                    currentPage === totalPages 
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-                      : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
+            <div className="px-6 py-3 border-t bg-gray-50">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={filteredDoctors.length}
+                itemsPerPage={itemsPerPage}
+                itemLabel="doctors"
+              />
             </div>
           )}
         </div>
