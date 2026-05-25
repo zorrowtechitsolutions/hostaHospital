@@ -24,6 +24,8 @@ export interface BloodBankResponse {
 
 export interface GetBloodBankParams {
   id?: string | number;
+  bloodGroup?: string;  
+  search_query?: string; 
 }
 
 // ================= API =================
@@ -46,6 +48,16 @@ export const bloodBankApi = api.injectEndpoints({
           queryParams.append("hospitalId", String(hospitalId));
         }
 
+        // ✅ ADDED - filter blood group
+        if (params?.bloodGroup) {
+          queryParams.append("bloodGroup", params.bloodGroup);
+        }
+
+        // ✅ ADDED - search
+        if (params?.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
+
         const queryString = queryParams.toString();
 
         // If ID is provided, get single blood bank record
@@ -58,10 +70,6 @@ export const bloodBankApi = api.injectEndpoints({
       },
 
       providesTags: (result, error, params) => {
-        // If we have a single record, provide a specific tag
-        if (params?.id && result?.data && !Array.isArray(result.data)) {
-          return [{ type: "BloodBank", id: params.id }];
-        }
         // Otherwise provide the general tag
         return ["BloodBank"];
       },

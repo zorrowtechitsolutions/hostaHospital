@@ -25,6 +25,9 @@ export interface Doctor {
   // appointment fields
   appointmentCount?: number;
   autoDecline?: number;
+  
+  // ✅ ADDED - status field for filtering
+  status?: string | boolean;
 }
 
 export interface LoginDoctorData {
@@ -43,6 +46,16 @@ export interface DoctorAuthResponse {
   error?: string;
 }
 
+// ✅ ADDED - params interface for getDoctors query
+export interface GetDoctorsParams {
+  name?: string;
+  speciality?: string;
+  status?: string | number | boolean;
+  search_query?: string;
+  page?: number;
+  limit?: number;
+}
+
 // ==============================
 // DOCTOR API
 // ==============================
@@ -55,22 +68,37 @@ export const doctorApi = api.injectEndpoints({
     // Automatically adds hospitalId from authenticated user
     // ==============================
     getDoctors: builder.query({
-      query: (params) => {
+      query: (params: GetDoctorsParams = {}) => {
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
-        
+
         // Automatically add hospitalId from authenticated user
         if (auth?.id) {
           queryParams.append("hospitalId", String(auth.id));
         }
-        
-        // Optional speciality filter (can be passed from component)
-        if (params?.speciality) {
+
+        // ✅ ADDED - filters
+        if (params.name) {
+          queryParams.append("name", params.name);
+        }
+
+        if (params.speciality) {
           queryParams.append("speciality", params.speciality);
         }
-        
-        const queryString = queryParams.toString();
-        return `/doctor${queryString ? `?${queryString}` : ""}`;
+
+        if (params.status !== undefined) {
+          queryParams.append("status", String(params.status));
+        }
+
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
+
+        // ✅ ADDED - pagination
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
+
+        return `/doctor?${queryParams.toString()}`;
       },
       providesTags: ["Doctor"],
     }),
@@ -159,10 +187,10 @@ export const doctorApi = api.injectEndpoints({
         method: "PUT",
         body: updateDoctor,
       }),
-invalidatesTags: (result, error, { id }) => [
-  { type: "Doctor", id },
-  "Doctor",
-],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Doctor", id },
+        "Doctor",
+      ],
     }),
 
     // ==============================
