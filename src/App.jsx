@@ -16,6 +16,7 @@ import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/Toast";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
+import ViewMedicalHistory from "./components/Appointment/ViewMedicalHistory";
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -38,7 +39,6 @@ const Pharmacy = lazy(() => import("./components/Pharmacy/Pharmacy"));
 const ViewDoctor = lazy(() => import("./components/Doctor/ViewDoctor"));
 const ViewProduct = lazy(() => import("./components/Pharmacy/ViewProduct"));
 const Consultation = lazy(() => import("./components/Appointment/Consultation"));
-const ViewMedicalHistory = lazy(() => import("./components/Appointment/ViewMedicalHistory"));
 const CalendarPage = lazy(() => import("./components/Appointment/CalendarPage"));
 const LaboratoryRegistrationForm = lazy(() => import("./components/Laborartory/LaboratoryRegistrationForm"));
 const NotificationsPage = lazy(() => import("./components/Notification/NotificationsPage"));

@@ -107,14 +107,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('accessToken');
   };
 
-  const value = {
-    user,
-    login,
-    logout,
-    loading,
-    isAuthenticated,
-    getToken: () => localStorage.getItem('accessToken'),
-  };
+const value = {
+  user,
+  login,
+  logout,
+  loading,
+  isAuthenticated,
+  getToken: () => localStorage.getItem('accessToken'),
+};
 
   return (
     <AuthContext.Provider value={value}>

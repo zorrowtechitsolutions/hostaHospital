@@ -1,9 +1,14 @@
-// src/components/Appointment/Consultation.jsx - Complete with toast notifications
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ViewMedicalHistory from "./ViewMedicalHistory";
-import { Button, Card, Input, Select, Textarea, Badge, Alert } from "../ui";
+import { Button, Card, Badge } from "../ui";
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
+import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
+import { useCreateVitalMutation } from "../../../app/service/vitals";
+import { getHospitalId } from "../../utils/auth";
+import { useCompleteBookingMutation } from "../../../app/service/request";
+import { useUpdateBookingMutation } from "../../../app/service/request";
+import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
 
 // Vital Input Component
 const VitalInput = ({ label, type = "text", unit, value, onChange, isEditing, onBlur }) => {
@@ -134,6 +139,13 @@ const Consultation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const appointmentData = location.state?.appointment || location.state || {};
+  
+  const [createPrescription, { isLoading: isCreateLoading }] = useCreatePrescriptionMutation();
+  const [createVital, { isLoading: isVitalLoading }] = useCreateVitalMutation();
+  const [updateBooking] = useUpdateBookingMutation();
+  
+  // Fetch prescription templates
+  const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
   const [medications, setMedications] = useState([
     { id: 1, name: "", dosage: "", duration: "", frequency: "", timing: "", instructions: "" }
@@ -153,6 +165,29 @@ const Consultation = () => {
   const [emptyStomach, setEmptyStomach] = useState("");
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    console.log("=== CONSULTATION PAGE DEBUG ===");
+    console.log("Appointment Data received:", appointmentData);
+    console.log("Doctor Name:", appointmentData.doctor?.name || appointmentData.doctorName);
+    console.log("Doctor Specialization:", appointmentData.doctor?.specialization || appointmentData.department);
+    console.log("Booking ID:", appointmentData.id);
+    console.log("==============================");
+  }, [appointmentData]);
+
+  // Debug template data
+  useEffect(() => {
+    console.log("=== PRESCRIPTION TEMPLATE DEBUG ===");
+    console.log("Existing Templates:", existingTemplates);
+    console.log("Templates Data:", existingTemplates?.data);
+    console.log("First Template:", existingTemplates?.data?.[0]);
+    if (existingTemplates?.data?.[0]) {
+      console.log("Template Type:", existingTemplates?.data?.[0]?.templateType);
+      console.log("Canvas BG:", existingTemplates?.data?.[0]?.canvasBg);
+      console.log("Design:", existingTemplates?.data?.[0]?.design);
+    }
+    console.log("================================");
+  }, [existingTemplates]);
 
   const validateMedication = (med) => {
     const errors = {};
@@ -181,6 +216,37 @@ const Consultation = () => {
     });
     setMedicationErrors(allErrors);
     return Object.keys(allErrors).length === 0;
+  };
+
+  const validateAppointmentData = () => {
+    const missingData = [];
+    
+    if (!appointmentData.id && !appointmentData.bookingId) {
+      missingData.push("Booking ID");
+    }
+    
+    const patientId = appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || null;
+    const userId = appointmentData.userId || appointmentData.patient?.userId || null;
+    
+    if (!patientId && !userId) {
+      missingData.push("Patient ID or User ID");
+    }
+    
+    const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
+    if (!doctorId) {
+      missingData.push("Doctor ID");
+    }
+    
+    const hospitalId = getHospitalId() || appointmentData.hospitalId;
+    if (!hospitalId) {
+      missingData.push("Hospital ID");
+    }
+    
+    if (missingData.length > 0) {
+      showErrorToast(`Missing required data: ${missingData.join(", ")}. Please go back and select a valid appointment.`);
+      return false;
+    }
+    return true;
   };
 
   const addMedicationRow = () => {
@@ -236,7 +302,7 @@ const Consultation = () => {
   
   const saveVitals = () => {
     setIsEditingVitals(false);
-    showSuccessToast("Vital signs saved successfully", 3000);
+    showSuccessToast("Vital signs saved locally", 3000);
   };
   
   const cancelVitalsEdit = () => setIsEditingVitals(false);
@@ -245,55 +311,117 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-const handleEndConsultation = async () => {
-  const isComplaintValid = validateComplaint();
-  const isMedicationsValid = validateAllMedications();
+  const handleEndConsultation = async () => {
+    if (!validateAppointmentData()) return;
+    
+    const isComplaintValid = validateComplaint();
+    const isMedicationsValid = validateAllMedications();
 
-  if (!isComplaintValid || !isMedicationsValid) return;
+    if (!isComplaintValid || !isMedicationsValid) return;
 
-  setIsSubmitting(true);
+    setIsSubmitting(true);
 
-  try {
-    // 1. save consultation
-    await createPrescription(consultationData);
+    try {
+      const bookingId = appointmentData.id || appointmentData.bookingId;
+      
+      const extractedPatientId = appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || null;
+      const extractedUserId = appointmentData.userId || appointmentData.patient?.userId || null;
+      const extractedDoctorId = appointmentData.doctorId || appointmentData.doctor?.id || appointmentData.doctor?.doctorId;
+      const extractedHospitalId = getHospitalId() || appointmentData.hospitalId || appointmentData.hospital?.id;
+      
+      const extractedDoctorName = appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName || appointmentData.doctor?.displayName || null;
+      const extractedDoctorSpecialization = appointmentData.doctor?.specialization || appointmentData.doctor?.department || appointmentData.department || appointmentData.specialization || null;
+      
+      if (!bookingId) throw new Error("Missing Booking ID");
+      if (!extractedDoctorId) throw new Error("Missing Doctor ID");
+      if (!extractedHospitalId) throw new Error("Missing Hospital ID");
+      if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
+      
+      const formattedMedications = medications.map(({ id, ...med }) => ({
+        ...med,
+        instructions: med.instructions || ""
+      }));
+      
+      const validMedications = formattedMedications.filter(med => med.name.trim() !== "");
 
-    // 2. update appointment/patient status
-    await updateAppointmentStatus(appointmentData.id, {
-      status: "Completed",
-      consultationCompleted: true,
-    });
+      // Get the selected template (first one from the list or null)
+      const selectedTemplate = existingTemplates?.data?.[0] || null;
+      
+      console.log("Selected Template for prescription:", selectedTemplate);
 
-    showSuccessToast("Consultation completed successfully");
+      // Create prescription data with template fields
+      const prescriptionData = {
+        bookingId,
+        hospitalId: extractedHospitalId,
+        doctorId: extractedDoctorId,
+        doctorName: extractedDoctorName,
+        doctorSpecialization: extractedDoctorSpecialization,
+        patientId: extractedPatientId || null,
+        userId: extractedUserId || null,
+        complaint: complaint.trim(),
+        medications: validMedications,
+        investigations: investigations.filter(i => i.trim() !== ""),
+        advice: advice.trim() || "",
+        next_consultation: nextConsultationDate || null,
+        empty_stomach: emptyStomach === "yes",
+        
+        // Template fields - use fetched template or defaults
+        templateType: selectedTemplate?.templateType || "demo",
+        canvasBg: selectedTemplate?.canvasBg || "#ffffff",
+        design: selectedTemplate?.design || [],
+        
+        // Vital signs
+        temperature: Number(vitals.temperature) || 0,
+        pulse: Number(vitals.pulse) || 0,
+        heartRate: Number(vitals.pulse) || 0,
+        respiratoryRate: Number(vitals.respiratoryRate) || 0,
+        spo2: Number(vitals.spo2) || 0,
+        height: Number(vitals.height) || 0,
+        weight: Number(vitals.weight) || 0,
+        bmi: Number(vitals.bmi) || 0,
+        waist: Number(vitals.waist) || 0,
+        bsa: Number(vitals.bsa) || 0,
+      };
 
-    // 3. go to patient list
-    navigate("/patients");
+      console.log("Final Prescription Data:", JSON.stringify(prescriptionData, null, 2));
 
-  } catch (error) {
-    console.error(error);
-    showErrorToast("Failed to complete consultation");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      const result = await createPrescription(prescriptionData).unwrap();
 
+      await updateBooking({
+        id: bookingId,
+        data: {
+          status: "completed"
+        }
+      }).unwrap();
+
+      console.log("✅ Prescription response:", result);
+      
+      showSuccessToast("Consultation completed successfully");
+      navigate("/visits", {
+        state: {
+          completedPatientId: extractedPatientId || result?.patientId,
+          showSuccess: true
+        },
+      });
+
+    } catch (error) {
+      console.error("❌ Error:", error);
+      showErrorToast(error?.data?.message || "Failed to complete consultation");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-sans">
       <div className="max-w-6xl mx-auto">
-        {/* HEADER WITH BACK BUTTON */}
         <div className="mb-4">
           <div className="flex items-center gap-3 mb-2">
             <button
               onClick={handleBackToAppointments}
-              className="flex items-center gap-1 text-gray-600  transition-colors group"
-              title="Back to Appointments"
+              className="flex items-center gap-1 text-gray-600 transition-colors group"
             >
-              <svg 
-                className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               <span className="text-sm font-medium">Back to Appointments</span>
@@ -303,76 +431,42 @@ const handleEndConsultation = async () => {
           <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
         </div>
 
-        {/* BASIC INFO CARD */}
+        {/* Basic Information Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-medium text-gray-800">Basic Information</h3>
-            <button 
-              onClick={() => setShowMedicalHistory(true)} 
-              className="text-[#1C62A0] text-xs cursor-pointer hover:underline"
-            >
+            <button onClick={() => setShowMedicalHistory(true)} className="text-[#1C62A0] text-xs cursor-pointer hover:underline">
               View Medical History →
             </button>
           </div>
           <div className="p-4 flex flex-wrap justify-between items-center gap-3">
             <div className="flex items-center gap-3">
-              <img 
-                src={appointmentData.patientAvatar || "https://randomuser.me/api/portraits/men/32.jpg"} 
-                className="w-10 h-10 rounded-lg object-cover" 
-                alt="patient" 
-              />
+              <img src={appointmentData.patientAvatar || "https://randomuser.me/api/portraits/men/32.jpg"} className="w-10 h-10 rounded-lg object-cover" alt="patient" />
               <div>
-                <Badge variant="info" className="text-[10px]">
-                  {appointmentData.patientType || "Out Patient"}
-                </Badge>
-                <p className="font-semibold text-gray-800 text-sm mt-1">
-                  {appointmentData.patientName || "Reyan Verol"}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Consultation ID : #{appointmentData.id || "C243546"}
-                </p>
+                <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
+                <p className="font-semibold text-gray-800 text-sm mt-1">{appointmentData.patientName || appointmentData.patient?.name || "Patient"}</p>
+                <p className="text-xs text-gray-500">Consultation ID : #{appointmentData.id || appointmentData.bookingId || "N/A"}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-xs bg-gray-50 px-3 py-2 rounded-lg">
-              <div>
-                <p className="text-gray-500 text-[10px]">Age / Gender</p>
-                <p className="font-medium text-gray-800 text-xs">
-                  {appointmentData.age || "28"} Years / {appointmentData.gender || "Male"}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500 text-[10px]">Department</p>
-                <p className="font-medium text-gray-800 text-xs">
-                  {appointmentData.department || "Cardiology"}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500 text-[10px]">Date</p>
-                <p className="font-medium text-gray-800 text-xs">
-                  {appointmentData.appointmentDateDisplay || "25 Jan 2025, 07:00 PM"}
-                </p>
-              </div>
+              <div><p className="text-gray-500 text-[10px]">Age / Gender</p><p className="font-medium text-gray-800 text-xs">{appointmentData.age || "28"} Years / {appointmentData.gender || "Male"}</p></div>
+              <div><p className="text-gray-500 text-[10px]">Department</p><p className="font-medium text-gray-800 text-xs">{appointmentData.department || "Cardiology"}</p></div>
+              <div><p className="text-gray-500 text-[10px]">Date</p><p className="font-medium text-gray-800 text-xs">{appointmentData.appointmentDateDisplay || "25 Jan 2025, 07:00 PM"}</p></div>
             </div>
           </div>
         </Card>
 
-        {/* VITALS CARD */}
+        {/* Vital Signs Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-medium text-gray-800">Vital Signs</h3>
             <div className="flex gap-2">
               {!isEditingVitals ? (
-                <button onClick={() => setIsEditingVitals(true)} className="text-xs text-[#1C62A0] font-medium">
-                  ✎ Edit
-                </button>
+                <button onClick={() => setIsEditingVitals(true)} className="text-xs text-[#1C62A0] font-medium">✎ Edit</button>
               ) : (
                 <>
-                  <button onClick={cancelVitalsEdit} className="text-xs text-gray-500 font-medium">
-                    Cancel
-                  </button>
-                  <button onClick={saveVitals} className="text-xs text-green-600 font-medium">
-                    ✓ Save
-                  </button>
+                  <button onClick={cancelVitalsEdit} className="text-xs text-gray-500 font-medium">Cancel</button>
+                  <button onClick={saveVitals} className="text-xs text-green-600 font-medium">✓ Save</button>
                 </>
               )}
             </div>
@@ -389,67 +483,44 @@ const handleEndConsultation = async () => {
               <VitalInput label="Waist" type="number" unit="cm" value={vitals.waist} onChange={(val) => updateVital("waist", val)} isEditing={isEditingVitals} />
               <VitalInput label="BSA" type="number" unit="m²" value={vitals.bsa} onChange={(val) => updateVital("bsa", val)} isEditing={isEditingVitals} />
             </div>
+            <p className="text-[10px] text-gray-400 mt-2">💡 Vital signs will be saved with the prescription and appear in the patient's Vitals tab</p>
           </div>
         </Card>
 
-        {/* COMPLAINT CARD */}
+        {/* Complaint Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100">
             <h3 className="text-sm font-medium text-gray-800">Complaint <span className="text-red-500">*</span></h3>
           </div>
           <div className="p-4">
-            <input 
-              className={`w-full px-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm ${complaintError ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
-              placeholder="Enter value separated by comma" 
-              value={complaint} 
-              onChange={(e) => { 
-                setComplaint(e.target.value); 
-                if (complaintError && e.target.value.trim()) setComplaintError(""); 
-              }} 
-            />
+            <input className={`w-full px-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm ${complaintError ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} placeholder="Enter value separated by comma" value={complaint} onChange={(e) => { setComplaint(e.target.value); if (complaintError && e.target.value.trim()) setComplaintError(""); }} />
             <p className="text-[10px] text-gray-400 mt-1">Example: Fever, Headache, Cough</p>
             {complaintError && <p className="text-red-500 text-[10px] mt-1">{complaintError}</p>}
           </div>
         </Card>
 
-        {/* MEDICATIONS CARD */}
+        {/* Medications Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-medium text-gray-800">Medications <span className="text-red-500">*</span></h3>
-            <button onClick={addMedicationRow} className="text-xs text-[#1C62A0] font-medium hover:underline">
-              + Add Another
-            </button>
+            <button onClick={addMedicationRow} className="text-xs text-[#1C62A0] font-medium hover:underline">+ Add Another</button>
           </div>
           <div className="p-4">
             {medications.map((medication) => (
-              <MedicationRow
-                key={medication.id}
-                medication={medication}
-                onUpdate={updateMedication}
-                onDelete={deleteMedicationRow}
-                errors={medicationErrors[medication.id] || {}}
-              />
+              <MedicationRow key={medication.id} medication={medication} onUpdate={updateMedication} onDelete={deleteMedicationRow} errors={medicationErrors[medication.id] || {}} />
             ))}
           </div>
         </Card>
 
-        {/* INVESTIGATIONS CARD */}
+        {/* Investigations Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100">
             <h3 className="text-sm font-medium text-gray-800">Investigations & Procedure</h3>
           </div>
           <div className="p-4">
             <div className="flex gap-2 mb-3">
-              <input 
-                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" 
-                placeholder="Enter " 
-                value={newInvestigation} 
-                onChange={(e) => setNewInvestigation(e.target.value)} 
-                onKeyPress={(e) => e.key === 'Enter' && addInvestigation()} 
-              />
-              <button onClick={addInvestigation} className="px-3 py-1.5 text-[#1C62A0] hover:text-[#6da0ca] rounded-lg transition-colors text-sm font-medium">
-                + Add
-              </button>
+              <input className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" placeholder="Enter investigation" value={newInvestigation} onChange={(e) => setNewInvestigation(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && addInvestigation()} />
+              <button onClick={addInvestigation} className="px-3 py-1.5 text-[#1C62A0] hover:text-[#6da0ca] rounded-lg transition-colors text-sm font-medium">+ Add</button>
             </div>
             {investigations.length > 0 && (
               <div className="mt-3 space-y-2">
@@ -458,9 +529,7 @@ const handleEndConsultation = async () => {
                   {investigations.map((item, index) => (
                     <div key={index} className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1">
                       <span className="text-sm text-gray-700">{item}</span>
-                      <button onClick={() => deleteInvestigation(index)} className="text-gray-400 hover:text-red-500 transition-colors">
-                        ✕
-                      </button>
+                      <button onClick={() => deleteInvestigation(index)} className="text-gray-400 hover:text-red-500 transition-colors">✕</button>
                     </div>
                   ))}
                 </div>
@@ -469,23 +538,17 @@ const handleEndConsultation = async () => {
           </div>
         </Card>
 
-        {/* ADVICE CARD */}
+        {/* Advice Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100">
             <h3 className="text-sm font-medium text-gray-800">Advice</h3>
           </div>
           <div className="p-4">
-            <textarea 
-              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" 
-              rows={2} 
-              placeholder="Write advice for the patient..."
-              value={advice}
-              onChange={(e) => setAdvice(e.target.value)}
-            />
+            <textarea className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" rows={2} placeholder="Write advice for the patient..." value={advice} onChange={(e) => setAdvice(e.target.value)} />
           </div>
         </Card>
 
-        {/* FOLLOW UP CARD */}
+        {/* Follow Up Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100">
             <h3 className="text-sm font-medium text-gray-800">Follow Up</h3>
@@ -494,21 +557,11 @@ const handleEndConsultation = async () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Next Consultation</label>
-                <input 
-                  type="date" 
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" 
-                  value={nextConsultationDate} 
-                  onChange={(e) => setNextConsultationDate(e.target.value)} 
-                />
-                <p className="text-[10px] text-gray-400 mt-1">Select date for follow-up</p>
+                <input type="date" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" value={nextConsultationDate} onChange={(e) => setNextConsultationDate(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Empty Stomach Required?</label>
-                <select 
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white" 
-                  value={emptyStomach}
-                  onChange={(e) => setEmptyStomach(e.target.value)}
-                >
+                <select className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white" value={emptyStomach} onChange={(e) => setEmptyStomach(e.target.value)}>
                   <option value="">Select</option>
                   <option value="yes">Yes, come on empty stomach</option>
                   <option value="no">No, can have food</option>
@@ -516,29 +569,35 @@ const handleEndConsultation = async () => {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
-              <Button variant="outline" size="sm" onClick={handleBackToAppointments}>
-                Cancel
-              </Button>
-              <Button 
-                variant="primary" 
-                size="sm" 
-                onClick={handleEndConsultation}
-                disabled={isSubmitting}
-                loading={isSubmitting}
-              >
-                {isSubmitting ? "Processing..." : "End Consultation"}
+              <Button variant="outline" size="sm" onClick={handleBackToAppointments}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={handleEndConsultation} disabled={isSubmitting || isCreateLoading || isVitalLoading || isTemplatesLoading} loading={isSubmitting || isCreateLoading || isVitalLoading}>
+                {isSubmitting || isCreateLoading || isVitalLoading ? "Processing..." : "End Consultation"}
               </Button>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Medical History Modal */}
-      <ViewMedicalHistory 
-        isOpen={showMedicalHistory} 
-        onClose={() => setShowMedicalHistory(false)} 
-        patientId={appointmentData.patientId}
-      />
+<ViewMedicalHistory
+  isOpen={showMedicalHistory}
+  onClose={() => setShowMedicalHistory(false)}
+  patientId={
+    appointmentData.patientId ||
+    appointmentData.patient?.id ||
+    appointmentData.patient?.patientId
+  }
+  department={
+    appointmentData.department ||
+    appointmentData.doctorDepartment ||
+    appointmentData.departmentName
+  }
+  doctorName={
+    appointmentData.doctor?.name ||
+    appointmentData.doctorName ||
+    appointmentData.displayName
+  }
+/>
+
     </div>
   );
 };

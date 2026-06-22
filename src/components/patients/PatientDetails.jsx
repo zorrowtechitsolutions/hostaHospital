@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon } from "lucide-react";
+import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText } from "lucide-react";
 import EditAppointmentModal from "./EditAppointmentModal";
 import EditVisitHistory from "./EditVisitHistoryModal";
 import DeleteModal from "./DeleteModel";
@@ -25,7 +25,10 @@ import PrescriptionReportModal from "./modals/PrecriptionReportModal";
 // Import API hooks
 import { useGetPatientByIdQuery } from "../../../app/service/patients";
 import { useGetBookingsQuery } from "../../../app/service/request";
+import { useGetPrescriptionsQuery, useDeletePrescriptionMutation } from "../../../app/service/prescription";
+import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../app/service/vitals";
 import { Loader } from "../ui";
+import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 const PatientDetails = () => {
   const location = useLocation();
@@ -84,7 +87,7 @@ const PatientDetails = () => {
   } = useGetPatientByIdQuery(patientId, {
     skip: !patientId
   });
-  
+
   // Fetch all bookings for appointments and visits
   const {
     data: bookingResponse,
@@ -92,7 +95,47 @@ const PatientDetails = () => {
     isLoading: isLoadingBookings
   } = useGetBookingsQuery({});
 
+  // Fetch prescriptions for this patient
+  const {
+    data: prescriptionsResponse,
+    isLoading: isLoadingPrescriptions,
+    refetch: refetchPrescriptions
+  } = useGetPrescriptionsQuery(
+    { patientId: patientId },
+    { skip: !patientId }
+  );
+
+  const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
+
+  console.log("PATIENT ID", patientId);
+  console.log("PRESCRIPTION ID", prescriptionId);
+
+  // Fetch vitals for this patient
+  const {
+    data: vitalsResponse,
+    isLoading: isLoadingVitals,
+    refetch: refetchVitals
+  } = useGetVitalsByPatientIdQuery(
+    {
+      patientId,
+      prescriptionId,
+    },
+    {
+      skip: !patientId || !prescriptionId,
+    }
+  );
+
+  // Delete prescription mutation
+  const [deletePrescription] = useDeletePrescriptionMutation();
+  
+  // Delete vital mutation
+  const [deleteVital] = useDeleteVitalMutation();
+
   const patientData = patientResponse?.data || patientResponse || passedPatient;
+
+  console.log("PATIENT API DATA", patientData);
+  console.log("VITALS RESPONSE", vitalsResponse);
+  console.log("PRESCRIPTIONS RESPONSE", prescriptionsResponse);
   
   // Filter appointments for current patient
   const patientAppointments = React.useMemo(() => {
@@ -131,7 +174,6 @@ const PatientDetails = () => {
       ? bookingResponse 
       : bookingResponse?.data || bookingResponse?.bookings || bookingResponse?.result || [];
     
-    // Filter by patient name AND status (accepted or completed)
     return bookingList
       .filter((booking) => {
         const bookingPatientName = booking.patient_name || booking.patientName;
@@ -140,7 +182,6 @@ const PatientDetails = () => {
         return String(bookingPatientName || '').toLowerCase() === String(currentPatientName || '').toLowerCase() && isAcceptedOrCompleted;
       })
       .map((booking, index) => {
-        // Get patient image key
         const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
         
         return {
@@ -159,11 +200,260 @@ const PatientDetails = () => {
           reason: booking.reason || "",
           notes: booking.notes || "",
           originalBooking: booking
-        };
+                };
       });
   }, [bookingResponse, patientData]);
 
-  // Combined patient state - initialized with empty values
+  // Transform prescriptions from API with proper doctor info extraction
+  const formattedPrescriptions = React.useMemo(() => {
+    const apiPrescriptions = prescriptionsResponse?.data || [];
+    
+    return apiPrescriptions.map((prescription, index) => {
+      const bookingList = Array.isArray(bookingResponse)
+        ? bookingResponse
+        : bookingResponse?.data || bookingResponse?.bookings || [];
+
+      let booking = null;
+      
+      if (prescription.bookingId) {
+        booking = bookingList.find(
+          (b) => Number(b.id) === Number(prescription.bookingId) ||
+                 String(b.id) === String(prescription.bookingId) ||
+                 Number(b.bookingId) === Number(prescription.bookingId)
+        );
+      }
+      
+      let doctorName = null;
+      
+      if (booking) {
+        if (booking.doctor_name) doctorName = booking.doctor_name;
+        else if (booking.displayName) doctorName = booking.displayName;
+        else if (booking.doctorName) doctorName = booking.doctorName;
+        else if (booking.doctor?.name) doctorName = booking.doctor?.name;
+      }
+      
+      if (!doctorName || doctorName === "null" || doctorName === "undefined") {
+        if (prescription.doctorName && prescription.doctorName !== "null" && prescription.doctorName !== "undefined") {
+          doctorName = prescription.doctorName;
+        } else if (prescription.prescribedBy && prescription.prescribedBy !== "Doctor" && prescription.prescribedBy !== "null") {
+          doctorName = prescription.prescribedBy;
+        } else if (prescription.doctor?.name) {
+          doctorName = prescription.doctor.name;
+        }
+      }
+      
+      let doctorSpecialization = null;
+      
+      if (booking) {
+        if (booking.department) doctorSpecialization = booking.department;
+        else if (booking.specialization) doctorSpecialization = booking.specialization;
+        else if (booking.doctor_department) doctorSpecialization = booking.doctor_department;
+      }
+      
+      if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
+        if (prescription.doctorSpecialization && prescription.doctorSpecialization !== "null" && prescription.doctorSpecialization !== "undefined") {
+          doctorSpecialization = prescription.doctorSpecialization;
+        } else if (prescription.specialization) {
+          doctorSpecialization = prescription.specialization;
+        } else if (prescription.doctor?.specialization) {
+          doctorSpecialization = prescription.doctor.specialization;
+        } else if (prescription.doctor?.department) {
+          doctorSpecialization = prescription.doctor.department;
+        }
+      }
+      
+      if (!doctorName || doctorName === "null" || doctorName === "undefined") {
+        doctorName = `Dr. ${prescription.doctorId || "Unknown"}`;
+      }
+      
+      if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
+        doctorSpecialization = "General Medicine";
+      }
+      
+      return {
+        id: prescription.id || prescription._id || index,
+        type: prescription.medications?.[0]?.name || "Prescription",
+        quantity: prescription.medications?.length || 0,
+        date: prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+        prescribedBy: doctorName,
+        doctorName: doctorName,
+        doctorSpecialization: doctorSpecialization,
+        amount: prescription.amount || "N/A",
+        paymentMethod: prescription.paymentMethod || "Insurance",
+        status: "Completed",
+        fullData: prescription,
+        complaint: prescription.complaint,
+        advice: prescription.advice,
+        investigations: prescription.investigations,
+        vitals: prescription.vitals,
+        medications: prescription.medications,
+        next_consultation: prescription.next_consultation
+      };
+    });
+  }, [prescriptionsResponse, bookingResponse]);
+
+  // Transform vitals from API AND extract from prescriptions
+  const formattedVitals = React.useMemo(() => {
+    // FIX: Safely handle vitalsResponse.data - ensure it's an array
+    let apiVitals = [];
+    const vitalsData = vitalsResponse?.data;
+    
+    if (Array.isArray(vitalsData)) {
+      apiVitals = vitalsData;
+    } else if (vitalsData && typeof vitalsData === 'object') {
+      // Check if it's a single vital object
+      if (vitalsData.id || vitalsData._id || vitalsData.temperature || vitalsData.heartRate) {
+        apiVitals = [vitalsData];
+      }
+      // Check for nested array properties
+      else if (Array.isArray(vitalsData.data)) {
+        apiVitals = vitalsData.data;
+      }
+      else if (Array.isArray(vitalsData.results)) {
+        apiVitals = vitalsData.results;
+      }
+      else if (Array.isArray(vitalsData.items)) {
+        apiVitals = vitalsData.items;
+      }
+    }
+    
+    const prescriptions = prescriptionsResponse?.data || [];
+    
+    // Extract vitals from prescriptions that have vitals data
+    const vitalsFromPrescriptions = prescriptions
+      .filter(p => p.vitals && Object.keys(p.vitals).length > 0 && 
+             (p.vitals.temperature || p.vitals.pulse || p.vitals.spo2 || p.vitals.bloodPressure || p.vitals.heartRate))
+      .map((prescription, index) => {
+        const bookingList = Array.isArray(bookingResponse)
+          ? bookingResponse
+          : bookingResponse?.data || bookingResponse?.bookings || [];
+        
+        let booking = null;
+        if (prescription.bookingId) {
+          booking = bookingList.find(b => Number(b.id) === Number(prescription.bookingId));
+        }
+        
+        let doctorName = prescription.doctorName;
+        if (!doctorName && booking) {
+          doctorName = booking.doctor_name || booking.displayName || booking.doctorName;
+        }
+        if (!doctorName) {
+          doctorName = prescription.prescribedBy || "Dr. Unknown";
+        }
+        
+        let doctorSpecialization = prescription.doctorSpecialization;
+        if (!doctorSpecialization && booking) {
+          doctorSpecialization = booking.department || booking.specialization || booking.doctor_department;
+        }
+        if (!doctorSpecialization) {
+          doctorSpecialization = "General Medicine";
+        }
+        
+        return {
+          id: `vital-from-prescription-${prescription.id || index}`,
+          patientId: prescription.patientId,
+          doctorId: prescription.doctorId,
+          bookingId: prescription.bookingId,
+          temperature: prescription.vitals?.temperature,
+          pulse: prescription.vitals?.pulse,
+          heartRate: prescription.vitals?.heartRate || prescription.vitals?.pulse,
+          respiratoryRate: prescription.vitals?.respiratoryRate,
+          spo2: prescription.vitals?.spo2,
+          bloodPressure: prescription.vitals?.bloodPressure,
+          bloodPressureSystolic: prescription.vitals?.bloodPressureSystolic,
+          bloodPressureDiastolic: prescription.vitals?.bloodPressureDiastolic,
+          height: prescription.vitals?.height,
+          weight: prescription.vitals?.weight,
+          bmi: prescription.vitals?.bmi,
+          waist: prescription.vitals?.waist,
+          bsa: prescription.vitals?.bsa,
+          notes: `Vitals from consultation on ${prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}`,
+          date: prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+          time: prescription.createdAt ? new Date(prescription.createdAt).toLocaleTimeString() : "",
+          createdAt: prescription.createdAt,
+          doctorName: doctorName,
+          doctorSpecialization: doctorSpecialization,
+          department: doctorSpecialization,
+          source: "from_prescription"
+        };
+      });
+    
+    // Format API vitals
+    const formattedApiVitals = apiVitals.map((vital, index) => {
+      const bookingList = Array.isArray(bookingResponse)
+        ? bookingResponse
+        : bookingResponse?.data || bookingResponse?.bookings || [];
+      
+      let booking = null;
+      if (vital.bookingId) {
+        booking = bookingList.find(b => Number(b.id) === Number(vital.bookingId));
+      }
+      
+      let doctorName = vital.doctorName || vital.doctor?.name;
+      if (!doctorName && booking) {
+        doctorName = booking.doctor_name || booking.displayName || booking.doctorName;
+      }
+      
+      let doctorSpecialization = vital.doctorSpecialization || vital.specialization || vital.department;
+      if (!doctorSpecialization && booking) {
+        doctorSpecialization = booking.department || booking.specialization || booking.doctor_department;
+      }
+      
+      return {
+        id: vital.id || vital._id || index,
+        patientId: vital.patientId,
+        doctorId: vital.doctorId,
+        bookingId: vital.bookingId,
+        temperature: vital.temperature,
+        heartRate: vital.heartRate || vital.pulse,
+        pulse: vital.pulse,
+        respiratoryRate: vital.respiratoryRate,
+        spo2: vital.spo2,
+        bloodPressure: vital.bloodPressure,
+        bloodPressureSystolic: vital.bloodPressureSystolic,
+        bloodPressureDiastolic: vital.bloodPressureDiastolic,
+        height: vital.height,
+        weight: vital.weight,
+        bmi: vital.bmi,
+        waist: vital.waist,
+        bsa: vital.bsa,
+        notes: vital.notes,
+        date: vital.createdAt ? new Date(vital.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+        time: vital.createdAt ? new Date(vital.createdAt).toLocaleTimeString() : "",
+        createdAt: vital.createdAt,
+        doctorName: doctorName || "Dr. Unknown",
+        doctorSpecialization: doctorSpecialization || "General Medicine",
+        department: doctorSpecialization || booking?.department || "General Medicine",
+        fullData: vital,
+        source: "from_api"
+      };
+    });
+    
+    // Combine both sources
+    const allVitals = [...formattedApiVitals, ...vitalsFromPrescriptions];
+    
+    // Remove duplicates (same date and doctor)
+    const uniqueVitals = allVitals.reduce((unique, current) => {
+      const isDuplicate = unique.some(item => 
+        item.date === current.date && 
+        item.doctorName === current.doctorName
+      );
+      if (!isDuplicate) {
+        unique.push(current);
+      }
+      return unique;
+    }, []);
+    
+    // Sort by date (newest first)
+    return uniqueVitals.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date);
+      const dateB = new Date(b.createdAt || b.date);
+      return dateB - dateA;
+    });
+    
+  }, [vitalsResponse, prescriptionsResponse, bookingResponse]);
+
+  // Combined patient state
   const [patient, setPatient] = useState({
     id: '',
     name: '',
@@ -202,7 +492,8 @@ const PatientDetails = () => {
     if (patientData) {
       setPatient({
         id: patientData.id || patientData._id,
-        name: patientData.name || '',
+        patientId: patientData.patientId || "",
+        name: patientData.name || "",
         gender: patientData.gender || '',
         phone: patientData.mobileNumber || patientData.phone || '',
         email: patientData.email || '',
@@ -223,9 +514,9 @@ const PatientDetails = () => {
         temperature: patientData.temperature || '',
         bloodPressure: patientData.bloodPressure || '',
         appointmentsList: patientAppointments,
-        visitHistoryList: patientVisits,  // Use patientVisits for visit history
-        vitalsList: patientData.vitals || [],
-        prescriptionsList: patientData.prescriptions || [],
+        visitHistoryList: patientVisits,
+        vitalsList: formattedVitals,
+        prescriptionsList: formattedPrescriptions,
         medicalHistoryList: patientData.medicalHistory || [],
         documentsList: patientData.documents || [],
         insuranceList: patientData.insurance || [],
@@ -233,7 +524,7 @@ const PatientDetails = () => {
         visits: patientVisits
       });
     }
-  }, [patientData, patientAppointments, patientVisits]);
+  }, [patientData, patientAppointments, patientVisits, formattedPrescriptions, formattedVitals]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -325,7 +616,51 @@ const PatientDetails = () => {
   };
 
   const handleViewPrescriptionDetails = (prescription) => {
-    setSelectedPrescription(prescription);
+const formattedPrescription = {
+  ...prescription.fullData,
+
+  id: prescription.id,
+  prescribedBy: prescription.prescribedBy,
+  doctorName: prescription.doctorName,
+  doctorSpecialization: prescription.doctorSpecialization,
+
+  medications:
+    prescription.medications ||
+    prescription.fullData?.medications ||
+    [],
+
+  complaint:
+    prescription.complaint ||
+    prescription.fullData?.complaint,
+
+  advice:
+    prescription.advice ||
+    prescription.fullData?.advice,
+
+  design:
+    prescription.fullData?.design || [],
+
+  canvasBg:
+    prescription.fullData?.canvasBg || "#ffffff"
+};
+
+
+    console.log(
+  "FULL PRESCRIPTION",
+  prescription.fullData
+);
+
+console.log(
+  "Prescription Design:",
+  prescription.fullData?.design
+);
+
+console.log(
+  "Canvas Bg:",
+  prescription.fullData?.canvasBg
+);
+    
+    setSelectedPrescription(formattedPrescription);
     setShowPrescriptionModal(true);
     setOpenMenu(null);
   };
@@ -334,6 +669,7 @@ const PatientDetails = () => {
     setShowPrescriptionModal(false);
     setSelectedPrescription(null);
     refetchPatient();
+    refetchPrescriptions();
   };
 
   const handleEditAppointmentClick = (appointment) => {
@@ -379,41 +715,44 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
-  const handleConfirmDelete = () => {
-    const { type, index, id } = deleteConfig;
+  const handleConfirmDelete = async () => {
+    const { type, id, index } = deleteConfig;
     
-    switch(type) {
-      case 'appointment':
+    try {
+      if (type === 'prescription') {
+        await deletePrescription(id).unwrap();
+        showSuccessToast("Prescription deleted successfully");
+        await refetchPrescriptions();
+      } else if (type === 'vital') {
+        await deleteVital(id).unwrap();
+        showSuccessToast("Vital record deleted successfully");
+        await refetchVitals();
+      } else if (type === 'appointment') {
         const updatedAppointments = patient.appointmentsList.filter((_, i) => i !== index);
         setPatient({...patient, appointmentsList: updatedAppointments});
-        break;
-      case 'vital':
-        const updatedVitals = patient.vitalsList.filter((_, i) => i !== index);
-        setPatient({...patient, vitalsList: updatedVitals});
-        break;
-      case 'visit':
+        showSuccessToast("Appointment deleted successfully");
+      } else if (type === 'visit') {
         const updatedVisits = patient.visitHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, visitHistoryList: updatedVisits});
-        break;
-      case 'prescription':
-        const updatedPrescriptions = patient.prescriptionsList.filter((_, i) => i !== index);
-        setPatient({...patient, prescriptionsList: updatedPrescriptions});
-        break;
-      case 'medical':
+        showSuccessToast("Visit record deleted successfully");
+      } else if (type === 'medical') {
         const updatedMedicalHistory = patient.medicalHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, medicalHistoryList: updatedMedicalHistory});
-        break;
-      case 'document':
+        showSuccessToast("Medical history deleted successfully");
+      } else if (type === 'document') {
         const updatedDocuments = patient.documentsList.filter((_, i) => i !== index);
         setPatient({...patient, documentsList: updatedDocuments});
-        break;
-      case 'insurance':
+        showSuccessToast("Document deleted successfully");
+      } else if (type === 'insurance') {
         const updatedInsurance = patient.insuranceList.filter(item => item.id !== id);
         setPatient({...patient, insuranceList: updatedInsurance});
-        break;
-      default:
-        break;
+        showSuccessToast("Insurance record deleted successfully");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      showErrorToast(`Failed to delete ${type}: ${error?.data?.message || error.message}`);
     }
+    
     setShowDeleteModal(false);
     setDeleteConfig({ type: '', id: null, index: null, name: '' });
   };
@@ -435,7 +774,6 @@ const PatientDetails = () => {
     { id: "prescription", label: "Prescription", icon: Pill },
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
-    // { id: "insurance", label: "Insurance", icon: ShieldIcon }
   ];
 
   const renderTabContent = () => {
@@ -494,14 +832,11 @@ const PatientDetails = () => {
         return <MedicalHistoryTab patient={patient} handleViewMedicalDetails={handleViewMedicalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "documents": 
         return <DocumentsTab patient={patient} handleDownloadDocument={handleDownloadDocument} handleDeleteClick={handleDeleteClick} />;
-      case "insurance": 
-        return <InsuranceTab patient={patient} handleDeleteClick={handleDeleteClick} getStatusBadge={getStatusBadge} />;
       default: 
         return <ProfileTab patient={patient} handleEditPatient={handleEditPatient} handleAddAppointment={handleAddAppointment} handleViewAppointmentDetails={handleViewAppointmentDetails} handleViewVisitDetails={handleViewVisitDetails} handleViewVitalDetails={handleViewVitalDetails} setTab={setTab} getStatusBadge={getStatusBadge} />;
     }
   };
 
-  // Loading state
   if (isLoadingPatient && !patientData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -510,7 +845,6 @@ const PatientDetails = () => {
     );
   }
 
-  // Patient not found state
   if (!patientData && !isLoadingPatient) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -561,7 +895,6 @@ const PatientDetails = () => {
       
       {renderTabContent()}
       
-      {/* ========== ALL MODALS ========== */}
       {showAppointmentDetailsModal && selectedAppointment && (
         <AppointmentDetailsModal data={selectedAppointment} onClose={() => setShowAppointmentDetailsModal(false)} />
       )}
@@ -583,17 +916,24 @@ const PatientDetails = () => {
       )}
       
       {showPrescriptionModal && (
-        <PrescriptionReportModal
-          isOpen={showPrescriptionModal}
-          onClose={() => {
-            setShowPrescriptionModal(false);
-            setSelectedPrescription(null);
-          }}
-          onSave={handleSavePrescription}
-          patient={patient}
-          existingPrescription={selectedPrescription}
-        />
-      )}
+<PrescriptionReportModal
+  isOpen={showPrescriptionModal}
+  onClose={() => {
+    setShowPrescriptionModal(false);
+    setSelectedPrescription(null);
+  }}
+  patient={patient}
+  existingPrescription={selectedPrescription}
+  templateDesign={selectedPrescription?.design || []}
+  templateBgColor={selectedPrescription?.canvasBg || "#ffffff"}
+  doctor={{
+    displayName: selectedPrescription?.doctorName,
+    department: selectedPrescription?.doctorSpecialization,
+    specialist: selectedPrescription?.doctorSpecialization,
+  }}
+/>
+
+)}
       
       {showEditModal && (
         <EditPatientModal patient={patient} setPatient={setPatient} onClose={() => setShowEditModal(false)} />
@@ -639,7 +979,6 @@ const PatientDetails = () => {
   );
 };
 
-// EditPatientModal component
 const EditPatientModal = ({ patient, setPatient, onClose }) => {
   const navigate = useNavigate();
   
@@ -661,61 +1000,6 @@ const EditPatientModal = ({ patient, setPatient, onClose }) => {
             Continue to Edit
           </button>
         </div>
-      </div>
-    </div>
-  );
-};
-
-// InsuranceTab component
-const InsuranceTab = ({ patient, handleDeleteClick, getStatusBadge }) => {
-  if (!patient.insuranceList || patient.insuranceList.length === 0) {
-    return (
-      <div className="bg-white rounded-xl p-6 text-center">
-        <p className="text-gray-500">No insurance records found</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
-            <tr>
-              <th className="px-6 py-3">Policy No</th>
-              <th className="px-6 py-3">Provider</th>
-              <th className="px-6 py-3">Plan Type</th>
-              <th className="px-6 py-3">Coverage</th>
-              <th className="px-6 py-3">Start Date</th>
-              <th className="px-6 py-3">Expiry Date</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {patient.insuranceList.map((item, idx) => (
-              <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-6 py-4 font-medium">{item.policyNo}</td>
-                <td className="px-6 py-4">{item.provider}</td>
-                <td className="px-6 py-4">{item.planType}</td>
-                <td className="px-6 py-4">{item.coverageAmount}</td>
-                <td className="px-6 py-4">{item.startDate}</td>
-                <td className="px-6 py-4">{item.expiryDate}</td>
-                <td className="px-6 py-4">
-                  <span className={getStatusBadge(item.status)}>{item.status}</span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button
-                    onClick={() => handleDeleteClick('insurance', item.id, idx, item.policyNo)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );

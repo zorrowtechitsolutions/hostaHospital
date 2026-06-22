@@ -34,13 +34,13 @@ export interface BookingRequest {
   consulting_time?: string;
   reason?: string;
   status?: BookingStatus;
-  
+  patient_age?: number;
+  patient_gender?: string;
+  booking_status?: string;
   // Keep old fields for backward compatibility (optional)
   patientId?: string;
   patientName?: string;
-  age?: number;
   contact?: string;
-  gender?: string;
   doctorName?: string;
   doctorSpecialty?: string;
   appointmentDate?: string;
@@ -66,12 +66,34 @@ export interface BookingResponse {
   success: boolean;
   message: string;
   data?: BookingRequest | BookingRequest[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 }
 
+// ENHANCED GetBookingsParams with all filter options
 export interface GetBookingsParams {
   id?: string | number;
+  userId?: string | number;
+  hospitalId?: string | number;
   doctorId?: string | number;
+  department?: string;
+  phone?: string;
   status?: BookingStatus;
+  doctor_name?: string;
+  patient_name?: string;
+  gender?: string;
+  startDate?: string;
+  endDate?: string;
+  date?: string;
+  search_query?: string;
+  page?: number;
+  limit?: number;
 }
 
 // ================= API =================
@@ -80,12 +102,14 @@ export const bookingApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ================= GET BOOKINGS =================
-    // Automatically adds hospitalId from authenticated user
-    getBookings: builder.query<
-      BookingResponse,
-      GetBookingsParams | void
-    >({
-      query: (params) => {
+    // ENHANCED: Supports all filter parameters
+   getBookings: builder.query<
+  BookingResponse,
+  GetBookingsParams
+>({
+  query: (
+    params: GetBookingsParams = {}
+  ) => {
         const queryParams = new URLSearchParams();
         
         // Auto-inject hospitalId from auth
@@ -94,21 +118,69 @@ export const bookingApi = api.injectEndpoints({
           queryParams.append("hospitalId", String(hospitalId));
         }
 
-        if (params?.doctorId) {
+        // Override if params has hospitalId
+        if (params.hospitalId) {
+          queryParams.set("hospitalId", String(params.hospitalId));
+        }
+
+        if (params.userId) {
+          queryParams.append("userId", String(params.userId));
+        }
+
+        if (params.doctorId) {
           queryParams.append("doctorId", String(params.doctorId));
         }
 
-        if (params?.status) {
+        if (params.department) {
+          queryParams.append("department", params.department);
+        }
+
+        if (params.phone) {
+          queryParams.append("phone", params.phone);
+        }
+
+        if (params.status) {
           queryParams.append("status", params.status);
         }
 
-        const queryString = queryParams.toString();
-
-        if (params?.id) {
-          return `/booking/${params.id}${queryString ? `?${queryString}` : ""}`;
+        if (params.doctor_name) {
+          queryParams.append("doctor_name", params.doctor_name);
         }
 
-        return `/booking${queryString ? `?${queryString}` : ""}`;
+        if (params.patient_name) {
+          queryParams.append("patient_name", params.patient_name);
+        }
+
+        if (params.gender) {
+          queryParams.append("gender", params.gender);
+        }
+
+        if (params.startDate) {
+          queryParams.append("startDate", params.startDate);
+        }
+
+        if (params.endDate) {
+          queryParams.append("endDate", params.endDate);
+        }
+
+        if (params.date) {
+          queryParams.append("date", params.date);
+        }
+
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
+
+        // Pagination
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
+
+        // If fetching single booking by ID
+        if (params.id) {
+          return `/booking/${params.id}?${queryParams.toString()}`;
+        }
+
+        return `/booking?${queryParams.toString()}`;
       },
 
       providesTags: (result, error, params) => {
@@ -137,23 +209,25 @@ export const bookingApi = api.injectEndpoints({
         return {
           url: "/booking",
           method: "POST",
-body: {
-  userId: data.userId,
-  patient_name: data.patient_name,
-  patient_dob: data.patient_dob,
-  patient_place: data.patient_place,
-  patient_phone: data.patient_phone,
-  doctorId: data.doctorId,
-  displayName: data.displayName,
-  department: data.department,
-  booking_date: data.booking_date,
-  consulting_time: data.consulting_time,  // ✅ This is included
-  token: data.token,                       // ✅ This is included
-  reason: data.reason,
-  status: data.status || "accepted",
-  hospitalId: hospitalId
-},
-};
+          body: {
+            userId: data.userId,
+            patient_name: data.patient_name,
+            patient_dob: data.patient_dob,
+            patient_place: data.patient_place,
+            patient_phone: data.patient_phone,
+            patient_age: data.patient_age,
+            patient_gender: data.patient_gender,
+            doctorId: data.doctorId,
+            displayName: data.displayName,
+            department: data.department,
+            booking_date: data.booking_date,
+            consulting_time: data.consulting_time,
+            token: data.token,
+            status: data.status || "accepted",
+            booking_status: data.booking_status,
+            hospitalId: hospitalId
+          },
+        };
       },
       invalidatesTags: ["Booking"],
     }),
@@ -196,9 +270,9 @@ body: {
         url: `/booking/${id}`,
         method: "PUT",
         body: {
-      rejectionReason: data.reason,
-      status: "declined",
-    },
+          rejectionReason: data.reason,
+          status: "declined",
+        },
       }),
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },

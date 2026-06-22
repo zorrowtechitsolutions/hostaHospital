@@ -151,15 +151,14 @@ const getUserId = () => {
 export const uploadToS3 = async (
   file: File,
   key: string | null = null,
-  staffId?: number | string
 ): Promise<UploadResponse> => {
   try {
     const role = getUserRole()?.toLowerCase();
     const token = getToken();
 
     // Get user ID based on role
-    const userId = staffId || getUserId();
-
+const hospitalId = getHospitalId();
+const userId = hospitalId;
     // COMPRESS
     const compressed = await compressImage(file);
 
@@ -171,15 +170,15 @@ export const uploadToS3 = async (
     console.log("Token exists:", !!token);
     console.log("Existing key:", key);
 
-    const body = {
-      filename: compressed.name,
-      contentType: compressed.type,
-      role, // doctor / staff / hospital
-      id: userId,
-      ...(key
-        ? { key }
-        : { size: compressed.size }),
-    };
+const body = {
+  filename: compressed.name,
+  contentType: compressed.type,
+  role,
+  id: Number(userId),
+  ...(key
+    ? { key }
+    : { size: compressed.size }),
+};
 
     console.log("Request body:", JSON.stringify(body, null, 2));
 

@@ -1,4 +1,4 @@
-// src/components/Settings/Settings.jsx - COMPLETE FIXED VERSION WITH SKELETON LOADING
+// src/components/Settings/Settings.jsx - WITH PRESCRIPTION TEMPLATE TAB
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import {
 import Security from './Security';
 import UserPermissions from './UserPermissions';
 import Map from './Map';
+import PrescriptionTemplate from './PrescriptionTemplate'; // Import the prescription template
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
@@ -158,8 +159,8 @@ const SettingsSkeleton = () => {
 
         <div className="border-b border-gray-200 mb-6">
           <div className="flex gap-8">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
+            {[...Array(5)].map((_, i) => (  // Changed from 4 to 5 tabs
+              <div key={i} className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
             ))}
           </div>
         </div>
@@ -684,6 +685,8 @@ const Settings = () => {
         return <UserPermissions />;
       case 'Map':
         return <Map />;
+      case 'Prescription Template':  // Added case for prescription template
+        return <PrescriptionTemplate />;
       default:
         return null;
     }
@@ -701,7 +704,12 @@ const Settings = () => {
           <p className="text-gray-500 mt-1">Manage your account settings</p>
         </div>
         
-        <Tabs tabs={['General', 'Security', 'User Permissions', 'Map'].map(tab => ({ id: tab, label: tab }))} activeTab={activeTab} onTabChange={setActiveTab} className="mb-6" />
+        <Tabs 
+          tabs={['General', 'Security', 'User Permissions', 'Map', 'Prescription Template'].map(tab => ({ id: tab, label: tab }))} 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+          className="mb-6" 
+        />
         
         <div className="mt-6">{renderTabContent()}</div>
         

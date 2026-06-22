@@ -59,6 +59,7 @@ const SkeletonTableRow = () => (
     <td className="px-6 py-4"><SkeletonText width="w-24" /></td>
     <td className="px-6 py-4"><SkeletonText width="w-32" /></td>
     <td className="px-6 py-4"><SkeletonBadge /></td>
+    <td className="px-6 py-4"><SkeletonBadge /></td>
     <td className="px-6 py-4 text-right"><SkeletonButton /></td>
   </tr>
 );
@@ -79,6 +80,7 @@ const SkeletonTable = ({ rows = 5 }) => (
             <th className="px-6 py-3"><SkeletonText width="w-28" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-24" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-32" height="h-3" /></th>
+            <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
             <th className="px-6 py-3 text-right"><SkeletonText width="w-12" height="h-3" /></th>
           </tr>
@@ -120,7 +122,7 @@ const SkeletonFilters = () => (
   </div>
 );
 
-// Skeleton Loader Component
+// Skeleton Loader Component - FIXED
 const SkeletonLoader = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
     <div className="mb-6">
@@ -151,7 +153,7 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
                 <th key={i} className="px-6 py-3">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </th>
@@ -161,7 +163,7 @@ const SkeletonLoader = () => (
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
                   </td>
@@ -216,7 +218,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     refetch,
     isFetching
   } = useGetBookingsQuery({
-    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() })
+    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
+    ...(searchTerm && { search_query: searchTerm }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter }),
+    page: currentPage,
+    limit: itemsPerPage
   });
 
   const [approveBooking] = useApproveBookingMutation();
@@ -283,7 +290,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Transform API response with proper operator precedence
+  // Get booking status badge class
+  const getBookingStatusBadgeClass = (bookingStatus) => {
+    const classes = {
+      "hospital booking": "bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium",
+      "clinic booking": "bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-medium",
+      "online booking": "bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium"
+    };
+    return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
+  };
+
+  // Transform API response with proper operator precedence - ADDED bookingStatus
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -301,6 +318,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         return age;
       };
 
+      console.log("=== RAW BOOKING ===");
+  console.log(booking);
+  console.log("patientId:", booking.patientId);
+  console.log("userId:", booking.userId);
+
+
       // Format date for display
       const formatDate = (dateString) => {
         if (!dateString || dateString === "N/A") return "N/A";
@@ -314,14 +337,29 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
       
       // Extract raw values first to avoid operator precedence issues
-      // Using ?? for better handling of empty strings and 0 values
       const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
     
-      return {
-        id: booking.id || booking._id,
-        formattedId: formatAppointmentId(booking.id || booking._id),
-        patientId: `PT${String(booking.userId || index + 1).padStart(4, '0')}`,
-        patientName: booking.patient_name || booking.patientName || "N/A",
+
+return {
+  id: booking.id || booking._id,
+
+  formattedId: formatAppointmentId(
+    booking.id || booking._id
+  ),
+
+patientId: booking.patientId || null,
+userId: booking.userId || null,
+
+  patientDisplayId: `PT${String(
+    booking.userId || index + 1
+  ).padStart(4, "0")}`,
+
+  patientName:
+    booking.patient_name ||
+    booking.patientName ||
+    "N/A",
+    
+    bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: booking.gender || "Male",
@@ -343,7 +381,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         avatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
         patientType: booking.patient_type || "Out Patient",
         preferredMode: booking.preferred_mode || "In-person",
-        originalStatus: booking.status // Store original backend status
+        originalStatus: booking.status
       };
     });
   };
@@ -385,7 +423,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     if (searchTerm) {
       filtered = filtered.filter(apt => 
         apt.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.patientId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.patientDisplayId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -435,7 +473,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
-      'Consulting Time': apt.startTime,
+      'Consulting Time': apt.consulting_time,
+      'Booking Status': apt.bookingStatus,
       'Status': apt.status,
       'Original Status': apt.originalStatus,
       'Reason': apt.reason
@@ -463,20 +502,26 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     event.target.value = '';
   };
 
-  const handleStartConsultation = (appointment) => {
-    navigate('/appointments/consultation', { 
-      state: { 
-        appointment: appointment,
-        patientName: appointment.patientName,
-        patientId: appointment.patientId,
-        doctorName: appointment.doctorName,
-        department: appointment.department,
-        appointmentDate: appointment.appointmentDateDisplay,
-        reason: appointment.reason, 
-        notes: appointment.notes
-      } 
-    });
-  };
+const handleStartConsultation = (appointment) => {
+  console.log("Appointment sent to consultation:", appointment);
+
+  navigate('/appointments/consultation', {
+    state: {
+      appointment,
+
+      patientId: appointment.patientId || null,
+      userId: appointment.userId || null,
+
+      patientName: appointment.patientName,
+      doctorName: appointment.doctorName,
+      department: appointment.department,
+      appointmentDate: appointment.appointmentDateDisplay,
+      reason: appointment.reason,
+      notes: appointment.notes
+    }
+  });
+};
+
 
   const handleViewDetails = (appointment) => {
     setSelectedAppointment(appointment);
@@ -493,7 +538,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowApproveModal(true);
   };
 
-  // UPDATED handleConfirmApprove with navigate after refetch
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) return;
     
@@ -668,12 +712,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                   <p className="text-sm text-gray-500">Patient</p>
                 </div>
               </div>
-              <span className={getStatusBadgeClass(appointment.status)}>{appointment.status}</span>
+              <span className={appointment.statusClass}>{appointment.status}</span>
             </div>
             
             <div>
               <p className="font-medium text-sm mb-1">Date & Time</p>
-              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {appointment.startTime}</p>
+              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {appointment.consulting_time}</p>
             </div>
             
             <div>
@@ -960,6 +1004,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                     <th className="px-6 py-3">Doctor Name</th>
                     <th className="px-6 py-3">Department</th>
                     <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Booking Status</th>
                     <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right w-16">Action</th>
                   </tr>
@@ -968,7 +1013,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                   {paginatedAppointments.map((apt, index) => (
                     <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
-                      <td className="px-6 py-4 text-gray-600">#{apt.patientId}</td>
+                      <td className="px-6 py-4 text-gray-600">#{apt.patientDisplayId}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <ShadcnAvatar className="w-8 h-8">
@@ -992,6 +1037,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                         <br />
                         <span className="text-xs">
                           {apt.consulting_time}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
+                          {apt.bookingStatus}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -1039,7 +1089,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           }} 
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          initialTime={selectedRequest.startTime !== "N/A" ? selectedRequest.startTime : ""}
+          initialTime={selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}
           initialToken=""
           isLoading={isApproving}
         />

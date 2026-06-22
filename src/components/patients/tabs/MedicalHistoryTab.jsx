@@ -1,13 +1,52 @@
-// src/components/patients/tabs/MedicalHistoryTab.jsx - With proper action menu positioning
+// src/components/patients/tabs/MedicalHistoryTab.jsx
 import React, { useState } from "react";
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
 import { Button, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Pagination } from "../../ui";
+import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
+import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 
 const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const medicalHistoryList = patient?.medicalHistoryList || [];
+  const { data: prescriptionData } = useGetPrescriptionsQuery({
+    patientId: patient?.id,
+    page: 1,
+    limit: 100,
+  });
+
+  const { data: doctorsData } = useGetDoctorsQuery();
+
+const medicalHistoryList =
+  prescriptionData?.data?.map((item) => {
+    const doctor = doctorsData?.data?.find(
+      (doc) => Number(doc.id) === Number(item.doctorId)
+    );
+
+    return {
+      id: item.id,
+      illnessName: item.complaint,
+      illnessDate: new Date(item.createdAt).toLocaleDateString(),
+
+      doctorName:
+        doctor?.displayName ||
+        doctor?.name ||
+        "Not Assigned",
+
+      department:
+        doctor?.specialization ||
+        doctor?.department ||
+        "Not Specified",
+
+      advice: item.advice,
+      investigations: item.investigations || [],
+      medications: item.medications || [],
+      rawData: item,
+    };
+  }) || [];
+
+
+
   const totalItems = medicalHistoryList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -19,6 +58,8 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
@@ -45,20 +86,18 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
               paginatedMedicalHistory.map((item, index) => (
                 <TableRow key={item.id} hover>
                   <TableCell 
-                    className="font-medium text-gray-800 cursor-pointer"
-                    onClick={() => handleViewMedicalDetails(item)}
-                  >
+                    className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+onClick={() => handleViewMedicalDetails(item)}                  >
                     {item.illnessName}
                   </TableCell>
                   <TableCell 
-                    className="text-gray-600 cursor-pointer"
-                    onClick={() => handleViewMedicalDetails(item)}
-                  >
-                    {item.illnessDate} ({item.yearsAgo})
+                    className="text-gray-600 cursor-pointer hover:text-[#1C62A0]"
+onClick={() => handleViewMedicalDetails(item)}                  >
+                    {item.illnessDate} 
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end">
-                      <div className="relative">
+                      <div className="relative action-menu-container">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -78,7 +117,7 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                handleViewMedicalDetails(item);
+handleViewMedicalDetails(item);
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
@@ -113,7 +152,6 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
         </table>
       </div>
 
-      {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
       {totalItems > 0 && totalPages > 1 && (
         <div className="px-6 py-3 border-t bg-gray-50">
           <Pagination

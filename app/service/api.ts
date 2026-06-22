@@ -90,7 +90,9 @@ export const api = createApi({
     "RolePermission",
     "S3",
     "Prescription",
-    "speciality"
+    "speciality",
+    "Vitals",
+    "PrescriptionTemplate"
   ],
 
   endpoints: () => ({}),
