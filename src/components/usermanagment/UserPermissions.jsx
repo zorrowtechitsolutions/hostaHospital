@@ -16,7 +16,8 @@ import {
   MoreVertical,
   Eye,
   Edit,
-  Shield
+  Shield,
+  ArrowLeft
 } from "lucide-react";
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
@@ -50,13 +51,13 @@ const updateRoleField = (setter) => (field) => (value) => {
   }));
 };
 
-// Modal Footer Component
+// Modal Footer Component - Fixed loading prop
 const ModalFooter = ({ onCancel, onSubmit, isSubmitting, submitText = "Save", cancelText = "Cancel" }) => (
   <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
     <Button type="button" variant="outline" onClick={onCancel}>
       {cancelText}
     </Button>
-    <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+    <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting || undefined}>
       {isSubmitting ? 'Processing...' : submitText}
     </Button>
   </div>
@@ -163,7 +164,7 @@ const DeleteRoleModal = memo(({ isOpen, onClose, role, onConfirm, isDeleting }) 
         </p>
         <div className="flex justify-center gap-3">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm} disabled={isDeleting} loading={isDeleting}>
+          <Button variant="danger" onClick={onConfirm} disabled={isDeleting} loading={isDeleting || undefined}>
             {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </div>
@@ -217,14 +218,24 @@ const RoleDropdown = memo(({ role, onView, onEdit, onDelete, onPermissions }) =>
   );
 });
 
-// Loading Skeleton Component
+// Loading Skeleton Component - Centered on full page
 const RoleSkeleton = () => (
-  <Card>
-    <div className="p-8 text-center">
-      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      <p className="mt-2 text-gray-500">Loading roles...</p>
+  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="p-1 w-9 h-9 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="h-7 w-48 bg-gray-200 rounded animate-pulse mt-2"></div>
+      <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mt-1"></div>
     </div>
-  </Card>
+    <Card className="min-h-[400px] flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0]"></div>
+        <p className="mt-3 text-gray-500">Loading roles...</p>
+      </div>
+    </Card>
+  </div>
 );
 
 // NewRoleModal Component
@@ -270,7 +281,6 @@ const UserPermissions = () => {
 
   // Get hospitalId from auth utility
   const hospitalId = getHospitalId();
-  console.log(hospitalId);
   
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -279,13 +289,18 @@ const UserPermissions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
+  // FIXED: Properly destructure data from useGetRolesQuery and merge with error response
   const {
-    data: rolesResponse,
+    data,
     isLoading,
     refetch,
-  } = useGetRolesQuery(hospitalId);
+    error,
+  } = useGetRolesQuery({ hospitalId });
+  
+  // Merge success + error response - handle both cases
+  const rolesResponse = data ?? error?.data ?? {};
 
-  console.log("Roles response:", rolesResponse);
+  console.log("Roles Response:", rolesResponse);
 
   const [createRole] = useCreateRoleMutation();
   const [updateRole] = useUpdateRoleMutation();
@@ -329,17 +344,6 @@ const UserPermissions = () => {
     setShowDeleteModal(false);
   };
 
-  // Normalized roles list
-  const allRoles = useMemo(() => {
-    const adminRoles = rolesResponse?.admin || [];
-    const hospitalRoles = rolesResponse?.data || [];
-    
-    // Filter admin role by ID and ensure uniqueness
-    const filteredAdminRoles = adminRoles.filter(admin => isAdminRole(admin));
-    
-    return [...filteredAdminRoles, ...hospitalRoles];
-  }, [rolesResponse]);
-
   // Update field helpers
   const updateNewRoleField = updateRoleField(setNewRole);
   const updateEditRoleField = updateRoleField(setEditRole);
@@ -364,7 +368,7 @@ const UserPermissions = () => {
       
       setNewRole({ name: "", description: "" });
       setShowNewRoleModal(false);
-      setCurrentPage(1); // Reset to first page after adding
+      setCurrentPage(1);
     } catch (error) {
       showErrorToast(error?.data?.message || "Failed to create role");
     } finally {
@@ -394,7 +398,7 @@ const UserPermissions = () => {
       showSuccessToast(`Role "${editRole.name}" updated successfully!`);
       
       closeEditModal();
-      setCurrentPage(1); // Reset to first page after editing
+      setCurrentPage(1);
     } catch (error) {
       showErrorToast(error?.data?.message || "Failed to update role");
     } finally {
@@ -416,7 +420,7 @@ const UserPermissions = () => {
       
       showDeleteToast(`Role "${roleToDelete?.name}" deleted successfully!`);
       closeDeleteModal();
-      setCurrentPage(1); // Reset to first page after deletion
+      setCurrentPage(1);
     } catch (error) {
       showErrorToast(error?.data?.message || "Failed to delete role");
     } finally {
@@ -460,13 +464,15 @@ const UserPermissions = () => {
     );
   };
 
-  // Get filtered admin roles
+  // FIXED: Filter only Admin role by ID (id === 2) and name "Admin"
   const filteredAdminRoles = filterRoles(
-    rolesResponse?.admin?.filter((admin) => admin?.id === ADMIN_ROLE_ID) || [],
+    (rolesResponse?.admin || []).filter(
+      role => role?.id === ADMIN_ROLE_ID && role?.name === "Admin"
+    ),
     searchTerm
   );
 
-  // Get filtered hospital roles
+  // FIXED: Show hospital roles from data array (not empty array)
   const filteredHospitalRoles = filterRoles(
     rolesResponse?.data || [],
     searchTerm
@@ -478,10 +484,7 @@ const UserPermissions = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedHospitalRoles = filteredHospitalRoles.slice(startIndex, startIndex + itemsPerPage);
 
-  // Calculate total roles count
-  const hospitalRolesCount = filteredHospitalRoles?.length || 0;
-  const adminRolesCount = filteredAdminRoles?.length || 0;
-  const totalRoles = adminRolesCount + hospitalRolesCount;
+  // Calculate total roles count - both admin and hospital roles
   const totalFilteredRoles = filteredAdminRoles.length + filteredHospitalRoles.length;
 
   const handlePageChange = useCallback((page) => {
@@ -494,7 +497,28 @@ const UserPermissions = () => {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      {/* Header with Breadcrumb */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <button
+            onClick={() => navigate('/users')}
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+          >
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </button>
+          <div className="text-xs text-gray-500">
+            <span className="text-gray-700">User Management</span>
+            <span className="mx-1 text-gray-400">»</span>
+            <span>User Permissions</span>
+          </div>
+        </div>
+        <h1 className="text-xl font-bold text-gray-800">User Permissions</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
+      </div>
+
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -537,7 +561,7 @@ const UserPermissions = () => {
           </div>
         </div>
         
-        {/* Show message when no results found */}
+        {/* Show message when no results found in search */}
         {totalFilteredRoles === 0 && searchTerm && (
           <div className="p-8 text-center">
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -624,10 +648,10 @@ const UserPermissions = () => {
                 ))}
               </tbody>
             )}
-          </table>
+           </table>
         </div>
 
-        {/* ADDED: Pagination Component */}
+        {/* Pagination Component - Only shown when there are hospital roles */}
         {totalHospitalRoles > 0 && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
             <Pagination
@@ -641,13 +665,13 @@ const UserPermissions = () => {
           </div>
         )}
 
-        {/* Show message when no hospital roles found */}
-        {totalHospitalRoles === 0 && filteredAdminRoles.length === 0 && !searchTerm && (
+        {/* Show message when no roles found - UPDATED with API message */}
+        {totalFilteredRoles === 0 && !searchTerm && (
           <div className="p-8 text-center">
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <p className="text-gray-500">No roles found. Click "New Role" to create one.</p>
+            <p className="text-gray-500">{rolesResponse?.message || "No roles found"}</p>
           </div>
         )}
       </Card>
@@ -684,7 +708,7 @@ const UserPermissions = () => {
         onConfirm={handleDeleteRole}
         isDeleting={isSubmitting}
       />
-    </>
+    </div>
   );
 };
 

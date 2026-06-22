@@ -1,4 +1,4 @@
-// src/components/patients/AddAppointmentModal.jsx - Updated with callback prop
+// src/components/patients/AddAppointmentModal.jsx - Updated with gender from patient data
 import React, { useState } from "react";
 import { Calendar, FileText } from "lucide-react";
 import { Modal, Textarea, Button, Avatar, Badge, Loader } from "../ui";
@@ -57,15 +57,17 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => 
     
     setIsSubmitting(true);
     
-    // Call the callback prop with booking data
+    // Call the callback prop with booking data - gender comes from patient data
     if (onProceedApprove) {
       onProceedApprove({
-        userId: patient?.userId || patient?.id,
-        patient_dob: patient?.dob || "",
-        patient_name: patient?.name || "",
-        patient_place: patient?.location?.place || patient?.address || "",
-        patient_phone: patient?.mobileNumber || patient?.phone || "",
-        hospitalId: patient?.hospitalId || null,
+  userId:
+    patient?.userId,
+            patient_dob: patient?.dob,
+        patient_name: patient?.name,
+        patient_place: patient?.location?.place || patient?.address,
+        patient_phone: patient?.mobileNumber,
+        patient_gender: patient?.gender, // Gender directly from patient data
+        hospitalId: patient?.hospitalId,
         doctorId: formData.doctorId,
         booking_date: formData.date,
         department: formData.doctorDepartment,

@@ -1,10 +1,10 @@
-// src/components/Doctor/EditDoctor.jsx - With Enhanced Lazy Loading
+// src/components/Doctor/EditDoctor.jsx - With Role Assignment
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield
 } from 'lucide-react';
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
@@ -15,8 +15,10 @@ import {
   useUpdateDoctorMutation,
   useGetSpecialitiesQuery
 } from "../../../app/service/doctorApi";
+import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
+import { useGetRolesQuery } from '../../../app/service/role';
+import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
-import { getHospitalId } from '../../utils/auth';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
 // Lazy load heavy components
@@ -424,6 +426,32 @@ const EditDoctor = () => {
   // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
+  // Get hospital ID and hospital name from auth
+  const hospitalId = getHospitalId();
+  const authUser = getAuthUser();
+  const hospitalName = authUser?.name || '';
+  
+  console.log("🏥 Hospital ID from auth:", hospitalId);
+  console.log("🏥 Hospital Name from auth:", hospitalName);
+  
+  // Role assignment state
+  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
+  
+  // Fetch roles from API
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useGetRolesQuery({
+    hospitalId,
+    limit: 100
+  });
+  
+  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+  const rolesList = [
+    ...(rolesData?.admin || []).filter(role => role.id === 2),
+    ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
+  ];
+  
   // Fetch specialities from backend for department dropdown
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
   
@@ -480,6 +508,7 @@ const EditDoctor = () => {
     joiningDate: '',
     experience: '',
     appointmentCount: '',
+    roleId: '', // Added roleId field
     weeklySchedule: {},
     outDoorConsultingOpen: '',
     outDoorConsultingClose: '',
@@ -543,6 +572,22 @@ const EditDoctor = () => {
       saturday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '14:00', eveningOpen: '16:00', eveningClose: '20:00' },
       sunday: { isHoliday: true, hasBreak: false, morningOpen: '10:00', morningClose: '13:00', eveningOpen: '16:00', eveningClose: '20:00' }
     };
+  };
+
+  // Get role name by ID for display
+  const getRoleNameById = (roleId) => {
+    const role = rolesList.find(r => String(r.id) === String(roleId));
+    return role?.name || role?.roleName || '';
+  };
+
+  // Get role badge color by role name
+  const getRoleBadgeColor = (roleId) => {
+    const roleName = getRoleNameById(roleId);
+    const roleNameLower = roleName?.toLowerCase();
+    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-700';
   };
 
   // Initialize form with doctor data
@@ -633,6 +678,7 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
+        roleId: doctor.roleId || "", // Added roleId from doctor data
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
@@ -689,6 +735,7 @@ const EditDoctor = () => {
       joiningDate: '',
       experience: '',
       appointmentCount: '',
+      roleId: '',
       weeklySchedule: getDefaultSchedule(),
       outDoorConsultingOpen: '',
       outDoorConsultingClose: '',
@@ -862,6 +909,9 @@ const EditDoctor = () => {
     try {
       setIsSubmitting(true);
 
+      const roleId = Number(formData.roleId);
+      const selectedRoleName = getRoleNameById(roleId);
+
       const updatedDoctorData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -884,6 +934,8 @@ const EditDoctor = () => {
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
         isActive: formData.isActive,
+        roleId: roleId, // Add roleId to update data
+        hospitalName: hospitalName, // Add hospital name
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -936,12 +988,34 @@ const EditDoctor = () => {
         updatedDoctorData.password = formData.password;
       }
 
+      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updatedDoctorData, null, 2));
+      console.log("🏥 Hospital Name being sent:", hospitalName);
+      console.log("👤 Role ID being sent:", roleId);
+
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
 
-      showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully!`);
+      // Update role permission if roleId exists
+      if (roleId) {
+        const payload = {
+          hospitalId: Number(hospitalId),
+          roleId: roleId,
+          userType: "doctor",
+          doctorIds: [
+            {
+              id: Number(doctorId),
+              roleId: roleId
+            }
+          ]
+        };
+        
+        console.log("📤 UPDATING ROLE PERMISSION:", payload);
+        await assignPermissions(payload).unwrap();
+      }
+
+      showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully with role ${selectedRoleName}!`);
 
       setTimeout(() => {
         navigate("/doctors");
@@ -960,7 +1034,7 @@ const EditDoctor = () => {
   };
 
   // Loading states - Show skeleton while form is initializing
-  if (isLoading) {
+  if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading doctor data..." />;
   }
 
@@ -1193,6 +1267,36 @@ const EditDoctor = () => {
                       value={formData.specialist} 
                       onChange={(e) => handleFieldChange('specialist', e.target.value)} 
                     />
+                  </div>
+
+                  {/* Assign Role - Dynamic dropdown */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assign Role <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <select
+                        name="roleId"
+                        value={formData.roleId}
+                        onChange={(e) => handleFieldChange('roleId', e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                      >
+                        <option value="">Select a role</option>
+                        {rolesList.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name || role.roleName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {formData.roleId && (
+                      <div className="mt-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                          {getRoleNameById(formData.roleId)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1527,8 +1631,8 @@ const EditDoctor = () => {
 
               <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
                 <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-                <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-                  {isSubmitting ? 'Updating...' : 'Update Doctor'}
+                <Button type="submit" variant="primary" disabled={isSubmitting || isAssigning} loading={isSubmitting || isAssigning}>
+                  {isSubmitting || isAssigning ? 'Updating...' : 'Update Doctor'}
                 </Button>
               </div>
             </Card>

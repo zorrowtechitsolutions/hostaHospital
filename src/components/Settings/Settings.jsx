@@ -8,7 +8,6 @@ import {
   Tabs
 } from '../ui';
 import Security from './Security';
-import UserPermissions from './UserPermissions';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate'; // Import the prescription template
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
@@ -159,7 +158,7 @@ const SettingsSkeleton = () => {
 
         <div className="border-b border-gray-200 mb-6">
           <div className="flex gap-8">
-            {[...Array(5)].map((_, i) => (  // Changed from 4 to 5 tabs
+            {['General', 'Security', 'Map', 'Prescription Template'].map((_, i) => (
               <div key={i} className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
             ))}
           </div>
@@ -586,24 +585,25 @@ const Settings = () => {
 
       <Card>
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h2 className="text-lg font-semibold text-gray-900">Working Hours</h2>
-          <p className="text-sm text-gray-500">Set your hospital operating hours</p>
-        </div>
-        <div className="p-6">
-          <div className="mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Working Hours</h2>
+              <p className="text-sm text-gray-500">Set your hospital operating hours</p>
+            </div>
             <button
               type="button"
               onClick={handleSet24HourMode}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 shadow-lg hover:shadow-xl ${
                 is24HourMode 
-                  ? 'bg-red-100 text-red-700 border border-red-300' 
-                  : 'bg-[#1C62A0] text-white hover:bg-[#154d7a]'
+                  ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200' 
+                  : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
               }`}
             >
               {is24HourMode ? 'Disable 24/7 Hours' : 'Set 24/7 Hours'}
             </button>
           </div>
-          
+        </div>
+        <div className="p-6">
           <div className="space-y-4">
             {DAYS.map((day) => (
               <div key={day.key} className="border-b border-gray-200 pb-4 last:border-0">
@@ -681,16 +681,17 @@ const Settings = () => {
         return GeneralTab;
       case 'Security':
         return <Security />;
-      case 'User Permissions':
-        return <UserPermissions />;
       case 'Map':
         return <Map />;
-      case 'Prescription Template':  // Added case for prescription template
+      case 'Prescription Template':
         return <PrescriptionTemplate />;
       default:
         return null;
     }
   };
+
+  // Define tabs array once
+  const tabs = ['General', 'Security', 'Map', 'Prescription Template'];
 
   if (isLoadingHospital) {
     return <SettingsSkeleton />;
@@ -705,7 +706,7 @@ const Settings = () => {
         </div>
         
         <Tabs 
-          tabs={['General', 'Security', 'User Permissions', 'Map', 'Prescription Template'].map(tab => ({ id: tab, label: tab }))} 
+          tabs={tabs.map(tab => ({ id: tab, label: tab }))}
           activeTab={activeTab} 
           onTabChange={setActiveTab} 
           className="mb-6" 
@@ -714,7 +715,7 @@ const Settings = () => {
         <div className="mt-6">{renderTabContent()}</div>
         
         <div className="mt-12 pt-6 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-400">© DreamS EMR - All Rights Reserved.</p>
+          <p className="text-sm text-gray-400">© {hospitalInfo.name} - All Rights Reserved.</p>
         </div>
       </div>
     </div>

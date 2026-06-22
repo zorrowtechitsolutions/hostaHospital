@@ -9,13 +9,13 @@ const notificationSound = new Audio("/notification.mp3");
 
 // 🔐 Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyCdDQAZSaahh4STtBfEJfP1gPlRlD5OKzc",
-  authDomain: "push-notification-d6a4c.firebaseapp.com",
-  projectId: "push-notification-d6a4c",
-  storageBucket: "push-notification-d6a4c.firebasestorage.app",
-  messagingSenderId: "352069839114",
-  appId: "1:352069839114:web:1e50cfab5c15138630f2f3",
-  measurementId: "G-VPZX6RY7W6",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // 🚀 Initialize Firebase
@@ -32,20 +32,46 @@ export const requestNotificationPermission = async () => {
 };
 
 // 🔑 Generate Token
-export const generateToken = async () => {
-  const permission = await Notification.requestPermission();
+// export const generateToken = async () => {
+//   const permission = await Notification.requestPermission();
 
-  if (permission === "granted") {
+//   if (permission === "granted") {
+//     const token = await getToken(messaging, {
+//       vapidKey:
+//         "BIUpc79TBbZ1nrhuhK6oke6LoSgrcUFsowuF7_8pKzR2Yj4J7A5zx-N4rRX71iFXXP3x8927WZQ-EK_byU4FGAw",
+//     });
+
+//     console.log("🔥 TOKEN:", token);
+//     localStorage.setItem("fcm_token", token);
+//     return token;
+//   } else {
+//     console.log("❌ Permission denied");
+//     return null;
+//   }
+// };
+
+export const generateToken = async () => {
+  try {
+    console.log("🚀 generateToken started");
+
+    const permission = await Notification.requestPermission();
+    console.log("Permission:", permission);
+
+    const registration = await navigator.serviceWorker.ready;
+
+    console.log("SW Ready:", registration);
+
     const token = await getToken(messaging, {
       vapidKey:
-        "BHrLuvLXdesM0T4-Uc7xlChllzdQZuN5utfCZ2Lh1j__II3qC2RCXFsI5pdxSipLvHYt3yMgo6En1GqwQe8U97I",
+        import.meta.env.VITE_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: registration,
     });
 
     console.log("🔥 TOKEN:", token);
-    localStorage.setItem("fcm_token", token);
+
     return token;
-  } else {
-    console.log("❌ Permission denied");
+  } catch (err) {
+    console.error("❌ FCM ERROR:", err);
     return null;
   }
 };

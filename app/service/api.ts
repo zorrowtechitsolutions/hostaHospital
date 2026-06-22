@@ -1,3 +1,4 @@
+// src/app/service/api.ts
 import {
   createApi,
   fetchBaseQuery,
@@ -15,18 +16,13 @@ interface RefreshResponse {
 
 const baseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
-
   credentials: "include",
-
   prepareHeaders: (headers) => {
     const token = getToken();
-
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
-
     headers.set("Content-Type", "application/json");
-
     return headers;
   },
 });
@@ -52,13 +48,10 @@ const baseQueryWithReauth: BaseQueryFn<
 
     if (refreshResult.data) {
       const refreshData = refreshResult.data as RefreshResponse;
-
-      const newToken =
-        refreshData.token || refreshData.accessToken;
+      const newToken = refreshData.token || refreshData.accessToken;
 
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
-
         result = await baseQuery(args, api, extraOptions);
       } else {
         clearAuth();
@@ -73,9 +66,7 @@ const baseQueryWithReauth: BaseQueryFn<
 
 export const api = createApi({
   reducerPath: "api",
-
   baseQuery: baseQueryWithReauth,
-
   tagTypes: [
     "Hospital",
     "Staff",
@@ -92,9 +83,14 @@ export const api = createApi({
     "Prescription",
     "speciality",
     "Vitals",
-    "PrescriptionTemplate"
+    "PrescriptionTemplate",
+    "Permission",
+    "Notification",    
+    "Notifications",   
+    "Ads",
+    "Document",
+    "LabResult",
   ],
-
   endpoints: () => ({}),
 });
 

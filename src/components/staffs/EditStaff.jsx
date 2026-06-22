@@ -1,7 +1,7 @@
-// src/components/staffs/EditStaff.jsx - Fixed to use isActive instead of status with S3 support
+// src/components/staffs/EditStaff.jsx - With Role Assignment (Header Removed)
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ChevronRight, Upload, X } from 'lucide-react';
+import { ChevronRight, Upload, X, Shield, ArrowLeft } from 'lucide-react';
 import {
   Button,
   Input,
@@ -23,6 +23,9 @@ import {
   useUpdateStaffMutation,
   useDeleteStaffMutation
 } from '../../../app/service/staffApi';
+import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
+import { useGetRolesQuery } from '../../../app/service/role';
+import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
 // Helper function to get full image URL from key/filename with URL encoding
@@ -51,6 +54,32 @@ const EditStaff = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Get hospital ID and hospital name from auth
+  const hospitalId = getHospitalId();
+  const authUser = getAuthUser();
+  const hospitalName = authUser?.name || '';
+  
+  console.log("🏥 Hospital ID from auth:", hospitalId);
+  console.log("🏥 Hospital Name from auth:", hospitalName);
+  
+  // Role assignment state
+  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
+  
+  // Fetch roles from API
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useGetRolesQuery({
+    hospitalId,
+    limit: 100
+  });
+  
+  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+  const rolesList = [
+    ...(rolesData?.admin || []).filter(role => role.id === 2),
+    ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
+  ];
+  
   // API hooks - hospitalId is automatically injected by the API service
   const {
     data: staffData,
@@ -72,6 +101,7 @@ const EditStaff = () => {
     mobile: '',
     email: '',
     designation: '',
+    roleId: '',
     appointmentDate: '',
     staffType: 'Permanent',
     jobType: 'Full Time',
@@ -98,6 +128,22 @@ const EditStaff = () => {
       }
     });
     return obj;
+  };
+
+  // Get role name by ID for display
+  const getRoleNameById = (roleId) => {
+    const role = rolesList.find(r => String(r.id) === String(roleId));
+    return role?.name || role?.roleName || '';
+  };
+
+  // Get role badge color by role name
+  const getRoleBadgeColor = (roleId) => {
+    const roleName = getRoleNameById(roleId);
+    const roleNameLower = roleName?.toLowerCase();
+    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-700';
   };
 
   // Image validation helper
@@ -145,6 +191,7 @@ const EditStaff = () => {
       mobile: staff.phone || '',
       email: staff.email || '',
       designation: staff.designation || '',
+      roleId: staff.roleId || '', // Added roleId from staff data
       appointmentDate: staff.joiningDate ? staff.joiningDate.split('T')[0] : '',
       staffType: staff.staffType || 'Permanent',
       jobType: staff.jobType || 'Full Time',
@@ -269,6 +316,11 @@ const EditStaff = () => {
     return '';
   };
 
+  const validateRole = (roleId) => {
+    if (!roleId) return 'Please select a role';
+    return '';
+  };
+
   const validateDob = (dob) => {
     if (dob) {
       const today = new Date();
@@ -288,6 +340,7 @@ const EditStaff = () => {
       case 'mobile': return validateMobile(value);
       case 'email': return validateEmail(value);
       case 'designation': return validateDesignation(value);
+      case 'roleId': return validateRole(value);
       case 'dob': return validateDob(value);
       default: return '';
     }
@@ -317,7 +370,7 @@ const EditStaff = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    const requiredFields = ['name', 'mobile', 'email', 'designation'];
+    const requiredFields = ['name', 'mobile', 'email', 'designation', 'roleId'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
@@ -353,80 +406,103 @@ const EditStaff = () => {
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
-      showWarningToast('Please fix the validation errors before submitting', 3000);
-      return;
+  if (!validateForm()) {
+    if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
+    showWarningToast('Please fix the validation errors before submitting', 3000);
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
+    const roleId = Number(formData.roleId);
+    const selectedRoleName = getRoleNameById(roleId);
+    
+    const updateData = {
+      name: formData.name,
+      email: formData.email,
+      phone: formData.mobile,
+      designation: formData.designation,
+      joiningDate: formData.appointmentDate || undefined,
+      jobType: formData.jobType || undefined,
+      staffType: formData.staffType || undefined,
+      dob: formData.dob || undefined,
+      gender: formData.gender.toLowerCase(),
+      knowLanguages: formData.knowLanguages,
+      qualification: formData.qualification || undefined,
+      roleId: roleId, // ✅ ADD roleId to updateData
+      hospitalName: hospitalName,
+      address: {
+        country: formData.country || undefined,
+        state: formData.state || undefined,
+        district: formData.city || undefined,
+        place: combinedPlace || formData.place || undefined,
+        pincode: formData.pincode ? Number(formData.pincode) : undefined
+      },
+      isActive: formData.isActive,
+      imageUrl: formData.imageUrl,
+      profileImage: formData.profileImage,
+      imageKey: formData.imageKey,
+    };
+
+    removeUndefined(updateData);
+    if (updateData.address) {
+      removeUndefined(updateData.address);
     }
 
-    setIsSubmitting(true);
+    console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
+    console.log("🏥 Hospital Name being sent:", hospitalName);
+    console.log("👤 Role ID being sent:", roleId);
 
-    try {
-      const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
-      
-      const updateData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.mobile,
-        designation: formData.designation,
-        joiningDate: formData.appointmentDate || undefined,
-        jobType: formData.jobType || undefined,
-        staffType: formData.staffType || undefined,
-        dob: formData.dob || undefined,
-        gender: formData.gender.toLowerCase(),
-        knowLanguages: formData.knowLanguages,
-        qualification: formData.qualification || undefined,
-        address: {
-          country: formData.country || undefined,
-          state: formData.state || undefined,
-          district: formData.city || undefined,
-          place: combinedPlace || formData.place || undefined,
-          pincode: formData.pincode ? Number(formData.pincode) : undefined
-        },
-        isActive: formData.isActive,
-        imageUrl: formData.imageUrl,
-        profileImage: formData.profileImage,
-        imageKey: formData.imageKey,
+    await updateStaff({
+      id: formData.id,
+      data: updateData
+    }).unwrap();
+
+    // Update role permission if roleId changed
+    if (roleId) {
+      const payload = {
+        hospitalId: Number(hospitalId),
+        roleId: roleId,
+        userType: "staff",
+        staffIds: [
+          {
+            id: Number(formData.id),
+            roleId: roleId
+          }
+        ]
       };
-
-      removeUndefined(updateData);
-      if (updateData.address) {
-        removeUndefined(updateData.address);
-      }
-
-      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
-      console.log("🖼️ imageUrl:", updateData.imageUrl);
-      console.log("🖼️ profileImage:", updateData.profileImage);
-      console.log("🔑 imageKey:", updateData.imageKey);
-
-      await updateStaff({
-        id: formData.id,
-        data: updateData
-      }).unwrap();
-
-      await refetch();
       
-      showUpdateToast(
-        `${formData.name}'s information has been updated successfully!`,
-        4000,
-        {
-          'Name': formData.name,
-          'ID': formData.id,
-          'Designation': formData.designation,
-          'Status': formData.isActive ? 'Active' : 'Inactive'
-        }
-      );
-      
-      setIsSubmitting(false);
-      setSubmitSuccess(true);
-      setTimeout(() => navigate('/staffs'), 1500);
-    } catch (error) {
-      console.error("Update error:", error);
-      showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
-      setIsSubmitting(false);
-      setSubmitError(error?.data?.message || 'Failed to update staff');
+      console.log("📤 UPDATING ROLE PERMISSION:", payload);
+      await assignPermissions(payload).unwrap();
     }
-  };
+
+    await refetch();
+    
+    showUpdateToast(
+      `${formData.name}'s information has been updated successfully!`,
+      4000,
+      {
+        'Name': formData.name,
+        'ID': formData.id,
+        'Designation': formData.designation,
+        'Role': selectedRoleName,
+        'Hospital': hospitalName,
+        'Status': formData.isActive ? 'Active' : 'Inactive'
+      }
+    );
+    
+    setIsSubmitting(false);
+    setSubmitSuccess(true);
+    setTimeout(() => navigate('/staffs'), 1500);
+  } catch (error) {
+    console.error("Update error:", error);
+    showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
+    setIsSubmitting(false);
+    setSubmitError(error?.data?.message || 'Failed to update staff');
+  }
+};
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
   const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin'];
@@ -435,18 +511,16 @@ const EditStaff = () => {
 
   const tabs = [{ id: 'basic', label: 'Basic Info' }];
 
-  const isFormSubmitting = isSubmitting || isUpdateLoading;
+  const isFormSubmitting = isSubmitting || isUpdateLoading || isAssigning;
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
+  const isLoadingData = loading || rolesLoading;
 
   // Skeleton Loading State
-  if (loading) {
+  if (isLoadingData) {
     return (
       <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9' }}>
-        <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-          <div className="h-7 w-48 bg-gray-200 rounded animate-pulse mb-1"></div>
-          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse"></div>
-        </div>
-
+        {/* REMOVED: White header section */}
+        
         <div className="p-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="border-b border-gray-200 px-6 pt-4">
@@ -470,7 +544,7 @@ const EditStaff = () => {
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                   <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
                 </div>
-                {[...Array(14)].map((_, i) => (
+                {[...Array(15)].map((_, i) => (
                   <div key={i} className="space-y-2">
                     <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
                     <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
@@ -491,13 +565,8 @@ const EditStaff = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">Edit Staff</h1>
-        <div className="text-sm text-gray-500 flex items-center gap-2">
-          <span>Home</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Staffs</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Edit Staff</span>
-        </div>
-      </div>
-
+      {/* REMOVED: White header section with "Edit Staff" title and breadcrumb */}
+      
       {submitSuccess && <Alert type="success" message="Staff updated successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
       {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
@@ -518,6 +587,19 @@ const EditStaff = () => {
 
       <div className="p-6">
         <Card>
+          {/* Added back button in the Card header */}
+          <div className="border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/staffs')} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                <ArrowLeft size={20} className="text-gray-600" />
+              </button>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Edit Staff</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Update staff member information</p>
+              </div>
+            </div>
+          </div>
+          
           <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
           {activeTab === 'basic' && (
@@ -606,6 +688,38 @@ const EditStaff = () => {
                   <input type="text" value={formData.id} disabled className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50" />
                 </div>
                 <Input label="Full Name" name="name" value={formData.name} onChange={handleChange} onBlur={handleBlur} error={errors.name} touched={touched.name} required placeholder="Enter full name" />
+                
+                {/* Assign Role - Dynamic dropdown */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Assign Role <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <select
+                      name="roleId"
+                      value={formData.roleId}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
+                    >
+                      <option value="">Select a role</option>
+                      {rolesList.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name || role.roleName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
+                  {formData.roleId && (
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                        {getRoleNameById(formData.roleId)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
                 <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} />
                 <Input label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} />
                 <Input label="Mobile Number" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
@@ -651,7 +765,10 @@ const EditStaff = () => {
 
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => navigate('/staffs')}>Cancel</Button>
+              <Button variant="outline" onClick={() => navigate('/staffs')} disabled={isFormSubmitting}>Cancel</Button>
+              <Button variant="danger" onClick={() => setDeleteConfirm(true)} disabled={isDeleting || isDeleteLoading || isFormSubmitting}>
+                Delete
+              </Button>
               <Button variant="primary" onClick={handleSubmit} disabled={isFormSubmitting} loading={isFormSubmitting}>
                 {isFormSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>

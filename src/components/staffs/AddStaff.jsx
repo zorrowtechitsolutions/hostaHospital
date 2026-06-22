@@ -1,4 +1,4 @@
-// src/components/staffs/AddStaff.jsx - WITH hospitalId auto-injected by API
+// src/components/staffs/AddStaff.jsx - WITH hospitalId auto-injected by API and Role Assignment
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,7 +8,9 @@ import {
   Image,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Shield,
+  ArrowLeft
 } from 'lucide-react';
 import {
   Button,
@@ -20,22 +22,15 @@ import {
 } from '../ui';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
+import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
+import { useGetRolesQuery } from '../../../app/service/role';
+import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
 
 // Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
 const STAFFS_ROUTE = '/staffs';
-
-// Helper function to get S3 image URL
-const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return null;
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return imageKey;
-  }
-  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
 
 // Static arrays moved outside component
 const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
@@ -86,6 +81,8 @@ const validatePassword = password => {
 
 const validateDesignation = designation => !designation ? 'Designation is required' : '';
 
+const validateRole = roleId => !roleId ? 'Please select a role' : '';
+
 const validateDob = (dob) => {
   if (!dob) return '';
   const today = new Date();
@@ -116,6 +113,7 @@ const validators = {
   email: validateEmail,
   password: validatePassword,
   designation: validateDesignation,
+  roleId: validateRole,
   dob: validateDob
 };
 
@@ -166,12 +164,40 @@ const AddStaff = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [languagesInput, setLanguagesInput] = useState('');
   
+  // Role assignment state
+  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
+  
+  // Get hospital ID and hospital name from auth
+  const hospitalId = getHospitalId();
+  console.log("AUTH USER:", getAuthUser());
+  const authUser = getAuthUser();
+  const hospitalName = authUser?.name || '';
+  
+  console.log("🏥 Hospital ID from auth:", hospitalId);
+  console.log("🏥 Hospital Name from auth:", hospitalName);
+  
+  // Fetch roles from API
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useGetRolesQuery({
+    hospitalId,
+    limit: 100
+  });
+  
+  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+  const rolesList = [
+    ...(rolesData?.admin || []).filter(role => role.id === 2),
+    ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
+  ];
+  
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     phone: '',
     designation: '',
+    roleId: '',
     joiningDate: '',
     jobType: '',
     staffType: '',
@@ -211,6 +237,10 @@ const AddStaff = () => {
   const resetSubmitState = () => {
     setSubmitError('');
     setErrors({});
+  };
+
+  const handleGoBack = () => {
+    navigate(STAFFS_ROUTE);
   };
 
   const handleApiError = (error) => {
@@ -334,7 +364,6 @@ const AddStaff = () => {
 
     try {
       const uploaded = await uploadToS3(file);
-      // Store only the key, not the full URL
       updateFormData({
         profileImage: uploaded.key,
         imageKey: uploaded.key
@@ -359,7 +388,7 @@ const AddStaff = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    const requiredFields = ['name', 'phone', 'email', 'password', 'designation'];
+    const requiredFields = ['name', 'phone', 'email', 'password', 'designation', 'roleId'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
@@ -371,6 +400,23 @@ const AddStaff = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Get role name by ID for display
+  const getRoleNameById = (roleId) => {
+    const role = rolesList.find(r => String(r.id) === String(roleId));
+    return role?.name || role?.roleName || '';
+  };
+
+  // Get role badge color by role name
+  const getRoleBadgeColor = (roleId) => {
+    const roleName = getRoleNameById(roleId);
+    const roleNameLower = roleName?.toLowerCase();
+    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-700';
+  };
+
+  // Handle form submission - Create staff and assign role
   const handleSubmit = async () => {
     resetSubmitState();
     
@@ -384,11 +430,15 @@ const AddStaff = () => {
     try {
       const combinedPlace = buildPlace(formData.addressLine1, formData.addressLine2);
       const isActive = formData.status === 'active';
+      const roleId = Number(formData.roleId);
+      const selectedRoleName = getRoleNameById(roleId);
+       
       
       const staffData = {
         name: formData.name,
         email: formData.email,
         password: formData.password,
+        roleId: Number(formData.roleId),
         phone: formData.phone,
         designation: formData.designation,
         joiningDate: formData.joiningDate || undefined,
@@ -398,6 +448,7 @@ const AddStaff = () => {
         gender: formData.gender.toLowerCase(),
         knowLanguages: formData.knowLanguages || [],
         qualification: formData.qualification || undefined,
+        hospitalName: hospitalName,
         address: {
           country: formData.address.country || undefined,
           state: formData.address.state || undefined,
@@ -415,23 +466,44 @@ const AddStaff = () => {
         removeUndefined(staffData.address);
       }
 
-      console.log("📤 STAFF DATA BEING SENT TO API:", JSON.stringify(staffData, null, 2));
-      console.log("🖼️ profileImage (key):", staffData.profileImage);
-      console.log("🔑 imageKey:", staffData.imageKey);
+      console.log(JSON.stringify(staffData, null, 2));
+      console.log("🏥 Hospital ID (auto-injected by API):", hospitalId);
+      console.log("🏥 Hospital Name being sent:", hospitalName);
 
+      // Create staff
       const response = await createStaff(staffData).unwrap();
       const staff = response.data;
       
       console.log("📥 API RESPONSE:", response);
       
+      // Assign role permission to the created staff
+      if (staff?.id && roleId) {
+        const payload = {
+          hospitalId: Number(hospitalId),
+          roleId: roleId,
+          userType: "staff",
+          staffIds: [
+            {
+              id: Number(staff.id),
+              roleId: roleId
+            }
+          ]
+        };
+        
+        console.log("📤 ASSIGNING ROLE PERMISSION:", payload);
+        await assignPermissions(payload).unwrap();
+      }
+      
       showAddToast(
-        `${formData.name} has been added as staff successfully!`,
+        `${formData.name} has been added as staff with role ${selectedRoleName}!`,
         SUCCESS_DURATION,
         {
           'Name': formData.name,
           'ID': staff?.id || staff?._id || 'Generated',
           'Email': formData.email,
           'Designation': formData.designation,
+          'Role': selectedRoleName,
+          'Hospital': hospitalName,
           'Status': isActive ? 'Active' : 'Inactive'
         }
       );
@@ -449,187 +521,242 @@ const AddStaff = () => {
     }
   };
 
-  const isFormSubmitting = isSubmitting || isApiLoading;
+  const handleCancel = () => {
+    navigate(STAFFS_ROUTE);
+  };
+
+  const isFormSubmitting = isSubmitting || isApiLoading || isAssigning;
   const isActive = formData.status === 'active';
+  const isLoadingData = rolesLoading;
+
+  if (isLoadingData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0]"></div>
+          <p className="mt-3 text-gray-500">Loading roles...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">Add New Staff</h1>
-        <div className="text-sm text-gray-500 flex items-center gap-2">
-          <span>Home</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Staffs</span><ChevronRight size={14} /><span className="text-gray-700 font-medium">Add Staff</span>
-        </div>
-      </div>
-
+      {/* REMOVED: White header section with "Add New Staff" */}
+      
       {submitSuccess && <Alert type="success" message="Staff added successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
       {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
       <div className="p-6">
-        <Card>
-          <div className="p-6">
-            {/* Profile Image Upload Section */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6 pb-6 border-b border-gray-200">
-              <div className="flex-shrink-0">
-                <div className="relative">
-                  <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
-                    {previewImage ? (
-                      <img 
-                        src={previewImage} 
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Image className="h-8 w-8 text-gray-400" />
-                    )}
-                  </div>
-                  {previewImage && (
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
+        <Card className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3 mb-1">
+                <button onClick={handleGoBack} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                  <ArrowLeft size={20} className="text-gray-600" />
+                </button>
+                <h2 className="text-lg font-semibold text-gray-800">Staff Information</h2>
               </div>
-              
-              <div className="flex-1 w-full">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
-                <div>
-                  <input
-                    id="profileImageInput"
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => document.getElementById('profileImageInput').click()}
-                    className="inline-flex items-center gap-2"
-                    disabled={isFormSubmitting}
-                  >
-                    <Upload className="h-4 w-4" />
-                    Upload Image
-                  </Button>
-                  <p className="text-xs text-gray-400 mt-2">
-                    JPEG, PNG, GIF, WEBP accepted. Max 5MB
-                  </p>
-                </div>
-                {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
-              </div>
+              <p className="text-sm text-gray-500 mt-1">Add new staff member information</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Input 
-                label="Full Name *" 
-                name="name" 
-                value={formData.name} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.name} 
-                required 
-                placeholder="Enter full name" 
-              />
-              
-              <Input 
-                label="Email *" 
-                name="email" 
-                type="email" 
-                value={formData.email} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.email} 
-                required 
-                placeholder="staff@example.com" 
-              />
-              
-              <PasswordInput
-                value={formData.password}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                error={errors.password}
-                touched={true}
-                showPassword={showPassword}
-                setShowPassword={setShowPassword}
-              />
-              
-              <Input 
-                label="Phone Number *" 
-                name="phone" 
-                type="tel" 
-                value={formData.phone} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.phone} 
-                required 
-                placeholder="+1 00000 00000" 
-              />
-              
-              <Select 
-                label="Gender" 
-                name="gender" 
-                options={genders} 
-                value={formData.gender} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.gender} 
-              />
-              
-              <Input 
-                label="Date of Birth" 
-                name="dob" 
-                type="date" 
-                value={formData.dob} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.dob} 
-              />
-              
-              <Select 
-                label="Designation *" 
-                name="designation" 
-                options={designations} 
-                value={formData.designation} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.designation} 
-                required 
-              />
-              
-              <Input 
-                label="Joining Date" 
-                name="joiningDate" 
-                type="date" 
-                value={formData.joiningDate} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.joiningDate} 
-              />
-              
-              <Select 
-                label="Staff Type" 
-                name="staffType" 
-                options={staffTypes} 
-                value={formData.staffType} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.staffType} 
-              />
-              
-              <Select 
-                label="Job Type" 
-                name="jobType" 
-                options={jobTypes} 
-                value={formData.jobType} 
-                onChange={handleChange} 
-                onBlur={handleBlur} 
-                error={errors.jobType} 
-              />
-              
-              <div className="md:col-span-2">
+            <div className="p-6 space-y-6">
+              {/* Profile Image Upload Section */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-4">
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                      {previewImage ? (
+                        <img 
+                          src={previewImage} 
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Image className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
+                    {previewImage && (
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
+                  <div>
+                    <input
+                      id="profileImageInput"
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('profileImageInput').click()}
+                      className="inline-flex items-center gap-2"
+                      disabled={isFormSubmitting}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Image
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
+                    </p>
+                  </div>
+                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input 
+                  label="Full Name *" 
+                  name="name" 
+                  value={formData.name} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.name} 
+                  required 
+                  placeholder="Enter full name" 
+                />
+                
+                <Input 
+                  label="Email *" 
+                  name="email" 
+                  type="email" 
+                  value={formData.email} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.email} 
+                  required 
+                  placeholder="staff@example.com" 
+                />
+                
+                <PasswordInput
+                  value={formData.password}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.password}
+                  touched={true}
+                  showPassword={showPassword}
+                  setShowPassword={setShowPassword}
+                />
+                
+                <Input 
+                  label="Phone Number *" 
+                  name="phone" 
+                  type="tel" 
+                  value={formData.phone} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.phone} 
+                  required 
+                  placeholder="+1 00000 00000" 
+                />
+
+                {/* Assign Role - Dynamic dropdown like AddNewUser */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Assign Role <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <select
+                      name="roleId"
+                      value={formData.roleId}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
+                    >
+                      <option value="">Select a role</option>
+                      {rolesList.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name || role.roleName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
+                  {formData.roleId && (
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                        {getRoleNameById(formData.roleId)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                <Select 
+                  label="Gender" 
+                  name="gender" 
+                  options={genders} 
+                  value={formData.gender} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.gender} 
+                />
+                
+                <Input 
+                  label="Date of Birth" 
+                  name="dob" 
+                  type="date" 
+                  value={formData.dob} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.dob} 
+                />
+                
+                <Select 
+                  label="Designation *" 
+                  name="designation" 
+                  options={designations} 
+                  value={formData.designation} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.designation} 
+                  required 
+                />
+                
+                <Input 
+                  label="Joining Date" 
+                  name="joiningDate" 
+                  type="date" 
+                  value={formData.joiningDate} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.joiningDate} 
+                />
+                
+                <Select 
+                  label="Staff Type" 
+                  name="staffType" 
+                  options={staffTypes} 
+                  value={formData.staffType} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.staffType} 
+                />
+                
+                <Select 
+                  label="Job Type" 
+                  name="jobType" 
+                  options={jobTypes} 
+                  value={formData.jobType} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.jobType} 
+                />
+              </div>
+
+              {/* Languages Known */}
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Languages Known</label>
                 <div className="flex gap-2 mb-2">
                   <select
@@ -654,7 +781,8 @@ const AddStaff = () => {
                 </div>
               </div>
 
-              <div className="md:col-span-2">
+              {/* Qualification */}
+              <div>
                 <Input 
                   label="Qualification" 
                   name="qualification" 
@@ -664,7 +792,8 @@ const AddStaff = () => {
                 />
               </div>
 
-              <div className="md:col-span-2">
+              {/* Address Information */}
+              <div>
                 <h4 className="text-md font-semibold text-gray-800 mb-4 mt-2">Address Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Select 
@@ -716,24 +845,40 @@ const AddStaff = () => {
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
-              <div className="flex items-center">
-                <Switch checked={isActive} onChange={handleStatusToggle} />
-                <span className="ml-3 text-sm text-gray-600">{isActive ? 'Active' : 'Inactive'}</span>
+              {/* Status Toggle */}
+              <div className="pt-4 border-t border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
+                <div className="flex items-center">
+                  <Switch checked={isActive} onChange={handleStatusToggle} />
+                  <span className="ml-3 text-sm text-gray-600">{isActive ? 'Active' : 'Inactive'}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
               </div>
-              <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
             </div>
-          </div>
 
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => navigate(STAFFS_ROUTE)} disabled={isFormSubmitting}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit} disabled={isFormSubmitting} loading={isFormSubmitting}>
-              {isFormSubmitting ? 'Saving...' : 'Save Staff'}
-            </Button>
-          </div>
+            {/* Form Actions */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                className="flex items-center gap-2"
+                disabled={isFormSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isFormSubmitting}
+                className="flex items-center gap-2"
+                disabled={isFormSubmitting}
+              >
+                {isFormSubmitting ? 'Saving...' : 'Save Staff'}
+              </Button>
+            </div>
+          </form>
         </Card>
       </div>
     </div>

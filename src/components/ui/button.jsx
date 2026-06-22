@@ -1,19 +1,33 @@
 import React from 'react';
 
 const variants = {
-  primary: 'bg-[#1C62A0] hover:bg-[#154a7d] text-white shadow-sm',
+  primary: `
+    bg-gradient-to-r
+    from-green-600
+    to-emerald-600
+    hover:from-green-700
+    hover:to-emerald-700
+    text-white
+    border-0
+    shadow-lg
+    hover:shadow-xl
+    transition-all
+    duration-300
+  `,
   secondary: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50',
   danger: 'bg-red-500 hover:bg-red-600 text-white shadow-sm',
   success: 'bg-green-500 hover:bg-green-600 text-white shadow-sm',
   warning: 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm',
-  outline: 'bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-50'
+  outline: 'bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-50',
+  ghost: 'bg-transparent text-gray-700 hover:bg-gray-100',
 };
 
 const sizes = {
   xs: 'px-2 py-1 text-xs rounded',
   sm: 'px-3 py-1.5 text-sm rounded-md',
   md: 'px-4 py-2 text-sm rounded-lg',
-  lg: 'px-6 py-2.5 text-base rounded-lg'
+  lg: 'px-6 py-2.5 text-base rounded-lg',
+  xl: 'px-8 py-3 text-lg rounded-xl',
 };
 
 export const Button = ({

@@ -7,6 +7,10 @@ import {
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
 import { useLogoutHospitalMutation } from '../../app/service/hospitalApi';
+import {
+  useGetNotificationsByHospitalQuery
+} from "../../app/service/notification";
+import { getHospitalId } from "../utils/auth";
 
 const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const navigate = useNavigate();
@@ -17,17 +21,25 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
-  // API hook for logout
   const [logoutHospital, { isLoading: isLoggingOut }] = useLogoutHospitalMutation();
   
-  // Get from auth OR localStorage fallback (prevents crashes when user is undefined)
+  const hospitalId = getHospitalId();
+  
+  const { data: notificationsData } =
+    useGetNotificationsByHospitalQuery(
+      { hospitalId },
+      {
+        skip: !hospitalId,
+        pollingInterval: 10000,
+      }
+    );
+  
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
   const hospitalName = user?.name || storedUser?.name || "Dreams EMR";
   const hospitalEmail = user?.email || storedUser?.email || "";
   const hospitalType = user?.type || storedUser?.type || "Administrator";
   
-  // Safe initials calculation with optional chaining to prevent crashes
   const initials = hospitalName
     ?.split(" ")
     ?.map((word) => word[0])
@@ -35,14 +47,11 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     ?.slice(0, 2)
     ?.toUpperCase() || "DE";
   
-  const notifications = [
-    { id: 1, title: 'New leave request', message: 'John Doe requested sick leave', time: '5 mins ago', read: false },
-    { id: 2, title: 'Project deadline', message: 'Mobile App project due in 2 days', time: '1 hour ago', read: false },
-    { id: 3, title: 'Employee joined', message: 'Sarah Williams joined the team', time: '3 hours ago', read: true },
-    { id: 4, title: 'Appointment reminder', message: 'Dr. Smith has a patient at 2:30 PM', time: '5 hours ago', read: true },
-  ];
-
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const notifications = notificationsData?.data || [];
+  
+  const unreadCount = notifications.filter(
+    (n) => !n.hospitalReadStatus?.[hospitalId]
+  ).length;
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -65,12 +74,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   };
 
   const handleLogout = async () => {
-    console.log("Logout button clicked");
     try {
       await logoutHospital().unwrap();
-      console.log("Logout API call successful");
     } catch (error) {
-      console.error("Logout API error:", error);
+      // Error handled silently
     } finally {
       logout();
       navigate("/sign-in");
@@ -177,9 +184,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
             <div className="hidden lg:block text-left">
               <p className="text-sm font-medium text-white truncate max-w-[160px]">
                 {hospitalName}
-              </p>
-              <p className="text-xs text-slate-300">
-                {hospitalType}
               </p>
             </div>
             <ChevronDown size={16} className="!text-white hidden lg:block" stroke="white" />

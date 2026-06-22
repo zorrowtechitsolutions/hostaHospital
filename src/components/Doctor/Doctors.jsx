@@ -1,9 +1,9 @@
-// src/components/Doctor/Doctors.jsx
+// src/components/Doctor/Doctors.jsx - With Green Gradient Buttons
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Modal, Pagination } from '../ui';
+import { Badge, Modal, Pagination, Button } from '../ui';
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
@@ -34,13 +34,11 @@ const getAppointmentValue = (doctor) =>
 
 const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
 
-// NEW: Helper function to get department display
+// Helper function to get department display
 const getDepartmentDisplay = (doctor) => {
-  // Priority: department field first
   if (doctor.department) {
     return doctor.department;
   }
-  // Fallback to specialty if department not available
   if (doctor.specialist) {
     return doctor.specialist;
   }
@@ -48,17 +46,6 @@ const getDepartmentDisplay = (doctor) => {
     return doctor.specialty;
   }
   return 'Department not specified';
-};
-
-// Helper function to get specialty (for secondary display if needed)
-const getSpecialtyDisplay = (doctor) => {
-  if (doctor.specialist && doctor.specialist !== doctor.department) {
-    return doctor.specialist;
-  }
-  if (doctor.specialty && doctor.specialty !== doctor.department) {
-    return doctor.specialty;
-  }
-  return null;
 };
 
 // Reusable Doctor Action Menu Component
@@ -163,7 +150,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                   </td>
+                  </td>
                 ))}
               </tr>
             ))}
@@ -192,9 +179,7 @@ const Doctors = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
-  const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('doctorViewMode') || 'grid';
-  });
+  const [viewMode, setViewMode] = useState('grid');
   const [activeMenu, setActiveMenu] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
   const [doctorToDelete, setDoctorToDelete] = useState(null);
@@ -205,43 +190,57 @@ const Doctors = () => {
 
   const fileInputRef = useRef(null);
 
+  // API Query with pagination parameters - server-side pagination
   const {
     data: response,
     error,
     isLoading,
     isFetching,
     refetch,
-  } = useGetDoctorsQuery();
+  } = useGetDoctorsQuery({
+    search_query: searchTerm?.trim() ? searchTerm : undefined,
+    speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
+    status: filterStatus === "All" ? undefined : (filterStatus === "Active" ? true : false),
+    page: currentPage,
+    limit: itemsPerPage
+  });
 
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('doctorViewMode', viewMode);
   }, [viewMode]);
 
-  // Normalize doctor data with imageUrl
+  // Get doctors from API response
   const doctors = useMemo(() => {
     if (!response?.data) return [];
     return response.data.map((doctor) => ({
       ...doctor,
       imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
+      hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
     }));
   }, [response?.data]);
 
-  // Get unique departments (changed from specialties)
+  // Get unique departments from API response for filter dropdown
   const departments = useMemo(() => {
+    if (response?.departments && Array.isArray(response.departments)) {
+      return ['All', ...response.departments];
+    }
     const departmentSet = new Set(
       doctors
         .map((d) => d.department)
         .filter(Boolean)
     );
     return ['All', ...Array.from(departmentSet)];
-  }, [doctors]);
+  }, [response?.departments, doctors]);
 
-  // Handle location state for department filter (changed from speciality)
+  // Get total pages and total items from API response (server-side pagination)
+  const totalPages = response?.pagination?.totalPages || 1;
+  const totalItems = response?.pagination?.totalItems || 0;
+
+  // Handle location state for department filter
   useEffect(() => {
     if (location.state?.department) {
       setSelectedSpecialty(location.state.department);
-      // Clear location state to prevent re-filtering on re-render
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -262,39 +261,6 @@ const Doctors = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // Filter doctors based on all criteria - Updated to use department
-  const filteredDoctors = useMemo(() => {
-    return doctors.filter(doctor => {
-      // Search filter - search by name, department, and specialty
-      const doctorName = getDoctorName(doctor).toLowerCase();
-      const doctorDepartment = (doctor.department || '').toLowerCase();
-      const doctorSpecialty = (doctor.specialist || doctor.specialty || '').toLowerCase();
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = searchTerm === '' || 
-        doctorName.includes(searchLower) || 
-        doctorDepartment.includes(searchLower) ||
-        doctorSpecialty.includes(searchLower);
-
-      // Department filter (changed from specialty)
-      const matchesDepartment = selectedSpecialty === 'All' || 
-        doctor.department === selectedSpecialty;
-
-      // Status filter
-      const matchesStatus = filterStatus === "All" ||
-        (filterStatus === "Active" && doctor.isActive) ||
-        (filterStatus === "Inactive" && !doctor.isActive);
-
-      return matchesSearch && matchesDepartment && matchesStatus;
-    });
-  }, [doctors, searchTerm, selectedSpecialty, filterStatus]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredDoctors.length / itemsPerPage);
-  const paginatedDoctors = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredDoctors.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredDoctors, currentPage, itemsPerPage]);
-
   const handlePageChange = useCallback((page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
@@ -310,14 +276,9 @@ const Doctors = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        
-        // Validate imported data
         if (!Array.isArray(importedData)) {
           throw new Error('Invalid data format: Expected an array');
         }
-
-        // Here you would typically call an API endpoint to import
-        // For now, we'll just show a success message
         console.log('Imported doctors:', importedData);
         alert(`${importedData.length} doctors imported successfully!`);
         refetch();
@@ -330,7 +291,7 @@ const Doctors = () => {
   }, [refetch]);
 
   const handleExport = useCallback(() => {
-    const exportData = filteredDoctors.map(doctor => ({
+    const exportData = doctors.map(doctor => ({
       'ID': doctor.id,
       'Name': getDoctorName(doctor),
       'Department': doctor.department,
@@ -359,7 +320,7 @@ const Doctors = () => {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', `doctors_export_${new Date().toISOString().split('T')[0]}.json`);
     linkElement.click();
-  }, [filteredDoctors]);
+  }, [doctors]);
 
   const handleRefresh = useCallback(() => {
     setSearchTerm('');
@@ -399,8 +360,6 @@ const Doctors = () => {
   }, [refetch]);
 
   const handleSaveAppointmentSettings = useCallback(async (settings) => {
-    // Here you would typically call an API endpoint
-    // For now, we'll just store in localStorage as a fallback
     const existingSettings = JSON.parse(localStorage.getItem('appointmentSettings') || '{}');
     existingSettings[settings.doctorId] = settings;
     localStorage.setItem('appointmentSettings', JSON.stringify(existingSettings));
@@ -428,7 +387,7 @@ const Doctors = () => {
           <p className="text-gray-500 mb-4">Failed to load doctor data. Please try again.</p>
           <button 
             onClick={handleRefresh}
-            className="px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D]"
+            className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
           >
             Retry
           </button>
@@ -522,14 +481,13 @@ const Doctors = () => {
                 ✕
               </button>
             )}
-            <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded" aria-label="Search">
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded" aria-label="Search">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
           </div>
 
-          {/* Department Filter Dropdown - Changed from Specialty */}
           <select
             value={selectedSpecialty}
             onChange={(e) => setSelectedSpecialty(e.target.value)}
@@ -559,7 +517,7 @@ const Doctors = () => {
           <div className="flex border border-gray-200 rounded-md bg-white mr-2">
             <button 
               onClick={() => setViewMode('grid')} 
-              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-[#1C62A0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
               aria-label="Grid view"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -568,7 +526,7 @@ const Doctors = () => {
             </button>
             <button 
               onClick={() => setViewMode('list')} 
-              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-[#1C62A0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
               aria-label="List view"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -601,7 +559,10 @@ const Doctors = () => {
             </svg>
           </button>
 
-          <Link to="/add-doctor" className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D] transition-colors">
+          <Link 
+            to="/add-doctor" 
+            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
             <span className="text-lg">+</span> New Doctor
           </Link>
         </div>
@@ -614,11 +575,22 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* GRID VIEW - Updated to show Department instead of Specialty */}
-      {viewMode === 'grid' && (
+      {/* Empty State - Show when no doctors found */}
+      {doctors.length === 0 && !isLoading && (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
+          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+        </div>
+      )}
+
+      {/* GRID VIEW */}
+      {viewMode === 'grid' && doctors.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedDoctors.map((doctor) => (
+            {doctors.map((doctor) => (
               <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
                 <div className="w-full flex justify-between items-start mb-4">
                   <Badge variant="info" className="text-[10px]">
@@ -664,7 +636,6 @@ const Doctors = () => {
                 >
                   {getDoctorName(doctor)}
                 </h3>
-                {/* CHANGED: Display Department instead of Specialty */}
                 <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
                 <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                   <div className="text-center">
@@ -684,14 +655,14 @@ const Doctors = () => {
             ))}
           </div>
 
-          {/* REPLACED GRID PAGINATION WITH REUSABLE COMPONENT */}
+          {/* Pagination for Grid View */}
           {totalPages > 1 && (
-            <div className="mt-6">
+            <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={filteredDoctors.length}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="doctors"
                 variant="centered"
@@ -701,124 +672,111 @@ const Doctors = () => {
         </>
       )}
 
-      {/* LIST VIEW - Updated to show Department instead of Specialty */}
-      {viewMode === 'list' && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      {/* LIST VIEW */}
+      {viewMode === 'list' && doctors.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Doctors
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {filteredDoctors.length}
+                {totalItems}
               </span>
             </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-6 py-3">Doctor ID</th>
-                  <th className="px-6 py-3">Doctor Name</th>
-                  <th className="px-6 py-3">Department</th>
-                  <th className="px-6 py-3">Qualification</th>
-                  <th className="px-6 py-3">Experience</th>
-                  <th className="px-6 py-3">Appointments</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedDoctors.map((doctor) => (
-                  <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
-                    <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                      {getDoctorId(doctor.id)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage
-                            src={getS3ImageUrl(doctor.imageUrl)}
-                            alt={getDoctorName(doctor)}
-                          />
-                          <AvatarFallback>
-                            {(doctor.firstName?.[0] || "D").toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span 
-                          onClick={() => handleViewDetails(doctor)} 
-                          className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors"
-                        >
-                          {getDoctorName(doctor)}
-                        </span>
-                      </div>
-                    </td>
-                    {/* CHANGED: Display Department instead of Specialty */}
-                    <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
-                    <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
-                    <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant={doctor.isActive ? "success" : "danger"}
-                        className="text-xs"
-                      >
-                        {doctor.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right relative menu-container">
-                      <button 
-                        onClick={(e) => toggleMenu(doctor.id, e)} 
-                        className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                        aria-label="Actions menu"
-                      >
-                        ⋮
-                      </button>
-                      <DoctorActionMenu
-                        doctor={doctor}
-                        activeMenu={activeMenu}
-                        onView={handleViewDetails}
-                        onEdit={handleEdit}
-                        onDelete={handleDeleteClick}
-                        onAppointment={handleAppointmentManagement}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
 
-          {/* REPLACED LIST PAGINATION WITH REUSABLE COMPONENT */}
-          {filteredDoctors.length > 0 && totalPages > 1 && (
-            <div className="px-6 py-3 border-t bg-gray-50">
+          <div className="flex flex-col min-h-[500px]">
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Doctor ID</th>
+                    <th className="px-6 py-3">Doctor Name</th>
+                    <th className="px-6 py-3">Department</th>
+                    <th className="px-6 py-3">Qualification</th>
+                    <th className="px-6 py-3">Experience</th>
+                    <th className="px-6 py-3">Appointments</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right w-16">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doctors.map((doctor) => (
+                    <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                        {getDoctorId(doctor.id)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage
+                              src={getS3ImageUrl(doctor.imageUrl)}
+                              alt={getDoctorName(doctor)}
+                            />
+                            <AvatarFallback>
+                              {(doctor.firstName?.[0] || "D").toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span 
+                            onClick={() => handleViewDetails(doctor)} 
+                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors"
+                          >
+                            {getDoctorName(doctor)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
+                      <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
+                      <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
+                      <td className="px-6 py-4">
+                        <Badge
+                          variant={doctor.isActive ? "success" : "danger"}
+                          className="text-xs"
+                        >
+                          {doctor.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-right relative menu-container">
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={(e) => toggleMenu(doctor.id, e)} 
+                            className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                            aria-label="Actions menu"
+                          >
+                            ⋮
+                          </button>
+                          <DoctorActionMenu
+                            doctor={doctor}
+                            activeMenu={activeMenu}
+                            onView={handleViewDetails}
+                            onEdit={handleEdit}
+                            onDelete={handleDeleteClick}
+                            onAppointment={handleAppointmentManagement}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={Math.max(1, totalPages)}
                 onPageChange={handlePageChange}
-                totalItems={filteredDoctors.length}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="doctors"
               />
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {filteredDoctors.length === 0 && !isLoading && (
-        <div className="text-center py-12 bg-white rounded-lg ">
-          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
-          {/* <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-          <button 
-            onClick={handleRefresh}
-            className="px-4 py-2 bg-[#1C62A0] text-white rounded-md hover:bg-[#154A7D] transition-colors"
-          >
-            Clear Filters
-          </button> */}
-        </div>
-      )}
-
+      {/* Delete Doctor Modal */}
       <DeleteDoctor
         isOpen={showDelete}
         onClose={() => {
@@ -831,6 +789,7 @@ const Doctors = () => {
         onDelete={handleDeleteDoctor}
       />
 
+      {/* Appointment Management Modal */}
       <AppointmentManagement
         isOpen={showAppointmentManagement}
         onClose={() => {

@@ -96,30 +96,49 @@ export const patientsApi = api.injectEndpoints({
     // ==============================
 
     getPatients: builder.query({
-      query: (params) => {
-        const queryParams = new URLSearchParams();
-        
-        if (params?.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
-        }
-        
-        if (params?.search) {
-          queryParams.append("search", params.search);
-        }
-        
-        if (params?.page) {
-          queryParams.append("page", String(params.page));
-        }
-        
-        if (params?.limit) {
-          queryParams.append("limit", String(params.limit));
-        }
-        
-        const queryString = queryParams.toString();
-        return `/patients${queryString ? `?${queryString}` : ""}`;
-      },
-      providesTags: ["Patient"],
-    }),
+  query: (params = {}) => {
+    const queryParams = new URLSearchParams();
+
+    if (params.name) {
+      queryParams.append("name", params.name);
+    }
+
+    if (params.phone) {
+      queryParams.append("phone", params.phone);
+    }
+
+    if (params.patientId) {
+      queryParams.append("patientId", params.patientId);
+    }
+
+    if (params.addressLine) {
+      queryParams.append("addressLine", params.addressLine);
+    }
+
+    if (params.email) {
+      queryParams.append("email", params.email);
+    }
+
+    if (params.guardianName) {
+      queryParams.append("guardianName", params.guardianName);
+    }
+
+    if (params.hospitalId) {
+      queryParams.append("hospitalId", String(params.hospitalId));
+    }
+
+    queryParams.append("page", String(params.page || 1));
+    queryParams.append("limit", String(params.limit || 10));
+
+    if (params.search_query) {
+      queryParams.append("search_query", params.search_query);
+    }
+
+    return `/patients?${queryParams.toString()}`;
+  },
+
+  providesTags: ["Patient"],
+}),
 
     // ==============================
     // GET SINGLE PATIENT

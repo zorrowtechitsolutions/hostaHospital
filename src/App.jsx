@@ -17,6 +17,13 @@ import { ToastProvider } from "./components/ui/Toast";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
 import ViewMedicalHistory from "./components/Appointment/ViewMedicalHistory";
+import HelpSupport from "./components/help/HelpSupport";
+import ProtectedRoute from "./context/ProtectedRoute";
+import Users from "./components/usermanagment/Users";
+import AddNewUser from "./components/usermanagment/AddNewUser";
+import EditUser from "./components/usermanagment/EditUser";
+import SuperAdminLayout from "./components/super admin/SuperAdminLayout";
+import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -42,8 +49,8 @@ const Consultation = lazy(() => import("./components/Appointment/Consultation"))
 const CalendarPage = lazy(() => import("./components/Appointment/CalendarPage"));
 const LaboratoryRegistrationForm = lazy(() => import("./components/Laborartory/LaboratoryRegistrationForm"));
 const NotificationsPage = lazy(() => import("./components/Notification/NotificationsPage"));
-const PermissionList = lazy(() => import("./components/Settings/PermissionList"));
-const UserPermissions = lazy(() => import("./components/Settings/UserPermissions"));
+const PermissionList = lazy(() => import("./components/usermanagment/PermissionList"));
+const UserPermissions = lazy(() => import("./components/usermanagment/UserPermissions"));
 const Visits = lazy(() => import("./components/visits/Visits"));
 const Appointments = lazy(() => import("./components/Appointment/Appointment"));
 const EmailTemplates = lazy(() => import("./components/Settings/Email"));
@@ -64,47 +71,6 @@ const PageLoader = () => (
   </div>
 );
 
-// export const getPresignedUrl = async ({
-//   filename,
-//   contentType,
-//   size,
-//   role,
-//   id,
-// }) => {
-//   try {
-//     const response = await fetch(
-//       "https://zorrowtek.in/api/presignurl",
-//       {
-//         method: "POST",
-//         headers: {
-//           "Content-Type": "application/json",
-//         },
-
-//         body: JSON.stringify({
-//           filename,
-//           contentType,
-//           size,
-//           role,
-//           id,
-//         }),
-//       }
-//     );
-
-//     const data = await response.json();
-
-//     console.log("Presigned URL:", data);
-
-//     return data;
-
-//   } catch (error) {
-//     console.error(
-//       "Presign URL Error:",
-//       error
-//     );
-//   }
-// };
-
-
 function App() {
   const { isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -119,6 +85,10 @@ function App() {
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  // Check if user is Super Admin
+  const roleId = Number(localStorage.getItem("roleId"));
+  const isSuperAdmin = roleId === 1;
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
@@ -130,35 +100,34 @@ function App() {
     }
   }, []);
 
-  // 🚫 Do nothing if not logged in
   useEffect(() => {
     if (!isAuthenticated) return;
 
     console.log("🔔 Initializing notifications...");
 
-    requestNotificationPermission();
-    generateToken();
+    const initNotifications = async () => {
+      await requestNotificationPermission();
+      const token = await generateToken();
+      console.log("🔥 FCM TOKEN:", token);
+    };
 
-    // ✅ store unsubscribe function
+    initNotifications();
+
     const unsubscribe = listenMessages((payload) => {
       console.log("📩 Notification received:", payload);
 
-      const title =
-        payload?.notification?.title || payload?.data?.title;
-
-      const body =
-        payload?.notification?.body || payload?.data?.body;
+      const title = payload?.notification?.title || payload?.data?.title;
+      const body = payload?.notification?.body || payload?.data?.body;
 
       setBooking({ title, body });
     });
 
-    // ✅ CLEANUP (very important)
     return () => {
       if (unsubscribe) unsubscribe();
     };
   }, [isAuthenticated]);
 
-  // ✅ Handle service worker messages to open modals
+  // Handle service worker messages to open modals
   useEffect(() => {
     const handleServiceWorkerMessage = (event) => {
       if (event.data && event.data.action === "openApproveModal") {
@@ -198,8 +167,8 @@ function App() {
 
   // Log auth state for debugging
   useEffect(() => {
-    console.log("App - isAuthenticated:", isAuthenticated, "Path:", location.pathname, "Loading:", loading);
-  }, [isAuthenticated, location.pathname, loading]);
+    console.log("App - isAuthenticated:", isAuthenticated, "Path:", location.pathname, "Loading:", loading, "isSuperAdmin:", isSuperAdmin);
+  }, [isAuthenticated, location.pathname, loading, isSuperAdmin]);
 
   if (loading) {
     return <PageLoader />;
@@ -210,31 +179,46 @@ function App() {
     console.log("Rendering PUBLIC routes");
     return (  
       <ToastProvider>
-        <Suspense
-          fallback={
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-64 rounded-2xl bg-white border border-gray-100 animate-pulse"
-                />
-              ))}
-            </div>
-          }
-        >
+        <Suspense fallback={<PageLoader />}>
           <Routes>
+            {/* Home page for non-authenticated users */}
+            <Route path="/" element={<HospitalHomePage />} />
             <Route path="/register" element={<Register />} />
             <Route path="/sign-in" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="*" element={<Navigate to="/sign-in" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </ToastProvider>
     );
   }
- 
-  // If authenticated, show main app
-  console.log("Rendering PROTECTED routes");
+
+  // SUPER ADMIN RENDERING - If Super Admin, render Super Admin layout only
+  if (isSuperAdmin) {
+    console.log("Rendering SUPER ADMIN routes - isSuperAdmin:", isSuperAdmin);
+    return (
+      <ToastProvider>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route
+              path="/super-admin/*"
+              element={
+                <ProtectedRoute requireSuperAdmin={true}>
+                  <SuperAdminLayout />
+                </ProtectedRoute>
+              }
+            />
+            {/* Redirect root to super admin dashboard */}
+            <Route path="/" element={<Navigate to="/super-admin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/super-admin/dashboard" replace />} />
+          </Routes>
+        </Suspense>
+      </ToastProvider>
+    );
+  }
+
+  // HOSPITAL ADMIN / DOCTOR / STAFF RENDERING
+  console.log("Rendering HOSPITAL routes");
   return (
     <ToastProvider>
       <div className="flex h-screen bg-gray-50 font-sans">
@@ -284,7 +268,6 @@ function App() {
               }}
               onConfirm={(data) => {
                 console.log("Appointment confirmed:", data, "for request:", selectedRequestId);
-                // TODO: Call your API to confirm appointment
                 setShowApproveModal(false);
                 setSelectedRequestId(null);
                 alert("Appointment confirmed successfully!");
@@ -302,7 +285,6 @@ function App() {
               }}
               onConfirm={() => {
                 console.log("Request rejected with reason:", rejectReason, "for request:", selectedRequestId);
-                // TODO: Call your API to reject request
                 setShowRejectModal(false);
                 setSelectedRequestId(null);
                 setRejectReason("");
@@ -313,44 +295,194 @@ function App() {
             />
           )}
           
-          {/* REMOVED p-4 padding from here */}
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<PageLoader />}>
               <Routes>
+                {/* Public routes within authenticated area */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                
+                {/* Dashboard - No specific permission needed, just authentication */}
                 <Route path="/dashboard" element={<Dashboard />} />
+                
+                {/* Settings - No specific permission needed */}
                 <Route path="/settings" element={<Settings />} />
-                <Route path="/patients" element={<Patients />} />
-                <Route path="/add-patient" element={<AddPatient />} />
-                <Route path="/edit-patient/:id" element={<EditPatientModal />} />
-                <Route path="/patients/:id" element={<PatientDetails />} />
-                <Route path="/requests" element={<RequestsTable />} />
-                <Route path="/staffs" element={<Staffs />} />
-                <Route path="/add-staff" element={<AddStaff />} />
-                <Route path="/edit-staff/:id" element={<EditStaff />} />
-                <Route path="/lab/results" element={<AllLabResults />} />
-                <Route path="/lab/tests" element={<LabTests />} />
-                <Route path="/lab/results/add" element={<AddEditLabResults />} />
-                <Route path="/lab/results/edit/:id" element={<AddEditLabResults />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/help" element={<HelpSupport />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/doctors" element={<Doctors />} />
-                <Route path="/add-doctor" element={<AddDoctor />} />
-                <Route path="/edit-doctor/:id" element={<EditDoctor />} />
-                <Route path="/doctor/:id" element={<ViewDoctor />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                
+                {/* Doctor routes with permission checks */}
+                <Route 
+                  path="/doctors" 
+                  element={
+                    <ProtectedRoute permissionId={2}>
+                      <Doctors />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-doctor" 
+                  element={
+                    <ProtectedRoute permissionId={3}>
+                      <AddDoctor />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/edit-doctor/:id" 
+                  element={
+                    <ProtectedRoute permissionId={4}>
+                      <EditDoctor />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/doctor/:id" 
+                  element={
+                    <ProtectedRoute permissionId={2}>
+                      <ViewDoctor />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Patient routes with permission checks */}
+                <Route 
+                  path="/patients" 
+                  element={
+                    <ProtectedRoute permissionId={14}>
+                      <Patients />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-patient" 
+                  element={
+                    <ProtectedRoute permissionId={15}>
+                      <AddPatient />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/edit-patient/:id" 
+                  element={
+                    <ProtectedRoute permissionId={16}>
+                      <EditPatientModal />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/patients/:id" 
+                  element={
+                    <ProtectedRoute permissionId={14}>
+                      <PatientDetails />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Staff routes with permission checks */}
+                <Route 
+                  path="/staffs" 
+                  element={
+                    <ProtectedRoute permissionId={10}>
+                      <Staffs />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-staff" 
+                  element={
+                    <ProtectedRoute permissionId={11}>
+                      <AddStaff />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/edit-staff/:id" 
+                  element={
+                    <ProtectedRoute permissionId={12}>
+                      <EditStaff />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Lab routes with permission checks */}
+                <Route 
+                  path="/lab/results" 
+                  element={
+                    <ProtectedRoute permissionId={22}>
+                      <AllLabResults />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/lab/tests" 
+                  element={
+                    <ProtectedRoute permissionId={22}>
+                      <LabTests />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/lab/results/add" 
+                  element={
+                    <ProtectedRoute permissionId={22}>
+                      <AddEditLabResults />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/lab/results/edit/:id" 
+                  element={
+                    <ProtectedRoute permissionId={22}>
+                      <AddEditLabResults />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/laboratory" 
+                  element={
+                    <ProtectedRoute permissionId={22}>
+                      <LaboratoryRegistrationForm />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Ambulance route */}
+                <Route 
+                  path="/ambulance" 
+                  element={
+                    <ProtectedRoute permissionId={46}>
+                      <Ambulance />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Blood Bank route */}
+                <Route 
+                  path="/blood" 
+                  element={
+                    <ProtectedRoute permissionId={26}>
+                      <BloodBank />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Other protected routes without specific permission IDs */}
+                <Route path="/requests" element={<RequestsTable />} />
                 <Route path="/pharmacy" element={<Pharmacy />} />
                 <Route path="/product/:id" element={<ViewProduct />} />
                 <Route path="/appointments/consultation" element={<Consultation />} />
                 <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/laboratory" element={<LaboratoryRegistrationForm />} />
-                <Route path="/roles" element={<UserPermissions />} />
+                <Route path="/roles" element={<UserPermissions/>} />
                 <Route path="/permissions/:roleId" element={<PermissionList />} /> 
+                <Route path="/users" element={<Users />} /> 
+                <Route path="/add-user" element={<AddNewUser />} />
+                <Route path="/edit-user/:id" element={<EditUser />} />
                 <Route path="/visits" element={<Visits />} />
                 <Route path="/appointments" element={<Appointments />} />
                 <Route path="/email" element={<EmailTemplates />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/ambulance" element={<Ambulance />} />
-                <Route path="/blood" element={<BloodBank />} />
+                
+                {/* Catch all route */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Suspense>
@@ -368,16 +500,3 @@ export default function AppWrapper() {
     </AuthProvider>
   );
 }
-
-// import React from 'react'
-// import { Uploader } from './components/web/Uploader'
-
-// function App() {
-//   return (
-//     <div>
-//       <Uploader />
-//     </div>
-//   )
-// }
-
-// export default App

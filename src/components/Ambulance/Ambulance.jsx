@@ -1,4 +1,4 @@
-// src/components/Ambulance/Ambulance.jsx - Filters removed (only dropdowns remain)
+// src/components/Ambulance/Ambulance.jsx - With Green Gradient Buttons
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -118,7 +118,7 @@ const Ambulance = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('grid');
+  const [viewMode, setViewMode] = useState('grid'); 
   const [typeFilter, setTypeFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
   
@@ -135,6 +135,11 @@ const Ambulance = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // Save view mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('ambulanceViewMode', viewMode);
+  }, [viewMode]);
 
   // Helper function to format ambulance ID for display only
   const formatAmbulanceId = (id) => {
@@ -384,7 +389,7 @@ const Ambulance = () => {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/blood')}
             className="p-1 hover:bg-gray-200 rounded transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,7 +426,7 @@ const Ambulance = () => {
                 ✕
               </button>
             )}
-            <button className="absolute right-2 top-1.5 bg-[#1C62A0] p-1 rounded">
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -442,15 +447,25 @@ const Ambulance = () => {
 
         <div className="flex gap-2 flex-wrap items-center">
           <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button onClick={() => setViewMode('grid')} className={`p-2 ${viewMode === 'grid' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+            <button 
+              onClick={() => setViewMode('grid')} 
+              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+            >
               <LayoutGrid size={16} />
             </button>
-            <button onClick={() => setViewMode('list')} className={`p-2 ${viewMode === 'list' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+            <button 
+              onClick={() => setViewMode('list')} 
+              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+            >
               <List size={16} />
             </button>
           </div>
 
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            title="Refresh"
+          >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
@@ -459,17 +474,20 @@ const Ambulance = () => {
             <Upload size={16} />
           </label>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export">
             <Download size={16} />
           </button>
 
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D]">
+          <button 
+            onClick={() => setShowAddModal(true)} 
+            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
             <Plus size={16} /> Add Ambulance
           </button>
         </div>
       </div>
 
-      {/* GRID VIEW */}
+      {/* GRID VIEW - Original simple structure (without sticky pagination) */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -528,9 +546,9 @@ const Ambulance = () => {
             ))}
           </div>
 
-          {/* REPLACED GRID PAGINATION WITH REUSABLE COMPONENT */}
+          {/* Pagination for Grid View */}
           {totalPages > 1 && (
-            <div className="mt-6">
+            <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -545,9 +563,9 @@ const Ambulance = () => {
         </>
       )}
 
-      {/* LIST VIEW */}
+      {/* LIST VIEW - WITH STICKY PAGINATION */}
       {viewMode === 'list' && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Ambulances
@@ -555,82 +573,86 @@ const Ambulance = () => {
             </h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-6 py-3">Ambulance ID</th>
-                  <th className="px-6 py-3">Service Name</th>
-                  <th className="px-6 py-3">Vehicle Type</th>
-                  <th className="px-6 py-3">Place</th>
-                  <th className="px-6 py-3">District</th>
-                  <th className="px-6 py-3">State</th>
-                  <th className="px-6 py-3">Phone</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedAmbulances.map((ambulance) => (
-                  <tr key={ambulance.id} className="hover:bg-gray-50 border-b border-gray-100">
-                    <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                      {ambulance.formattedId}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Truck className="w-4 h-4 text-[#1C62A0]" />
-                        </div>
-                        <span 
-                          onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} 
-                          className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
-                        >
-                          {ambulance.serviceName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 max-w-[200px] truncate">{ambulance.vehicleType}</td>
-                    <td className="px-6 py-4 text-gray-600">{ambulance.address?.place || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-600">{ambulance.address?.district || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-600">{ambulance.address?.state || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-600">{ambulance.phone}</td>
-                    <td className="px-6 py-4 text-right relative menu-container">
-                      <button onClick={(e) => toggleMenu(ambulance.id, e)} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold">
-                        ⋮
-                      </button>
-                      {activeMenu === ambulance.id && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                          <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <Eye size={16} /> View Details
-                          </button>
-                          <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <Edit size={16} /> Edit
-                          </button>
-                          <div className="border-t border-gray-100 my-1"></div>
-                          <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                            <Trash2 size={16} /> Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
+          {/* Flex container for sticky pagination */}
+          <div className="flex flex-col min-h-[500px]">
+            {/* Table area - grows to take available space */}
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Ambulance ID</th>
+                    <th className="px-6 py-3">Service Name</th>
+                    <th className="px-6 py-3">Vehicle Type</th>
+                    <th className="px-6 py-3">Place</th>
+                    <th className="px-6 py-3">District</th>
+                    <th className="px-6 py-3">State</th>
+                    <th className="px-6 py-3">Phone</th>
+                    <th className="px-6 py-3 text-right w-16">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {paginatedAmbulances.map((ambulance) => (
+                    <tr key={ambulance.id} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                        {ambulance.formattedId}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Truck className="w-4 h-4 text-[#1C62A0]" />
+                          </div>
+                          <span 
+                            onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} 
+                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                          >
+                            {ambulance.serviceName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 max-w-[200px] truncate">{ambulance.vehicleType}</td>
+                      <td className="px-6 py-4 text-gray-600">{ambulance.address?.place || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{ambulance.address?.district || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{ambulance.address?.state || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{ambulance.phone}</td>
+                      <td className="px-6 py-4 text-right relative menu-container">
+                        <div className="flex justify-end">
+                          <button onClick={(e) => toggleMenu(ambulance.id, e)} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold">
+                            ⋮
+                          </button>
+                          {activeMenu === ambulance.id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                <Eye size={16} /> View Details
+                              </button>
+                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                <Edit size={16} /> Edit
+                              </button>
+                              <div className="border-t border-gray-100 my-1"></div>
+                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                                <Trash2 size={16} /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* REPLACED LIST PAGINATION WITH REUSABLE COMPONENT */}
-          {filteredAmbulances.length > 0 && totalPages > 1 && (
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+            {/* Pagination - Sticks to bottom using mt-auto */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={Math.max(1, totalPages)}
                 onPageChange={handlePageChange}
                 totalItems={filteredAmbulances.length}
                 itemsPerPage={itemsPerPage}
                 itemLabel="ambulances"
               />
             </div>
-          )}
+          </div>
         </div>
       )}
 

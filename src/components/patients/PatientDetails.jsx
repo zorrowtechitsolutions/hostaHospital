@@ -1,6 +1,7 @@
+// src/components/patients/PatientDetails.jsx - With Lab Results Tab
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText } from "lucide-react";
+import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon, Beaker } from "lucide-react";
 import EditAppointmentModal from "./EditAppointmentModal";
 import EditVisitHistory from "./EditVisitHistoryModal";
 import DeleteModal from "./DeleteModel";
@@ -13,6 +14,8 @@ import VisitHistoryTab from "./tabs/VisitHistoryTab";
 import PrescriptionTab from "./tabs/PrescriptionTab";
 import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
 import DocumentsTab from "./tabs/DocumentsTab";
+import LabResultsTab from "./tabs/LabResultsTab";
+import InsuranceTab from "./tabs/InsuranceTab"; // ✅ ADDED
 
 // Import Modals
 import AppointmentDetailsModal from "./modals/AppointmentDetailsModal";
@@ -153,7 +156,7 @@ const PatientDetails = () => {
         id: booking.id || booking._id || index,
         doctorName: booking.displayName || booking.doctor_name || "N/A",
         doctor: booking.displayName || booking.doctor_name || "N/A",
-        department: booking.department || "N/A",
+        department: booking.department || booking.doctor_department || "N/A",
         appointmentDate: booking.booking_date,
         date: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : "N/A",
         time: booking.consulting_time || "N/A",
@@ -200,7 +203,7 @@ const PatientDetails = () => {
           reason: booking.reason || "",
           notes: booking.notes || "",
           originalBooking: booking
-                };
+        };
       });
   }, [bookingResponse, patientData]);
 
@@ -456,6 +459,8 @@ const PatientDetails = () => {
   // Combined patient state
   const [patient, setPatient] = useState({
     id: '',
+    hospitalId: '',
+    userId: '',
     name: '',
     gender: '',
     phone: '',
@@ -482,6 +487,7 @@ const PatientDetails = () => {
     prescriptionsList: [],
     medicalHistoryList: [],
     documentsList: [],
+    labResultsList: [],
     insuranceList: [],
     appointments: [],
     visits: []
@@ -493,7 +499,9 @@ const PatientDetails = () => {
       setPatient({
         id: patientData.id || patientData._id,
         patientId: patientData.patientId || "",
-        name: patientData.name || "",
+        hospitalId: patientData.hospitalId || patientData.hospital?.id || '',
+        userId: patientData.userId || patientData.user?.id || '',
+        name: patientData.name || '',
         gender: patientData.gender || '',
         phone: patientData.mobileNumber || patientData.phone || '',
         email: patientData.email || '',
@@ -515,10 +523,11 @@ const PatientDetails = () => {
         bloodPressure: patientData.bloodPressure || '',
         appointmentsList: patientAppointments,
         visitHistoryList: patientVisits,
-        vitalsList: formattedVitals,
-        prescriptionsList: formattedPrescriptions,
+        vitalsList: formattedVitals, // ✅ FIXED: Only assigned once
+        prescriptionsList: formattedPrescriptions, // ✅ FIXED: Only assigned once
         medicalHistoryList: patientData.medicalHistory || [],
         documentsList: patientData.documents || [],
+        labResultsList: patientData.labResults || patientData.lab_results || [],
         insuranceList: patientData.insurance || [],
         appointments: patientAppointments,
         visits: patientVisits
@@ -616,49 +625,22 @@ const PatientDetails = () => {
   };
 
   const handleViewPrescriptionDetails = (prescription) => {
-const formattedPrescription = {
-  ...prescription.fullData,
+    const formattedPrescription = {
+      ...prescription.fullData,
+      id: prescription.id,
+      prescribedBy: prescription.prescribedBy,
+      doctorName: prescription.doctorName,
+      doctorSpecialization: prescription.doctorSpecialization,
+      medications: prescription.medications || prescription.fullData?.medications || [],
+      complaint: prescription.complaint || prescription.fullData?.complaint,
+      advice: prescription.advice || prescription.fullData?.advice,
+      design: prescription.fullData?.design || [],
+      canvasBg: prescription.fullData?.canvasBg || "#ffffff"
+    };
 
-  id: prescription.id,
-  prescribedBy: prescription.prescribedBy,
-  doctorName: prescription.doctorName,
-  doctorSpecialization: prescription.doctorSpecialization,
-
-  medications:
-    prescription.medications ||
-    prescription.fullData?.medications ||
-    [],
-
-  complaint:
-    prescription.complaint ||
-    prescription.fullData?.complaint,
-
-  advice:
-    prescription.advice ||
-    prescription.fullData?.advice,
-
-  design:
-    prescription.fullData?.design || [],
-
-  canvasBg:
-    prescription.fullData?.canvasBg || "#ffffff"
-};
-
-
-    console.log(
-  "FULL PRESCRIPTION",
-  prescription.fullData
-);
-
-console.log(
-  "Prescription Design:",
-  prescription.fullData?.design
-);
-
-console.log(
-  "Canvas Bg:",
-  prescription.fullData?.canvasBg
-);
+    console.log("FULL PRESCRIPTION", prescription.fullData);
+    console.log("Prescription Design:", prescription.fullData?.design);
+    console.log("Canvas Bg:", prescription.fullData?.canvasBg);
     
     setSelectedPrescription(formattedPrescription);
     setShowPrescriptionModal(true);
@@ -743,6 +725,10 @@ console.log(
         const updatedDocuments = patient.documentsList.filter((_, i) => i !== index);
         setPatient({...patient, documentsList: updatedDocuments});
         showSuccessToast("Document deleted successfully");
+      } else if (type === 'labResult') {
+        const updatedLabResults = patient.labResultsList.filter((_, i) => i !== index);
+        setPatient({...patient, labResultsList: updatedLabResults});
+        showSuccessToast("Lab result deleted successfully");
       } else if (type === 'insurance') {
         const updatedInsurance = patient.insuranceList.filter(item => item.id !== id);
         setPatient({...patient, insuranceList: updatedInsurance});
@@ -774,6 +760,8 @@ console.log(
     { id: "prescription", label: "Prescription", icon: Pill },
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
+    { id: "lab-results", label: "Lab Results", icon: Beaker },
+    { id: "insurance", label: "Insurance", icon: ShieldIcon }
   ];
 
   const renderTabContent = () => {
@@ -832,6 +820,10 @@ console.log(
         return <MedicalHistoryTab patient={patient} handleViewMedicalDetails={handleViewMedicalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "documents": 
         return <DocumentsTab patient={patient} handleDownloadDocument={handleDownloadDocument} handleDeleteClick={handleDeleteClick} />;
+      case "lab-results": 
+        return <LabResultsTab patient={patient} handleDeleteClick={handleDeleteClick} />;
+      case "insurance": 
+        return <InsuranceTab patient={patient} handleDeleteClick={handleDeleteClick} getStatusBadge={getStatusBadge} />;
       default: 
         return <ProfileTab patient={patient} handleEditPatient={handleEditPatient} handleAddAppointment={handleAddAppointment} handleViewAppointmentDetails={handleViewAppointmentDetails} handleViewVisitDetails={handleViewVisitDetails} handleViewVitalDetails={handleViewVitalDetails} setTab={setTab} getStatusBadge={getStatusBadge} />;
     }
@@ -916,24 +908,23 @@ console.log(
       )}
       
       {showPrescriptionModal && (
-<PrescriptionReportModal
-  isOpen={showPrescriptionModal}
-  onClose={() => {
-    setShowPrescriptionModal(false);
-    setSelectedPrescription(null);
-  }}
-  patient={patient}
-  existingPrescription={selectedPrescription}
-  templateDesign={selectedPrescription?.design || []}
-  templateBgColor={selectedPrescription?.canvasBg || "#ffffff"}
-  doctor={{
-    displayName: selectedPrescription?.doctorName,
-    department: selectedPrescription?.doctorSpecialization,
-    specialist: selectedPrescription?.doctorSpecialization,
-  }}
-/>
-
-)}
+        <PrescriptionReportModal
+          isOpen={showPrescriptionModal}
+          onClose={() => {
+            setShowPrescriptionModal(false);
+            setSelectedPrescription(null);
+          }}
+          patient={patient}
+          existingPrescription={selectedPrescription}
+          templateDesign={selectedPrescription?.design || []}
+          templateBgColor={selectedPrescription?.canvasBg || "#ffffff"}
+          doctor={{
+            displayName: selectedPrescription?.doctorName,
+            department: selectedPrescription?.doctorSpecialization,
+            specialist: selectedPrescription?.doctorSpecialization,
+          }}
+        />
+      )}
       
       {showEditModal && (
         <EditPatientModal patient={patient} setPatient={setPatient} onClose={() => setShowEditModal(false)} />

@@ -103,13 +103,13 @@ export const bookingApi = api.injectEndpoints({
 
     // ================= GET BOOKINGS =================
     // ENHANCED: Supports all filter parameters
-   getBookings: builder.query<
-  BookingResponse,
-  GetBookingsParams
->({
-  query: (
-    params: GetBookingsParams = {}
-  ) => {
+    getBookings: builder.query<
+      BookingResponse,
+      GetBookingsParams
+    >({
+      query: (
+        params: GetBookingsParams = {}
+      ) => {
         const queryParams = new URLSearchParams();
         
         // Auto-inject hospitalId from auth
@@ -225,7 +225,8 @@ export const bookingApi = api.injectEndpoints({
             token: data.token,
             status: data.status || "accepted",
             booking_status: data.booking_status,
-            hospitalId: hospitalId
+            hospitalId: hospitalId,
+            patientId: data.patientId // Keeping for backward compatibility
           },
         };
       },
@@ -240,18 +241,20 @@ export const bookingApi = api.injectEndpoints({
         data: ApproveBookingData;
       }
     >({
-      query: ({ id, data }) => (
-        console.log("Approving booking with data:", data), {
-        url: `/booking/${id}`,
-        method: "PUT",
-        body: {
-          date: data.date,
-          consulting_time: data.consulting_time,
-          token: data.token,
-          notes: data.notes,
-          status: "accepted",
-        },
-      }),
+      query: ({ id, data }) => {
+        console.log("Approving booking with data:", data);
+        return {
+          url: `/booking/${id}`,
+          method: "PUT",
+          body: {
+            date: data.date,
+            consulting_time: data.consulting_time,
+            token: data.token,
+            notes: data.notes,
+            status: "accepted",
+          },
+        };
+      },
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
         "Booking",
@@ -332,22 +335,23 @@ export const bookingApi = api.injectEndpoints({
         data: Partial<Omit<BookingRequest, 'hospitalId'>>;
       }
     >({
-      query: ({ id, data }) => (
-        console.log(data, "Updating booking with data:"),
-        {
-        url: `/booking/${id}`,
-        method: "PUT",
-        body: {
-          patient_name: data.patient_name,
-          patient_phone: data.patient_phone,
-          doctorId: data.doctorId,
-          booking_date: data.booking_date,
-          consulting_time: data.consulting_time,
-          reason: data.reason,
-          status: data.status,
-          token: data.token,
-        },
-      }),
+      query: ({ id, data }) => {
+        console.log(data, "Updating booking with data:");
+        return {
+          url: `/booking/${id}`,
+          method: "PUT",
+          body: {
+            patient_name: data.patient_name,
+            patient_phone: data.patient_phone,
+            doctorId: data.doctorId,
+            booking_date: data.booking_date,
+            consulting_time: data.consulting_time,
+            reason: data.reason,
+            status: data.status,
+            token: data.token,
+          },
+        };
+      },
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
         "Booking",

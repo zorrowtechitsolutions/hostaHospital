@@ -1,4 +1,4 @@
-// src/components/staffs/Staffs.jsx - Fixed status mapping from API with S3 Support
+// src/components/staffs/Staffs.jsx - With Server-Side Pagination
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -71,13 +71,21 @@ const Staffs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // API Hooks
+  // ✅ API Hooks with pagination parameters - server-side pagination
   const {
     data: staffApiResponse,
     isLoading: loading,
     refetch,
     isFetching
-  } = useGetStaffQuery();
+  } = useGetStaffQuery({
+    search_query: searchTerm?.trim() || undefined,
+    designation: designationFilter !== 'all' ? designationFilter : undefined,
+    gender: genderFilter !== 'all' ? genderFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    date: dateFilter || undefined,
+    page: currentPage,
+    limit: itemsPerPage
+  });
 
   const [deleteStaff] = useDeleteStaffMutation();
 
@@ -102,7 +110,7 @@ const Staffs = () => {
       // Get the image key from the staff object - prioritize imageUrl, then profileImage, then imageKey
       const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
       
-      // FIXED: Properly map status from API response
+      // Properly map status from API response
       let staffStatus = 'Inactive'; // Default to Inactive
       
       // Check status from various possible sources in the API response
@@ -119,9 +127,6 @@ const Staffs = () => {
       } else if (staff.active === false) {
         staffStatus = 'Inactive';
       }
-      
-      // Debug: log the status to console to see what the API returns
-      console.log(`Staff ${staff.name || staff.id}: status from API = ${staff.status}, mapped to = ${staffStatus}`);
       
       return {
         id: staff.id,
@@ -154,54 +159,28 @@ const Staffs = () => {
     });
   };
 
+  // ✅ Use server-side pagination values from API response
   const staffsData = transformStaffData(staffApiResponse?.data || []);
+  const totalItems = staffApiResponse?.pagination?.totalItems || 0;
+  const totalPages = staffApiResponse?.pagination?.totalPages || 1;
 
+  // ✅ Remove client-side filtering - let API handle it
+  // const filteredStaffs = getFilteredStaffs(); // ← REMOVED
+
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
   const getAllDesignations = () => {
-    const designations = [...new Set(staffsData.map(s => s.designation).filter(Boolean))];
+    // Use all data from API response if available
+    const allData = staffApiResponse?.allData || staffsData;
+    const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
   };
 
-  const getFilteredStaffs = () => {
-    let filtered = [...staffsData];
-    
-    if (searchTerm) {
-      filtered = filtered.filter(staff => 
-        staff.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        staff.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        staff.designation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        staff.phone?.includes(searchTerm) ||
-        staff.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    if (designationFilter !== 'all') {
-      filtered = filtered.filter(staff => staff.designation === designationFilter);
-    }
-    
-    if (genderFilter !== 'all') {
-      filtered = filtered.filter(staff => staff.gender.toLowerCase() === genderFilter.toLowerCase());
-    }
-    
-    // Status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(staff => staff.status === statusFilter);
-    }
-    
-    if (dateFilter) {
-      filtered = filtered.filter(staff => staff.appointmentDate === dateFilter);
-    }
-    
-    return filtered;
-  };
-
-  const filteredStaffs = getFilteredStaffs();
-  const totalPages = Math.ceil(filteredStaffs.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedStaffs = filteredStaffs.slice(startIndex, startIndex + itemsPerPage);
+  // ✅ Remove client-side filtering - API handles it
+  // const getFilteredStaffs = () => { ... }; // ← REMOVED
 
   const clearAllFilters = () => {
     setDesignationFilter('all');
@@ -219,7 +198,7 @@ const Staffs = () => {
   };
 
   const handleExport = () => {
-    const exportData = getFilteredStaffs().map(staff => ({
+    const exportData = staffsData.map(staff => ({
       'Staff ID': staff.formattedId,
       'Staff Name': staff.name,
       'Gender': staff.gender,
@@ -561,88 +540,85 @@ const Staffs = () => {
           </div>
         )}
 
-        {/* Staff Table */}
-        {filteredStaffs.length === 0 ? (
+        {/* Staff Table - WITH STICKY PAGINATION USING SERVER-SIDE TOTALPAGES */}
+        {staffsData.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
-            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-            {(activeFilterCount > 0 || searchTerm) && (
-              <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
-                Clear all filters
-              </button>
-            )}
           </div>
         ) : (
-          <Card>
+          <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Staffs 
-                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredStaffs.length}</span>
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
               </h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Staff ID</th>
-                    <th className="px-6 py-3">Staff Name</th>
-                    <th className="px-6 py-3">Gender</th>
-                    <th className="px-6 py-3">Designation</th>
-                    <th className="px-6 py-3">Phone Number</th>
-                    <th className="px-6 py-3">Appointment Date</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedStaffs.map((staff, index) => (
-                    <tr key={staff.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.formattedId}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage 
-                              src={getS3ImageUrl(staff.imageUrl)} 
-                              alt={staff.name} 
-                            />
-                            <AvatarFallback className="text-sm font-medium">
-                              {staff.name?.charAt(0)?.toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium text-gray-800">{staff.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{staff.gender}</td>
-                      <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
-                      <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
-                      <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant={staff.status === 'Active' ? 'success' : 'danger'} className="text-xs">
-                          {staff.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end">
-                          <RowActionMenu staff={staff} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
             
-            {/* REPLACED PAGINATION BLOCK WITH REUSABLE COMPONENT */}
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={filteredStaffs.length}
-                itemsPerPage={itemsPerPage}
-                itemLabel="staffs"
-              />
+            <div className="flex flex-col min-h-[420px]">
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-6 py-3">Staff ID</th>
+                      <th className="px-6 py-3">Staff Name</th>
+                      <th className="px-6 py-3">Gender</th>
+                      <th className="px-6 py-3">Designation</th>
+                      <th className="px-6 py-3">Phone Number</th>
+                      <th className="px-6 py-3">Appointment Date</th>
+                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staffsData.map((staff, index) => (
+                      <tr key={staff.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                        <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.formattedId}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage 
+                                src={getS3ImageUrl(staff.imageUrl)} 
+                                alt={staff.name} 
+                              />
+                              <AvatarFallback className="text-sm font-medium">
+                                {staff.name?.charAt(0)?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium text-gray-800">{staff.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{staff.gender}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={staff.status === 'Active' ? 'success' : 'danger'} className="text-xs">
+                            {staff.status}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end">
+                            <RowActionMenu staff={staff} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination - Using server-side totalPages */}
+              <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={Math.max(1, totalPages)}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="staffs"
+                />
+              </div>
             </div>
           </Card>
         )}
