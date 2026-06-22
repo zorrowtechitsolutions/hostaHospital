@@ -1,15 +1,54 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { 
-  Users, Calendar, Stethoscope, MoreVertical, Check, X
+  Users, Calendar, Stethoscope, MoreVertical, Check, X, Droplet, User, Clock
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ApproveRequestModal from "@/components/Requests/ApproveRequestModel";
 import RejectRequestModal from "@/components/Requests/RejectRequestModel";
+import { useGetPatientsQuery } from "../../app/service/patients";
+import { useGetBookingsQuery } from "../../app/service/request";
+import { useGetDoctorsQuery } from "../../app/service/doctorApi";
+import { useGetBloodBankQuery } from "../../app/service/bloodbank";
+import { showSuccessToast, showErrorToast } from "../components/ui/Toast";
+import { getHospitalId } from "../utils/auth";
+
+// Helper function to get department consistently
+const getDepartment = (booking) => {
+  return booking.doctor_department ||
+         booking.department ||
+         booking.doctor?.department ||
+         "General";
+};
+
+// Helper function to format date
+const formatVisitDate = (dateString) => {
+  if (!dateString) return "N/A";
+  try {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      return date.toLocaleDateString("en-US", { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+  } catch (error) {
+    return "N/A";
+  }
+};
 
 // DateDropdown component integrated directly
 const DateDropdown = () => {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState("3 Apr 26 - 3 Apr 26");
+  const [selected, setSelected] = useState("Today");
   const ref = useRef(null);
 
   const options = [
@@ -63,57 +102,115 @@ const DateDropdown = () => {
 // DashboardPanels Component
 const DashboardPanels = () => {
   const navigate = useNavigate();
-  const reports = [
-    ['David Marshall', 'Hemoglobin', '💧'],
-    ['Thomas McLean', 'X Ray', '🟢'],
-    ['Greta Kinney', 'MRI Scan', '🧠'],
-    ['Larry Wilburn', 'Blood Test', '🧪'],
-    ['Reyan Verol', 'CT Scan', '📋']
-  ];
+  
+  const hospitalId = getHospitalId();
+  
+  const { data: patientsData } = useGetPatientsQuery(
+    { hospitalId },
+    { refetchOnMountOrArgChange: true }
+  );
+  const patients = patientsData?.data || [];
+  
+  const { data: doctorsData } = useGetDoctorsQuery(
+    { hospitalId },
+    { refetchOnMountOrArgChange: true }
+  );
+  const doctors = doctorsData?.data || [];
+  
+  const { data: bloodBankData } = useGetBloodBankQuery();
+  const bloodStocks = bloodBankData?.data || [];
 
-  const doctors = [
-    ['Dr. William Harrison', 'Cardiology', 'Available'],
-    ['Dr. Victoria Adams', 'Urology', 'Unavailable'],
-    ['Dr. Jonathan Bennett', 'Radiology', 'Available'],
-    ['Dr. Natalie Brooks', 'ENT Surgery', 'Available'],
-    ['Dr. Samuel Reed', 'Dermatology', 'Available']
-  ];
+  const { data: bookingsData } = useGetBookingsQuery({ status: "accepted", limit: 10 });
+  const bookings = bookingsData?.data || [];
+
+  const recentVisits = useMemo(() => {
+    return bookings.slice(0, 5).map((booking) => ({
+      id: booking.id || booking._id,
+      name: booking.patient_name || booking.patientName || "Unknown Patient",
+      date: formatVisitDate(booking.booking_date || booking.date),
+      doctor: booking.doctor_name || booking.displayName || "Doctor",
+      department: getDepartment(booking),
+      rawDate: booking.booking_date || booking.date,
+      time: booking.consulting_time || booking.time || "",
+    }));
+  }, [bookings]);
+
+  const doctorsList = doctors.slice(0, 5).map((doctor) => [
+    doctor.displayName || doctor.name,
+    doctor.department || doctor.specialist || "General",
+    doctor.isActive ? "Available" : "Unavailable"
+  ]);
+
+  const getStockColor = (count) => {
+    if (count === 0) return "text-red-600 bg-red-50 dark:bg-red-900/20";
+    if (count < 10) return "text-orange-600 bg-orange-50 dark:bg-orange-900/20";
+    if (count < 30) return "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20";
+    return "text-green-600 bg-green-50 dark:bg-green-900/20";
+  };
+
+  const totalVisits = bookings.length;
+  const thisMonthVisits = bookings.filter(b => {
+    if (!b.booking_date) return false;
+    const date = new Date(b.booking_date);
+    const now = new Date();
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).length;
 
   return (
-<div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6 mt-6">
-        {/* Patient Reports */}
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6 mt-6">
+      {/* Blood Bank Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">Patient Reports</h2>
+          <div className="flex items-center gap-2">
+            <Droplet size={18} className="text-red-500" />
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white">Blood Bank</h2>
+          </div>
           <button 
-            onClick={() => navigate('/lab/results')}
+            onClick={() => navigate('/blood-bank')}
             className="border border-slate-200 dark:border-gray-600 rounded-lg px-3 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             View All
           </button>
         </div>
         <div className="p-4 space-y-3">
-          {reports.map(([name, type, icon]) => (
-            <div key={name} className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-gray-700 flex items-center justify-center text-sm">{icon}</div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-800 dark:text-white">{name}</p>
-                  <p className="text-xs text-slate-500 dark:text-gray-400">{type}</p>
+          {bloodStocks.slice(0, 5).map((stock) => {
+            const isLowStock = stock.count < 10;
+            return (
+              <div key={stock.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${getStockColor(stock.count)}`}>
+                    <Droplet size={14} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800 dark:text-white">{stock.bloodGroup}</p>
+                    <p className="text-xs text-slate-500 dark:text-gray-400">
+                      {stock.count} units • Last updated: {stock.updatedAt?.split('T')[0] || 'N/A'}
+                    </p>
+                  </div>
                 </div>
+                {isLowStock && (
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                    Low Stock
+                  </span>
+                )}
               </div>
-              <button className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-gray-600 transition-colors text-xs">
-                ⬇
-              </button>
+            );
+          })}
+          {bloodStocks.length === 0 && (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+              No blood stock data available
             </div>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* Patient Visits */}
+      {/* Patient Visits - Connected to API */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">Patient Visits</h2>
+          <div className="flex items-center gap-2">
+            <User size={18} className="text-blue-500" />
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white">Patient Visits</h2>
+          </div>
           <button 
             onClick={() => navigate('/visits')}
             className="border border-slate-200 dark:border-gray-600 rounded-lg px-3 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -121,16 +218,49 @@ const DashboardPanels = () => {
             View All
           </button>
         </div>
-        <div className="p-4 text-center">
-          <div className="w-32 h-32 mx-auto rounded-full border-[8px] border-dashed border-blue-400 flex items-center justify-center text-center">
-            <div>
-              <p className="text-xs text-slate-500 dark:text-gray-400">Total Patients</p>
-              <p className="text-2xl font-bold text-gray-800 dark:text-white">90%</p>
+        <div className="p-4">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalVisits}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Total Visits</p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{thisMonthVisits}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">This Month</p>
             </div>
           </div>
-          <div className="mt-4 space-y-2 text-left">
-            <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400"><span>Male</span><span>69%</span></div>
-            <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400"><span>Female</span><span>56%</span></div>
+
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Recent Visits
+            </p>
+            {recentVisits.length > 0 ? (
+              recentVisits.map((visit) => (
+                <div 
+                  key={visit.id} 
+                  onClick={() => navigate(`/visits`)}
+                  className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs font-medium">
+                      {visit.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 dark:text-white">{visit.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{visit.doctor} • {visit.department}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock size={12} className="text-gray-400" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{visit.date}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                No recent visits
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -147,7 +277,7 @@ const DashboardPanels = () => {
           </button>
         </div>
         <div className="p-4 space-y-3">
-          {doctors.map(([name, dept, status]) => (
+          {doctorsList.map(([name, dept, status]) => (
             <div key={name} className="flex justify-between items-center">
               <div>
                 <p className="font-semibold text-sm text-gray-800 dark:text-white">{name}</p>
@@ -171,26 +301,55 @@ const DashboardPanels = () => {
 // DepartmentAndPatientRecord Component
 const DepartmentAndPatientRecord = () => {
   const navigate = useNavigate();
-  const departments = [
-    ['Cardiology', '#2F80ED'],
-    ['Neurology', '#111827'],
-    ['Dermatology', '#7C3AED'],
-    ['Orthopedics', '#F97316'],
-    ['Urology', '#FBBF24'],
-    ['Radiology', '#4338CA']
-  ];
+  
+  const hospitalId = getHospitalId();
+  
+  const { data: bookingsData } = useGetBookingsQuery({ limit: 100 });
+  const bookings = bookingsData?.data || [];
 
-  const records = [
-    ['James Carter', 'Male', 'Cardiology', '17 Jun 2025'],
-    ['Emily Davis', 'Female', 'Urology', '10 Jun 2025'],
-    ['Michael John', 'Male', 'Radiology', '22 May 2025'],
-    ['Olivia Miller', 'Female', 'ENT Surgery', '15 May 2025'],
-    ['David Smith', 'Male', 'Dermatology', '30 Apr 2025']
-  ];
+  const { data: patientsData } = useGetPatientsQuery(
+    { hospitalId, limit: 5 },
+    { refetchOnMountOrArgChange: true }
+  );
+  const patients = patientsData?.data || [];
+
+  const departmentStats = useMemo(() => {
+    const stats = {};
+    bookings.forEach((booking) => {
+      const dept = getDepartment(booking);
+      if (dept) {
+        stats[dept] = (stats[dept] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(stats)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, count]) => ({ name, count }));
+  }, [bookings]);
+
+  const departmentColors = ['#2F80ED', '#111827', '#7C3AED', '#F97316', '#FBBF24', '#4338CA'];
+
+  const records = patients.slice(0, 5).map((patient) => [
+    patient.name,
+    patient.gender || "Male",
+    patient.department || "General",
+    patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : "N/A"
+  ]);
+
+  const totalAppointments = bookings.length;
+  const lastMonthAppointments = bookings.filter(b => {
+    if (!b.booking_date) return false;
+    const date = new Date(b.booking_date);
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    return date >= lastMonth && date <= lastMonthEnd;
+  }).length;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
-      {/* Top Departments */}
+      {/* Top Departments - Connected to API */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white">Top Departments</h2>
@@ -207,27 +366,37 @@ const DepartmentAndPatientRecord = () => {
             <div className="w-40 h-40 rounded-full border-[10px] border-dashed border-blue-400 flex items-center justify-center text-center">
               <div>
                 <p className="text-xs text-slate-500 dark:text-gray-400">Appointments</p>
-                <p className="text-2xl font-bold text-gray-800 dark:text-white">3656</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalAppointments}</p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              {departments.map(([name, color]) => (
-                <div key={name} className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></span>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{name}</span>
+            <div className="space-y-2 flex-1">
+              {departmentStats.length > 0 ? (
+                departmentStats.map((dept, index) => (
+                  <div key={dept.name} className="flex items-center gap-2">
+                    <span 
+                      className="w-3 h-3 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: departmentColors[index % departmentColors.length] }}
+                    ></span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{dept.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{dept.count}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  No department data available
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 mt-6 border border-slate-200 dark:border-gray-700 rounded-lg overflow-hidden">
             <div className="p-3 text-center border-r border-slate-200 dark:border-gray-700">
-              <p className="text-lg font-bold text-gray-800 dark:text-white">$2512.32</p>
-              <p className="text-xs text-slate-500 dark:text-gray-400">Revenue Generated</p>
+              <p className="text-lg font-bold text-gray-800 dark:text-white">{totalAppointments}</p>
+              <p className="text-xs text-slate-500 dark:text-gray-400">Total Appointments</p>
             </div>
             <div className="p-3 text-center">
-              <p className="text-lg font-bold text-gray-800 dark:text-white">3125+</p>
+              <p className="text-lg font-bold text-gray-800 dark:text-white">{lastMonthAppointments}+</p>
               <p className="text-xs text-slate-500 dark:text-gray-400">Appointments last month</p>
             </div>
           </div>
@@ -278,13 +447,24 @@ const DepartmentAndPatientRecord = () => {
 // LatestAppointments Component
 const LatestAppointments = () => {
   const navigate = useNavigate();
-  const appointments = [
-    ['#PT0025', 'James Carter', 'Visit', 'Dr. Andrew Clark', '17 Jun 2025', 'Inprogress'],
-    ['#PT0024', 'Emily Davis', 'Consultation', 'Dr. Katherine Brooks', '10 Jun 2025', 'Inprogress'],
-    ['#PT0023', 'Michael Johnson', 'Visit', 'Dr. Benjamin Harris', '22 May 2025', 'Completed'],
-    ['#PT0022', 'Olivia Miller', 'Consultation', 'Dr. Laura Mitchell', '15 May 2025', 'Completed'],
-    ['#PT0021', 'David Smith', 'Consultation', 'Dr. Christopher Lewis', '30 Apr 2025', 'Completed']
-  ];
+  
+  const { data: bookingsResponse } = useGetBookingsQuery({ limit: 5 });
+  const bookings = bookingsResponse?.data || [];
+  
+  const acceptedAppointments = bookings.filter(b => b.status === 'accepted').slice(0, 5);
+  
+  const appointments = acceptedAppointments.map((booking, idx) => {
+    const department = getDepartment(booking);
+    return [
+      `#PT${String(booking.userId || idx + 1).padStart(4, '0')}`,
+      booking.patient_name || "Patient",
+      "Visit",
+      booking.doctor_name || booking.displayName || "Doctor",
+      department,
+      booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : "N/A",
+      "Inprogress"
+    ];
+  });
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700 p-4">
@@ -306,24 +486,26 @@ const LatestAppointments = () => {
               <th className="p-2 text-xs">Patient Name</th>
               <th className="p-2 text-xs">Session</th>
               <th className="p-2 text-xs">Doctor</th>
+              <th className="p-2 text-xs">Department</th>
               <th className="p-2 text-xs">Date</th>
               <th className="p-2 text-xs">Status</th>
             </tr>
           </thead>
           <tbody>
-            {appointments.map(([id, patient, session, doctor, date, status]) => (
+            {appointments.map(([id, patient, session, doctor, department, date, status]) => (
               <tr key={id} className="border-b border-slate-200 dark:border-gray-700">
                 <td className="p-2 font-medium text-xs text-gray-800 dark:text-white">{id}</td>
                 <td className="p-2 text-xs text-gray-600 dark:text-gray-400">{patient}</td>
                 <td className="p-2 text-xs text-gray-600 dark:text-gray-400">{session}</td>
                 <td className="p-2 text-xs text-gray-600 dark:text-gray-400">{doctor}</td>
+                <td className="p-2">
+                  <span className="px-2 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs">
+                    {department}
+                  </span>
+                </td>
                 <td className="p-2 text-xs text-gray-600 dark:text-gray-400">{date}</td>
                 <td className="p-2">
-                  <span className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
-                    status === 'Completed'
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                      : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
-                  }`}>
+                  <span className="px-2 py-0.5 rounded-lg text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
                     {status}
                   </span>
                 </td>
@@ -340,78 +522,165 @@ const LatestAppointments = () => {
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // Modal States
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  const hospitalId = getHospitalId();
+
+  const { data: patientsData } = useGetPatientsQuery(
+    { hospitalId },
+    { refetchOnMountOrArgChange: true }
+  );
+  const { data: appointmentsData } = useGetBookingsQuery({});
+  const { data: doctorsData } = useGetDoctorsQuery(
+    { hospitalId },
+    { refetchOnMountOrArgChange: true }
+  );
+
+  const totalPatients = patientsData?.pagination?.totalItems || 0;
+  const totalAppointments = appointmentsData?.pagination?.totalItems || 0;
+  const totalDoctors = doctorsData?.pagination?.totalItems || 0;
+  
+  const { data: pendingRequestsData, refetch: refetchPending } = useGetBookingsQuery({ status: "pending", limit: 5 });
+  const appointmentRequests = pendingRequestsData?.data || [];
+
+  const bookings = appointmentsData?.data || [];
+  
+  const appointmentDepartments = [
+    ...new Set(
+      bookings
+        .map(
+          (booking) =>
+            booking.doctor_department ||
+            booking.department ||
+            booking.doctor?.department
+        )
+        .filter(Boolean)
+    ),
+  ];
+
+  const patientStats = useMemo(() => {
+    const patients = patientsData?.data || [];
+    const total = patients.length;
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const newPatients = patients.filter(p => {
+      if (!p.createdAt) return false;
+      const createdDate = new Date(p.createdAt);
+      return createdDate >= thirtyDaysAgo;
+    }).length;
+    
+    const oldPatients = total - newPatients;
+    
+    const monthlyData = {};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const now = new Date();
+    for (let i = 3; i >= 0; i--) {
+      const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = monthNames[month.getMonth()];
+      monthlyData[monthName] = 0;
+    }
+    
+    patients.forEach(p => {
+      if (!p.createdAt) return;
+      const createdDate = new Date(p.createdAt);
+      const monthName = monthNames[createdDate.getMonth()];
+      if (monthlyData[monthName] !== undefined) {
+        monthlyData[monthName]++;
+      }
+    });
+    
+    const chartMonths = Object.keys(monthlyData);
+    const chartValues = Object.values(monthlyData);
+    const maxValue = Math.max(...chartValues, 1);
+    const chartColors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500'];
+    
+    const chartData = chartMonths.map((month, idx) => ({
+      month,
+      count: chartValues[idx] || 0,
+      percentage: Math.round((chartValues[idx] || 0) / maxValue * 100) || 0,
+      color: chartColors[idx % chartColors.length]
+    }));
+
+    return {
+      total,
+      newPatients,
+      oldPatients,
+      chartData
+    };
+  }, [patientsData]);
+
   const stats = [
     {
       title: "Patients",
-      value: "108",
+      value: totalPatients.toString(),
       icon: Users,
       color: "bg-blue-500",
-      change: "+20%",
       changeColor: "text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30",
       path: "/patients",
     },
     {
       title: "Appointments",
-      value: "658",
+      value: totalAppointments.toString(),
       icon: Calendar,
       color: "bg-orange-500",
-      change: "-15%",
       changeColor: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30",
       path: "/appointments",
     },
     {
       title: "Doctors",
-      value: "565",
+      value: totalDoctors.toString(),
       icon: Stethoscope,
       color: "bg-purple-500",
-      change: "+18%",
       changeColor: "text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30",
       path: "/doctors",
     },
   ];
 
-  const appointmentRequests = [
-    { id: 1, name: "Dominic Foster", dept: "Urology", date: "12 Aug 2025", time: "11:35 PM" },
-    { id: 2, name: "Charlotte Bennett", dept: "Cardiology", date: "06 Aug 2025", time: "09:58 AM" },
-    { id: 3, name: "Ethan Sullivan", dept: "Dermatology", date: "01 Aug 2025", time: "12:10 PM" },
-    { id: 4, name: "Brianna Thompson", dept: "ENT Surgery", date: "26 Jul 2025", time: "02:30 PM" },
-    { id: 5, name: "Michael Rodriguez", dept: "Neurology", date: "20 Jul 2025", time: "01:45 PM" },
-  ];
-
-  const allAppointments = ["Urology", "Cardiology", "Dermatology", "ENT Surgery"];
-
-  // Handle Approve
   const handleApproveClick = (request) => {
     setSelectedRequest(request);
     setShowApproveModal(true);
   };
 
-  const handleConfirmApprove = (appointmentData) => {
-    console.log("Appointment confirmed:", appointmentData, "for request:", selectedRequest);
-    alert(`Appointment confirmed for ${selectedRequest?.name} on ${appointmentData.date} at ${appointmentData.time} with Token #${appointmentData.token}`);
+  const handleConfirmApprove = async (appointmentData) => {
+    showSuccessToast(
+      `Appointment confirmed for ${selectedRequest?.patient_name}`,
+      4000,
+      {
+        'Patient': selectedRequest?.patient_name,
+        'Date': appointmentData.date,
+        'Time': appointmentData.consulting_time,
+        'Token': `#${appointmentData.token}`
+      }
+    );
     setShowApproveModal(false);
     setSelectedRequest(null);
+    await refetchPending();
   };
 
-  // Handle Reject
   const handleRejectClick = (request) => {
     setSelectedRequest(request);
     setRejectReason("");
     setShowRejectModal(true);
   };
 
-  const handleConfirmReject = () => {
-    console.log("Request rejected with reason:", rejectReason, "for request:", selectedRequest);
-    alert(`Request for ${selectedRequest?.name} has been rejected. Reason: ${rejectReason || "No reason provided"}`);
+  const handleConfirmReject = async () => {
+    showErrorToast(
+      `Request for ${selectedRequest?.patient_name} has been rejected.`,
+      4000,
+      {
+        'Patient': selectedRequest?.patient_name,
+        'Reason': rejectReason || "No reason provided"
+      }
+    );
     setShowRejectModal(false);
     setSelectedRequest(null);
     setRejectReason("");
+    await refetchPending();
   };
 
   return (
@@ -423,7 +692,7 @@ export default function Dashboard() {
             Welcome, Admin
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Today you have 10 visits •{" "}
+            Today you have {appointmentRequests.length} visits •{" "}
             <button 
               onClick={() => navigate("/visits")}
               className="text-blue-600 dark:text-blue-400 hover:underline"
@@ -433,11 +702,10 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Date Dropdown - Replaces Search Bar */}
         <DateDropdown />
       </div>
 
-      {/* Stats Cards - 3 cards only */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {stats.map((item, index) => (
           <div
@@ -489,38 +757,43 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {appointmentRequests.map((request, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="p-3">
-                      <p className="font-medium text-gray-800 dark:text-white text-sm">{request.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{request.time}</p>
-                    </td>
-                    <td className="p-3">
-                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                        {request.dept}
-                      </span>
-                    </td>
-                    <td className="p-3 text-sm text-gray-600 dark:text-gray-300">{request.date}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => handleApproveClick(request)}
-                          className="p-1 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"
-                          title="Approve Request"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button 
-                          onClick={() => handleRejectClick(request)}
-                          className="p-1 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
-                          title="Reject Request"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {appointmentRequests.map((request, idx) => {
+                  const department = getDepartment(request);
+                  return (
+                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <td className="p-3">
+                        <p className="font-medium text-gray-800 dark:text-white text-sm">{request.patient_name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{request.consulting_time || "N/A"}</p>
+                      </td>
+                      <td className="p-3">
+                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                          {department}
+                        </span>
+                      </td>
+                      <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                        {request.booking_date ? new Date(request.booking_date).toLocaleDateString() : "N/A"}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleApproveClick(request)}
+                            className="p-1 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"
+                            title="Approve Request"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleRejectClick(request)}
+                            className="p-1 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
+                            title="Reject Request"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -528,7 +801,7 @@ export default function Dashboard() {
 
         {/* Right Column - Patients Statistics & All Appointments */}
         <div className="space-y-5">
-          {/* Patients Statistics */}
+          {/* Patients Statistics - Connected to Real API */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-800 dark:text-white">Patients Statistics</h3>
@@ -543,56 +816,69 @@ export default function Dashboard() {
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Total Patients</p>
-                  <p className="text-xl font-bold text-gray-800 dark:text-white">480</p>
+                  <p className="text-xl font-bold text-gray-800 dark:text-white">{patientStats.total}</p>
                 </div>
                 <div className="flex gap-3">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">New (96)</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">New ({patientStats.newPatients})</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Old (384)</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Old ({patientStats.oldPatients})</span>
                   </div>
                 </div>
               </div>
-              {/* Bar Chart Visualization */}
+              {/* Bar Chart Visualization - From Real Data */}
               <div className="space-y-2">
-                {['Jan', 'Feb', 'Mar', 'Apr'].map((month, idx) => {
-                  const percentages = [45, 62, 78, 54];
-                  const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500'];
-                  return (
-                    <div key={month}>
-                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                        <span>{month}</span>
-                        <span>{percentages[idx]} patients</span>
-                      </div>
-                      <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                        <div className={`h-full ${colors[idx]} rounded-lg`} style={{ width: `${percentages[idx]}%` }} />
-                      </div>
+                {patientStats.chartData.map((data, idx) => (
+                  <div key={data.month}>
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-0.5">
+                      <span>{data.month}</span>
+                      <span>{data.count} patients</span>
                     </div>
-                  );
-                })}
+                    <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
+                      <div 
+                        className={`h-full ${data.color} rounded-lg transition-all duration-500`} 
+                        style={{ width: `${data.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* All Appointments Categories */}
+          {/* All Appointments Categories - Dynamic from API */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
               <h3 className="font-semibold text-sm text-gray-800 dark:text-white">All Appointments</h3>
             </div>
             <div className="p-3 grid grid-cols-2 gap-2">
-              {allAppointments.map((appt, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => navigate("/appointments")}
-                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                >
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{appt}</span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">→</span>
+              {appointmentDepartments.length > 0 ? (
+                appointmentDepartments.slice(0, 8).map((department, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() =>
+                      navigate("/appointments", {
+                        state: { department },
+                      })
+                    }
+                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                  >
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {department}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      →
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  No departments found
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

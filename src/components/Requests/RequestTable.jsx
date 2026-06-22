@@ -61,7 +61,6 @@ const calculateAge = (dob) => {
 };
 
 // FIXED: Proper operator precedence for date and time extraction
-// IMPORTANT: Keep field name as "time" (not consulting_time) to match display logic
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -74,7 +73,7 @@ const transformBookingsData = (bookingList) => {
 
     // Extract raw values first to avoid operator precedence issues
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
-const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
+    const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
 
     return {
       id: bookingId,
@@ -88,7 +87,6 @@ const rawTime = booking.open || booking.consulting_time || booking.consulting_ti
       doctorName: booking.doctor_name || booking.doctorName || "N/A",
       department: booking.doctor_department || booking.department || "N/A",
       appointmentDate: rawDate === "N/A" ? "N/A" : rawDate.split("T")[0],
-      // IMPORTANT: Keep as "time" (not consulting_time) to match display logic
       consulting_time: rawTime,
       reason: booking.reason || "",
       status: booking.status || "pending",
@@ -196,7 +194,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  
   // Loading states for mutations
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -208,7 +205,12 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     refetch,
     isFetching
   } = useGetBookingsQuery({
-    status: "pending"
+    status: "pending",
+    page: currentPage,
+    limit: itemsPerPage,
+    ...(searchTerm && { search_query: searchTerm }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter })
   });
 
   const [approveBooking] = useApproveBookingMutation();
@@ -285,7 +287,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return filtered;
   }, [safeData, doctorId, doctorName, showAllData, searchTerm, departmentFilter, dateFilter, statusFilter]);
 
-  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const totalItems = filteredRequests.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
 
@@ -638,35 +641,37 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b bg-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">
-            Total Pending Requests
-            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-              {filteredRequests.length}
-            </span>
-          </h2>
+      {/* Request Table - WITH STICKY PAGINATION LIKE APPOINTMENTS */}
+      {filteredRequests.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
+          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+          {activeFilterCount > 0 && (
+            <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
+              Clear all filters
+            </button>
+          )}
         </div>
-
-        {filteredRequests.length === 0 ? (
-          <div className="text-center py-12">
-            <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
-            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-            {activeFilterCount > 0 && (
-              <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
-                Clear all filters
-              </button>
-            )}
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700">
+              Total Pending Requests
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {totalItems}
+              </span>
+            </h2>
           </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
+
+          {/* Flex container that expands to fill available space */}
+          <div className="flex flex-col min-h-[500px]">
+            {/* Table area - grows to take available space */}
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
                     <th className="px-6 py-3">Request ID</th>
-                    <th className="px-6 py-3">Patient ID</th>
                     <th className="px-6 py-3">Patient Name</th>
                     <th className="px-6 py-3">Age</th>
                     <th className="px-6 py-3">Contact</th>
@@ -681,10 +686,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                     <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-600">#{item.patientId}</span>
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-10 h-10">
@@ -699,16 +701,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                           </Avatar>
                           <span className="font-medium text-gray-800">{item.patientName}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-gray-700">{item.age} yrs</span>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={CENTERED_FLEX_CLASS}>
                           <Phone size={14} className="text-gray-400" />
                           <span className="text-gray-700">{item.contact}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={CENTERED_FLEX_CLASS}>
                           <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
@@ -716,17 +718,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                           </div>
                           <span className="text-gray-700">{item.doctorName}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 text-gray-600">
                           <Calendar size={14} className="text-gray-400" />
-                          {/* FIXED: Uses item.consulting_time (not item.time) */}
                           {item.appointmentDate} {item.consulting_time && item.consulting_time !== "N/A" && item.consulting_time !== "--:--" && (
                             <>at {item.consulting_time}</>
                           )}
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-3">
                           <button
@@ -744,29 +745,27 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                             <X size={18} />
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))}
                 </tbody>
-              </table>
+               </table>
             </div>
 
-            {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  totalItems={filteredRequests.length}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="pending requests"
-                />
-              </div>
-            )}
-          </>
-        )}
-      </Card>
+            {/* Pagination - Sticks to bottom using mt-auto */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.max(1, totalPages)}
+                onPageChange={setCurrentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="pending requests"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Approve Modal */}
       {showApproveModal && selectedRequest && (
@@ -776,7 +775,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           onClose={closeApproveModal}
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          // FIXED: Uses item.consulting_time (not item.time)
           initialTime={selectedRequest.consulting_time && selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}          
           initialToken=""
           isLoading={isApproving}

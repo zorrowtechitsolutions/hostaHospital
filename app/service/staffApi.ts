@@ -26,6 +26,7 @@ export interface Staff {
   staffType?: string;
   dob?: string;
   gender?: string;
+  hospitalName?: string;
   knowLanguages?: string[];
   qualification?: string;
   address?: StaffAddress;
@@ -45,6 +46,25 @@ export interface StaffResponse {
 
 export interface GetStaffParams {
   id?: string | number;
+  hospitalId?: string | number;
+  page?: number;
+  limit?: number;
+
+  name?: string;
+  gender?: string;
+  phone?: string;
+
+  status?: string;
+
+  designation?: string;
+
+  staffType?: string;
+
+  email?: string;
+
+  staffId?: string;
+
+  search_query?: string;
 }
 
 // ================= API =================
@@ -54,35 +74,119 @@ export const staffApi = api.injectEndpoints({
 
     // ================= GET STAFF =================
     // Automatically adds hospitalId from authenticated user
-    getStaff: builder.query<
-      StaffResponse,
-      GetStaffParams | void
-    >({
-      query: (params) => {
-        const queryParams = new URLSearchParams();
-        
-        // Auto-inject hospitalId from auth
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
+getStaff: builder.query<
+  StaffResponse,
+  GetStaffParams | void
+>({
+query: (params) => {
 
-        const queryString = queryParams.toString();
+const queryParams =
+new URLSearchParams();
 
-        if (params?.id) {
-          return `/staff/${params.id}${queryString ? `?${queryString}` : ""}`;
-        }
+const hospitalId =
+getHospitalId();
 
-        return `/staff${queryString ? `?${queryString}` : ""}`;
-      },
+if (hospitalId) {
+queryParams.append(
+"hospitalId",
+String(hospitalId)
+);
+}
+ if (params?.hospitalId) {
+  queryParams.set("hospitalId", String(params.hospitalId));
+}
 
-      providesTags: (result, error, params) => {
-        if (params?.id && result?.data && !Array.isArray(result.data)) {
-          return [{ type: "Staff", id: params.id }];
-        }
-        return ["Staff"];
-      },
-    }),
+// filters
+if (params?.name)
+queryParams.append(
+"name",
+params.name
+);
+
+if (params?.gender)
+queryParams.append(
+"gender",
+params.gender
+);
+
+if (params?.phone)
+queryParams.append(
+"phone",
+params.phone
+);
+
+if (params?.status)
+queryParams.append(
+"status",
+params.status
+);
+
+if (params?.designation)
+queryParams.append(
+"designation",
+params.designation
+);
+
+if (params?.staffType)
+queryParams.append(
+"staffType",
+params.staffType
+);
+
+if (params?.email)
+queryParams.append(
+"email",
+params.email
+);
+
+if (params?.staffId)
+queryParams.append(
+"staffId",
+params.staffId
+);
+
+if (params?.search_query)
+queryParams.append(
+"search_query",
+params.search_query
+);
+
+// pagination
+if (params?.page)
+queryParams.append(
+"page",
+String(params.page)
+);
+
+if (params?.limit)
+queryParams.append(
+"limit",
+String(params.limit)
+);
+
+if (params?.id) {
+
+return `/staff/${params.id}?${queryParams.toString()}`;
+
+}
+
+return `/staff?${queryParams.toString()}`;
+
+},
+
+providesTags:
+["Staff"]
+
+}),
+
+getStaffById: builder.query<
+  StaffResponse,
+  number | string
+>({
+  query: (id) => `/staff/${id}`,
+  providesTags: ["Staff"],
+}),
+
 
     // ================= CREATE STAFF =================
     // Automatically adds hospitalId from authenticated user
@@ -145,6 +249,7 @@ export const staffApi = api.injectEndpoints({
       {
         email: string;
         password: string;
+        fcmToken?: string;
       }
     >({
       query: (data) => ({
@@ -240,6 +345,7 @@ export const staffApi = api.injectEndpoints({
 
 export const {
   useGetStaffQuery,
+  useGetStaffByIdQuery,
   useCreateStaffMutation,
   useUpdateStaffMutation,
   useDeleteStaffMutation,

@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx - With proper parent/child active states and hospital name
+// src/components/Sidebar.jsx - With proper parent/child active states, hospital name
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -19,9 +19,11 @@ import {
   Ambulance,
   FileClock,
   Droplet,
+  HelpCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext"; // 1. Import useAuth
+import { useAuth } from "../context/AuthContext";
 
 const menu = [
   {
@@ -67,14 +69,41 @@ const menu = [
   },
   {
     title: "SYSTEM",
-    items: [{ label: "Settings", icon: Settings, path: "/settings" }],
+    items: [
+      {
+        label: "Settings",
+        icon: Settings,
+        path: "/settings",
+      },
+      {
+        label: "User Management",
+        icon: UserCog,
+        hasDropdown: true,
+        dropdownItems: [
+          {
+            label: "Users",
+            icon: Users,
+            path: "/users",
+          },
+          {
+            label: "Group Permission",
+            icon: ShieldCheck,
+            path: "/roles",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    title: "HELP",
+    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }],
   },
 ];
 
 export default function Sidebar({ sidebarOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth(); // 2. Get logged-in hospital data
+  const { user } = useAuth(); // Get logged-in hospital data
   const [openDropdowns, setOpenDropdowns] = useState({});
 
   const toggleDropdown = (label) => {
@@ -120,7 +149,7 @@ export default function Sidebar({ sidebarOpen }) {
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-      {/* 3. Updated Logo Section with dynamic hospital name */}
+      {/* Updated Logo Section with dynamic hospital name */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
           <h1 className="text-lg font-semibold truncate">
@@ -143,7 +172,7 @@ export default function Sidebar({ sidebarOpen }) {
 
             <div className="space-y-1">
               {section.items.map((item) => {
-                // For items with dropdown (Appointments, Laboratory)
+                // For items with dropdown (Appointments, User Management)
                 if (item.hasDropdown) {
                   const dropdownActive = isDropdownItemActive(item.dropdownItems);
                   const isOpen = openDropdowns[item.label] || shouldKeepOpen(item.dropdownItems);

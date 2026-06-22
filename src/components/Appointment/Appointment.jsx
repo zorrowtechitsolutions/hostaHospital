@@ -1,3 +1,4 @@
+// src/components/Appointment/Appointment.jsx - With Green Gradient Buttons
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -27,7 +28,7 @@ import { getS3ImageUrl } from '../../../app/service/S3';
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
 
-// Skeleton Components
+// Skeleton Components (keep as is)
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
   <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
 );
@@ -59,6 +60,7 @@ const SkeletonTableRow = () => (
     <td className="px-6 py-4"><SkeletonText width="w-24" /></td>
     <td className="px-6 py-4"><SkeletonText width="w-32" /></td>
     <td className="px-6 py-4"><SkeletonBadge /></td>
+    <td className="px-6 py-4"><SkeletonBadge /></td>
     <td className="px-6 py-4 text-right"><SkeletonButton /></td>
   </tr>
 );
@@ -79,6 +81,7 @@ const SkeletonTable = ({ rows = 5 }) => (
             <th className="px-6 py-3"><SkeletonText width="w-28" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-24" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-32" height="h-3" /></th>
+            <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
             <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
             <th className="px-6 py-3 text-right"><SkeletonText width="w-12" height="h-3" /></th>
           </tr>
@@ -145,7 +148,6 @@ const SkeletonLoader = () => (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
-        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -209,14 +211,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-  // API Hooks
+  // API Hooks - PASS currentPage to API
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching
   } = useGetBookingsQuery({
-    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() })
+    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
+    ...(searchTerm && { search_query: searchTerm }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter }),
+    page: currentPage,
+    limit: itemsPerPage
   });
 
   const [approveBooking] = useApproveBookingMutation();
@@ -236,25 +243,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
 
-  // Helper to add 1 hour to time string
-  const addHour = (timeStr) => {
-    if (!timeStr) return "N/A";
-    try {
-      const [time, modifier] = timeStr.split(' ');
-      let [hours, minutes] = time.split(':');
-      let hour = parseInt(hours);
-      if (modifier === 'PM' && hour !== 12) hour += 12;
-      if (modifier === 'AM' && hour === 12) hour = 0;
-      hour = (hour + 1) % 24;
-      const newModifier = hour >= 12 ? 'PM' : 'AM';
-      hour = hour % 12 || 12;
-      return `${hour.toString().padStart(2, '0')}:${minutes} ${newModifier}`;
-    } catch {
-      return "N/A";
-    }
-  };
-
-  // Updated mapStatus function to handle new backend statuses
+  // Updated mapStatus function
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -272,7 +261,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  // Get status badge class based on display status
+  // Get status badge class
   const getStatusBadgeClass = (displayStatus) => {
     const classes = {
       Accepted: "bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium",
@@ -283,12 +272,21 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Transform API response with proper operator precedence
+  // Get booking status badge class
+  const getBookingStatusBadgeClass = (bookingStatus) => {
+    const classes = {
+      "hospital booking": "inline-flex whitespace-nowrap bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-medium",
+      "clinic booking": "inline-flex whitespace-nowrap bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-medium",
+      "online booking": "inline-flex whitespace-nowrap bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-medium"
+    };
+    return classes[bookingStatus?.toLowerCase()] || "inline-flex whitespace-nowrap bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium";
+  };
+
+  // Transform API response
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
     return bookingList.map((booking, index) => {
-      // Calculate age from DOB
       const calculateAge = (dob) => {
         if (!dob) return "N/A";
         const birthDate = new Date(dob);
@@ -301,7 +299,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         return age;
       };
 
-      // Format date for display
       const formatDate = (dateString) => {
         if (!dateString || dateString === "N/A") return "N/A";
         const date = new Date(dateString);
@@ -309,19 +306,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       };
 
       const displayStatus = mapStatus(booking.status);
-      
-      // Get patient image key - check multiple possible fields
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
-      
-      // Extract raw values first to avoid operator precedence issues
-      // Using ?? for better handling of empty strings and 0 values
       const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
+      const actualPatientId = booking.patientId ||
+        booking.patient?.id ||
+        booking.patient?._id ||
+        booking.patient_id ||
+        booking.patientID;
     
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
-        patientId: `PT${String(booking.userId || index + 1).padStart(4, '0')}`,
+        patientId: `#PT${String(actualPatientId).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
+        bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: booking.gender || "Male",
@@ -343,11 +341,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         avatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
         patientType: booking.patient_type || "Out Patient",
         preferredMode: booking.preferred_mode || "In-person",
-        originalStatus: booking.status // Store original backend status
+        originalStatus: booking.status
       };
     });
   };
 
+  // Extract data from response
   const bookingList =
     Array.isArray(bookingsResponse)
       ? bookingsResponse
@@ -358,19 +357,24 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const appointmentsData = transformBookingsData(bookingList);
 
-  // Get unique departments
+  // ✅ Get total items from API response for server-side pagination
+  const totalItems = bookingsResponse?.pagination?.totalItems || 
+                     bookingsResponse?.total || 
+                     bookingsResponse?.totalCount || 
+                     bookingsResponse?.meta?.total ||
+                     appointmentsData.length;
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // Get unique departments from ALL data (not just current page)
   const getAllDepartments = () => {
-    let sourceData;
-    if (doctorId && !showAllData) {
-      sourceData = appointmentsData.filter(apt => apt.doctorId === doctorId || apt.doctorName === doctorName);
-    } else {
-      sourceData = appointmentsData;
-    }
-    const departments = [...new Set(sourceData.map(a => a.department).filter(Boolean))];
+    // If we have the full list, use it, otherwise use current page data
+    const allData = bookingsResponse?.allData || appointmentsData;
+    const departments = [...new Set(allData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
 
-  // Filter function
+  // Filter function - now only for display, not pagination
   const getFilteredAppointments = () => {
     let filtered;
     
@@ -382,6 +386,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       filtered = [...appointmentsData];
     }
     
+    // Client-side filtering for search and filters (since API handles pagination)
     if (searchTerm) {
       filtered = filtered.filter(apt => 
         apt.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -407,9 +412,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const filteredAppointments = getFilteredAppointments();
-  const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAppointments = filteredAppointments.slice(startIndex, startIndex + itemsPerPage);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -426,6 +428,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleExport = () => {
+    // Export from filtered appointments
     const exportData = getFilteredAppointments().map(apt => ({
       'Appointment ID': apt.formattedId,
       'Patient ID': apt.patientId,
@@ -435,7 +438,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
-      'Consulting Time': apt.startTime,
+      'Consulting Time': apt.consulting_time,
+      'Booking Status': apt.bookingStatus,
       'Status': apt.status,
       'Original Status': apt.originalStatus,
       'Reason': apt.reason
@@ -455,6 +459,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       try {
         const importedData = JSON.parse(e.target.result);
         showSuccessToast(`Successfully imported ${importedData.length} appointments!`, 3000);
+        refetch();
       } catch (error) {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
@@ -493,7 +498,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowApproveModal(true);
   };
 
-  // UPDATED handleConfirmApprove with navigate after refetch
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) return;
     
@@ -522,7 +526,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       );
       
       await refetch();
-      navigate("/appointments");
     } catch (error) {
       showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
     } finally {
@@ -573,6 +576,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const handleSaveEdit = (updatedData) => {
     setShowEditModal(false);
     setAppointmentToEdit(null);
+    refetch();
   };
 
   const handleDeleteClick = (appointment) => {
@@ -668,12 +672,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                   <p className="text-sm text-gray-500">Patient</p>
                 </div>
               </div>
-              <span className={getStatusBadgeClass(appointment.status)}>{appointment.status}</span>
+              <span className={appointment.statusClass}>{appointment.status}</span>
             </div>
             
             <div>
               <p className="font-medium text-sm mb-1">Date & Time</p>
-              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {appointment.startTime}</p>
+              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {appointment.consulting_time}</p>
             </div>
             
             <div>
@@ -722,7 +726,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                   handleStartConsultation(appointment);
                   onClose();
                 }} 
-                className="px-4 py-2 bg-[#1C62A0] text-white rounded-md text-sm"
+                className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 Start Consultation
               </button>
@@ -744,7 +748,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
     return (
-      <div className="relative" ref={menuRef}>
+      <div className="relative inline-block" ref={menuRef}>
         <Button variant="ghost" size="sm" onClick={() => setShowMenu(!showMenu)} className="p-2">
           <MoreVertical size={18} />
         </Button>
@@ -769,6 +773,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </>
             )}
             <div className="border-t border-gray-100 my-1"></div>
+            <button onClick={() => { handleEditClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100">
+              <Edit size={16} /> Edit
+            </button>
             <button onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
               <Trash2 size={16} /> Delete
             </button>
@@ -786,13 +793,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   return (
     <>
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="p-1">
+            <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-            </Button>
+            </button>
             <div className="text-xs text-gray-500">
               <span className="text-gray-700">Appointments</span>
               <span className="mx-1 text-gray-400">»</span>
@@ -804,6 +812,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
         </div>
 
+        {/* Doctor Banner (if applicable) */}
         {showDoctorBanner && (
           <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -842,26 +851,52 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         )}
 
+        {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex-1 max-w-md">
-            <SearchBar 
-              placeholder="Search by Appointment ID, Patient ID, Patient Name, Contact..." 
-              value={searchTerm} 
-              onChange={setSearchTerm} 
-              onClear={() => setSearchTerm('')} 
-            />
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            <div className="relative flex-1 max-w-sm">
+              <input
+                type="text"
+                placeholder="Search by Appointment ID, Patient Name, Contact..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+              <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
+                <Search className="w-4 h-4 text-white" />
+              </button>
+            </div>
           </div>
+
           <div className="flex gap-2 flex-wrap items-center">
-            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh">
-              <RefreshCcw size={16} />
-            </Button>
+            <button 
+              onClick={handleRefresh} 
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+              disabled={isFetching}
+            >
+              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+            </button>
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
             <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
               <Upload size={16} />
             </label>
-            <Button variant="outline" size="sm" onClick={handleExport} title="Export">
+            <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
               <Download size={16} />
-            </Button>
+            </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -879,6 +914,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         </div>
 
+        {/* FILTER SECTION */}
         {showFilters && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -920,9 +956,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
               >
                 <option value="">All Departments</option>
-                {getAllDepartments().map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
+                {/* Department list from API response */}
+                {(() => {
+                  const allData = bookingsResponse?.allData || appointmentsData;
+                  const departments = [...new Set(allData.map(a => a.department).filter(Boolean))];
+                  return departments.map((dept) => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ));
+                })()}
               </select>
 
               <input
@@ -935,6 +976,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         )}
 
+        {/* Appointments Table */}
         {filteredAppointments.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -942,86 +984,93 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             <p className="text-gray-500">Try adjusting your search or filter criteria</p>
           </div>
         ) : (
-          <Card>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Appointments 
-                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredAppointments.length}</span>
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
               </h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Appointment ID</th>
-                    <th className="px-6 py-3">Patient ID</th>
-                    <th className="px-6 py-3">Patient Name</th>
-                    <th className="px-6 py-3">Contact</th>
-                    <th className="px-6 py-3">Doctor Name</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Appointment Date</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right w-16">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedAppointments.map((apt, index) => (
-                    <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
-                      <td className="px-6 py-4 text-gray-600">#{apt.patientId}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <ShadcnAvatar className="w-8 h-8">
-                            <AvatarImage 
-                              src={getS3ImageUrl(apt.patientImageKey)} 
-                              alt={apt.patientName}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                              {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
-                            </AvatarFallback>
-                          </ShadcnAvatar>
-                          <span className="font-medium text-gray-800">{apt.patientName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
-                      <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
-                      <td className="px-6 py-4 text-gray-600">{apt.department}</td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {apt.appointmentDateDisplay}
-                        <br />
-                        <span className="text-xs">
-                          {apt.consulting_time}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={apt.statusClass}>{apt.status}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end">
-                          <RowActionMenu appointment={apt} />
-                        </div>
-                      </td>
+
+            <div className="flex flex-col min-h-[500px]">
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-6 py-3">Appointment ID</th>
+                      <th className="px-6 py-3">Patient Name</th>
+                      <th className="px-6 py-3">Contact</th>
+                      <th className="px-6 py-3">Doctor Name</th>
+                      <th className="px-6 py-3">Department</th>
+                      <th className="px-6 py-3">Appointment Date</th>
+                      <th className="px-6 py-3">Booking Status</th>
+                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3 text-right w-16">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {appointmentsData.map((apt, index) => (
+                      <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                        <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <ShadcnAvatar className="w-8 h-8">
+                              <AvatarImage 
+                                src={getS3ImageUrl(apt.patientImageKey)} 
+                                alt={apt.patientName}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                                {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
+                              </AvatarFallback>
+                            </ShadcnAvatar>
+                            <span className="font-medium text-gray-800">{apt.patientName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
+                        <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
+                        <td className="px-6 py-4 text-gray-600">{apt.department}</td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {apt.appointmentDateDisplay}
+                          <br />
+                          <span className="text-xs text-gray-400">{apt.consulting_time}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
+                            {apt.bookingStatus}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={apt.statusClass}>{apt.status}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end">
+                            <RowActionMenu appointment={apt} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination - Using server-side totalPages */}
+              <div className="mt-auto px-6 py-4 bg-gray-50">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={Math.max(1, totalPages)}
+                  onPageChange={handlePageChange}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="appointments"
+                />
+              </div>
             </div>
-            
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                totalItems={filteredAppointments.length}
-                itemsPerPage={itemsPerPage}
-                itemLabel="appointments"
-              />
-            </div>
-          </Card>
+          </div>
         )}
       </div>
 
+      {/* Modals - Keep as is */}
       {showDetailsModal && selectedAppointment && (
         <AppointmentDetailsModal 
           appointment={selectedAppointment} 
@@ -1039,7 +1088,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           }} 
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          initialTime={selectedRequest.startTime !== "N/A" ? selectedRequest.startTime : ""}
+          initialTime={selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}
           initialToken=""
           isLoading={isApproving}
         />

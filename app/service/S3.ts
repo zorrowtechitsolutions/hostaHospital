@@ -129,36 +129,61 @@ const getUserId = () => {
 
   const role = getUserRole()?.toLowerCase();
 
+  console.log("=== getUserId DEBUG ===");
+  console.log("Auth object:", auth);
+  console.log("Role:", role);
+
+  let userId = null;
+
   switch (role) {
     case "doctor":
-      return auth.doctorId || auth.id;
-
+      userId = auth.doctorId || auth.id;
+      break;
     case "staff":
-      return auth.staffId || auth.id;
-
+      userId = auth.staffId || auth.id;
+      break;
     case "hospital":
-      return auth.hospitalId || auth.id;
-
+      userId = auth.hospitalId || auth.id;
+      break;
+    case "super_admin":
+    case "superadmin":
+    case "admin":
+      userId = auth.hospitalId || getHospitalId() || auth.id;
+      console.log("Super Admin - Using ID:", userId);
+      break;
     default:
-      return auth.id;
+      userId = auth.id || auth.userId || auth.hospitalId || getHospitalId();
+      break;
   }
+
+  console.log("Final User ID:", userId);
+  console.log("=======================");
+  
+  return userId;
 };
 
 // ========================
-// UPLOAD
+// UPLOAD    
 // ========================
 
 export const uploadToS3 = async (
   file: File,
   key: string | null = null,
-  staffId?: number | string
+  customId?: number | string,
+  customRole?: string  // Allow custom role like "documents"
 ): Promise<UploadResponse> => {
   try {
-    const role = getUserRole()?.toLowerCase();
+    const role = customRole || getUserRole()?.toLowerCase() || "hospital";
     const token = getToken();
 
-    // Get user ID based on role
-    const userId = staffId || getUserId();
+    // Get ID - use provided id or get from storage
+    let id = customId || getUserId();
+    
+    // For Super Admin, if id is still undefined, try to get hospitalId
+    if (!id && (role === 'super_admin' || role === 'superadmin' || role === 'admin')) {
+      id = getHospitalId();
+      console.log("Super Admin fallback - Using hospitalId from getHospitalId():", id);
+    }
 
     // COMPRESS
     const compressed = await compressImage(file);
@@ -167,15 +192,22 @@ export const uploadToS3 = async (
     console.log("Original size:", (file.size / 1024 / 1024).toFixed(2), "MB");
     console.log("Compressed size:", (compressed.size / 1024 / 1024).toFixed(2), "MB");
     console.log("Role:", role);
-    console.log("User ID:", userId);
+    console.log("ID:", id);
+    console.log("Custom ID passed:", customId);
+    console.log("Custom Role passed:", customRole);
     console.log("Token exists:", !!token);
     console.log("Existing key:", key);
+
+    // Validate required fields
+    if (!id) {
+      throw new Error("ID is required for S3 upload. Please make sure you are logged in.");
+    }
 
     const body = {
       filename: compressed.name,
       contentType: compressed.type,
-      role, // doctor / staff / hospital
-      id: userId,
+      role: role, // doctor / staff / hospital / super_admin / documents
+      id: id,
       ...(key
         ? { key }
         : { size: compressed.size }),
@@ -192,7 +224,6 @@ export const uploadToS3 = async (
       body: JSON.stringify(body),
     });
 
-    // IMPROVED ERROR HANDLING
     if (!res.ok) {
       let errorText = "";
       try {
@@ -245,16 +276,26 @@ export const uploadToS3 = async (
 // DELETE
 // ========================
 
-export const deleteFromS3 = async (key: string) => {
+export const deleteFromS3 = async (key: string, role?: string, id?: string | number) => {
   const token = getToken();
-  const role = getUserRole();
-  const id = getUserId();
+  const finalRole = role || getUserRole() || "hospital";
+  let finalId = id || getUserId();
+  
+  if (!finalId && (finalRole === 'super_admin' || finalRole === 'superadmin' || finalRole === 'admin')) {
+    finalId = getHospitalId();
+    console.log("Super Admin delete - Using hospitalId:", finalId);
+  }
 
   console.log("=== S3 DELETE DEBUG ===");
   console.log("Key:", key);
-  console.log("Role:", role);
-  console.log("User ID:", id);
+  console.log("Role:", finalRole);
+  console.log("ID:", finalId);
   console.log("Token exists:", !!token);
+
+  if (!finalId) {
+    console.warn("No ID found for delete operation");
+    return true;
+  }
 
   const res = await fetch(API_URL, {
     method: "DELETE",
@@ -264,8 +305,8 @@ export const deleteFromS3 = async (key: string) => {
     },
     body: JSON.stringify({
       key,
-      role,
-      id,
+      role: finalRole,
+      id: finalId,
     }),
   });
 
@@ -283,7 +324,8 @@ export const deleteFromS3 = async (key: string) => {
       body: errorText
     });
     
-    throw new Error(`Delete from S3 failed (${res.status}): ${errorText}`);
+    console.warn("Delete failed, but continuing...");
+    return false;
   }
 
   console.log("Delete successful!");

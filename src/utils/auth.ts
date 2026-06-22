@@ -4,6 +4,7 @@ import { jwtDecode } from "jwt-decode";
 export interface JwtPayload {
   id: number;
   name: string;
+  hospitalName?: string;
   email?: string;
   role: string;
   roleId: number;

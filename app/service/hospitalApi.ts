@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password & Forgot Password endpoints
+// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password, Forgot Password & Super Admin Login
 import { api } from "./api";
 
 // Type definitions
@@ -27,6 +27,7 @@ export interface Hospital {
 export interface LoginCredentials {
   email: string;
   password: string;
+  fcmToken?: string;
 }
 
 export interface PhoneLoginData {
@@ -99,6 +100,31 @@ export interface ResetPasswordResponse {
   error?: string;
 }
 
+// Super Admin Types
+export interface SuperAdmin {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  role?: string;
+  roleId?: number;
+  createdAt?: string;
+}
+
+export interface SuperAdminLoginResponse {
+  success?: boolean;
+  token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  roleId?: number;
+  role?: string;
+  roleDetected?: string;
+  data?: SuperAdmin;
+  user?: SuperAdmin;
+  message?: string;
+  error?: string;
+}
+
 export interface AuthResponse {
   success?: boolean;
   token?: string;
@@ -108,6 +134,10 @@ export interface AuthResponse {
   hospital?: Hospital;
   message?: string;
   error?: string;
+  roleId?: number;
+  role?: string;
+  roleDetected?: string;
+  hospitals?: any[];
 }
 
 export const hospitalApi = api.injectEndpoints({
@@ -139,7 +169,7 @@ export const hospitalApi = api.injectEndpoints({
 
     loginHospital: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => ({
-        url: `/hospital/login`,
+        url: `/hospital/g-login`,
         method: "POST",
         body: loginData,
       }),
@@ -152,6 +182,45 @@ export const hospitalApi = api.injectEndpoints({
           localStorage.setItem("refreshToken", response.refreshToken);
         }
         return response;
+      },
+      invalidatesTags: ["Hospital"],
+    }),
+
+    // Super Admin Login Mutation
+    loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, LoginCredentials>({
+      query: (loginData) => ({
+        url: `/users/login`,
+        method: "POST",
+        body: loginData,
+      }),
+      transformResponse: (response: SuperAdminLoginResponse) => {
+        console.log("👑 Super Admin Login API response:", response);
+        
+        const token = response.token || response.accessToken;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+          console.log("✅ Super Admin token stored");
+        }
+        
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+          console.log("✅ Super Admin refresh token stored");
+        }
+        
+        // Store roleId for Super Admin detection
+        if (response.roleId) {
+          localStorage.setItem("roleId", response.roleId.toString());
+          console.log("✅ Super Admin roleId stored:", response.roleId);
+        }
+        
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Super Admin login error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Super Admin login failed",
+        };
       },
       invalidatesTags: ["Hospital"],
     }),
@@ -204,6 +273,11 @@ export const hospitalApi = api.injectEndpoints({
           await queryFulfilled;
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
+          localStorage.removeItem("roleId");
+          localStorage.removeItem("userRole");
+          localStorage.removeItem("userData");
+          localStorage.removeItem("authData");
+          localStorage.removeItem("permissions");
         } catch (error) {
           console.error("Logout error:", error);
         }
@@ -352,6 +426,7 @@ export const {
   // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
+  useLoginSuperAdminMutation,  // Export the new Super Admin login hook
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,

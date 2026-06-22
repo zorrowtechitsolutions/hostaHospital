@@ -20,6 +20,8 @@ export interface Ambulance {
   vehicleType: string;
   address?: AmbulanceAddress;
   hospitalId?: number;
+  userId?: string | number; 
+  name?: string; 
   createdAt?: string;
   updatedAt?: string;
 }
@@ -30,8 +32,19 @@ export interface AmbulanceResponse {
   data?: Ambulance | Ambulance[];
 }
 
+// ✅ UPDATED - GetAmbulanceParams with userId field
 export interface GetAmbulanceParams {
   id?: string | number;
+  userId?: string | number; 
+  hospitalId?: string | number;
+  name?: string;
+  country?: string;
+  state?: string;
+  district?: string;
+  place?: string;
+  pincode?: string | number;
+  vehicleType?: string;
+  search_query?: string;
 }
 
 // ================= API =================
@@ -41,23 +54,71 @@ export const ambulanceApi = api.injectEndpoints({
 
     // ================= GET AMBULANCES =================
     // Automatically adds hospitalId from authenticated user
+    // ✅ UPDATED with proper typing
     getAmbulance: builder.query<
       AmbulanceResponse,
       GetAmbulanceParams | void
     >({
-      query: (params) => {
+      // ✅ CHANGED: Added proper typing for params
+      query: (params: GetAmbulanceParams = {}) => {
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
-        // Automatically add hospitalId from authenticated user
+        // Auto-inject hospitalId from auth (matches backend)
         if (auth?.id) {
           queryParams.append("hospitalId", String(auth.id));
+        }
+
+        // Override hospitalId if provided in params
+        if (params.hospitalId) {
+          queryParams.set("hospitalId", String(params.hospitalId));
+        }
+
+        // ✅ ADDED - User ID filter (matches backend)
+        if (params.userId) {
+          queryParams.append("userId", String(params.userId));
+        }
+
+        // Name filter (matches backend)
+        if (params.name) {
+          queryParams.append("name", params.name);
+        }
+
+        // Address filters (matches backend)
+        if (params.country) {
+          queryParams.append("country", params.country);
+        }
+
+        if (params.state) {
+          queryParams.append("state", params.state);
+        }
+
+        if (params.district) {
+          queryParams.append("district", params.district);
+        }
+
+        if (params.place) {
+          queryParams.append("place", params.place);
+        }
+
+        if (params.pincode) {
+          queryParams.append("pincode", String(params.pincode));
+        }
+
+        // Vehicle type filter (matches backend)
+        if (params.vehicleType) {
+          queryParams.append("vehicleType", params.vehicleType);
+        }
+
+        // Search query (matches backend)
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
         }
 
         const queryString = queryParams.toString();
 
         // If ID is provided, get single ambulance
-        if (params?.id) {
+        if (params.id) {
           return `/ambulance/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
@@ -93,6 +154,8 @@ export const ambulanceApi = api.injectEndpoints({
             vehicleType: data.vehicleType,
             address: data.address,
             hospitalId: auth?.id, // Automatically add from auth
+            userId: data.userId, // if provided
+            name: data.name, // if provided
           },
         };
       },
@@ -116,6 +179,8 @@ export const ambulanceApi = api.injectEndpoints({
           phone: data.phone,
           vehicleType: data.vehicleType,
           address: data.address,
+          userId: data.userId,
+          name: data.name,
         },
       }),
 

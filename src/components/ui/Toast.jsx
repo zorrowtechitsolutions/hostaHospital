@@ -1,7 +1,7 @@
 // src/components/ui/Toast.jsx
 import React, { useEffect, useState } from 'react';
 
-const Toast = ({ message, type = 'success', duration = 4000, onClose, details = null }) => {
+const Toast = ({ message, type = 'success', duration = 4000, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -165,25 +165,6 @@ const Toast = ({ message, type = 'success', duration = 4000, onClose, details = 
           ✕
         </div>
       </div>
-      {details && (
-        <div 
-          style={{
-            background: 'white',
-            marginTop: '8px',
-            padding: '10px 14px',
-            borderRadius: '8px',
-            fontSize: '12px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            borderLeft: `3px solid ${getBgColor()}`
-          }}
-        >
-          {Object.entries(details).map(([key, value]) => (
-            <div key={key} style={{ marginBottom: '4px' }}>
-              <span style={{ fontWeight: 600 }}>{key}:</span> {value}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };
@@ -191,54 +172,54 @@ const Toast = ({ message, type = 'success', duration = 4000, onClose, details = 
 // Global Toast Container
 let toastContainer = null;
 
-export const showToast = (message, type = 'success', duration = 4000, details = null) => {
+export const showToast = (message, type = 'success', duration = 4000) => {
   if (toastContainer) {
-    toastContainer(message, type, duration, details);
+    toastContainer(message, type, duration);
   }
 };
 
 // Convenience methods
-export const showSuccessToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'success', duration, details);
+export const showSuccessToast = (message, duration = 4000) => {
+  showToast(message, 'success', duration);
 };
 
-export const showErrorToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'error', duration, details);
+export const showErrorToast = (message, duration = 4000) => {
+  showToast(message, 'error', duration);
 };
 
-export const showWarningToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'warning', duration, details);
+export const showWarningToast = (message, duration = 4000) => {
+  showToast(message, 'warning', duration);
 };
 
-export const showInfoToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'info', duration, details);
+export const showInfoToast = (message, duration = 4000) => {
+  showToast(message, 'info', duration);
 };
 
-export const showDeleteToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'delete', duration, details);
+export const showDeleteToast = (message, duration = 4000) => {
+  showToast(message, 'delete', duration);
 };
 
-export const showUpdateToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'update', duration, details);
+export const showUpdateToast = (message, duration = 4000) => {
+  showToast(message, 'update', duration);
 };
 
-export const showEditToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'edit', duration, details);
+export const showEditToast = (message, duration = 4000) => {
+  showToast(message, 'edit', duration);
 };
 
-export const showSaveToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'save', duration, details);
+export const showSaveToast = (message, duration = 4000) => {
+  showToast(message, 'save', duration);
 };
 
-export const showAddToast = (message, duration = 4000, details = null) => {
-  showToast(message, 'add', duration, details);
+export const showAddToast = (message, duration = 4000) => {
+  showToast(message, 'add', duration);
 };
 
 export const ToastProvider = ({ children }) => {
   const [toast, setToast] = useState(null);
 
-  const showToastMessage = (message, type = 'success', duration = 4000, details = null) => {
-    setToast({ message, type, duration, details });
+  const showToastMessage = (message, type = 'success', duration = 4000) => {
+    setToast({ message, type, duration });
   };
 
   useEffect(() => {
@@ -256,7 +237,6 @@ export const ToastProvider = ({ children }) => {
           message={toast.message}
           type={toast.type}
           duration={toast.duration}
-          details={toast.details}
           onClose={() => setToast(null)}
         />
       )}

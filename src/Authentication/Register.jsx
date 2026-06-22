@@ -1,4 +1,4 @@
-// src/Authentication/Register.jsx - COMPLETE FIXED VERSION WITH AUTO-LOGIN
+// src/Authentication/Register.jsx - COMPLETE FIXED VERSION WITH LOGO
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -12,6 +12,7 @@ import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showI
 import { Country, State, City } from 'country-state-city';
 import { useRegisterMutation } from '../../app/service/hospitalApi';  
 import { useAuth } from '../context/AuthContext'; 
+import logo from "../assets/logo.jpeg";
 
 const SearchableDropdown = ({ 
   label, 
@@ -208,8 +209,8 @@ const SearchableCityDropdown = ({
 
 const Register = () => {
   const navigate = useNavigate();
-  const { login } = useAuth(); // ADDED: Get login function from auth context
-  const [register, { isLoading: isApiLoading }] = useRegisterMutation(); // CHANGED: useRegisterMutation instead of useAddNewHospitalMutation
+  const { login } = useAuth();
+  const [register, { isLoading: isApiLoading }] = useRegisterMutation();
   const [activeTab, setActiveTab] = useState("normal");
   const [is24x7, setIs24x7] = useState(false);
   const [showPassword, setShowPassword] = useState(false);     
@@ -407,7 +408,6 @@ const Register = () => {
     setCityName(name);
   };
 
-  // UPDATED: handleSubmit with auto-login
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
@@ -474,30 +474,25 @@ const Register = () => {
         const response = await register(hospitalData).unwrap();
         console.log("Registration successful with tokens:", response);
         
-        // Extract hospital data from response.data (your backend returns data in response.data)
-        // Backend did not return hospital data
-if (!response.data) {
+        // Extract hospital data from response.data
+        if (!response.data) {
+          showSuccessToast(
+            "Registration completed successfully. Please sign in.",
+            4000
+          );
+          setIsSubmitting(false);
+          navigate("/sign-in");
+          return;
+        }
 
-  showSuccessToast(
-    "Registration completed successfully. Please sign in.",
-    4000
-  );
-
-  setIsSubmitting(false);
-
-  navigate("/sign-in");
-
-  return;
-}
-
-// AUTO LOGIN ONLY IF DATA EXISTS
-login({
-  id: response.data.id,
-  name: response.data.name,
-  email: response.data.email,
-  phone: response.data.phone,
-  type: response.data.type,
-});
+        // Auto login if data exists
+        login({
+          id: response.data.id,
+          name: response.data.name,
+          email: response.data.email,
+          phone: response.data.phone,
+          type: response.data.type,
+        });
         
         // Tokens are automatically stored by transformResponse in the API
         const accessToken = localStorage.getItem("accessToken");
@@ -509,7 +504,7 @@ login({
         
         setIsSubmitting(false);
         
-        // Navigate directly to dashboard (no need to go to login page)
+        // Navigate directly to dashboard
         setTimeout(() => {
           navigate('/dashboard');
         }, 2000);
@@ -530,8 +525,12 @@ login({
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
       <div className="w-full max-w-5xl bg-white rounded-2xl shadow-sm p-8 space-y-8">
         <div className="text-center space-y-3">
-          <div className="w-14 h-14 mx-auto rounded-xl bg-[#154A7D] text-white flex items-center justify-center text-2xl font-bold">
-            <Building className="h-7 w-7" />
+          <div className="flex justify-center">
+            <img
+              src={logo}
+              alt="Hosta Logo"
+              className="h-20 w-20 rounded-2xl shadow-lg border-2 border-blue-100 object-cover"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Create Hospital Account</h1>
           <p className="text-slate-500">Register your hospital to get started with our management system</p>
@@ -633,8 +632,27 @@ login({
             <p className="text-xs text-gray-500">Password must be at least 8 characters with uppercase, lowercase, and numbers</p>
           </div>
 
-          <Button type="submit" variant="primary" size="lg" fullWidth disabled={isSubmitting || isApiLoading} loading={isSubmitting || isApiLoading}>
-            {isSubmitting || isApiLoading ? 'Creating Account...' : 'Create Account'}
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={isSubmitting || isApiLoading}
+            loading={isSubmitting || isApiLoading}
+            className="
+              bg-gradient-to-r
+              from-green-600
+              to-emerald-600
+              hover:from-green-700
+              hover:to-emerald-700
+              text-white
+              border-0
+              shadow-lg
+            "
+          >
+            {isSubmitting || isApiLoading
+              ? "Creating Account..."
+              : "Create Account"}
           </Button>
 
           <p className="text-center text-sm text-gray-600">Already have an account? <Link to="/sign-in" className="text-[#154A7D] hover:text-[#0e3a61] font-medium">Sign In</Link></p>

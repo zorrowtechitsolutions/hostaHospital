@@ -1,4 +1,4 @@
-// src/components/Settings/Security.jsx - With Simplified Password Validation
+// src/components/Settings/Security.jsx - With Green Change Password & Red Delete Button
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Modal, Input, Badge, Alert } from '../ui';
@@ -24,13 +24,13 @@ const SECURITY_ITEMS = [
     title: 'Password',
     description: 'Set a unique password to secure the account',
     meta: (user) => `Last Changed: ${user?.lastPasswordChange || 'Never'}`,
-    actions: [{ label: 'Change', type: 'change' }]
+    actions: [{ label: 'Change Password', type: 'change' }]
   },
   {
     id: 'delete',
     title: 'Delete Account',
     description: 'Your account will be permanently deleted after 30 days',
-    actions: [{ label: 'Delete', type: 'delete' }]
+    actions: [{ label: 'Delete Account', type: 'delete' }]
   },
 ];
 
@@ -267,6 +267,7 @@ const Security = () => {
               variant="primary"
               disabled={isFormLoading}
               loading={isFormLoading}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
             >
               {isFormLoading ? 'Updating...' : 'Update Password'}
             </Button>
@@ -313,7 +314,8 @@ const Security = () => {
           onClick={handleDeleteAccount}
           disabled={confirmText.trim() !== 'DELETE' || isDeleting}
           loading={isDeleting}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="ghost"
+          className="bg-red-600 hover:bg-red-700 text-white"
         >
           {isDeleting ? 'Deleting...' : 'Delete My Account'}
         </Button>
@@ -359,15 +361,41 @@ const Security = () => {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {item.actions.map((action, idx) => {
-                  const isDangerAction = ['Delete', 'Deactivate'].includes(action.label);
+                  const isDangerAction = ['Delete', 'Delete Account', 'Deactivate'].includes(action.label);
+                  const isChangeAction = ['Change', 'Change Password'].includes(action.label);
+                  
+                  if (isDangerAction) {
+                    return (
+                      <button
+  key={idx}
+  onClick={action.onClick}
+  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300"
+>
+  {action.label}
+</button>
+                    );
+                  }
+                  
+                  if (isChangeAction) {
+                    return (
+                      <Button
+                        key={idx}
+                        variant="ghost"
+                        size="sm"
+                        onClick={action.onClick}
+                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        {action.label}
+                      </Button>
+                    );
+                  }
+                  
                   return (
                     <Button
                       key={idx}
-                      variant={!isDangerAction ? 'ghost' : undefined}
+                      variant="ghost"
                       size="sm"
                       onClick={action.onClick}
-                      className={isDangerAction && action.label === 'Delete' ? 'bg-red-600 hover:bg-red-700 text-white' :
-                        isDangerAction && action.label === 'Deactivate' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}
                     >
                       {action.label}
                     </Button>

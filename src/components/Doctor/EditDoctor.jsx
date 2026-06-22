@@ -1,10 +1,10 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Rewrite with Fixed Image Handling
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+// src/components/Doctor/EditDoctor.jsx - With Role Assignment
+import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, Lock, Image, 
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield
 } from 'lucide-react';
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
@@ -12,31 +12,120 @@ import {
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 import {
   useGetDoctorByIdQuery,
-  useUpdateDoctorMutation
+  useUpdateDoctorMutation,
+  useGetSpecialitiesQuery
 } from "../../../app/service/doctorApi";
+import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
+import { useGetRolesQuery } from '../../../app/service/role';
+import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
-import { getHospitalId } from '../../utils/auth';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// Helper function to get full image URL from key/filename with URL encoding
+// Lazy load heavy components
+const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
+const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
+
+// Helper function to get full image URL
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  
-  if (imageKey.startsWith("http")) {
-    return imageKey;
-  }
-  
+  if (imageKey.startsWith("http")) return imageKey;
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
-// Fallback loading component
-const LoadingFallback = () => (
-  <div className="w-full py-12 flex justify-center items-center">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+// Lazy Image Component with Intersection Observer
+const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
+  const [imageSrc, setImageSrc] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    if (!imageKey) {
+      setIsLoading(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            setImageSrc(getFullImageUrl(imageKey));
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '50px' }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [imageKey]);
+
+  return (
+    <div ref={imgRef} className="w-full h-full">
+      {isLoading && (
+        <div className="w-full h-full bg-gray-200 animate-pulse rounded-full flex items-center justify-center">
+          <span className="text-gray-400 text-2xl font-medium">
+            {firstName ? firstName.charAt(0).toUpperCase() : 'D'}
+          </span>
+        </div>
+      )}
+      {imageSrc && (
+        <img
+          src={imageSrc}
+          alt="Profile"
+          className="w-full h-full object-cover rounded-full"
+          onLoad={() => {
+            setIsLoading(false);
+            onLoad?.();
+          }}
+          onError={(e) => {
+            setIsLoading(false);
+            onError?.(e);
+          }}
+        />
+      )}
+      {!imageSrc && !isLoading && (
+        <div className="w-full h-full bg-gray-100 flex items-center justify-center rounded-full">
+          <span className="text-gray-400 text-2xl font-medium">
+            {firstName ? firstName.charAt(0).toUpperCase() : 'D'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Form Section Skeleton Loader
+const FormSectionSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    <div className="h-8 w-40 bg-gray-200 rounded"></div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="space-y-2">
+          <div className="h-4 w-24 bg-gray-200 rounded"></div>
+          <div className="h-10 w-full bg-gray-200 rounded"></div>
+        </div>
+      ))}
+    </div>
   </div>
 );
 
-// SearchableDropdown Component - FIXED to always pass string values
+// Profile Section Skeleton
+const ProfileSectionSkeleton = () => (
+  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg animate-pulse">
+    <div className="w-24 h-24 bg-gray-200 rounded-full"></div>
+    <div className="flex-1 w-full">
+      <div className="h-5 w-32 bg-gray-200 rounded mb-2"></div>
+      <div className="h-10 w-40 bg-gray-200 rounded"></div>
+      <div className="h-3 w-48 bg-gray-200 rounded mt-2"></div>
+    </div>
+  </div>
+);
+
+// SearchableDropdown Component with Lazy Loading
 const SearchableDropdownComponent = ({ 
   label, 
   options, 
@@ -48,16 +137,19 @@ const SearchableDropdownComponent = ({
   required = false,
   getOptionLabel = (option) => option.name || option,
   getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index
+  optionKey = (option, index) => option.isoCode || index,
+  isLoading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => {
-    const label = getOptionLabel(option).toLowerCase();
-    return label.includes(searchTerm.toLowerCase());
-  });
+  const filteredOptions = useMemo(() => {
+    return options.filter(option => {
+      const label = getOptionLabel(option).toLowerCase();
+      return label.includes(searchTerm.toLowerCase());
+    });
+  }, [options, searchTerm, getOptionLabel]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -70,7 +162,6 @@ const SearchableDropdownComponent = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // FIXED: Always pass string values
   const handleSelect = (option) => {
     onChange(String(getOptionValue(option)), String(getOptionLabel(option)));
     setSearchTerm("");
@@ -101,21 +192,21 @@ const SearchableDropdownComponent = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={placeholder}
-          disabled={disabled}
+          placeholder={isLoading ? "Loading departments..." : placeholder}
+          disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+            (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
         <ChevronDown 
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
       
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
             <div
@@ -123,16 +214,25 @@ const SearchableDropdownComponent = ({
               className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => handleSelect(option)}
             >
-              <MapPin className="h-4 w-4 text-gray-400" />
+              <Briefcase className="h-4 w-4 text-gray-400" />
               <span className="text-gray-700">{getOptionLabel(option)}</span>
             </div>
           ))}
         </div>
       )}
       
-      {isOpen && filteredOptions.length === 0 && (
+      {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          No results found
+          No departments found
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <span>Loading departments...</span>
+          </div>
         </div>
       )}
     </div>
@@ -140,18 +240,18 @@ const SearchableDropdownComponent = ({
 };
 
 // Day Schedule Row Component
-const DayScheduleRowComponent = ({ day, schedule, onUpdate }) => {
+const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
   useEffect(() => {
     setLocalSchedule(schedule);
   }, [schedule]);
 
-  const handleChange = (field, value) => {
+  const handleChange = useCallback((field, value) => {
     const updated = { ...localSchedule, [field]: value };
     setLocalSchedule(updated);
     onUpdate(updated);
-  };
+  }, [localSchedule, onUpdate]);
 
   const formatTimeDisplay = (time) => {
     if (!time) return '';
@@ -260,7 +360,7 @@ const DayScheduleRowComponent = ({ day, schedule, onUpdate }) => {
       )}
     </div>
   );
-};
+});
 
 // Centered Loader Component
 const CenteredLoader = ({ text = "Loading..." }) => (
@@ -273,7 +373,7 @@ const CenteredLoader = ({ text = "Loading..." }) => (
 );
 
 // Status Toggle Component
-const StatusToggle = ({ status, onToggle, disabled }) => {
+const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
   const isActive = status;
 
   return (
@@ -317,7 +417,7 @@ const StatusToggle = ({ status, onToggle, disabled }) => {
       </div>
     </div>
   );
-};
+});
 
 const EditDoctor = () => {
   const navigate = useNavigate();
@@ -326,8 +426,45 @@ const EditDoctor = () => {
   // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  console.log("=== EDIT DOCTOR DEBUG ===");
-  console.log("Doctor ID from URL:", doctorId);
+  // Get hospital ID and hospital name from auth
+  const hospitalId = getHospitalId();
+  const authUser = getAuthUser();
+  const hospitalName = authUser?.name || '';
+  
+  console.log("🏥 Hospital ID from auth:", hospitalId);
+  console.log("🏥 Hospital Name from auth:", hospitalName);
+  
+  // Role assignment state
+  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
+  
+  // Fetch roles from API
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useGetRolesQuery({
+    hospitalId,
+    limit: 100
+  });
+  
+  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+  const rolesList = [
+    ...(rolesData?.admin || []).filter(role => role.id === 2),
+    ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
+  ];
+  
+  // Fetch specialities from backend for department dropdown
+  const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
+  
+  // Transform specialities to department options
+  const departmentOptions = React.useMemo(() => {
+    const rows = specialitiesData?.data || [];
+    return rows.map((spec) => ({
+      id: spec.id,
+      name: spec.name.toUpperCase(),
+      value: spec.name.toUpperCase(),
+      label: spec.name.toUpperCase()
+    }));
+  }, [specialitiesData]);
   
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('basic');
@@ -337,10 +474,11 @@ const EditDoctor = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Form state - profileImage stores the S3 key for existing images
+  // Form state
   const [formData, setFormData] = useState({
-    profileImage: null, // This stores the S3 key for existing image
+    profileImage: null,
     imageUrl: null,
     imageKey: null,
     firstName: '',
@@ -370,6 +508,7 @@ const EditDoctor = () => {
     joiningDate: '',
     experience: '',
     appointmentCount: '',
+    roleId: '', // Added roleId field
     weeklySchedule: {},
     outDoorConsultingOpen: '',
     outDoorConsultingClose: '',
@@ -379,8 +518,6 @@ const EditDoctor = () => {
   });
 
   const [errors, setErrors] = useState({});
-  console.log(formData);
-  
 
   // Use getDoctorById query for single doctor
   const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
@@ -389,12 +526,8 @@ const EditDoctor = () => {
   
   const [updateDoctor] = useUpdateDoctorMutation();
 
-  console.log("Doctor API Response:", doctorResponse);
-
-  // Extract doctor from response with multiple possible paths
+  // Extract doctor from response
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
-
-  console.log("Extracted Doctor:", doctor);
 
   const countries = Country.getAllCountries();
   const [availableStates, setAvailableStates] = useState([]);
@@ -441,24 +574,31 @@ const EditDoctor = () => {
     };
   };
 
+  // Get role name by ID for display
+  const getRoleNameById = (roleId) => {
+    const role = rolesList.find(r => String(r.id) === String(roleId));
+    return role?.name || role?.roleName || '';
+  };
+
+  // Get role badge color by role name
+  const getRoleBadgeColor = (roleId) => {
+    const roleName = getRoleNameById(roleId);
+    const roleNameLower = roleName?.toLowerCase();
+    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-700';
+  };
+
   // Initialize form with doctor data
   useEffect(() => {
     if (doctor && doctor.id && !formInitialized) {
-      console.log("=== INITIALIZING FORM WITH DOCTOR DATA ===");
-      console.log("Doctor object:", doctor);
-      
-      // Get image key from doctor - check ALL possible paths in the response
+      // Get image key from doctor
       const imageKey = 
         doctor?.imageUrl ||
         doctor?.profileImage ||
         doctor?.image ||
-        doctor?.data?.imageUrl ||
-        doctor?.doctor?.imageUrl ||
-        doctor?.doctor?.image ||
-        doctor?.data?.doctor?.imageUrl ||
         null;
-      
-      console.log("🖼️ Extracted imageKey:", imageKey);
       
       // Find country and state
       const country = countries.find(c => 
@@ -513,7 +653,7 @@ const EditDoctor = () => {
         imageKey: imageKey,
         firstName: doctor.firstName || "",
         lastName: doctor.lastName || "",
-        department: doctor.department || "",
+        department: doctor.department?.toUpperCase() || "",
         specialist: doctor.specialist || "",
         qualification: doctor.qualification || "",
         fees: doctor.fees || "",
@@ -538,6 +678,7 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
+        roleId: doctor.roleId || "", // Added roleId from doctor data
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
@@ -546,18 +687,7 @@ const EditDoctor = () => {
         isActive: doctor.isActive ?? true
       };
       
-      console.log("Setting form data:", newFormData);
       setFormData(newFormData);
-      
-      // Set preview image using getFullImageUrl helper
-      if (imageKey) {
-        const fullUrl = getFullImageUrl(imageKey);
-        console.log("🖼️ Setting preview image URL:", fullUrl);
-        setPreviewImage(fullUrl);
-      } else {
-        console.log("❌ No profile image found");
-        setPreviewImage(null);
-      }
       
       // Update states and cities
       if (country?.isoCode) {
@@ -605,6 +735,7 @@ const EditDoctor = () => {
       joiningDate: '',
       experience: '',
       appointmentCount: '',
+      roleId: '',
       weeklySchedule: getDefaultSchedule(),
       outDoorConsultingOpen: '',
       outDoorConsultingClose: '',
@@ -613,9 +744,10 @@ const EditDoctor = () => {
       isActive: true
     });
     setPreviewImage(null);
+    setImageLoaded(false);
   }, [doctorId]);
 
-  const updateScheduleForDay = (day, newSchedule) => {
+  const updateScheduleForDay = useCallback((day, newSchedule) => {
     setFormData(prev => ({
       ...prev,
       weeklySchedule: {
@@ -623,9 +755,8 @@ const EditDoctor = () => {
         [day]: newSchedule
       }
     }));
-  };
+  }, []);
 
-  // Handle image upload to S3
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -645,11 +776,9 @@ const EditDoctor = () => {
     
     try {
       setUploadProgress(30);
-      // FIXED: Pass doctorId instead of formData.id which doesn't exist
       const uploaded = await uploadToS3(file, formData.imageKey || null, doctorId);
       setUploadProgress(100);
       
-      // Store the key in all three fields
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
@@ -691,14 +820,14 @@ const EditDoctor = () => {
 
   const removeImage = () => {
     setPreviewImage(null);
+    setImageLoaded(false);
     setUploadProgress(0);
     setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
     setErrors(prev => ({ ...prev, profileImage: '' }));
     showSuccessToast('Image removed', 2000);
   };
 
-  // FIXED: Handle country change with both code and name as strings
-  const handleCountryChange = (code, name) => {
+  const handleCountryChange = useCallback((code, name) => {
     setFormData(prev => ({
       ...prev,
       countryCode: String(code),
@@ -709,10 +838,9 @@ const EditDoctor = () => {
     }));
     setAvailableStates(State.getStatesOfCountry(code));
     setAvailableCities([]);
-  };
+  }, []);
 
-  // FIXED: Handle state change with both code and name as strings
-  const handleStateChange = (code, name) => {
+  const handleStateChange = useCallback((code, name) => {
     setFormData(prev => ({
       ...prev,
       stateCode: String(code),
@@ -720,17 +848,16 @@ const EditDoctor = () => {
       district: ''
     }));
     setAvailableCities(City.getCitiesOfState(formData.countryCode, code));
-  };
+  }, [formData.countryCode]);
 
-  // FIXED: Handle city change - receives (value, name) from SearchableDropdown
-  const handleCityChange = (value, name) => {
+  const handleCityChange = useCallback((value, name) => {
     setFormData(prev => ({
       ...prev,
       district: String(name)
     }));
-  };
+  }, []);
 
-  const handleLanguageSelect = (languageValue) => {
+  const handleLanguageSelect = useCallback((languageValue) => {
     setFormData(prev => {
       const currentLanguages = [...prev.knownLanguages];
       if (currentLanguages.includes(languageValue)) {
@@ -739,42 +866,42 @@ const EditDoctor = () => {
         return { ...prev, knownLanguages: [...currentLanguages, languageValue] };
       }
     });
-  };
+  }, []);
 
-  const removeLanguage = (languageValue) => {
+  const removeLanguage = useCallback((languageValue) => {
     setFormData(prev => ({
       ...prev,
       knownLanguages: prev.knownLanguages.filter(lang => lang !== languageValue)
     }));
-  };
+  }, []);
 
   const getLanguageLabel = (value) => {
     const lang = languageOptions.find(l => l.value === value);
     return lang ? lang.label : value;
   };
 
-  const handleFieldChange = (field, value) => {
+  const handleFieldChange = useCallback((field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
-  };
+  }, []);
 
-  const toggleDoctorStatus = () => {
+  const toggleDoctorStatus = useCallback(() => {
     setFormData(prev => ({
       ...prev,
       isActive: !prev.isActive
     }));
     showSuccessToast(`Doctor status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
-  };
+  }, [formData.isActive]);
 
-  const toggleBookingStatus = () => {
+  const toggleBookingStatus = useCallback(() => {
     setFormData(prev => ({
       ...prev,
       bookingOpen: !prev.bookingOpen
     }));
     showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
-  };
+  }, [formData.bookingOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -782,7 +909,9 @@ const EditDoctor = () => {
     try {
       setIsSubmitting(true);
 
-      // No hospitalId in update - only fields that can change
+      const roleId = Number(formData.roleId);
+      const selectedRoleName = getRoleNameById(roleId);
+
       const updatedDoctorData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -805,6 +934,8 @@ const EditDoctor = () => {
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
         isActive: formData.isActive,
+        roleId: roleId, // Add roleId to update data
+        hospitalName: hospitalName, // Add hospital name
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -858,16 +989,33 @@ const EditDoctor = () => {
       }
 
       console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updatedDoctorData, null, 2));
-      console.log("🖼️ imageUrl:", updatedDoctorData.imageUrl);
-      console.log("🖼️ profileImage:", updatedDoctorData.profileImage);
-      console.log("🔑 imageKey:", updatedDoctorData.imageKey);
+      console.log("🏥 Hospital Name being sent:", hospitalName);
+      console.log("👤 Role ID being sent:", roleId);
 
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
 
-      showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully!`);
+      // Update role permission if roleId exists
+      if (roleId) {
+        const payload = {
+          hospitalId: Number(hospitalId),
+          roleId: roleId,
+          userType: "doctor",
+          doctorIds: [
+            {
+              id: Number(doctorId),
+              roleId: roleId
+            }
+          ]
+        };
+        
+        console.log("📤 UPDATING ROLE PERMISSION:", payload);
+        await assignPermissions(payload).unwrap();
+      }
+
+      showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully with role ${selectedRoleName}!`);
 
       setTimeout(() => {
         navigate("/doctors");
@@ -885,14 +1033,12 @@ const EditDoctor = () => {
     navigate('/doctors');
   };
 
-  // Centered loading state for initial load
-  if (isLoading) {
+  // Loading states - Show skeleton while form is initializing
+  if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading doctor data..." />;
   }
 
-  // Error state
   if (error) {
-    console.error("Error fetching doctor:", error);
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -901,7 +1047,6 @@ const EditDoctor = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mt-4">Error Loading Doctor</h2>
           <p className="text-gray-600 mt-2">There was an error loading the doctor data.</p>
-          <p className="text-gray-500 text-sm mt-1">ID: {doctorId}</p>
           <Button variant="primary" onClick={() => navigate('/doctors')} className="mt-6">
             Back to Doctors List
           </Button>
@@ -910,7 +1055,6 @@ const EditDoctor = () => {
     );
   }
 
-  // No doctor found
   if (!doctor && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -928,533 +1072,574 @@ const EditDoctor = () => {
     );
   }
 
-  // Show centered loading if form is not initialized yet
   if (!formInitialized && doctor) {
-    return <CenteredLoader text="Loading form data..." />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mt-2"></div>
+          </div>
+          <ProfileSectionSkeleton />
+          <div className="mt-6">
+            <FormSectionSkeleton />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Edit Doctor</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Editing: {formData.firstName} {formData.lastName}
-              </p>
+    <Suspense fallback={<CenteredLoader text="Loading page..." />}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
+                <ArrowLeft className="h-5 w-5 text-gray-600" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Edit Doctor</h1>
+                <p className="text-sm text-gray-500 mt-1">
+                  Editing: {formData.firstName} {formData.lastName}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <form onSubmit={handleSubmit}>
-          <Card>
-            <div className="border-b border-gray-200 px-6">
-              <nav className="-mb-px flex space-x-8">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
+          <form onSubmit={handleSubmit}>
+            <Card>
+              <div className="border-b border-gray-200 px-6">
+                <nav className="-mb-px flex space-x-8">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        activeTab === tab.id
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
 
-            {activeTab === 'basic' && (
-              <div className="p-6 space-y-6">
-                {/* Profile Image Section */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex-shrink-0">
-                    <div className="relative">
-                      <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
-                        {previewImage ? (
-                          <img 
-                            src={previewImage} 
-                            alt="Profile" 
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error("❌ Image failed to load:", previewImage);
-                              e.target.style.display = 'none';
-                              const parent = e.target.parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<div class="w-full h-full bg-gray-100 flex items-center justify-center">
-                                  <span class="text-gray-400 text-2xl font-medium">${formData.firstName ? formData.firstName.charAt(0).toUpperCase() : 'D'}</span>
-                                </div>`;
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                            <span className="text-gray-400 text-2xl font-medium">
-                              {formData.firstName ? formData.firstName.charAt(0).toUpperCase() : 'D'}
-                            </span>
-                          </div>
+              {activeTab === 'basic' && (
+                <div className="p-6 space-y-6">
+                  {/* Profile Image Section with Lazy Loading */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-shrink-0">
+                      <div className="relative">
+                        <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                          {previewImage ? (
+                            <img 
+                              src={previewImage} 
+                              alt="Profile" 
+                              className="w-full h-full object-cover rounded-full"
+                              onLoad={() => setImageLoaded(true)}
+                            />
+                          ) : (
+                            <LazyProfileImage 
+                              imageKey={formData.profileImage}
+                              firstName={formData.firstName}
+                              onLoad={() => setImageLoaded(true)}
+                              onError={() => setImageLoaded(false)}
+                            />
+                          )}
+                        </div>
+                        {(previewImage || formData.profileImage) && (
+                          <button 
+                            type="button" 
+                            onClick={removeImage} 
+                            className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
-                      {previewImage && (
-                        <button type="button" onClick={removeImage} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm">
-                          <X className="h-3 w-3" />
-                        </button>
+                    </div>
+                    <div className="flex-1 w-full">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
+                      <div>
+                        <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
+                        <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2" disabled={isSubmitting}>
+                          <Upload className="h-4 w-4" /> Upload New Image
+                        </Button>
+                        <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
+                      </div>
+                      {isUploading && (
+                        <div className="mt-2">
+                          <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                        </div>
+                      )}
+                      {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">Doctor ID:</span>
+                      <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                        #{String(doctor?.id || doctorId).padStart(4, '0')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="First Name" 
+                      name="firstName" 
+                      icon={User} 
+                      placeholder="Enter first name" 
+                      value={formData.firstName} 
+                      onChange={(e) => handleFieldChange('firstName', e.target.value)} 
+                      required 
+                    />
+                    <Input 
+                      label="Last Name" 
+                      name="lastName" 
+                      icon={User} 
+                      placeholder="Enter last name" 
+                      value={formData.lastName} 
+                      onChange={(e) => handleFieldChange('lastName', e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Joining Date" 
+                      name="joiningDate" 
+                      type="date" 
+                      icon={Calendar} 
+                      value={formData.joiningDate} 
+                      onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
+                    />
+                    <Input 
+                      label="Experience (years)" 
+                      name="experience" 
+                      icon={Briefcase} 
+                      placeholder="e.g., 5" 
+                      value={formData.experience} 
+                      onChange={(e) => handleFieldChange('experience', e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Department Dropdown - Fetched from Backend with Lazy Loading */}
+                    <SearchableDropdownComponent
+                      label="Department"
+                      options={departmentOptions}
+                      value={formData.department}
+                      onChange={(value, label) => handleFieldChange('department', value)}
+                      placeholder={
+                        isLoadingSpecialities
+                          ? "Loading departments..."
+                          : "Search for a department..."
+                      }
+                      icon={Briefcase}
+                      required={true}
+                      isLoading={isLoadingSpecialities}
+                      getOptionLabel={(option) => option.name}
+                      getOptionValue={(option) => option.value}
+                      optionKey={(option) => option.id}
+                    />
+                    
+                    {/* Specialist Field - Optional */}
+                    <Input 
+                      label="Specialist" 
+                      name="specialist" 
+                      icon={IdCard} 
+                      placeholder="e.g., Cardiologist (Optional)" 
+                      value={formData.specialist} 
+                      onChange={(e) => handleFieldChange('specialist', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Assign Role - Dynamic dropdown */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assign Role <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <select
+                        name="roleId"
+                        value={formData.roleId}
+                        onChange={(e) => handleFieldChange('roleId', e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                      >
+                        <option value="">Select a role</option>
+                        {rolesList.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name || role.roleName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {formData.roleId && (
+                      <div className="mt-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                          {getRoleNameById(formData.roleId)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Qualification" 
+                      name="qualification" 
+                      icon={GraduationCap} 
+                      placeholder="e.g., MBBS, MD" 
+                      value={formData.qualification} 
+                      onChange={(e) => handleFieldChange('qualification', e.target.value)} 
+                      required 
+                    />
+                    <Input 
+                      label="Fees ($)" 
+                      name="fees" 
+                      type="number" 
+                      icon={DollarSign} 
+                      placeholder="0.00" 
+                      value={formData.fees} 
+                      onChange={(e) => handleFieldChange('fees', e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Phone Number" 
+                      name="phoneNumber" 
+                      icon={Phone} 
+                      placeholder="+1 234 567 8900" 
+                      value={formData.phoneNumber} 
+                      onChange={(e) => handleFieldChange('phoneNumber', e.target.value)} 
+                      required 
+                    />
+                    <Input 
+                      label="Email Address" 
+                      name="email" 
+                      type="email" 
+                      icon={Mail} 
+                      placeholder="doctor@example.com" 
+                      value={formData.email} 
+                      onChange={(e) => handleFieldChange('email', e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Date of Birth" 
+                      name="dob" 
+                      type="date" 
+                      icon={Calendar} 
+                      value={formData.dob} 
+                      onChange={(e) => handleFieldChange('dob', e.target.value)} 
+                      required 
+                    />
+                    <Select 
+                      label="Gender" 
+                      name="gender" 
+                      options={['Male', 'Female', 'Other']} 
+                      placeholder="Select Gender" 
+                      value={formData.gender} 
+                      onChange={(value) => handleFieldChange('gender', value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input 
+                      label="Registration Number" 
+                      name="registrationNumber" 
+                      icon={IdCard} 
+                      placeholder="Medical license number" 
+                      value={formData.registrationNumber} 
+                      onChange={(e) => handleFieldChange('registrationNumber', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Languages Multi-select */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Known Languages <span className="text-red-500">*</span>
+                    </label>
+                    
+                    {formData.knownLanguages.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formData.knownLanguages.map(lang => (
+                          <span key={lang} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                            {getLanguageLabel(lang)}
+                            <button type="button" onClick={() => removeLanguage(lang)} className="hover:text-blue-600">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                        className={`w-full px-3 py-2 text-left border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between`}
+                      >
+                        <span className={formData.knownLanguages.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
+                          {formData.knownLanguages.length === 0 ? 'Select languages' : `${formData.knownLanguages.length} language(s) selected`}
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      
+                      {isLanguageDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsLanguageDropdownOpen(false)} />
+                          <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                            {languageOptions.map(lang => (
+                              <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={formData.knownLanguages.includes(lang.value)}
+                                  onChange={() => handleLanguageSelect(lang.value)}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span className="ml-2 text-sm text-gray-700">{lang.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
-                  <div className="flex-1 w-full">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
-                    <div>
-                      <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
-                      <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2" disabled={isSubmitting}>
-                        <Upload className="h-4 w-4" /> Upload New Image
-                      </Button>
-                      <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
-                    </div>
-                    {isUploading && (
-                      <div className="mt-2">
-                        <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+
+                  <Textarea 
+                    label="About" 
+                    name="about" 
+                    rows={3} 
+                    placeholder="Write a brief description..." 
+                    value={formData.about} 
+                    onChange={(e) => handleFieldChange('about', e.target.value)} 
+                  />
+
+                  {/* Address Section */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
+                    <div className="space-y-5">
+                      <SearchableDropdownComponent
+                        label="Country"
+                        options={countries}
+                        value={formData.countryCode}
+                        onChange={handleCountryChange}
+                        placeholder="Search for a country..."
+                        icon={MapPin}
+                        required={true}
+                      />
+                      
+                      <SearchableDropdownComponent
+                        label="State"
+                        options={availableStates}
+                        value={formData.stateCode}
+                        onChange={handleStateChange}
+                        placeholder="Search for a state..."
+                        icon={MapPin}
+                        disabled={!formData.countryCode}
+                        required={true}
+                      />
+
+                      <SearchableDropdownComponent
+                        label="District"
+                        options={availableCities}
+                        value={formData.district}
+                        onChange={handleCityChange}
+                        placeholder="Search for a district..."
+                        icon={MapPin}
+                        disabled={!formData.stateCode}
+                        required={true}
+                        getOptionLabel={(option) => option.name}
+                        getOptionValue={(option) => option.name}
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <Input 
+                          label="Place" 
+                          name="place" 
+                          placeholder="Place/Locality" 
+                          value={formData.place} 
+                          onChange={(e) => handleFieldChange('place', e.target.value)} 
+                        />
+                        <Input 
+                          label="Pincode" 
+                          name="pincode" 
+                          placeholder="Postal code" 
+                          value={formData.pincode} 
+                          onChange={(e) => handleFieldChange('pincode', e.target.value)} 
+                        />
                       </div>
-                    )}
-                    {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                    </div>
+                  </div>
+
+                  {/* Account Details */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <Input 
+                        label="Display Name" 
+                        name="displayName" 
+                        icon={User} 
+                        placeholder="How name appears on profile" 
+                        value={formData.displayName} 
+                        onChange={(e) => handleFieldChange('displayName', e.target.value)} 
+                      />
+                      
+                      <div className="relative">
+                        <Input 
+                          label="New Password" 
+                          name="password" 
+                          type={showPassword ? "text" : "password"} 
+                          icon={Lock} 
+                          placeholder="Leave blank to keep current" 
+                          value={formData.password} 
+                          onChange={(e) => handleFieldChange('password', e.target.value)} 
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
+                          {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
+                      
+                      <div className="relative">
+                        <Input 
+                          label="Confirm New Password" 
+                          name="confirmPassword" 
+                          type={showConfirmPassword ? "text" : "password"} 
+                          icon={Lock} 
+                          placeholder="Confirm new password" 
+                          value={formData.confirmPassword} 
+                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)} 
+                        />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
+                          {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Toggle */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <StatusToggle 
+                      status={formData.isActive} 
+                      onToggle={toggleDoctorStatus}
+                      disabled={isSubmitting}
+                    />
                   </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">Doctor ID:</span>
-                    <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                      #{String(doctor?.id || doctorId).padStart(4, '0')}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="First Name" 
-                    name="firstName" 
-                    icon={User} 
-                    placeholder="Enter first name" 
-                    value={formData.firstName} 
-                    onChange={(e) => handleFieldChange('firstName', e.target.value)} 
-                    required 
-                  />
-                  <Input 
-                    label="Last Name" 
-                    name="lastName" 
-                    icon={User} 
-                    placeholder="Enter last name" 
-                    value={formData.lastName} 
-                    onChange={(e) => handleFieldChange('lastName', e.target.value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Joining Date" 
-                    name="joiningDate" 
-                    type="date" 
-                    icon={Calendar} 
-                    value={formData.joiningDate} 
-                    onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select 
-                    label="Department" 
-                    name="department" 
-                    options={['Cardiology', 'Neurology', 'Pediatrics', 'Orthopedics', 'Dermatology', 'Psychiatry', 'Radiology', 'Surgery', 'ENT']} 
-                    placeholder="Select Department" 
-                    value={formData.department} 
-                    onChange={(e) => handleFieldChange('department', e.target.value)} 
-                    required 
-                  />
-                  <Input 
-                    label="Specialist" 
-                    name="specialist" 
-                    icon={IdCard} 
-                    placeholder="e.g., Cardiologist" 
-                    value={formData.specialist} 
-                    onChange={(e) => handleFieldChange('specialist', e.target.value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Qualification" 
-                    name="qualification" 
-                    icon={GraduationCap} 
-                    placeholder="e.g., MBBS, MD, PhD, MS" 
-                    value={formData.qualification} 
-                    onChange={(e) => handleFieldChange('qualification', e.target.value)} 
-                    required 
-                  />
-                  <Input 
-                    label="Fees ($)" 
-                    name="fees" 
-                    type="number" 
-                    icon={DollarSign} 
-                    placeholder="0.00" 
-                    value={formData.fees} 
-                    onChange={(e) => handleFieldChange('fees', e.target.value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Phone Number" 
-                    name="phoneNumber" 
-                    icon={Phone} 
-                    placeholder="+1 234 567 8900" 
-                    value={formData.phoneNumber} 
-                    onChange={(e) => handleFieldChange('phoneNumber', e.target.value)} 
-                    required 
-                  />
-                  <Input 
-                    label="Email Address" 
-                    name="email" 
-                    type="email" 
-                    icon={Mail} 
-                    placeholder="doctor@example.com" 
-                    value={formData.email} 
-                    onChange={(e) => handleFieldChange('email', e.target.value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Date of Birth" 
-                    name="dob" 
-                    type="date" 
-                    icon={Calendar} 
-                    value={formData.dob} 
-                    onChange={(e) => handleFieldChange('dob', e.target.value)} 
-                    required 
-                  />
-                  <Select 
-                    label="Gender" 
-                    name="gender" 
-                    options={['Male', 'Female', 'Other']} 
-                    placeholder="Select Gender" 
-                    value={formData.gender} 
-                    onChange={(value) => handleFieldChange('gender', value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Registration Number" 
-                    name="registrationNumber" 
-                    icon={IdCard} 
-                    placeholder="Medical license number" 
-                    value={formData.registrationNumber} 
-                    onChange={(e) => handleFieldChange('registrationNumber', e.target.value)} 
-                  />
-                  <Input 
-                    label="Experience" 
-                    name="experience" 
-                    icon={Briefcase} 
-                    placeholder="e.g., 5 years" 
-                    value={formData.experience} 
-                    onChange={(e) => handleFieldChange('experience', e.target.value)} 
-                    required 
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Appointment Count (Optional)" 
-                    name="appointmentCount" 
-                    type="number" 
-                    icon={Users} 
-                    placeholder="Number of appointments handled" 
-                    value={formData.appointmentCount} 
-                    onChange={(e) => handleFieldChange('appointmentCount', e.target.value)} 
-                  />
-                </div>
-
-                {/* Languages Multi-select */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Known Languages <span className="text-red-500">*</span>
-                  </label>
+              {activeTab === 'professional' && (
+                <div className="p-6 space-y-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
                   
-                  {formData.knownLanguages.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {formData.knownLanguages.map(lang => (
-                        <span key={lang} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
-                          {getLanguageLabel(lang)}
-                          <button type="button" onClick={() => removeLanguage(lang)} className="hover:text-blue-600">
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="space-y-4">
+                    {weekDays.map((day) => (
+                      <DayScheduleRowComponent
+                        key={day.key}
+                        day={day.label}
+                        schedule={formData.weeklySchedule[day.key] || { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '17:00', eveningOpen: '', eveningClose: '' }}
+                        onUpdate={(newSchedule) => updateScheduleForDay(day.key, newSchedule)}
+                      />
+                    ))}
+                  </div>
+
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
+                    <Home className="h-5 w-5" /> Out Door Consulting
+                  </h3>
                   
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
-                      className={`w-full px-3 py-2 text-left border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between`}
-                    >
-                      <span className={formData.knownLanguages.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
-                        {formData.knownLanguages.length === 0 ? 'Select languages' : `${formData.knownLanguages.length} language(s) selected`}
-                      </span>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {isLanguageDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setIsLanguageDropdownOpen(false)} />
-                        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {languageOptions.map(lang => (
-                            <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={formData.knownLanguages.includes(lang.value)}
-                                onChange={() => handleLanguageSelect(lang.value)}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">{lang.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <Textarea 
-                  label="About" 
-                  name="about" 
-                  rows={3} 
-                  placeholder="Write a brief description about the doctor's experience..." 
-                  value={formData.about} 
-                  onChange={(e) => handleFieldChange('about', e.target.value)} 
-                />
-
-                {/* Address Section */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
-                  <div className="space-y-5">
-                    <SearchableDropdownComponent
-                      label="Country"
-                      options={countries}
-                      value={formData.countryCode}
-                      onChange={handleCountryChange}
-                      placeholder="Search for a country..."
-                      icon={MapPin}
-                      required={true}
-                    />
-                    
-                    <SearchableDropdownComponent
-                      label="State"
-                      options={availableStates}
-                      value={formData.stateCode}
-                      onChange={handleStateChange}
-                      placeholder="Search for a state..."
-                      icon={MapPin}
-                      disabled={!formData.countryCode}
-                      required={true}
-                    />
-
-                    <SearchableDropdownComponent
-                      label="District"
-                      options={availableCities}
-                      value={formData.district}
-                      onChange={handleCityChange}
-                      placeholder="Search for a district..."
-                      icon={MapPin}
-                      disabled={!formData.stateCode}
-                      required={true}
-                      getOptionLabel={(option) => option.name}
-                      getOptionValue={(option) => option.name}
-                    />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <Input 
-                        label="Place" 
-                        name="place" 
-                        placeholder="Place/Locality" 
-                        value={formData.place} 
-                        onChange={(e) => handleFieldChange('place', e.target.value)} 
-                      />
-                      <Input 
-                        label="Pincode" 
-                        name="pincode" 
-                        placeholder="Postal code" 
-                        value={formData.pincode} 
-                        onChange={(e) => handleFieldChange('pincode', e.target.value)} 
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Account Details */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Display Name" 
-                      name="displayName" 
-                      icon={User} 
-                      placeholder="How name appears on profile" 
-                      value={formData.displayName} 
-                      onChange={(e) => handleFieldChange('displayName', e.target.value)} 
-                    />
-                    
-                    <div className="relative">
-                      <Input 
-                        label="New Password" 
-                        name="password" 
-                        type={showPassword ? "text" : "password"} 
-                        icon={Lock} 
-                        placeholder="Leave blank to keep current" 
-                        value={formData.password} 
-                        onChange={(e) => handleFieldChange('password', e.target.value)} 
-                      />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                    
-                    <div className="relative">
-                      <Input 
-                        label="Confirm New Password" 
-                        name="confirmPassword" 
-                        type={showConfirmPassword ? "text" : "password"} 
-                        icon={Lock} 
-                        placeholder="Confirm new password" 
-                        value={formData.confirmPassword} 
-                        onChange={(e) => handleFieldChange('confirmPassword', e.target.value)} 
-                      />
-                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
-                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status Toggle - Placed at the end of Basic Info */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <StatusToggle 
-                    status={formData.isActive} 
-                    onToggle={toggleDoctorStatus}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'professional' && (
-              <div className="p-6 space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
-                
-                <div className="space-y-4">
-                  {weekDays.map((day) => (
-                    <DayScheduleRowComponent
-                      key={day.key}
-                      day={day.label}
-                      schedule={formData.weeklySchedule[day.key] || { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '17:00', eveningOpen: '', eveningClose: '' }}
-                      onUpdate={(newSchedule) => updateScheduleForDay(day.key, newSchedule)}
-                    />
-                  ))}
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Home className="h-5 w-5" /> Out Door Consulting
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input 
-                        label="Open Time" 
-                        name="outDoorConsultingOpen" 
-                        type="time" 
-                        value={formData.outDoorConsultingOpen} 
-                        onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)} 
-                      />
-                      <Input 
-                        label="Close Time" 
-                        name="outDoorConsultingClose" 
-                        type="time" 
-                        value={formData.outDoorConsultingClose} 
-                        onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)} 
-                      />
-                    </div>
-                  </div>
-                  <Input 
-                    label="Consulting Place" 
-                    name="outDoorConsultingPlace" 
-                    icon={MapPin} 
-                    placeholder="Enter consulting location" 
-                    value={formData.outDoorConsultingPlace} 
-                    onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)} 
-                  />
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
-                  <Video className="h-5 w-5" /> Booking Status
-                </h3>
-                
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Booking Availability</label>
-                      <p className="text-xs text-gray-500">Allow patients to book appointments with this doctor</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input 
+                          label="Open Time" 
+                          name="outDoorConsultingOpen" 
+                          type="time" 
+                          value={formData.outDoorConsultingOpen} 
+                          onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)} 
+                        />
+                        <Input 
+                          label="Close Time" 
+                          name="outDoorConsultingClose" 
+                          type="time" 
+                          value={formData.outDoorConsultingClose} 
+                          onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)} 
+                        />
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={toggleBookingStatus}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
+                    <Input 
+                      label="Consulting Place" 
+                      name="outDoorConsultingPlace" 
+                      icon={MapPin} 
+                      placeholder="Enter consulting location" 
+                      value={formData.outDoorConsultingPlace} 
+                      onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)} 
+                    />
                   </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    {formData.bookingOpen ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600"><CheckCircle className="h-3 w-3" /> Bookings Open</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle className="h-3 w-3" /> Bookings Closed</span>
-                    )}
+
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
+                    <Video className="h-5 w-5" /> Booking Status
+                  </h3>
+                  
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Booking Availability</label>
+                        <p className="text-xs text-gray-500">Allow patients to book appointments with this doctor</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleBookingStatus}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          formData.bookingOpen ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      {formData.bookingOpen ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-600"><CheckCircle className="h-3 w-3" /> Bookings Open</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle className="h-3 w-3" /> Bookings Closed</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
-              <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-              <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
-                {isSubmitting ? 'Updating...' : 'Update Doctor'}
-              </Button>
-            </div>
-          </Card>
-        </form>
+              <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+                <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
+                <Button type="submit" variant="primary" disabled={isSubmitting || isAssigning} loading={isSubmitting || isAssigning}>
+                  {isSubmitting || isAssigning ? 'Updating...' : 'Update Doctor'}
+                </Button>
+              </div>
+            </Card>
+          </form>
+        </div>
       </div>
-    </div>
+    </Suspense>
   );
 };
 

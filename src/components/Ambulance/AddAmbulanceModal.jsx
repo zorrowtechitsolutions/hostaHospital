@@ -97,37 +97,37 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
     
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
   const handleCountryChange = (code, name) => {
+    console.log("Country selected in modal:", { code, name });
     setCountryCode(code);
     setFormData(prev => ({
       ...prev,
       address: { ...prev.address, country: name, state: '', district: '', place: '', pincode: '' }
     }));
     setStateCode('');
-    // Clear related errors
     if (errors['address.country']) setErrors(prev => ({ ...prev, 'address.country': '' }));
     if (errors['address.state']) setErrors(prev => ({ ...prev, 'address.state': '' }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
   };
 
   const handleStateChange = (code, name) => {
+    console.log("State selected in modal:", { code, name });
     setStateCode(code);
     setFormData(prev => ({
       ...prev,
       address: { ...prev.address, state: name, district: '', place: '', pincode: '' }
     }));
-    // Clear related errors
     if (errors['address.state']) setErrors(prev => ({ ...prev, 'address.state': '' }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
   };
 
   const handleCityChange = (name) => {
+    console.log("City/District selected in modal:", name);
     setFormData(prev => ({
       ...prev,
       address: { ...prev.address, district: name, place: '', pincode: '' }
@@ -136,9 +136,9 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const validateForm = () => {
+    console.log("Validating form in modal...");
     const newErrors = {};
     
-    // Validate all fields
     const serviceNameError = validateServiceName(formData.serviceName);
     if (serviceNameError) newErrors.serviceName = serviceNameError;
     
@@ -158,7 +158,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
     
     setErrors(newErrors);
     
-    // Mark all fields as touched
     setTouched({
       serviceName: true,
       phone: true,
@@ -170,13 +169,19 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       'address.pincode': true
     });
     
+    console.log("Validation errors in modal:", newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
+    console.log("===== MODAL SUBMIT =====");
+    console.log("Current form data:", formData);
+    
     if (!validateForm()) {
-      // Scroll to first error
       const firstErrorField = Object.keys(errors)[0];
+      console.log("Validation failed. First error field:", firstErrorField);
+      console.log("All errors:", errors);
+      
       const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
       if (errorElement) {
         errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -185,10 +190,10 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       return;
     }
     
+    console.log("Form validation passed!");
     setIsSubmitting(true);
     
-    // Pass only the required backend fields (hospitalId is automatically added by API)
-    onSave({
+    const payload = {
       serviceName: formData.serviceName,
       phone: formData.phone,
       vehicleType: formData.vehicleType,
@@ -199,9 +204,20 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
         place: formData.address.place,
         pincode: Number(formData.address.pincode)
       }
-    });
+    };
+
+    console.log("===== FINAL PAYLOAD FROM MODAL =====");
+    console.log("Payload:", JSON.stringify(payload, null, 2));
+    console.log("Payload details:");
+    console.log("  - serviceName:", payload.serviceName);
+    console.log("  - phone:", payload.phone);
+    console.log("  - vehicleType:", payload.vehicleType);
+    console.log("  - address:", payload.address);
+    // console.log("  - event: AMBULANCE_REGISTERED (automatically added in API service)");
+    console.log("====================================");
     
-    // Reset form
+    onSave(payload);
+    
     setFormData({
       serviceName: '',
       address: { country: '', state: '', district: '', place: '', pincode: '' },
@@ -214,6 +230,8 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
     setTouched({});
     setIsSubmitting(false);
     onClose();
+    
+    console.log("Modal closed and form reset");
   };
 
   return (

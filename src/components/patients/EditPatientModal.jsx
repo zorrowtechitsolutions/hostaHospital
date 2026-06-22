@@ -123,15 +123,34 @@ const EditPatient = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   
+  // Convert id to number for API call
+  const numericId = id ? Number(id) : null;
+  
+  console.log("Route ID (param):", id);
+  console.log("Numeric ID:", numericId);
+  
   // Get user data from auth utility
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
   
-  // Fetch patient data
-  const { data: patientResponse, isLoading: isLoadingPatient, refetch } = useGetPatientByIdQuery(id);
+  // Fetch patient data - FIXED: convert id to number and add skip condition
+  const { 
+    data: patientResponse, 
+    isLoading: isLoadingPatient, 
+    refetch,
+    error: fetchError
+  } = useGetPatientByIdQuery(numericId, {
+    skip: !numericId
+  });
+  
   const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
   
-  const patient = patientResponse?.data;
+  // FIXED: Handle both response formats
+  const patient = patientResponse?.data || patientResponse || null;
+  
+  console.log("Patient Response:", patientResponse);
+  console.log("Extracted Patient:", patient);
+  console.log("Fetch Error:", fetchError);
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -174,6 +193,11 @@ const EditPatient = () => {
   // Load patient data into form
   useEffect(() => {
     if (patient) {
+      console.log("Loading patient data into form:", patient);
+      
+      // Find country code from country name
+      const country = countries.find(c => c.name === patient.location?.country);
+      
       setFormData({
         fullName: patient.name || '',
         bloodGroup: patient.bloodGroup || '',
@@ -187,7 +211,7 @@ const EditPatient = () => {
         guardianName: patient.guardianName || '',
         guardianRelation: patient.guardianRelation || '',
         addressLine: patient.addressLine || '',
-        countryCode: '',
+        countryCode: country?.isoCode || '',
         countryName: patient.location?.country || '',
         stateCode: '',
         stateName: patient.location?.state || '',
@@ -200,7 +224,7 @@ const EditPatient = () => {
       
       setOriginalPatientId(patient.id || patient._id);
     }
-  }, [patient]);
+  }, [patient, countries]);
 
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
@@ -433,16 +457,37 @@ const EditPatient = () => {
 
   const handleGoBack = () => navigate('/patients');
 
+  // Loading state
   if (isLoadingPatient) {
-    return <Loader centered text="Loading patient data..." />;
-  }
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader
+        centered
+        text="Loading patient data..."
+      />
+    </div>
+  );
+}
 
-  if (!patient) {
+  // Patient not found state - show proper message
+  if (!patient && !isLoadingPatient) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Patient not found</h2>
-          <Button onClick={handleGoBack}>Go Back</Button>
+          <div className="bg-white rounded-xl shadow-sm p-8">
+            <div className="w-20 h-20 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-10 h-10 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Patient not found</h2>
+            <p className="text-gray-500 mb-6">
+              The patient you're trying to edit doesn't exist or has been removed.
+              <br />
+              <span className="text-xs text-gray-400">Patient ID: {id}</span>
+            </p>
+            <Button onClick={handleGoBack} variant="primary">
+              Back to Patients
+            </Button>
+          </div>
         </div>
       </div>
     );

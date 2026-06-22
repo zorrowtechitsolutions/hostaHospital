@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx
+// src/components/patients/Patients.jsx - With Green Gradient Buttons
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -18,7 +18,8 @@ import {
   RefreshCcw,
   Upload,
   Trash2,
-  Filter
+  Filter,
+  Search
 } from 'lucide-react';
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
@@ -34,6 +35,9 @@ import {
 import { useGetPatientsQuery, useDeletePatientMutation } from '../../../app/service/patients';
 import { useCreateBookingMutation } from '../../../app/service/request';
 import { getAuthUser } from '../../utils/auth';
+import { showSuccessToast, showErrorToast } from '../ui/Toast';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getS3ImageUrl } from '../../../app/service/S3';
 
 const Patients = () => {
   const navigate = useNavigate();
@@ -44,7 +48,7 @@ const Patients = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
   const [patientType, setPatientType] = useState('outpatient');
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
   
   // Delete Modal State
@@ -69,31 +73,33 @@ const Patients = () => {
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
 
-  // API hooks
+  // API hooks WITH QUERY PARAMETERS - using server-side pagination
   const { 
     data: patientsResponse, 
     isLoading: isLoadingPatients,
-    refetch: refetchPatients
+    refetch: refetchPatients,
+    isFetching
   } = useGetPatientsQuery({
     hospitalId: hospitalId,
-    search: searchTerm || undefined,
+    search_query: searchTerm?.trim() || undefined,
     page: currentPage,
-    limit: itemsPerPage
+    limit: itemsPerPage,
+    ...(genderFilter && { gender: genderFilter }),
   });
 
   const [deletePatient] = useDeletePatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // Get patients array from response
-  const allPatients = patientsResponse?.data?.patients || patientsResponse?.data || [];
-  const totalPatients = patientsResponse?.data?.total || allPatients.length;
-  const totalPages = patientsResponse?.data?.totalPages || Math.ceil(totalPatients / itemsPerPage);
+  // Get patients array and pagination info from response
+  const allPatients = patientsResponse?.data || [];
+  const totalItems = patientsResponse?.pagination?.totalItems || 0;
+  const totalPages = patientsResponse?.pagination?.totalPages || 1;
 
   // Separate patients into outpatient and inpatient based on patientType
   const outpatientPatients = allPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
   const inpatientPatients = allPatients.filter(p => p.patientType === 'Inpatient');
 
-  // Get active patients based on tab
+  // Get active patients based on tab (client-side filtering for tabs)
   const getActivePatients = () => {
     if (activeTab === 'outpatient') return outpatientPatients;
     if (activeTab === 'inpatient') return inpatientPatients;
@@ -102,32 +108,21 @@ const Patients = () => {
 
   const activePatients = getActivePatients();
 
-  // Filter by gender and department
-  const getFilteredPatients = () => {
-    let patients = [...activePatients];
-    
-    if (genderFilter) {
-      patients = patients.filter(patient => 
-        patient.gender === genderFilter
-      );
-    }
-    
-    if (departmentFilter) {
-      patients = patients.filter(patient => 
-        patient.department === departmentFilter
-      );
-    }
-    
-    return patients;
-  };
+  // Apply local filters for gender and department (client-side filtering)
+  const filteredPatients = activePatients.filter(p => {
+    if (genderFilter && p.gender !== genderFilter) return false;
+    if (departmentFilter && p.department !== departmentFilter) return false;
+    return true;
+  });
 
-  const filteredPatients = getFilteredPatients();
-  const paginatedPatients = filteredPatients.slice(0, itemsPerPage);
+  // Use server-side totalPages for pagination
+  const totalFilteredItems = totalItems;
+  const totalFilteredPages = totalPages;
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter, dateFilter, genderFilter, activeTab]);
+  }, [searchTerm, genderFilter, departmentFilter, activeTab]);
 
   // Navigation handlers
   const handleViewDetails = (patient) => {
@@ -154,9 +149,10 @@ const Patients = () => {
         refetchPatients();
         setShowDeleteModal(false);
         setPatientToDelete(null);
+        showSuccessToast(`${patientToDelete.name} has been deleted successfully!`, 2000);
       } catch (error) {
         console.error('Error deleting patient:', error);
-        alert('Failed to delete patient. Please try again.');
+        showErrorToast('Failed to delete patient. Please try again.', 3000);
       }
     }
   };
@@ -169,6 +165,7 @@ const Patients = () => {
     setGenderFilter("");
     setCurrentPage(1);
     refetchPatients();
+    showSuccessToast("Refreshed patients", 2000);
   };
 
   const handleExport = () => {
@@ -192,6 +189,7 @@ const Patients = () => {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
+    showSuccessToast(`Exported ${exportData.length} patients`, 2000);
   };
 
   const handleImport = (event) => {
@@ -202,9 +200,10 @@ const Patients = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        alert(`Import functionality requires bulk create endpoint. Found ${importedData.length} records.`);
+        showSuccessToast(`Import functionality requires bulk create endpoint. Found ${importedData.length} records.`, 4000);
+        refetchPatients();
       } catch (error) {
-        alert('Error parsing JSON file. Please make sure it\'s a valid JSON file.');
+        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     
@@ -217,43 +216,85 @@ const Patients = () => {
     setShowAppointmentModal(true);
   };
 
-  // Handle proceed from AddAppointmentModal
   const handleProceedApprove = (data) => {
-    setBookingData(data);
+    const patientId = appointmentPatient?.id || appointmentPatient?._id;
+    
+    const updatedData = {
+      ...data,
+      patientId: patientId ? `#PT00${String(patientId)}` : null,
+    };
+
+    setBookingData(updatedData);
     setShowAppointmentModal(false);
     setShowApproveModal(true);
   };
 
-  // Handle confirm appointment - FINAL VERSION with correct payload (no userId/hospitalId)
- // Handle confirm appointment - ALTERNATIVE PAYLOAD VERSION
-const handleConfirmAppointment = async (approveData) => {
-  try {
-    const payload = {
-      userId: bookingData?.userId,
-      patient_name: bookingData?.patient_name,
-      patient_dob: bookingData?.patient_dob,
-      patient_place: bookingData?.patient_place,
-      patient_phone: bookingData?.patient_phone,
-      hospitalId: bookingData?.hospitalId,
-      doctorId: bookingData?.doctorId,
-      booking_date: approveData?.booking_date,
-      department: bookingData?.department,
-      displayName: bookingData?.displayName,
-      status: "accepted"
-    };
+  const formatDate = (date) => {
+    if (!date) return "";
+    const d = new Date(date);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
 
-    console.log("CREATE APPOINTMENT", payload);
+  const calculateAge = (dob) => {
+    if (!dob) return 0;
+    const birth = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    if (today.getMonth() < birth.getMonth() || 
+        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
-    await createBooking(payload).unwrap();
+  const handleConfirmAppointment = async (approveData) => {
+    try {
+      const payload = {
+        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
+        userId: Number(bookingData?.userId),
+        patient_name: bookingData?.patient_name,
+        patient_dob: formatDate(bookingData?.patient_dob),
+        patient_place: bookingData?.patient_place,
+        patient_phone: bookingData?.patient_phone,
+        patient_age: calculateAge(bookingData?.patient_dob),
+        patient_gender: bookingData?.patient_gender || appointmentPatient?.gender,
+        hospitalId: Number(bookingData?.hospitalId),
+        doctorId: Number(bookingData?.doctorId),
+        booking_date: formatDate(approveData?.booking_date),
+        department: bookingData?.department,
+        displayName: bookingData?.displayName,
+        consulting_time: approveData?.consulting_time,
+        token: approveData?.token ? parseInt(approveData.token) : null,
+        status: "accepted",
+        booking_status: "hospital booking"
+      };
 
-    setShowApproveModal(false);
-    setBookingData(null);
+      const response = await createBooking(payload).unwrap();
 
-    navigate("/appointments");
-  } catch (error) {
-    console.log("BOOKING ERROR", error);
-  }
-};
+      showSuccessToast(
+        "Appointment confirmed successfully!",
+        4000,
+        {
+          Patient: payload.patient_name,
+          Doctor: bookingData?.displayName,
+          Date: approveData.booking_date,
+          Time: approveData.consulting_time,
+          Token: response?.data?.token || payload.token
+        }
+      );
+
+      setShowApproveModal(false);
+      setBookingData(null);
+      setAppointmentPatient(null);
+      navigate("/appointments");
+    } catch (err) {
+      console.log("BOOKING ERROR:", err);
+      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
+    }
+  };
 
   const clearAllFilters = () => {
     setStatusFilter('all');
@@ -262,6 +303,8 @@ const handleConfirmAppointment = async (approveData) => {
     setGenderFilter('');
     setSearchTerm('');
     setActiveTab('all');
+    setCurrentPage(1);
+    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
@@ -281,14 +324,18 @@ const handleConfirmAppointment = async (approveData) => {
     return departments.sort();
   };
 
-  // Helper function to format date
-  const formatDate = (dateString) => {
+  const formatDisplayDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Row Action Menu Component for List View
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Row Action Menu Component
   const RowActionMenu = ({ patient }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -304,7 +351,7 @@ const handleConfirmAppointment = async (approveData) => {
     }, []);
 
     return (
-      <div className="relative" ref={menuRef}>
+      <div className="relative inline-block" ref={menuRef}>
         <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded hover:bg-gray-100 transition-colors">
           <MoreVertical size={18} />
         </button>
@@ -329,83 +376,6 @@ const handleConfirmAppointment = async (approveData) => {
     );
   };
 
-  // Patient Card Component for Grid View
-  const PatientCard = ({ patient }) => {
-    return (
-      <Card hover className="overflow-hidden cursor-pointer" onClick={() => handleViewDetails(patient)}>
-        <div className="p-5" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flexShrink: 0 }}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <User className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="default" className="text-xs font-mono">
-                      #PT00{patient.id || patient._id?.slice(-6)}
-                    </Badge>
-                    <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
-                      {patient.patientType || 'Outpatient'}
-                    </Badge>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
-                  <p className="text-xs text-gray-500">{patient.age || 'N/A'} years • {patient.gender || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Phone className="w-4 h-4" />
-                <span>Mobile</span>
-              </div>
-              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.mobileNumber}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Mail className="w-4 h-4" />
-                <span>Email</span>
-              </div>
-              <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.email || 'N/A'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Activity className="w-4 h-4" />
-                <span>Blood Group</span>
-              </div>
-              <span className="font-medium text-gray-900">{patient.bloodGroup || 'N/A'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Calendar className="w-4 h-4" />
-                <span>Created</span>
-              </div>
-              <span className="font-medium text-gray-900">{formatDate(patient.createdAt)}</span>
-            </div>
-          </div>
-          
-          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: '1rem' }}>
-            <div className="flex gap-2 border-t border-gray-100 pt-4">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAddAppointmentModal(patient);
-                }} 
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-              >
-                <Calendar className="w-4 h-4" /> 
-                Add Appointment
-              </button>
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
-  };
-
   const activeFilterCount = getActiveFilterCount();
 
   // Centered loader
@@ -422,11 +392,11 @@ const handleConfirmAppointment = async (approveData) => {
       {/* Breadcrumb Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="p-1">
+          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-          </Button>
+          </button>
           <div className="text-xs text-gray-500">
             <span className="text-gray-700">Patients</span>
             <span className="mx-1 text-gray-400">»</span>
@@ -448,7 +418,7 @@ const handleConfirmAppointment = async (approveData) => {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          All Patients ({allPatients.length})
+          All Patients ({totalItems})
         </button>
         <button
           onClick={() => setActiveTab('outpatient')}
@@ -474,26 +444,58 @@ const handleConfirmAppointment = async (approveData) => {
 
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex-1 max-w-md">
-          <SearchBar 
-            placeholder="Search by name, mobile..." 
-            value={searchTerm} 
-            onChange={setSearchTerm} 
-            onClear={() => setSearchTerm('')} 
-          />
+        <div className="flex flex-1 gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 max-w-sm">
+            <input
+              type="text"
+              placeholder="Search by name, mobile..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
+              <Search className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
+
         <div className="flex gap-2 flex-wrap items-center">
           <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button onClick={() => setViewMode('grid')} className={`p-2 ${viewMode === 'grid' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+            <button 
+              onClick={() => setViewMode('grid')} 
+              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+            >
               <LayoutGrid size={16} />
             </button>
-            <button onClick={() => setViewMode('list')} className={`p-2 ${viewMode === 'list' ? 'bg-[#1C62A0] text-white' : 'text-gray-400'}`}>
+            <button 
+              onClick={() => setViewMode('list')} 
+              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+            >
               <List size={16} />
             </button>
           </div>
 
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
-            <RefreshCcw size={16} />
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            title="Refresh" 
+            disabled={isFetching}
+          >
+            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
@@ -501,7 +503,11 @@ const handleConfirmAppointment = async (approveData) => {
             <Upload size={16} />
           </label>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export Patients">
+          <button 
+            onClick={handleExport} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            title="Export Patients"
+          >
             <Download size={16} />
           </button>
 
@@ -520,7 +526,10 @@ const handleConfirmAppointment = async (approveData) => {
             )}
           </button>
 
-          <Button onClick={handleAddPatient} className="flex items-center gap-2">
+          <Button 
+            onClick={handleAddPatient} 
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
             <Plus size={16} /> New Patient
           </Button>
         </div>
@@ -548,10 +557,13 @@ const handleConfirmAppointment = async (approveData) => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <select
               value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
+              onChange={(e) => {
+                setGenderFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="">All Genders</option>
@@ -562,7 +574,10 @@ const handleConfirmAppointment = async (approveData) => {
 
             <select
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
+              onChange={(e) => {
+                setDepartmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="">All Departments</option>
@@ -579,23 +594,97 @@ const handleConfirmAppointment = async (approveData) => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
-          <p className="text-gray-500">Try adjusting your search or filter criteria</p>
         </div>
       ) : viewMode === 'grid' ? (
+        /* GRID VIEW */
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedPatients.map((patient) => (
-              <PatientCard key={patient.id || patient._id} patient={patient} />
+            {allPatients.map((patient) => (
+              <div key={patient.id || patient._id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden cursor-pointer" onClick={() => handleViewDetails(patient)}>
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage 
+                          src={getS3ImageUrl(patient.imageKey)} 
+                          alt={patient.name}
+                          className="object-cover"
+                        />
+                        <AvatarFallback className="bg-blue-100 text-blue-600 text-base font-medium">
+                          {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="default" className="text-xs font-mono">
+                            #PT00{patient.id || patient._id?.slice(-6)}
+                          </Badge>
+                          <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
+                            {patient.patientType || 'Outpatient'}
+                          </Badge>
+                        </div>
+                        <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
+                        <p className="text-xs text-gray-500">{patient.age || 'N/A'} years • {patient.gender || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Phone className="w-4 h-4" />
+                        <span>Mobile</span>
+                      </div>
+                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.mobileNumber}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Mail className="w-4 h-4" />
+                        <span>Email</span>
+                      </div>
+                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Activity className="w-4 h-4" />
+                        <span>Blood Group</span>
+                      </div>
+                      <span className="font-medium text-gray-900">{patient.bloodGroup || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Calendar className="w-4 h-4" />
+                        <span>Created</span>
+                      </div>
+                      <span className="font-medium text-gray-900">{formatDisplayDate(patient.createdAt)}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 border-t border-gray-100 pt-4">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddAppointmentModal(patient);
+                      }} 
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                    >
+                      <Calendar className="w-4 h-4" /> 
+                      Add Appointment
+                    </button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
-          
-          {totalPages > 1 && (
-            <div className="mt-6">
+
+          {/* Pagination for Grid View - Using server-side totalPages */}
+          {totalFilteredPages > 1 && (
+            <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalPatients}
+                totalPages={totalFilteredPages}
+                onPageChange={handlePageChange}
+                totalItems={totalFilteredItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
                 variant="centered"
@@ -604,75 +693,90 @@ const handleConfirmAppointment = async (approveData) => {
           )}
         </>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+        /* LIST VIEW - WITH STICKY PAGINATION using server-side totalPages */
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Patients
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredPatients.length}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {totalFilteredItems}
+              </span>
             </h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-6 py-3">Patient ID</th>
-                  <th className="px-6 py-3">Patient Name</th>
-                  <th className="px-6 py-3">Gender</th>
-                  <th className="px-6 py-3">Mobile Number</th>
-                  <th className="px-6 py-3">Blood Group</th>
-                  <th className="px-6 py-3">Type</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedPatients.map((patient) => (
-                  <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
-                    <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                      #PT00{patient.id || patient._id?.slice(-6)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="w-4 h-4 text-blue-600" />
-                        </div>
-                        <span 
-                          onClick={() => handleViewDetails(patient)} 
-                          className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
-                        >
-                          {patient.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
-                    <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
-                    <td className="px-6 py-4">
-                      <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
-                        {patient.patientType || 'Outpatient'}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <RowActionMenu patient={patient} />
-                    </td>
+          {/* Flex container that expands to fill available space */}
+          <div className="flex flex-col min-h-[500px]">
+            {/* Table area - grows to take available space */}
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Patient ID</th>
+                    <th className="px-6 py-3">Patient Name</th>
+                    <th className="px-6 py-3">Gender</th>
+                    <th className="px-6 py-3">Mobile Number</th>
+                    <th className="px-6 py-3">Blood Group</th>
+                    <th className="px-6 py-3">Type</th>
+                    <th className="px-6 py-3 text-right w-16">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {allPatients.map((patient) => (
+                    <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                        #PT00{patient.id || patient._id?.slice(-6)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage 
+                              src={getS3ImageUrl(patient.imageKey)} 
+                              alt={patient.name}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                              {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span 
+                            onClick={() => handleViewDetails(patient)} 
+                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                          >
+                            {patient.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
+                      <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
+                      <td className="px-6 py-4">
+                        <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
+                          {patient.patientType || 'Outpatient'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end">
+                          <RowActionMenu patient={patient} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {filteredPatients.length > 0 && totalPages > 1 && (
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+            {/* Pagination - Sticks to bottom using mt-auto with server-side totalPages */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalPatients}
+                totalPages={totalFilteredPages}
+                onPageChange={handlePageChange}
+                totalItems={totalFilteredItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
               />
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -683,16 +787,16 @@ const handleConfirmAppointment = async (approveData) => {
           patient={appointmentPatient}
           onClose={() => {
             setShowAppointmentModal(false);
-            setAppointmentPatient(null);
           }}
           onProceedApprove={handleProceedApprove}
         />
       )}
 
-      {/* Approve Request Modal - No bookingId prop needed */}
+      {/* Approve Request Modal */}
       {showApproveModal && bookingData && (
         <ApproveRequestModal
           requestData={bookingData}
+          initialDate={bookingData?.booking_date}
           onClose={() => {
             setShowApproveModal(false);
             setBookingData(null);

@@ -1,4 +1,4 @@
-// src/components/visits/Visits.jsx - Added Status Filter with S3 Support
+// src/components/visits/Visits.jsx - With Green Gradient Buttons
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -62,28 +62,35 @@ const Visits = () => {
   const [editingVisit, setEditingVisit] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
-  // API Hooks - hospitalId is automatically injected by the API service
+  // API Hooks - With server-side pagination parameters
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching 
   } = useGetBookingsQuery({
-    status: "accepted" // Only fetch approved appointments
+    status: "accepted",
+    page: currentPage,
+    limit: itemsPerPage,
+    ...(searchTerm && { search_query: searchTerm }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter })
   });
 
   // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
 
-  // Clean mapping - ONLY approved fields with proper API response handling
-  const visitsData = useMemo(() => {
-    // FIX: Properly extract booking list from response
+  // Use server-side pagination values from API response
+  const totalItems = bookingsResponse?.pagination?.totalItems || 0;
+  const totalPages = bookingsResponse?.pagination?.totalPages || 1;
+
+  // Clean mapping - Backend already sends only accepted bookings
+  const allVisitsData = useMemo(() => {
     const bookingList =
       Array.isArray(bookingsResponse)
         ? bookingsResponse
@@ -92,19 +99,18 @@ const Visits = () => {
           bookingsResponse?.result ||
           [];
 
-    console.log("BOOKINGS RESPONSE:", bookingsResponse);
-    console.log("BOOKING LIST:", bookingList);
-
-    // Filter only accepted bookings (already filtered by API, but double-check)
-    const acceptedBookings = bookingList.filter(
-      (booking) => booking.status?.toLowerCase() === "accepted"
-    );
-
-    console.log("ACCEPTED BOOKINGS:", acceptedBookings);
+    const acceptedBookings = bookingList;
 
     return acceptedBookings.map((booking, index) => {
-      // Get patient image key - check multiple possible fields
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+      
+      const tokenValue = 
+        booking.token ||
+        booking.appointment_token ||
+        booking.booking_token ||
+        booking.appointmentToken ||
+        booking.approveData?.token ||
+        "N/A";
       
       return {
         id: booking.id || booking._id,
@@ -115,12 +121,7 @@ const Visits = () => {
         department: booking.doctor_department || booking.department || "General",
         visitDate: booking.booking_date || booking.date || "",
         startTime: booking.consulting_time || booking.time || "",
-        token: booking.token ?? booking.appointment_token ?? "N/A",
-        status: booking.consultation_status === "completed"
-          ? "Complete"
-          : booking.consultation_status === "ongoing"
-          ? "In Progress"
-          : "Pending",
+        token: Number(tokenValue || ""),
         patientImageKey: patientImageKey,
         patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
         originalBooking: booking
@@ -128,77 +129,14 @@ const Visits = () => {
     });
   }, [bookingsResponse]);
 
-  // Recent approved visits (first 3 from the list)
-  const recentVisits = useMemo(() => {
-    return visitsData.slice(0, 3).map(visit => ({
-      id: visit.id,
-      patientName: visit.patientName,
-      patientId: visit.patientId,
-      patientImageKey: visit.patientImageKey,
-      patientAvatar: visit.patientAvatar,
-      visitDate: visit.visitDate,
-      startTime: visit.startTime,
-      doctorName: visit.doctorName,
-      department: visit.department,
-      token: visit.token,
-      status: visit.status
-    }));
-  }, [visitsData]);
-
-  // Get unique departments from visits data
-  const getAllDepartments = () => {
-    return [...new Set(visitsData.map(v => v.department).filter(Boolean))].sort();
-  };
-
-  // Get unique statuses from visits data
-  const getAllStatuses = () => {
-    return [...new Set(visitsData.map(v => v.status).filter(Boolean))].sort();
-  };
-
-  const getFilteredVisits = () => {
-    let filtered = [...visitsData];
-    
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(visit => 
-        visit.visitId?.toLowerCase().includes(term) ||
-        visit.patientId?.toLowerCase().includes(term) ||
-        visit.patientName?.toLowerCase().includes(term) ||
-        visit.doctorName?.toLowerCase().includes(term) ||
-        visit.department?.toLowerCase().includes(term) ||
-        visit.token?.toLowerCase().includes(term)
-      );
-    }
-    
-    if (departmentFilter) {
-      filtered = filtered.filter(visit => visit.department === departmentFilter);
-    }
-    
-    if (statusFilter) {
-      filtered = filtered.filter(visit => visit.status === statusFilter);
-    }
-    
-    if (dateFilter) {
-      filtered = filtered.filter(visit => visit.visitDate === dateFilter);
-    }
-    
-    return filtered;
-  };
-
-  const filteredVisits = getFilteredVisits();
-  const totalPages = Math.ceil(filteredVisits.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedVisits = filteredVisits.slice(startIndex, startIndex + itemsPerPage);
-
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, statusFilter, dateFilter]);
+  }, [searchTerm, departmentFilter, dateFilter]);
 
   const handleRefresh = () => { 
     setSearchTerm(""); 
     setDepartmentFilter(""); 
-    setStatusFilter("");
     setDateFilter("");
     setCurrentPage(1); 
     refetch(); 
@@ -206,7 +144,7 @@ const Visits = () => {
   };
   
   const handleExport = () => {
-    const exportData = getFilteredVisits().map(visit => ({ 
+    const exportData = allVisitsData.map(visit => ({ 
       'Visit ID': visit.visitId,
       'Patient ID': visit.patientId,
       'Patient Name': visit.patientName,
@@ -214,8 +152,7 @@ const Visits = () => {
       'Department': visit.department,
       'Date': formatDate(visit.visitDate),
       'Time': visit.startTime,
-      'Token': visit.token,
-      'Status': visit.status
+      'Token': visit.token
     }));
     
     const link = document.createElement('a');
@@ -245,14 +182,14 @@ const Visits = () => {
   
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
-    setStatusFilter('');
     setDateFilter('');
     setSearchTerm('');
+    setCurrentPage(1);
     showSuccessToast("All filters cleared", 2000);
   };
   
   const getActiveFilterCount = () => {
-    return (departmentFilter ? 1 : 0) + (statusFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
+    return (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
 
   const handleViewDetails = (visit) => { 
@@ -318,6 +255,7 @@ const Visits = () => {
       
       setShowDeleteModal(false);
       setVisitToDelete(null);
+      refetch();
       
     } catch (error) {
       console.error('Delete error:', error);
@@ -367,14 +305,18 @@ const Visits = () => {
             <label className="block text-xs font-medium text-gray-500">Token Number</label>
             <p className="text-sm font-mono font-bold text-blue-600">#{visit.token || 'N/A'}</p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500">Status</label>
-            <Badge variant="success">{visit.status}</Badge>
-          </div>
         </div>
         <div className="flex gap-2 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
-          <Button variant="success" onClick={() => { handleStartVisit(visit); onClose(); }} fullWidth icon={PlayCircle}>Start Visit</Button>
+          <Button 
+            variant="success" 
+            onClick={() => { handleStartVisit(visit); onClose(); }} 
+            fullWidth 
+            icon={PlayCircle}
+            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
+            Start Visit
+          </Button>
         </div>
       </Modal>
     );
@@ -393,7 +335,7 @@ const Visits = () => {
     }, []);
     
     return (
-      <div className="relative" ref={menuRef}>
+      <div className="relative inline-block" ref={menuRef}>
         <Button variant="ghost" size="sm" onClick={() => setShowMenu(!showMenu)} className="p-2">
           <MoreVertical size={18} />
         </Button>
@@ -425,6 +367,32 @@ const Visits = () => {
   };
 
   const activeFilterCount = getActiveFilterCount();
+
+  // Recent visits from API data (already paginated)
+  const recentVisits = useMemo(() => {
+    return allVisitsData.slice(0, 3).map(visit => ({
+      id: visit.id,
+      patientName: visit.patientName,
+      patientId: visit.patientId,
+      patientImageKey: visit.patientImageKey,
+      patientAvatar: visit.patientAvatar,
+      visitDate: visit.visitDate,
+      startTime: visit.startTime,
+      doctorName: visit.doctorName,
+      department: visit.department,
+      token: visit.token
+    }));
+  }, [allVisitsData]);
+
+  // Get unique departments from visits data for filter dropdown
+  const getAllDepartments = () => {
+    return [...new Set(allVisitsData.map(v => v.department).filter(Boolean))].sort();
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Skeleton Loader Component
   const SkeletonLoader = () => (
@@ -475,7 +443,7 @@ const Visits = () => {
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-16 border-b border-gray-100">
             <div className="flex items-center px-6 py-4">
-              {[1, 2, 3, 4, 5, 6, 7].map((j) => (
+              {[1, 2, 3, 4, 5, 6].map((j) => (
                 <div key={j} className="flex-1">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </div>
@@ -496,11 +464,11 @@ const Visits = () => {
       {/* Breadcrumb Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="p-1">
+          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-          </Button>
+          </button>
           <div className="text-xs text-gray-500">
             <span className="text-gray-700">Visits</span>
             <span className="mx-1 text-gray-400">»</span>
@@ -517,25 +485,50 @@ const Visits = () => {
 
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex-1 max-w-md">
-          <SearchBar 
-            placeholder="Search by Visit ID, Patient ID, Patient Name, Doctor, Token..." 
-            value={searchTerm} 
-            onChange={setSearchTerm} 
-            onClear={() => setSearchTerm('')} 
-          />
+        <div className="flex flex-1 gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 max-w-sm">
+            <input
+              type="text"
+              placeholder="Search by Visit ID, Patient Name, Doctor, Token..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
+              <Search className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
+
         <div className="flex gap-2 flex-wrap items-center">
-          <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            disabled={isFetching}
+          >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
-          </Button>
+          </button>
           <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
           <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
             <Upload size={16} />
           </label>
-          <Button variant="outline" size="sm" onClick={handleExport} title="Export">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
             <Download size={16} />
-          </Button>
+          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -575,7 +568,7 @@ const Visits = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <select 
               value={departmentFilter} 
               onChange={(e) => setDepartmentFilter(e.target.value)} 
@@ -584,17 +577,6 @@ const Visits = () => {
               <option value="">All Departments</option>
               {getAllDepartments().map((dept) => (
                 <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-
-            <select 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)} 
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="">All Status</option>
-              {getAllStatuses().map((status) => (
-                <option key={status} value={status}>{status}</option>
               ))}
             </select>
 
@@ -614,7 +596,7 @@ const Visits = () => {
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Visits</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {recentVisits.map((visit) => (
-              <Card key={visit.id} hover className="overflow-hidden">
+              <div key={visit.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
                     <ShadcnAvatar className="w-12 h-12">
@@ -644,124 +626,111 @@ const Visits = () => {
                         {formatDateTime(visit.visitDate, visit.startTime)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-500">Status</span>
-                      <Badge variant="success">{visit.status}</Badge>
-                    </div>
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                     <span className="text-sm font-medium text-gray-600">{visit.department}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <button 
                       onClick={() => {
-                        const fullVisit = visitsData.find(v => v.id === visit.id);
+                        const fullVisit = allVisitsData.find(v => v.id === visit.id);
                         if (fullVisit) handleStartVisit(fullVisit);
                       }} 
-                      className="text-sm text-blue-600"
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Start Visit →
-                    </Button>
+                    </button>
                   </div>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Visits Table */}
-      {filteredVisits.length === 0 ? (
+      {/* Visits Table - WITH STICKY PAGINATION USING SERVER-SIDE TOTALPAGES */}
+      {allVisitsData.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No visits found</h3>
-          <p className="text-gray-500 mb-4">
-            {visitsData.length === 0 
-              ? "No approved appointments yet. Approved requests will appear here." 
-              : "Try adjusting your search or filter criteria"}
-          </p>
-          {(activeFilterCount > 0 || searchTerm) && (
-            <Button onClick={clearAllFilters}>Clear All Filters</Button>
-          )}
+          <p className="text-gray-500">No approved appointments yet. Approved requests will appear here.</p>
         </div>
       ) : (
-        <Card>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Visits 
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredVisits.length}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
             </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-6 py-3">Visit ID</th>
-                  <th className="px-6 py-3">Patient</th>
-                  <th className="px-6 py-3">Doctor</th>
-                  <th className="px-6 py-3">Department</th>
-                  <th className="px-6 py-3">Date & Time</th>
-                  <th className="px-6 py-3">Token</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedVisits.map((visit, index) => (
-                  <tr key={visit.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                    <td className="px-6 py-4 text-[#1C62A0] font-medium">{visit.visitId}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <ShadcnAvatar className="w-8 h-8">
-                          <AvatarImage 
-                            src={getS3ImageUrl(visit.patientImageKey)} 
-                            alt={visit.patientName}
-                            className="object-cover"
-                          />
-                          <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                            {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
-                          </AvatarFallback>
-                        </ShadcnAvatar>
-                        <div>
-                          <span className="font-medium text-gray-800">{visit.patientName}</span>
-                          <p className="text-xs text-gray-400">{visit.patientId}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{visit.doctorName}</td>
-                    <td className="px-6 py-4 text-gray-600">{visit.department}</td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {formatDateTime(visit.visitDate, visit.startTime)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700">
-                        #{visit.token || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge variant="success">{visit.status}</Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <RowActionMenu visit={visit} />
-                    </td>
+
+          {/* Flex container that expands to fill available space */}
+          <div className="flex flex-col min-h-[500px]">
+            {/* Table area - grows to take available space */}
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Visit ID</th>
+                    <th className="px-6 py-3">Patient</th>
+                    <th className="px-6 py-3">Doctor</th>
+                    <th className="px-6 py-3">Department</th>
+                    <th className="px-6 py-3">Date & Time</th>
+                    <th className="px-6 py-3">Token</th>
+                    <th className="px-6 py-3 text-right w-16">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {allVisitsData.map((visit, index) => (
+                    <tr key={visit.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{visit.visitId}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <ShadcnAvatar className="w-8 h-8">
+                            <AvatarImage 
+                              src={getS3ImageUrl(visit.patientImageKey)} 
+                              alt={visit.patientName}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                              {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
+                            </AvatarFallback>
+                          </ShadcnAvatar>
+                          <span className="font-medium text-gray-800">{visit.patientName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{visit.doctorName}</td>
+                      <td className="px-6 py-4 text-gray-600">{visit.department}</td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {formatDateTime(visit.visitDate, visit.startTime)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700">
+                          #{visit.token || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end">
+                          <RowActionMenu visit={visit} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination - Sticks to bottom using mt-auto with server-side totalPages */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.max(1, totalPages)}
+                onPageChange={handlePageChange}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="visits"
+              />
+            </div>
           </div>
-          
-          {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
-          <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              totalItems={filteredVisits.length}
-              itemsPerPage={itemsPerPage}
-              itemLabel="approved visits"
-            />
-          </div>
-        </Card>
+        </div>
       )}
 
       {/* Modals */}
@@ -778,7 +747,7 @@ const Visits = () => {
         itemName={visitToDelete?.visitId} 
         isDeleting={isDeleting}
       />
-    </div>
+    </div> 
   );
 };
 

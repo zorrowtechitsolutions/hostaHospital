@@ -1,57 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, Trash2, CheckCheck, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import {
+  useGetNotificationsByHospitalQuery,
+  useMarkAllNotificationsAsReadByHospitalMutation,
+  useDeleteNotificationMutation,
+} from '../../app/service/notification';
+import { getHospitalId, getUserRole } from '../utils/auth';
+import { showSuccessToast, showErrorToast } from '../components/ui/Toast';
 
 const NotificationPanel = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedNotificationId, setSelectedNotificationId] = useState(null);
-  const [notifications, setNotifications] = useState([
-    { 
-      id: 1, 
-      title: 'John Doe added new patient appointment booking', 
-      time: '4 min ago', 
-      read: false,
-      type: 'booking'
-    },
-    { 
-      id: 2, 
-      title: 'Thomas William booked a new appointment.', 
-      time: '15 min ago', 
-      read: false,
-      type: 'booking'
-    },
-    { 
-      id: 3, 
-      title: 'Sarah Anderson has been successfully booked for April 5 at 10:00 AM.', 
-      time: '45 Min Ago', 
-      read: true,
-      type: 'booking'
-    },
-    { 
-      id: 4, 
-      title: 'Ann McClure cancelled her appointment scheduled for February 5, 2024', 
-      time: '58 Min Ago', 
-      read: true,
-      type: 'cancellation'
-    },
-  ]);
+  
+  const hospitalId = getHospitalId();
+  const userRole = getUserRole();
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const { 
+    data: notificationsData, 
+    isLoading, 
+    error,
+    refetch 
+  } = useGetNotificationsByHospitalQuery({
+    hospitalId: hospitalId,
+  }, {
+    skip: !hospitalId || !isOpen,
+  });
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
+  const [markAllAsRead] = useMarkAllNotificationsAsReadByHospitalMutation();
+  const [deleteNotification] = useDeleteNotificationMutation();
+
+  const notifications = notificationsData?.data || [];
+  
+  const unreadCount = notifications.filter(
+    n => !n.hospitalReadStatus?.[hospitalId]
+  ).length;
+
+  // Mark all notifications as read
+  const handleMarkAllAsRead = async () => {
+    try {
+      if (!hospitalId) return;
+
+      const notificationIds = notifications.map(
+        notification => notification.id
+      );
+
+      if (!notificationIds.length) return;
+
+      await markAllAsRead({
+        hospitalId: Number(hospitalId),
+        notificationIds,
+      }).unwrap();
+
+      await refetch();
+
+      showSuccessToast("All notifications marked as read");
+    } catch (error) {
+      showErrorToast("Failed to mark all as read");
+    }
   };
 
+  // Delete notification
   const handleDeleteClick = (id) => {
     setSelectedNotificationId(id);
     setShowDeleteConfirm(true);
   };
 
-  const confirmDelete = () => {
-    setNotifications(prev => prev.filter(notif => notif.id !== selectedNotificationId));
-    setShowDeleteConfirm(false);
-    setSelectedNotificationId(null);
+  const confirmDelete = async () => {
+    try {
+      await deleteNotification(selectedNotificationId).unwrap();
+      await refetch();
+      showSuccessToast('Notification deleted successfully');
+      setShowDeleteConfirm(false);
+      setSelectedNotificationId(null);
+    } catch (error) {
+      showErrorToast('Failed to delete notification');
+    }
   };
 
   const cancelDelete = () => {
@@ -59,15 +85,33 @@ const NotificationPanel = ({ isOpen, onClose }) => {
     setSelectedNotificationId(null);
   };
 
-  const markAsRead = (id) => {
-    setNotifications(prev => prev.map(notif => 
-      notif.id === id ? { ...notif, read: true } : notif
-    ));
-  };
-
   const handleViewAll = () => {
     onClose();
     navigate('/notifications');
+  };
+
+  // Format time
+  const formatTime = (dateString) => {
+    if (!dateString) return '';
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch {
+      return '';
+    }
+  };
+
+  // Get notification type color/label
+  const getNotificationType = (type) => {
+    switch (type) {
+      case 'success':
+        return { label: 'Success', className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' };
+      case 'warning':
+        return { label: 'Warning', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' };
+      case 'error':
+        return { label: 'Error', className: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' };
+      default:
+        return { label: 'Info', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' };
+    }
   };
 
   if (!isOpen) return null;
@@ -80,16 +124,20 @@ const NotificationPanel = ({ isOpen, onClose }) => {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Notifications</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Stay updated with latest activities</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
+              </p>
             </div>
             <div className="flex items-center gap-3">
-              <button 
-                onClick={markAllAsRead}
-                className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 transition-colors"
-              >
-                <CheckCheck size={14} />
-                Mark all as read
-              </button>
+              {unreadCount > 0 && (
+                <button 
+                  onClick={handleMarkAllAsRead}
+                  className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 transition-colors"
+                >
+                  <CheckCheck size={14} />
+                  Mark all as read
+                </button>
+              )}
               <button onClick={onClose} className="lg:hidden p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                 <X size={18} className="text-gray-500 dark:text-gray-400" />
               </button>
@@ -99,50 +147,76 @@ const NotificationPanel = ({ isOpen, onClose }) => {
 
         {/* Notifications List */}
         <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
-          {notifications.length === 0 ? (
+          {isLoading ? (
+            <div className="px-5 py-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-3"></div>
+              <p className="text-gray-500 dark:text-gray-400">Loading notifications...</p>
+            </div>
+          ) : error ? (
+            <div className="px-5 py-8 text-center">
+              <p className="text-red-500 dark:text-red-400">Error loading notifications</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {error?.data?.message || error?.message || 'Please try again'}
+              </p>
+              <button 
+                onClick={() => refetch()}
+                className="mt-2 text-sm text-purple-600 hover:text-purple-700"
+              >
+                Try again
+              </button>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="px-5 py-8 text-center">
               <Bell size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-gray-500 dark:text-gray-400">No notifications</p>
             </div>
           ) : (
-            notifications.map((notif) => (
-              <div 
-                key={notif.id} 
-                className={`group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 ${
-                  !notif.read ? 'bg-purple-50/50 dark:bg-purple-900/10' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3 cursor-pointer" onClick={() => markAsRead(notif.id)}>
-                  {/* Unread indicator */}
-                  {!notif.read && (
-                    <div className="w-2 h-2 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0"></div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!notif.read ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {notif.title}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-xs text-gray-400 dark:text-gray-500">{notif.time}</span>
-                      {notif.type === 'cancellation' && (
-                        <span className="text-xs px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded">
-                          Cancelled
+            notifications.map((notif) => {
+              const typeInfo = getNotificationType(notif.type);
+              const isUnread = !notif.hospitalReadStatus?.[hospitalId];
+              
+              return (
+                <div 
+                  key={notif.id} 
+                  className={`group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 ${
+                    isUnread ? 'bg-purple-50' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Unread indicator */}
+                    {isUnread && (
+                      <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0"></div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${isUnread ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
+                        {notif.title}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                        {notif.message}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {formatTime(notif.createdAt)}
                         </span>
-                      )}
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${typeInfo.className}`}>
+                          {typeInfo.label}
+                        </span>
+                      </div>
                     </div>
+                    {/* Delete button */}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(notif.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                    >
+                      <Trash2 size={14} className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400" />
+                    </button>
                   </div>
-                  {/* Delete button */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteClick(notif.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                  >
-                    <Trash2 size={14} className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400" />
-                  </button>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -1,6 +1,7 @@
+// src/components/patients/PatientDetails.jsx - With Lab Results Tab
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon } from "lucide-react";
+import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon, Beaker } from "lucide-react";
 import EditAppointmentModal from "./EditAppointmentModal";
 import EditVisitHistory from "./EditVisitHistoryModal";
 import DeleteModal from "./DeleteModel";
@@ -13,6 +14,7 @@ import VisitHistoryTab from "./tabs/VisitHistoryTab";
 import PrescriptionTab from "./tabs/PrescriptionTab";
 import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
 import DocumentsTab from "./tabs/DocumentsTab";
+import LabResultsTab from "./tabs/LabResultsTab";
 
 // Import Modals
 import AppointmentDetailsModal from "./modals/AppointmentDetailsModal";
@@ -110,7 +112,7 @@ const PatientDetails = () => {
         id: booking.id || booking._id || index,
         doctorName: booking.displayName || booking.doctor_name || "N/A",
         doctor: booking.displayName || booking.doctor_name || "N/A",
-        department: booking.department || "N/A",
+        department: booking.department || booking.doctor_department || "N/A",
         appointmentDate: booking.booking_date,
         date: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : "N/A",
         time: booking.consulting_time || "N/A",
@@ -166,6 +168,8 @@ const PatientDetails = () => {
   // Combined patient state - initialized with empty values
   const [patient, setPatient] = useState({
     id: '',
+    hospitalId: '',  // ✅ ADDED - FIXES THE S3 UPLOAD ISSUE
+    userId: '',      // ✅ ADDED - FIXES THE S3 UPLOAD ISSUE
     name: '',
     gender: '',
     phone: '',
@@ -192,16 +196,19 @@ const PatientDetails = () => {
     prescriptionsList: [],
     medicalHistoryList: [],
     documentsList: [],
+    labResultsList: [],   // ✅ ADDED
     insuranceList: [],
     appointments: [],
     visits: []
   });
 
-  // Update patient state when API data loads
+  // Update patient state when API data loads - FIXED!
   useEffect(() => {
     if (patientData) {
       setPatient({
         id: patientData.id || patientData._id,
+        hospitalId: patientData.hospitalId || patientData.hospital?.id || '',  // ✅ ADDED
+        userId: patientData.userId || patientData.user?.id || '',              // ✅ ADDED
         name: patientData.name || '',
         gender: patientData.gender || '',
         phone: patientData.mobileNumber || patientData.phone || '',
@@ -223,11 +230,12 @@ const PatientDetails = () => {
         temperature: patientData.temperature || '',
         bloodPressure: patientData.bloodPressure || '',
         appointmentsList: patientAppointments,
-        visitHistoryList: patientVisits,  // Use patientVisits for visit history
+        visitHistoryList: patientVisits,
         vitalsList: patientData.vitals || [],
         prescriptionsList: patientData.prescriptions || [],
         medicalHistoryList: patientData.medicalHistory || [],
         documentsList: patientData.documents || [],
+        labResultsList: patientData.labResults || patientData.lab_results || [],  // ✅ ADDED
         insuranceList: patientData.insurance || [],
         appointments: patientAppointments,
         visits: patientVisits
@@ -407,6 +415,10 @@ const PatientDetails = () => {
         const updatedDocuments = patient.documentsList.filter((_, i) => i !== index);
         setPatient({...patient, documentsList: updatedDocuments});
         break;
+      case 'labResult':
+        const updatedLabResults = patient.labResultsList.filter((_, i) => i !== index);
+        setPatient({...patient, labResultsList: updatedLabResults});
+        break;
       case 'insurance':
         const updatedInsurance = patient.insuranceList.filter(item => item.id !== id);
         setPatient({...patient, insuranceList: updatedInsurance});
@@ -435,6 +447,7 @@ const PatientDetails = () => {
     { id: "prescription", label: "Prescription", icon: Pill },
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
+    { id: "lab-results", label: "Lab Results", icon: Beaker },
     // { id: "insurance", label: "Insurance", icon: ShieldIcon }
   ];
 
@@ -494,6 +507,8 @@ const PatientDetails = () => {
         return <MedicalHistoryTab patient={patient} handleViewMedicalDetails={handleViewMedicalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
       case "documents": 
         return <DocumentsTab patient={patient} handleDownloadDocument={handleDownloadDocument} handleDeleteClick={handleDeleteClick} />;
+      case "lab-results": 
+        return <LabResultsTab patient={patient} handleDeleteClick={handleDeleteClick} />;
       case "insurance": 
         return <InsuranceTab patient={patient} handleDeleteClick={handleDeleteClick} getStatusBadge={getStatusBadge} />;
       default: 

@@ -1,4 +1,4 @@
-// src/components/ui/Pagination.jsx
+// src/components/ui/Pagination.jsx - With Green Gradient Style
 import React from 'react';
 
 export const Pagination = ({ 
@@ -22,26 +22,26 @@ export const Pagination = ({
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className={`
-            px-3 py-1 border rounded-md text-sm transition-all
+            px-3 py-1 border rounded-md text-sm transition-all font-medium
             ${currentPage === 1
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-              : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+              : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 hover:border-gray-400"
             }
           `}
         >
           Previous
         </button>
-        <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
+        <span className="px-3 py-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-md text-sm font-medium shadow-sm">
           {currentPage}
         </span>
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages || totalPages === 0}
           className={`
-            px-3 py-1 border rounded-md text-sm transition-all
+            px-3 py-1 border rounded-md text-sm transition-all font-medium
             ${currentPage === totalPages || totalPages === 0
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-              : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+              : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 hover:border-gray-400"
             }
           `}
         >
