@@ -211,7 +211,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-  // API Hooks - PASS currentPage to API
+  // API Hooks
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
@@ -272,14 +272,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Get booking status badge class
+  // Get booking status badge class (single definition)
   const getBookingStatusBadgeClass = (bookingStatus) => {
     const classes = {
-      "hospital booking": "inline-flex whitespace-nowrap bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-medium",
-      "clinic booking": "inline-flex whitespace-nowrap bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-medium",
-      "online booking": "inline-flex whitespace-nowrap bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-medium"
+      "hospital booking": "bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium",
+      "clinic booking": "bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-medium",
+      "online booking": "bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium"
     };
-    return classes[bookingStatus?.toLowerCase()] || "inline-flex whitespace-nowrap bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium";
+    return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
   };
 
   // Transform API response
@@ -299,6 +299,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         return age;
       };
 
+      // Format date for display
       const formatDate = (dateString) => {
         if (!dateString || dateString === "N/A") return "N/A";
         const date = new Date(dateString);
@@ -307,17 +308,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       const displayStatus = mapStatus(booking.status);
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+      
       const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
       const actualPatientId = booking.patientId ||
         booking.patient?.id ||
         booking.patient?._id ||
         booking.patient_id ||
         booking.patientID;
-    
+
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
-        patientId: `#PT${String(actualPatientId).padStart(4, '0')}`,
+        patientId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
+        patientDisplayId: `PT${String(booking.userId || index + 1).padStart(4, "0")}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
@@ -341,7 +344,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         avatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
         patientType: booking.patient_type || "Out Patient",
         preferredMode: booking.preferred_mode || "In-person",
-        originalStatus: booking.status
+        originalStatus: booking.status,
+        userId: booking.userId || null
       };
     });
   };
@@ -357,7 +361,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const appointmentsData = transformBookingsData(bookingList);
 
-  // ✅ Get total items from API response for server-side pagination
+  // Get total items from API response for server-side pagination
   const totalItems = bookingsResponse?.pagination?.totalItems || 
                      bookingsResponse?.total || 
                      bookingsResponse?.totalCount || 
@@ -366,15 +370,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // Get unique departments from ALL data (not just current page)
+  // Get unique departments from ALL data
   const getAllDepartments = () => {
-    // If we have the full list, use it, otherwise use current page data
     const allData = bookingsResponse?.allData || appointmentsData;
     const departments = [...new Set(allData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
 
-  // Filter function - now only for display, not pagination
+  // Filter function
   const getFilteredAppointments = () => {
     let filtered;
     
@@ -386,11 +389,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       filtered = [...appointmentsData];
     }
     
-    // Client-side filtering for search and filters (since API handles pagination)
+    // Client-side filtering for search and filters
     if (searchTerm) {
       filtered = filtered.filter(apt => 
         apt.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.patientId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        apt.patientDisplayId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         apt.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -413,6 +416,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const filteredAppointments = getFilteredAppointments();
 
+  // Paginate filtered appointments
+  const paginatedAppointments = filteredAppointments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, departmentFilter, dateFilter, showAllData]);
@@ -428,8 +437,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleExport = () => {
-    // Export from filtered appointments
-    const exportData = getFilteredAppointments().map(apt => ({
+    const exportData = filteredAppointments.map(apt => ({
       'Appointment ID': apt.formattedId,
       'Patient ID': apt.patientId,
       'Patient Name': apt.patientName,
@@ -469,17 +477,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleStartConsultation = (appointment) => {
-    navigate('/appointments/consultation', { 
-      state: { 
-        appointment: appointment,
+    console.log("Appointment sent to consultation:", appointment);
+    navigate('/appointments/consultation', {
+      state: {
+        appointment,
+        patientId: appointment.patientId || null,
+        userId: appointment.userId || null,
         patientName: appointment.patientName,
-        patientId: appointment.patientId,
         doctorName: appointment.doctorName,
         department: appointment.department,
         appointmentDate: appointment.appointmentDateDisplay,
-        reason: appointment.reason, 
+        reason: appointment.reason,
         notes: appointment.notes
-      } 
+      }
     });
   };
 
@@ -516,13 +526,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       showSuccessToast(
         `Appointment ${selectedRequest.formattedId} approved successfully!`,
-        4000,
-        {
-          'Patient': selectedRequest.patientName,
-          'Date': appointmentData.date,
-          'Consulting Time': appointmentData.consulting_time,
-          'Token': `#${appointmentData.token}`
-        }
+        4000
       );
       
       await refetch();
@@ -554,12 +558,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       showErrorToast(
         `Appointment ${selectedRequest.formattedId} rejected successfully!`,
-        4000,
-        {
-          'Patient': selectedRequest.patientName,
-          'Doctor': selectedRequest.doctorName,
-          'Reason': rejectReason || "No reason provided"
-        }
+        4000
       );
       
       refetch();
@@ -594,12 +593,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       showErrorToast(
         `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
-        4000,
-        {
-          'Patient': appointmentToDelete.patientName,
-          'Doctor': appointmentToDelete.doctorName,
-          'Date': appointmentToDelete.appointmentDateDisplay
-        }
+        4000
       );
       
       setShowDeleteModal(false);
@@ -812,7 +806,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
         </div>
 
-        {/* Doctor Banner (if applicable) */}
+        {/* Doctor Banner */}
         {showDoctorBanner && (
           <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -956,14 +950,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
               >
                 <option value="">All Departments</option>
-                {/* Department list from API response */}
-                {(() => {
-                  const allData = bookingsResponse?.allData || appointmentsData;
-                  const departments = [...new Set(allData.map(a => a.department).filter(Boolean))];
-                  return departments.map((dept) => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ));
-                })()}
+                {getAllDepartments().map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
               </select>
 
               <input
@@ -991,86 +980,83 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
               </h2>
             </div>
-
-            <div className="flex flex-col min-h-[500px]">
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                    <tr>
-                      <th className="px-6 py-3">Appointment ID</th>
-                      <th className="px-6 py-3">Patient Name</th>
-                      <th className="px-6 py-3">Contact</th>
-                      <th className="px-6 py-3">Doctor Name</th>
-                      <th className="px-6 py-3">Department</th>
-                      <th className="px-6 py-3">Appointment Date</th>
-                      <th className="px-6 py-3">Booking Status</th>
-                      <th className="px-6 py-3">Status</th>
-                      <th className="px-6 py-3 text-right w-16">Actions</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-6 py-3">Appointment ID</th>
+                    <th className="px-6 py-3">Patient Name</th>
+                    <th className="px-6 py-3">Contact</th>
+                    <th className="px-6 py-3">Doctor Name</th>
+                    <th className="px-6 py-3">Department</th>
+                    <th className="px-6 py-3">Appointment Date</th>
+                    <th className="px-6 py-3">Booking Status</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right w-16">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedAppointments.map((apt, index) => (
+                    <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <ShadcnAvatar className="w-8 h-8">
+                            <AvatarImage 
+                              src={getS3ImageUrl(apt.patientImageKey)} 
+                              alt={apt.patientName}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
+                              {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
+                            </AvatarFallback>
+                          </ShadcnAvatar>
+                          <span className="font-medium text-gray-800">{apt.patientName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
+                      <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
+                      <td className="px-6 py-4 text-gray-600">{apt.department}</td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {apt.appointmentDateDisplay}
+                        <br />
+                        <span className="text-xs text-gray-400">{apt.consulting_time}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
+                          {apt.bookingStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={apt.statusClass}>{apt.status}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end">
+                          <RowActionMenu appointment={apt} />
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {appointmentsData.map((apt, index) => (
-                      <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                        <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <ShadcnAvatar className="w-8 h-8">
-                              <AvatarImage 
-                                src={getS3ImageUrl(apt.patientImageKey)} 
-                                alt={apt.patientName}
-                                className="object-cover"
-                              />
-                              <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                                {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
-                              </AvatarFallback>
-                            </ShadcnAvatar>
-                            <span className="font-medium text-gray-800">{apt.patientName}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{apt.contact}</td>
-                        <td className="px-6 py-4 font-medium text-gray-800">{apt.doctorName}</td>
-                        <td className="px-6 py-4 text-gray-600">{apt.department}</td>
-                        <td className="px-6 py-4 text-gray-600">
-                          {apt.appointmentDateDisplay}
-                          <br />
-                          <span className="text-xs text-gray-400">{apt.consulting_time}</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
-                            {apt.bookingStatus}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={apt.statusClass}>{apt.status}</span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end">
-                            <RowActionMenu appointment={apt} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-              {/* Pagination - Using server-side totalPages */}
-              <div className="mt-auto px-6 py-4 bg-gray-50">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={Math.max(1, totalPages)}
-                  onPageChange={handlePageChange}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="appointments"
-                />
-              </div>
+            {/* Pagination */}
+            <div className="mt-auto px-6 py-4 bg-gray-50">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.max(1, totalPages)}
+                onPageChange={handlePageChange}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="appointments"
+              />
             </div>
           </div>
         )}
       </div>
 
-      {/* Modals - Keep as is */}
+      {/* Modals */}
       {showDetailsModal && selectedAppointment && (
         <AppointmentDetailsModal 
           appointment={selectedAppointment} 

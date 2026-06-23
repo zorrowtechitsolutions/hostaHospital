@@ -150,7 +150,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                   </td>
+                  </td>
                 ))}
               </tr>
             ))}
@@ -575,8 +575,19 @@ const Doctors = () => {
         </div>
       )}
 
+      {/* Empty State - Show when no doctors found */}
+      {doctors.length === 0 && !isLoading && (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
+          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+        </div>
+      )}
+
       {/* GRID VIEW */}
-      {viewMode === 'grid' && (
+      {viewMode === 'grid' && doctors.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {doctors.map((doctor) => (
@@ -644,7 +655,7 @@ const Doctors = () => {
             ))}
           </div>
 
-          {/* Pagination for Grid View - Server-side */}
+          {/* Pagination for Grid View */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
@@ -661,8 +672,8 @@ const Doctors = () => {
         </>
       )}
 
-      {/* LIST VIEW WITH STICKY PAGINATION - Server-side */}
-      {viewMode === 'list' && (
+      {/* LIST VIEW */}
+      {viewMode === 'list' && doctors.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
@@ -673,9 +684,7 @@ const Doctors = () => {
             </h2>
           </div>
 
-          {/* Flex container for sticky pagination */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -752,7 +761,7 @@ const Doctors = () => {
               </table>
             </div>
 
-            {/* Pagination - Sticks to bottom using server-side totalPages */}
+            {/* Pagination */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
@@ -767,15 +776,7 @@ const Doctors = () => {
         </div>
       )}
 
-      {doctors.length === 0 && !isLoading && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
-        </div>
-      )}
-
+      {/* Delete Doctor Modal */}
       <DeleteDoctor
         isOpen={showDelete}
         onClose={() => {
@@ -788,6 +789,7 @@ const Doctors = () => {
         onDelete={handleDeleteDoctor}
       />
 
+      {/* Appointment Management Modal */}
       <AppointmentManagement
         isOpen={showAppointmentManagement}
         onClose={() => {

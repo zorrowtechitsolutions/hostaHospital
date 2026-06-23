@@ -82,6 +82,8 @@ export const api = createApi({
     "S3",
     "Prescription",
     "speciality",
+    "Vitals",
+    "PrescriptionTemplate",
     "Permission",
     "Notification",    
     "Notifications",   

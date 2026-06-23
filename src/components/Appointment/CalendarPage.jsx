@@ -1,52 +1,155 @@
-// src/components/Appointment/CalendarPage.jsx - Refactored
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button, Card, Badge, Alert } from "../ui";
+// src/components/Appointment/CalendarPage.jsx
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Button, Card } from "../ui";
+import {
+  useGetPrescriptionsQuery,
+} from "../../../app/service/prescription";
 
 const CalendarPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const doctorName = location.state?.doctorName;
+const departmentName = location.state?.department;
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const generateVisitRecords = () => {
-    const records = {};
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    
-    const visitData = [
-      { monthsAgo: 24, day: 15, complaint: "Severe sore throat with difficulty swallowing, high fever (103°F), and swollen lymph nodes in the neck. Patient reports loss of appetite and general weakness for the past 5 days.", assessment: "Acute bacterial tonsillitis diagnosed. Throat swab showed Group A Streptococcus. Patient advised complete bed rest for 3 days. Warm salt water gargles recommended 3 times daily. Follow-up in 1 week if symptoms persist. Complete blood count showed elevated WBC (14,500).", medications: "Amoxicillin 875mg - twice daily for 10 days, Ibuprofen 600mg - every 8 hours for pain and fever, Paracetamol 500mg - as needed for fever, Multivitamin tablets once daily", doctor: "Dr. Sarah Johnson", department: "ENT" },
-      { monthsAgo: 18, day: 22, complaint: "Persistent dry cough for 3 weeks, low-grade fever (100.4°F), chest tightness, and shortness of breath on exertion. Patient has history of seasonal allergies. No relief from OTC cough medications.", assessment: "Post-viral bronchitis with reactive airway disease. Chest X-ray showed mild bronchial thickening. Spirometry revealed mild obstructive pattern. Prescribed bronchodilators and advised steam inhalation. Avoid cold drinks and smoke exposure. Review in 2 weeks.", medications: "Azithromycin 500mg - day 1 then 250mg days 2-5, Dextromethorphan syrup 10ml - three times daily, Guaifenesin 600mg - twice daily for mucus clearance, Montelukast 10mg - once daily at bedtime, Albuterol inhaler - 2 puffs as needed", doctor: "Dr. Michael Chen", department: "Pulmonology" },
-      { monthsAgo: 14, day: 8, complaint: "Intermittent chest pain radiating to left arm, palpitations, anxiety, and episodes of dizziness. Pain worsens with stress and improves with rest. Patient reports poor sleep quality for 2 months.", assessment: "Anxiety-induced chest pain with panic attacks. ECG, Troponin, and 2D Echo all normal. Stress test negative for ischemia. Referred to cardiology for reassurance. Cognitive behavioral therapy recommended. Stress management techniques advised.", medications: "Alprazolam 0.5mg - twice daily as needed, Propranolol 20mg - twice daily for palpitations, Escitalopram 10mg - once daily, Melatonin 5mg - at bedtime for sleep, Omega-3 fatty acids 1000mg daily", doctor: "Dr. Emily Rodriguez", department: "Cardiology" },
-      { monthsAgo: 10, day: 12, complaint: "Severe throbbing headache on right side, nausea, vomiting, photophobia, and phonophobia. Headache lasts 6-8 hours and occurs 3-4 times per month. Patient identifies triggers including lack of sleep and certain foods.", assessment: "Classic migraine with aura. Neurological examination normal. MRI brain normal. Migraine diary recommended to identify triggers. Lifestyle modifications including regular sleep schedule, hydration, and stress reduction. Follow-up in 1 month.", medications: "Sumatriptan 100mg - at onset of migraine (max 2 doses per week), Rizatriptan 10mg - alternative abortive therapy, Propranolol 40mg - twice daily for prevention, Topiramate 25mg - at bedtime (titrate slowly), Vitamin B2 400mg daily, Magnesium glycinate 400mg daily", doctor: "Dr. David Kim", department: "Neurology" },
-      { monthsAgo: 8, day: 5, complaint: "Chronic lower back pain radiating to left leg, numbness in toes, difficulty sitting for long periods, and morning stiffness lasting 30 minutes. Pain rated 7/10. No history of trauma.", assessment: "Lumbar radiculopathy due to L4-L5 disc bulge confirmed by MRI. Physical therapy evaluation completed. Core strengthening exercises prescribed. Ergonomic assessment recommended for workplace. Avoid heavy lifting and prolonged sitting. Reassess in 6 weeks.", medications: "Cyclobenzaprine 10mg - three times daily for muscle spasm, Gabapentin 300mg - at bedtime (increase to 300mg twice daily after 1 week), Acetaminophen 650mg - every 6 hours as needed, Diclofenac gel - apply to affected area 3 times daily, Methylcobalamin 1500mcg daily for nerve health", doctor: "Dr. Lisa Wong", department: "Orthopedics" },
-      { monthsAgo: 6, day: 18, complaint: "Generalized itchy skin rash with red raised bumps on arms, legs, and trunk. Rash appeared after using new laundry detergent. Patient reports mild swelling of lips and difficulty sleeping due to itching.", assessment: "Severe allergic contact dermatitis. Patch testing scheduled for next month. Skin biopsy showed acute spongiotic dermatitis. Avoid identified allergens. Cool compresses advised for itching. Short course of oral steroids prescribed. Follow-up in 2 weeks.", medications: "Cetirizine 20mg - once daily, Fexofenadine 180mg - twice daily for severe itching, Hydrocortisone 2.5% cream - apply twice daily, Triamcinolone 0.1% ointment - for resistant areas, Prednisone 40mg - daily for 5 days then taper, Calamine lotion - as needed for relief", doctor: "Dr. James Wilson", department: "Dermatology" },
-      { monthsAgo: 4, day: 10, complaint: "Burning epigastric pain after meals, bloating, excessive belching, and occasional nausea. Symptoms worse with spicy foods and empty stomach. No blood in stool. Patient reports using NSAIDs frequently for headaches.", assessment: "Moderate erosive gastritis confirmed by endoscopy. H. pylori test negative. NSAID-induced gastritis suspected. Dietary modifications including small frequent meals, avoid spicy/oily foods, and no lying down after meals. Eradication therapy not required. Review in 4 weeks.", medications: "Omeprazole 40mg - once daily before breakfast, Sucralfate 1g - four times daily before meals and at bedtime, Domperidone 10mg - three times daily before meals, Antacid suspension 20ml - as needed for breakthrough symptoms, Probiotics once daily", doctor: "Dr. Priya Sharma", department: "Gastroenterology" },
-      { monthsAgo: 3, day: 25, complaint: "Frequent urination (every 1-2 hours), increased thirst, blurred vision, fatigue, and unexplained weight loss of 8 kg over 3 months. Family history of type 2 diabetes.", assessment: "Newly diagnosed Type 2 Diabetes Mellitus. HbA1c 8.9%, fasting glucose 168 mg/dL. Diabetes education provided including glucose monitoring, diet planning, and exercise recommendations. Referred to dietitian for medical nutrition therapy. Eye exam and foot exam scheduled.", medications: "Metformin 500mg - once daily with dinner (increase to twice daily after 1 week), Glimepiride 1mg - once daily with breakfast, Atorvastatin 20mg - at bedtime, Lisinopril 5mg - once daily, Vitamin D3 2000 IU daily, Aspirin 81mg daily", doctor: "Dr. Robert Taylor", department: "Endocrinology" },
-      { monthsAgo: 2, day: 3, complaint: "Urinary burning sensation, frequent urge to urinate, lower abdominal discomfort, and cloudy urine with strong odor. Symptoms started 4 days ago. No fever or chills.", assessment: "Acute uncomplicated urinary tract infection. Urinalysis showed leukocytes, nitrites, and bacteria. Urine culture sent for sensitivity. Increased fluid intake advised. Avoid caffeine and alcohol until symptoms resolve. Complete full course of antibiotics. Follow-up if no improvement in 48 hours.", medications: "Nitrofurantoin 100mg - twice daily for 7 days, Phenazopyridine 200mg - three times daily for pain relief (max 2 days), D-mannose 500mg - twice daily for prevention, Probiotics for women once daily, Cranberry extract 500mg daily, Ibuprofen 400mg - as needed for discomfort", doctor: "Dr. Michelle Lee", department: "Urology" },
-      { monthsAgo: 1, day: 14, complaint: "Joint pain and swelling in both knees and wrists, morning stiffness lasting 2 hours, fatigue, and low-grade fever. Symptoms worse in the morning and improve with activity. Family history of rheumatoid arthritis.", assessment: "Seropositive Rheumatoid Arthritis diagnosed. Rheumatoid factor positive (78 IU/mL), Anti-CCP positive, ESR elevated (45 mm/hr), CRP elevated (24 mg/L). X-rays showed mild joint space narrowing. Referred to rheumatology for ongoing management. Physical therapy recommended for joint protection.", medications: "Methotrexate 15mg - once weekly, Folic acid 1mg - daily (except methotrexate day), Hydroxychloroquine 200mg - twice daily, Prednisone 5mg - daily (taper over 4 weeks), Celecoxib 200mg - once daily, Calcium 600mg with Vitamin D twice daily", doctor: "Dr. Andrew Patel", department: "Rheumatology" },
-      { monthsAgo: 0, day: today.getDate() - 3, complaint: "Acute onset fever (102°F), chills, body aches, headache, and sore throat for 3 days. Patient reports exposure to sick family member. No difficulty breathing. Vaccination status unknown.", assessment: "Acute viral upper respiratory infection. Rapid flu test negative, COVID-19 negative. Supportive care advised. Monitor for warning signs including difficulty breathing, chest pain, confusion, or persistent high fever. Return to ER if symptoms worsen. Complete isolation recommended for 5 days.", medications: "Oseltamivir 75mg - twice daily for 5 days (empiric), Paracetamol 650mg - every 6 hours for fever, Ibuprofen 400mg - every 8 hours for body aches, Dextromethorphan-guaifenesin syrup 10ml - every 4 hours, Vitamin C 1000mg daily, Zinc 50mg daily for 5 days, Normal saline nasal spray as needed", doctor: "Dr. Amanda Foster", department: "Internal Medicine" }
-    ];
+  // Get patientId from location state or from URL params
+  const patientId = location.state?.patientId || new URLSearchParams(location.search).get('patientId');
 
-    visitData.forEach(visit => {
-      const visitDate = new Date(currentYear, currentMonth - visit.monthsAgo, visit.day);
-      if (visitDate <= today) {
-        const dateString = visitDate.toISOString().split('T')[0];
-        records[dateString] = {
-          complaint: visit.complaint,
-          assessment: visit.assessment,
-          medications: visit.medications,
-          doctor: visit.doctor,
-          department: visit.department
+  console.log("Calendar - PATIENT ID:", patientId);
+
+  const {
+    data: prescriptionData,
+    isLoading,
+    error,
+  } = useGetPrescriptionsQuery(
+    {
+      patientId,
+      page: 1,
+      limit: 100,
+    },
+    {
+      skip: !patientId,
+    }
+  );
+
+  // Log the FULL API response to see the structure
+  console.log("Calendar - FULL PRESCRIPTION DATA:", JSON.stringify(prescriptionData, null, 2));
+
+  // Doctor ID to Department mapping (temporary fix)
+  // You should ideally fetch this from an API or pass from parent
+  const doctorDepartmentMap = {
+    10: "Ortho",
+    // Add more mappings as needed
+    // Example: 11: "Cardiology", 12: "Neurology", etc.
+  };
+
+  // FIX: Create a timezone-safe date formatter
+  const formatDateKey = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Create visit records from prescription data
+  const createVisitRecords = () => {
+    const records = {};
+    
+    // Check if data exists and has the right structure
+    if (!prescriptionData) {
+      console.log("No prescription data available");
+      return records;
+    }
+
+    // Try different possible data structures
+    let prescriptions = [];
+    
+    if (Array.isArray(prescriptionData)) {
+      prescriptions = prescriptionData;
+    } else if (prescriptionData.data && Array.isArray(prescriptionData.data)) {
+      prescriptions = prescriptionData.data;
+    } else if (prescriptionData.prescriptions && Array.isArray(prescriptionData.prescriptions)) {
+      prescriptions = prescriptionData.prescriptions;
+    } else if (prescriptionData.result && Array.isArray(prescriptionData.result)) {
+      prescriptions = prescriptionData.result;
+    }
+
+    console.log("Prescriptions array:", prescriptions);
+    console.log("Number of prescriptions:", prescriptions.length);
+
+    prescriptions.forEach((prescription, index) => {
+      console.log(`Prescription ${index}:`, prescription);
+      
+      // Try to find the date field
+      const dateField = prescription.createdAt || prescription.date || prescription.visitDate || prescription.prescriptionDate;
+      
+      if (dateField) {
+        // FIX: Use formatDateKey instead of toISOString
+        const dateKey = formatDateKey(dateField);
+        console.log(`Date key for prescription ${index}:`, dateKey);
+        
+        // Get department from various possible locations
+        let department = "-";
+        if (prescription.department) {
+          department = prescription.department;
+        } else if (prescription.doctorDepartment) {
+          department = prescription.doctorDepartment;
+        } else if (prescription.doctor?.department) {
+          department = prescription.doctor.department;
+        } else if (prescription.specialization) {
+          department = prescription.specialization;
+        } else if (prescription.doctor?.specialization) {
+          department = prescription.doctor.specialization;
+        } else if (prescription.booking?.department) {
+          department = prescription.booking.department;
+        } else if (prescription.doctorId && doctorDepartmentMap[prescription.doctorId]) {
+          department = doctorDepartmentMap[prescription.doctorId];
+        }
+        
+        records[dateKey] = {
+          complaint: prescription.chiefComplaint || prescription.complaint || prescription.symptoms || "-",
+          assessment: prescription.assessment || prescription.diagnosis || prescription.plan || "-",
+          notes: prescription.advice || prescription.notes || prescription.note || prescription.doctorNotes || "-",
+          medications: prescription.medications || prescription.medicines || prescription.prescriptionItems || [],
+doctor: doctorName || "-",
+department: departmentName || "-",
+          createdAt: dateField,
+          doctorId: prescription.doctorId,
+          bookingId: prescription.bookingId,
+          nextConsultation: prescription.next_consultation,
+          emptyStomach: prescription.empty_stomach,
+          // Store the full prescription for debugging
+          _raw: prescription
         };
+      } else {
+        console.log(`Prescription ${index} has no date field:`, prescription);
       }
     });
+
+    console.log("Created visit records:", records);
     return records;
   };
 
-  const [visitRecords] = useState(generateVisitRecords());
+  const [visitRecords, setVisitRecords] = useState({});
+
+  // Update visit records when prescription data changes
+  useEffect(() => {
+    const records = createVisitRecords();
+    setVisitRecords(records);
+    
+    // If there are records and no date is selected, select the first one
+    const dates = Object.keys(records);
+    if (dates.length > 0 && !selectedDate) {
+      setSelectedDate(new Date(dates[0]));
+    }
+  }, [prescriptionData]);
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -64,19 +167,23 @@ const CalendarPage = () => {
 
   const isVisitedDate = (date) => {
     if (!date) return false;
-    const dateString = date.toISOString().split('T')[0];
-    return visitRecords[dateString] !== undefined;
+    // FIX: Use formatDateKey instead of toISOString
+    const dateString = formatDateKey(date);
+    const hasRecord = visitRecords[dateString] !== undefined;
+    return hasRecord;
   };
 
   const getVisitDetails = (date) => {
     if (!date) return null;
-    const dateString = date.toISOString().split('T')[0];
-    return visitRecords[dateString];
+    // FIX: Use formatDateKey instead of toISOString
+    const dateString = formatDateKey(date);
+    const details = visitRecords[dateString];
+    return details;
   };
 
   const isToday = (date) => {
     if (!date) return false;
-    return date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+    return formatDateKey(date) === formatDateKey(today);
   };
 
   const isFutureDate = (date) => {
@@ -85,7 +192,11 @@ const CalendarPage = () => {
   };
 
   const handleDateClick = (date) => {
-    if (date && !isFutureDate(date)) setSelectedDate(date);
+    if (date && !isFutureDate(date)) {
+      setSelectedDate(date);
+      console.log("Selected date:", date);
+      console.log("Selected date key:", formatDateKey(date));
+    }
   };
 
   const goToPreviousMonth = () => {
@@ -109,7 +220,76 @@ const CalendarPage = () => {
   const days = getDaysInMonth(currentMonth);
   const selectedVisitDetails = selectedDate ? getVisitDetails(selectedDate) : null;
 
-  const getMedicationsList = (medications) => medications.split(', ');
+  // Helper to format medications for display
+  const getMedicationsDisplay = (medications) => {
+    if (!medications || medications.length === 0) return ["No medications prescribed"];
+    return medications.map((med, index) => {
+      // Log medication structure for debugging
+      console.log(`Medication ${index}:`, med);
+      
+      const name = med.medicineName || med.name || med.drugName || med.medication || med.itemName || 
+                   med.medicine_name || med.medication_name || "Unknown";
+      const dosage = med.dosage || med.dose || med.strength || med.quantity || 
+                     med.dosage_amount || med.dosage_value || "";
+      const duration = med.duration || med.frequency || med.period || med.days || 
+                       med.duration_days || med.frequency_days || "";
+      return `${name} ${dosage} ${duration}`.trim();
+    });
+  };
+
+  // If no patientId, show error
+  if (!patientId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl p-8 shadow-lg max-w-md">
+          <div className="text-center">
+            <div className="text-yellow-500 text-4xl mb-3">⚠️</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Patient Selected</h3>
+            <p className="text-sm text-gray-600">Please select a patient to view their calendar.</p>
+            <button 
+              onClick={() => navigate(-1)}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl p-8 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-gray-600">Loading visit records...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl p-8 shadow-lg max-w-md">
+          <div className="text-center">
+            <div className="text-red-500 text-4xl mb-3">⚠️</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Error Loading Data</h3>
+            <p className="text-sm text-gray-600">Unable to load visit history. Please try again later.</p>
+            <button 
+              onClick={() => navigate(-1)}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -125,7 +305,9 @@ const CalendarPage = () => {
               </Button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Visit History Calendar</h1>
-                <p className="text-sm text-gray-500">Reyan Verol • ID: #C243546</p>
+                <p className="text-sm text-gray-500">
+                  {Object.keys(visitRecords).length} total visits
+                </p>
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -178,7 +360,7 @@ const CalendarPage = () => {
                 {days.map((date, index) => {
                   const isVisited = date && isVisitedDate(date);
                   const isSelected = date && selectedDate && 
-                    date.toISOString().split('T')[0] === selectedDate.toISOString().split('T')[0];
+                    formatDateKey(date) === formatDateKey(selectedDate);
                   const today_date = date && isToday(date);
                   const future = date && isFutureDate(date);
                   
@@ -244,36 +426,109 @@ const CalendarPage = () => {
                     <div className="space-y-4">
                       <div className="text-center pb-4 border-b border-gray-100">
                         <p className="text-2xl font-bold text-gray-900">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()]}</p>
-                        <p className="text-sm text-gray-500 mt-1">{selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric' })}</p>
+                        <p className="text-sm text-gray-500 mt-1">{selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        {selectedVisitDetails.createdAt && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(selectedVisitDetails.createdAt).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                          </p>
+                        )}
                       </div>
+                      
                       <div className="space-y-4">
+                        {/* Complaint */}
                         <div className="bg-red-50 rounded-lg p-3">
-                          <p className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1">Complaint</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{selectedVisitDetails.complaint}</p>
+                          <p className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1">
+                            <span>🩺</span> Complaint
+                          </p>
+                          <p className="text-sm text-gray-700 leading-relaxed">
+                            {selectedVisitDetails.complaint || "No complaint recorded"}
+                          </p>
                         </div>
-                        <div className="bg-blue-50 rounded-lg p-3">
-                          <p className="text-xs font-semibold text-blue-600 mb-2 flex items-center gap-1">Assessment & Plan</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{selectedVisitDetails.assessment}</p>
-                        </div>
+
+                        {/* Assessment */}
+                        {selectedVisitDetails.assessment && selectedVisitDetails.assessment !== "-" && (
+                          <div className="bg-blue-50 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-blue-600 mb-2 flex items-center gap-1">
+                              <span>📋</span> Assessment & Plan
+                            </p>
+                            <p className="text-sm text-gray-700 leading-relaxed">
+                              {selectedVisitDetails.assessment}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Notes / Advice */}
+                        {selectedVisitDetails.notes && selectedVisitDetails.notes !== "-" && (
+                          <div className="bg-yellow-50 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-yellow-600 mb-2 flex items-center gap-1">
+                              <span>📝</span> Notes / Advice
+                            </p>
+                            <p className="text-sm text-gray-700 leading-relaxed">
+                              {selectedVisitDetails.notes}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Medications */}
                         <div className="bg-green-50 rounded-lg p-3">
-                          <p className="text-xs font-semibold text-green-600 mb-2 flex items-center gap-1">Prescribed Medications</p>
+                          <p className="text-xs font-semibold text-green-600 mb-2 flex items-center gap-1">
+                            <span>💊</span> Prescribed Medications
+                          </p>
                           <ul className="space-y-1">
-                            {getMedicationsList(selectedVisitDetails.medications).map((med, idx) => (
+                            {getMedicationsDisplay(selectedVisitDetails.medications).map((med, idx) => (
                               <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
                                 <span className="text-green-600 mt-0.5">•</span>
-                                <span className="leading-relaxed">{med.trim()}</span>
+                                <span className="leading-relaxed">{med}</span>
                               </li>
                             ))}
                           </ul>
                         </div>
+
+                        {/* Next Consultation */}
+                        {selectedVisitDetails.nextConsultation && (
+                          <div className="bg-purple-50 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-purple-600 mb-2 flex items-center gap-1">
+                              <span>📅</span> Next Consultation
+                            </p>
+                            <p className="text-sm text-gray-700 leading-relaxed">
+                              {new Date(selectedVisitDetails.nextConsultation).toLocaleDateString('en-US', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Empty Stomach */}
+                        {selectedVisitDetails.emptyStomach !== undefined && (
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                              <span>🍽️</span> Take on Empty Stomach
+                            </p>
+                            <p className="text-sm text-gray-700 leading-relaxed">
+                              {selectedVisitDetails.emptyStomach ? "Yes" : "No"}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Doctor and Department */}
                         <div className="grid grid-cols-2 gap-3 pt-2">
                           <div className="bg-gray-50 rounded-lg p-2">
                             <p className="text-[10px] font-medium text-gray-500">Doctor</p>
-                            <p className="text-xs text-gray-700 font-medium mt-0.5">{selectedVisitDetails.doctor}</p>
+                            <p className="text-xs text-gray-700 font-medium mt-0.5">
+                              {selectedVisitDetails.doctor || "Not specified"}
+                            </p>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-2">
                             <p className="text-[10px] font-medium text-gray-500">Department</p>
-                            <p className="text-xs text-gray-700 font-medium mt-0.5">{selectedVisitDetails.department}</p>
+                            <p className="text-xs text-gray-700 font-medium mt-0.5">
+                              {selectedVisitDetails.department || "Not specified"}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -306,10 +561,22 @@ const CalendarPage = () => {
               <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 sticky bottom-0">
                 <p className="text-xs font-medium text-gray-700 mb-3">Legend</p>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 bg-green-500 rounded-full"></div><span className="text-xs text-gray-600">Date with visit record</span></div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 bg-blue-600 rounded-full"></div><span className="text-xs text-gray-600">Today</span></div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 bg-blue-100 ring-2 ring-blue-500 ring-inset rounded"></div><span className="text-xs text-gray-600">Selected date</span></div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-4 bg-gray-100 border border-gray-200 rounded"></div><span className="text-xs text-gray-400">Future date (disabled)</span></div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                    <span className="text-xs text-gray-600">Date with visit record</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+                    <span className="text-xs text-gray-600">Today</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-blue-100 ring-2 ring-blue-500 ring-inset rounded"></div>
+                    <span className="text-xs text-gray-600">Selected date</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-gray-100 border border-gray-200 rounded"></div>
+                    <span className="text-xs text-gray-400">Future date (disabled)</span>
+                  </div>
                 </div>
               </div>
             </div>

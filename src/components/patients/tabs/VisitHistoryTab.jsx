@@ -100,7 +100,7 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                         </Button>
                         {openMenu === `visit-${item.id}` && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                            <button
+                            {/* <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
                                 handleViewVisitDetails(item);
@@ -109,8 +109,8 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
                             >
                               <Eye size={15} /> View Details
-                            </button>
-                            <button
+                            </button> */}
+                            {/* <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
                                 handleEditVisitClick(item);
@@ -119,7 +119,7 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
                               <Edit size={15} /> Edit
-                            </button>
+                            </button> */}
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 

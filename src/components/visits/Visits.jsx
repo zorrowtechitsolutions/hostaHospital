@@ -124,7 +124,8 @@ const Visits = () => {
         token: Number(tokenValue || ""),
         patientImageKey: patientImageKey,
         patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
-        originalBooking: booking
+        originalBooking: booking,
+        status: booking.status || "accepted"
       };
     });
   }, [bookingsResponse]);
@@ -285,7 +286,7 @@ const Visits = () => {
           <div>
             <h3 className="font-semibold text-gray-800 text-lg">{visit.patientName}</h3>
             <p className="text-sm text-gray-500">{visit.visitId}</p>
-            <p className="text-xs text-gray-400">Patient ID: {visit.patientId}</p>
+            <p className="text-xs text-gray-400">User ID: {visit.patientId}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -443,7 +444,7 @@ const Visits = () => {
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-16 border-b border-gray-100">
             <div className="flex items-center px-6 py-4">
-              {[1, 2, 3, 4, 5, 6].map((j) => (
+              {[1, 2, 3, 4, 5, 6, 7].map((j) => (
                 <div key={j} className="flex-1">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </div>
@@ -646,7 +647,7 @@ const Visits = () => {
         </div>
       )}
 
-      {/* Visits Table - WITH STICKY PAGINATION USING SERVER-SIDE TOTALPAGES */}
+      {/* Visits Table */}
       {allVisitsData.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -694,7 +695,10 @@ const Visits = () => {
                               {visit.patientName?.charAt(0)?.toUpperCase() || "P"}
                             </AvatarFallback>
                           </ShadcnAvatar>
-                          <span className="font-medium text-gray-800">{visit.patientName}</span>
+                          <div>
+                            <span className="font-medium text-gray-800">{visit.patientName}</span>
+                            <p className="text-xs text-gray-400">{visit.patientId}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{visit.doctorName}</td>
@@ -708,27 +712,25 @@ const Visits = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end">
-                          <RowActionMenu visit={visit} />
-                        </div>
+                        <RowActionMenu visit={visit} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination - Sticks to bottom using mt-auto with server-side totalPages */}
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="visits"
-              />
-            </div>
+          </div>
+          
+          {/* Pagination */}
+          <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={Math.max(1, totalPages)}
+              onPageChange={handlePageChange}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              itemLabel="approved visits"
+            />
           </div>
         </div>
       )}
@@ -747,7 +749,7 @@ const Visits = () => {
         itemName={visitToDelete?.visitId} 
         isDeleting={isDeleting}
       />
-    </div> 
+    </div>
   );
 };
 

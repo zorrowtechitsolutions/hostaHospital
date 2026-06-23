@@ -1,4 +1,4 @@
-// src/components/Settings/Settings.jsx - UPDATED WITH GREEN BUTTON ON RIGHT
+// src/components/Settings/Settings.jsx - WITH PRESCRIPTION TEMPLATE TAB
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
 } from '../ui';
 import Security from './Security';
 import Map from './Map';
+import PrescriptionTemplate from './PrescriptionTemplate'; // Import the prescription template
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
@@ -157,8 +158,8 @@ const SettingsSkeleton = () => {
 
         <div className="border-b border-gray-200 mb-6">
           <div className="flex gap-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
+            {['General', 'Security', 'Map', 'Prescription Template'].map((_, i) => (
+              <div key={i} className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
             ))}
           </div>
         </div>
@@ -682,10 +683,15 @@ const Settings = () => {
         return <Security />;
       case 'Map':
         return <Map />;
+      case 'Prescription Template':
+        return <PrescriptionTemplate />;
       default:
         return null;
     }
   };
+
+  // Define tabs array once
+  const tabs = ['General', 'Security', 'Map', 'Prescription Template'];
 
   if (isLoadingHospital) {
     return <SettingsSkeleton />;
@@ -700,7 +706,7 @@ const Settings = () => {
         </div>
         
         <Tabs 
-          tabs={['General', 'Security', 'Map'].map(tab => ({ id: tab, label: tab }))} 
+          tabs={tabs.map(tab => ({ id: tab, label: tab }))}
           activeTab={activeTab} 
           onTabChange={setActiveTab} 
           className="mb-6" 

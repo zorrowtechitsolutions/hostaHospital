@@ -776,7 +776,7 @@ const EditDoctor = () => {
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, doctorId);
+      const uploaded = await uploadToS3(file, formData.imageKey || null);
       setUploadProgress(100);
       
       setFormData(prev => ({

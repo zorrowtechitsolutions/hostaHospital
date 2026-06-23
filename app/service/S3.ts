@@ -176,6 +176,9 @@ export const uploadToS3 = async (
     const role = customRole || getUserRole()?.toLowerCase() || "hospital";
     const token = getToken();
 
+    // Get user ID based on role
+const hospitalId = getHospitalId();
+const userId = hospitalId;
     // Get ID - use provided id or get from storage
     let id = customId || getUserId();
     
