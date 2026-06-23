@@ -311,6 +311,18 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
+  // Helper function to extract numeric ID from string
+  const extractNumericId = (id) => {
+    if (!id) return null;
+    if (typeof id === 'number') return id;
+    if (typeof id === 'string') {
+      // Remove any non-numeric characters (like #PT0001 -> 1)
+      const numericMatch = id.match(/\d+/);
+      return numericMatch ? parseInt(numericMatch[0]) : null;
+    }
+    return null;
+  };
+
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -324,10 +336,31 @@ const Consultation = () => {
     try {
       const bookingId = appointmentData.id || appointmentData.bookingId;
       
-      const extractedPatientId = appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || null;
-      const extractedUserId = appointmentData.userId || appointmentData.patient?.userId || null;
-      const extractedDoctorId = appointmentData.doctorId || appointmentData.doctor?.id || appointmentData.doctor?.doctorId;
-      const extractedHospitalId = getHospitalId() || appointmentData.hospitalId || appointmentData.hospital?.id;
+      // Extract numeric IDs from potentially string values
+      const extractedPatientId = extractNumericId(
+        appointmentData.patientId || 
+        appointmentData.patient?.id || 
+        appointmentData.patient?.patientId || 
+        null
+      );
+      
+      const extractedUserId = extractNumericId(
+        appointmentData.userId || 
+        appointmentData.patient?.userId || 
+        null
+      );
+      
+      const extractedDoctorId = extractNumericId(
+        appointmentData.doctorId || 
+        appointmentData.doctor?.id || 
+        appointmentData.doctor?.doctorId
+      );
+      
+      const extractedHospitalId = extractNumericId(
+        getHospitalId() || 
+        appointmentData.hospitalId || 
+        appointmentData.hospital?.id
+      );
       
       const extractedDoctorName = appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName || appointmentData.doctor?.displayName || null;
       const extractedDoctorSpecialization = appointmentData.doctor?.specialization || appointmentData.doctor?.department || appointmentData.department || appointmentData.specialization || null;
@@ -337,12 +370,17 @@ const Consultation = () => {
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
       
+      // Map medication fields to match API expectations
       const formattedMedications = medications.map(({ id, ...med }) => ({
-        ...med,
-        instructions: med.instructions || ""
+        medicineName: med.name,
+        dosage: med.dosage,
+        duration: med.duration,
+        frequency: med.frequency,
+        timing: med.timing,
+        instructions: med.instructions || "",
       }));
       
-      const validMedications = formattedMedications.filter(med => med.name.trim() !== "");
+      const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
 
       // Get the selected template (first one from the list or null)
       const selectedTemplate = existingTemplates?.data?.[0] || null;
@@ -351,13 +389,13 @@ const Consultation = () => {
 
       // Create prescription data with template fields
       const prescriptionData = {
-        bookingId,
+        bookingId: Number(bookingId),
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
         doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
-        patientId: extractedPatientId || null,
-        userId: extractedUserId || null,
+        patientId: extractedPatientId || undefined,
+        userId: extractedUserId || undefined,
         complaint: complaint.trim(),
         medications: validMedications,
         investigations: investigations.filter(i => i.trim() !== ""),
@@ -373,7 +411,6 @@ const Consultation = () => {
         // Vital signs
         temperature: Number(vitals.temperature) || 0,
         pulse: Number(vitals.pulse) || 0,
-        heartRate: Number(vitals.pulse) || 0,
         respiratoryRate: Number(vitals.respiratoryRate) || 0,
         spo2: Number(vitals.spo2) || 0,
         height: Number(vitals.height) || 0,
@@ -578,26 +615,25 @@ const Consultation = () => {
         </Card>
       </div>
 
-<ViewMedicalHistory
-  isOpen={showMedicalHistory}
-  onClose={() => setShowMedicalHistory(false)}
-  patientId={
-    appointmentData.patientId ||
-    appointmentData.patient?.id ||
-    appointmentData.patient?.patientId
-  }
-  department={
-    appointmentData.department ||
-    appointmentData.doctorDepartment ||
-    appointmentData.departmentName
-  }
-  doctorName={
-    appointmentData.doctor?.name ||
-    appointmentData.doctorName ||
-    appointmentData.displayName
-  }
-/>
-
+      <ViewMedicalHistory
+        isOpen={showMedicalHistory}
+        onClose={() => setShowMedicalHistory(false)}
+        patientId={
+          appointmentData.patient?.id ||
+          Number(appointmentData.patientId) ||
+          null
+        }
+        department={
+          appointmentData.department ||
+          appointmentData.doctorDepartment ||
+          appointmentData.departmentName
+        }
+        doctorName={
+          appointmentData.doctor?.name ||
+          appointmentData.doctorName ||
+          appointmentData.displayName
+        }
+      />
     </div>
   );
 };

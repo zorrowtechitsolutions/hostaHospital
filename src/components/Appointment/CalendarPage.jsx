@@ -1,4 +1,3 @@
-// src/components/Appointment/CalendarPage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button, Card } from "../ui";
@@ -6,22 +5,36 @@ import {
   useGetPrescriptionsQuery,
 } from "../../../app/service/prescription";
 
+// Helper function to extract numeric ID from string
+const extractNumericId = (id) => {
+  if (!id) return null;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'string') {
+    // Remove any non-numeric characters (like #PT0001 -> 1)
+    const numericMatch = id.match(/\d+/);
+    return numericMatch ? parseInt(numericMatch[0]) : null;
+  }
+  return null;
+};
+
 const CalendarPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const doctorName = location.state?.doctorName;
-const departmentName = location.state?.department;
+  const departmentName = location.state?.department;
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Get patientId from location state or from URL params
-  const patientId = location.state?.patientId || new URLSearchParams(location.search).get('patientId');
+  // Get patientId from location state or from URL params and extract numeric ID
+  const rawPatientId = location.state?.patientId || new URLSearchParams(location.search).get('patientId');
+  const patientId = extractNumericId(rawPatientId);
 
-  console.log("Calendar - PATIENT ID:", patientId);
+  console.log("Calendar - Raw PATIENT ID:", rawPatientId);
+  console.log("Calendar - Numeric PATIENT ID:", patientId);
 
   const {
     data: prescriptionData,
@@ -42,14 +55,12 @@ const departmentName = location.state?.department;
   console.log("Calendar - FULL PRESCRIPTION DATA:", JSON.stringify(prescriptionData, null, 2));
 
   // Doctor ID to Department mapping (temporary fix)
-  // You should ideally fetch this from an API or pass from parent
   const doctorDepartmentMap = {
     10: "Ortho",
     // Add more mappings as needed
-    // Example: 11: "Cardiology", 12: "Neurology", etc.
   };
 
-  // FIX: Create a timezone-safe date formatter
+  // Create a timezone-safe date formatter
   const formatDateKey = (date) => {
     const d = new Date(date);
     const year = d.getFullYear();
@@ -62,13 +73,12 @@ const departmentName = location.state?.department;
   const createVisitRecords = () => {
     const records = {};
     
-    // Check if data exists and has the right structure
     if (!prescriptionData) {
       console.log("No prescription data available");
       return records;
     }
 
-    // Try different possible data structures
+    // Extract prescriptions from various possible data structures
     let prescriptions = [];
     
     if (Array.isArray(prescriptionData)) {
@@ -79,6 +89,8 @@ const departmentName = location.state?.department;
       prescriptions = prescriptionData.prescriptions;
     } else if (prescriptionData.result && Array.isArray(prescriptionData.result)) {
       prescriptions = prescriptionData.result;
+    } else if (prescriptionData.patient && Array.isArray(prescriptionData.patient.prescriptions)) {
+      prescriptions = prescriptionData.patient.prescriptions;
     }
 
     console.log("Prescriptions array:", prescriptions);
@@ -88,10 +100,9 @@ const departmentName = location.state?.department;
       console.log(`Prescription ${index}:`, prescription);
       
       // Try to find the date field
-      const dateField = prescription.createdAt || prescription.date || prescription.visitDate || prescription.prescriptionDate;
+      const dateField = prescription.createdAt || prescription.date || prescription.visitDate || prescription.prescriptionDate || prescription.updatedAt;
       
       if (dateField) {
-        // FIX: Use formatDateKey instead of toISOString
         const dateKey = formatDateKey(dateField);
         console.log(`Date key for prescription ${index}:`, dateKey);
         
@@ -113,13 +124,28 @@ const departmentName = location.state?.department;
           department = doctorDepartmentMap[prescription.doctorId];
         }
         
+        // Get medications with proper field mapping
+        let medications = prescription.medications || prescription.medicines || prescription.prescriptionItems || [];
+        if (!Array.isArray(medications)) {
+          medications = [];
+        }
+        
+        // Map medication fields for consistent display
+        const mappedMedications = medications.map(med => ({
+          name: med.medicineName || med.name || med.drugName || med.medication || med.itemName || med.medicine_name || med.medication_name || "Unknown",
+          dosage: med.dosage || med.dose || med.strength || med.quantity || med.dosage_amount || med.dosage_value || "",
+          duration: med.duration || med.frequency || med.period || med.days || med.duration_days || med.frequency_days || "",
+          // Keep original fields
+          ...med
+        }));
+        
         records[dateKey] = {
-          complaint: prescription.chiefComplaint || prescription.complaint || prescription.symptoms || "-",
-          assessment: prescription.assessment || prescription.diagnosis || prescription.plan || "-",
-          notes: prescription.advice || prescription.notes || prescription.note || prescription.doctorNotes || "-",
-          medications: prescription.medications || prescription.medicines || prescription.prescriptionItems || [],
-doctor: doctorName || "-",
-department: departmentName || "-",
+          complaint: prescription.complaint || prescription.chiefComplaint || prescription.symptoms || prescription.reason || prescription.presentingComplaint || "-",
+          assessment: prescription.assessment || prescription.diagnosis || prescription.plan || prescription.assessmentPlan || "-",
+          notes: prescription.advice || prescription.notes || prescription.note || prescription.doctorNotes || prescription.additionalNotes || "-",
+          medications: mappedMedications,
+          doctor: doctorName || prescription.doctorName || prescription.doctor?.name || "-",
+          department: departmentName || department || "-",
           createdAt: dateField,
           doctorId: prescription.doctorId,
           bookingId: prescription.bookingId,
@@ -167,7 +193,6 @@ department: departmentName || "-",
 
   const isVisitedDate = (date) => {
     if (!date) return false;
-    // FIX: Use formatDateKey instead of toISOString
     const dateString = formatDateKey(date);
     const hasRecord = visitRecords[dateString] !== undefined;
     return hasRecord;
@@ -175,7 +200,6 @@ department: departmentName || "-",
 
   const getVisitDetails = (date) => {
     if (!date) return null;
-    // FIX: Use formatDateKey instead of toISOString
     const dateString = formatDateKey(date);
     const details = visitRecords[dateString];
     return details;
@@ -224,10 +248,9 @@ department: departmentName || "-",
   const getMedicationsDisplay = (medications) => {
     if (!medications || medications.length === 0) return ["No medications prescribed"];
     return medications.map((med, index) => {
-      // Log medication structure for debugging
       console.log(`Medication ${index}:`, med);
       
-      const name = med.medicineName || med.name || med.drugName || med.medication || med.itemName || 
+      const name = med.name || med.medicineName || med.drugName || med.medication || med.itemName || 
                    med.medicine_name || med.medication_name || "Unknown";
       const dosage = med.dosage || med.dose || med.strength || med.quantity || 
                      med.dosage_amount || med.dosage_value || "";

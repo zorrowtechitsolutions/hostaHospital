@@ -1,12 +1,21 @@
-// src/components/Appointment/ViewMedicalHistory.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui";
 import {
   useGetPrescriptionsQuery,
 } from "../../../app/service/prescription";
-// Import your doctor API service if available
-// import { useGetDoctorQuery } from "../../../app/service/doctor";
+
+// Helper function to extract numeric ID from string
+const extractNumericId = (id) => {
+  if (!id) return null;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'string') {
+    // Remove any non-numeric characters (like #PT0001 -> 1)
+    const numericMatch = id.match(/\d+/);
+    return numericMatch ? parseInt(numericMatch[0]) : null;
+  }
+  return null;
+};
 
 const ViewMedicalHistory = ({
   isOpen,
@@ -17,26 +26,31 @@ const ViewMedicalHistory = ({
 }) => {
   const navigate = useNavigate();
 
+  // Extract numeric ID from patientId
+  const numericPatientId = extractNumericId(patientId);
+
+  console.log("ViewMedicalHistory - Original PATIENT ID:", patientId);
+  console.log("ViewMedicalHistory - Numeric PATIENT ID:", numericPatientId);
+
   const {
     data: prescriptionData,
     isLoading,
     error,
   } = useGetPrescriptionsQuery(
     {
-      patientId,
+      patientId: numericPatientId,
       page: 1,
       limit: 100,
     },
     {
-      skip: !patientId,
+      skip: !numericPatientId,
     }
   );
 
   // Log the API response to see exact structure
-  console.log("ViewMedicalHistory - PATIENT ID:", patientId);
   console.log("ViewMedicalHistory - FULL PRESCRIPTION DATA:", JSON.stringify(prescriptionData, null, 2));
 
-  // Extract prescriptions from response
+  // Extract prescriptions from response with proper handling
   let prescriptions = [];
   if (Array.isArray(prescriptionData)) {
     prescriptions = prescriptionData;
@@ -44,12 +58,14 @@ const ViewMedicalHistory = ({
     prescriptions = prescriptionData.data;
   } else if (prescriptionData?.prescriptions && Array.isArray(prescriptionData.prescriptions)) {
     prescriptions = prescriptionData.prescriptions;
+  } else if (prescriptionData?.result && Array.isArray(prescriptionData.result)) {
+    prescriptions = prescriptionData.result;
   }
   
   // Sort prescriptions by date (newest first)
   const sortedPrescriptions = [...prescriptions].sort((a, b) => {
-    const dateA = new Date(a.createdAt || a.date || a.visitDate || 0);
-    const dateB = new Date(b.createdAt || b.date || b.visitDate || 0);
+    const dateA = new Date(a.createdAt || a.date || a.visitDate || a.updatedAt || 0);
+    const dateB = new Date(b.createdAt || b.date || b.visitDate || b.updatedAt || 0);
     return dateB - dateA;
   });
   
@@ -69,27 +85,28 @@ const ViewMedicalHistory = ({
     return defaultValue;
   };
 
-  // Helper to get nested field value
-  const getNestedField = (record, path, defaultValue = "-") => {
-    const value = path.split('.').reduce((obj, key) => {
-      if (obj && obj[key] !== undefined && obj[key] !== null) {
-        return obj[key];
-      }
-      return undefined;
-    }, record);
-    
-    return value !== undefined && value !== null && value !== "" ? value : defaultValue;
-  };
-
   const handleShowCalendar = () => {
     onClose();
-navigate("/calendar", {
-  state: {
-    patientId,
-    doctorName,
-    department
-  }
-});
+    navigate("/calendar", {
+      state: {
+        patientId: numericPatientId,
+        doctorName,
+        department
+      }
+    });
+  };
+
+  // Helper to format medications
+  const formatMedications = (medications) => {
+    if (!medications || !Array.isArray(medications)) return [];
+    return medications.map(med => ({
+      name: med.medicineName || med.name || med.drugName || med.medication || med.itemName || 
+            med.medicine_name || med.medication_name || "-",
+      dosage: med.dosage || med.dose || med.strength || med.quantity || 
+              med.dosage_amount || med.dosage_value || "-",
+      duration: med.duration || med.frequency || med.period || med.days || 
+                med.duration_days || med.frequency_days || "-"
+    }));
   };
 
   if (!isOpen) return null;
@@ -127,6 +144,8 @@ navigate("/calendar", {
     );
   }
 
+  const medications = formatMedications(latestRecord.medications || latestRecord.medicines || latestRecord.prescriptionItems || []);
+
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 ease-in-out z-40" onClick={onClose} />
@@ -144,15 +163,15 @@ navigate("/calendar", {
             <div className="flex justify-between items-center pb-3 border-b border-gray-100">
               <div>
                 <p className="text-xs text-gray-500">Department</p>
-<p className="text-sm font-medium text-gray-800">
-  {department || "-"}
-</p>
-</div>
+                <p className="text-sm font-medium text-gray-800">
+                  {department || latestRecord.department || latestRecord.doctorDepartment || "-"}
+                </p>
+              </div>
               <div>
                 <p className="text-xs text-gray-500">Date</p>
                 <p className="text-sm font-medium text-gray-800">
-                  {latestRecord?.createdAt || latestRecord?.date || latestRecord?.visitDate || latestRecord?.prescriptionDate
-                    ? new Date(latestRecord.createdAt || latestRecord.date || latestRecord.visitDate || latestRecord.prescriptionDate).toLocaleString('en-US', {
+                  {latestRecord?.createdAt || latestRecord?.date || latestRecord?.visitDate || latestRecord?.updatedAt
+                    ? new Date(latestRecord.createdAt || latestRecord.date || latestRecord.visitDate || latestRecord.updatedAt).toLocaleString('en-US', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
@@ -183,7 +202,7 @@ navigate("/calendar", {
               </h3>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-medium text-gray-800">
-                  {getField(latestRecord, ['chiefComplaint', 'complaint', 'symptoms', 'reason', 'presentingComplaint'], "-")}
+                  {getField(latestRecord, ['complaint', 'chiefComplaint', 'symptoms', 'reason', 'presentingComplaint'], "-")}
                 </p>
                 {latestRecord?.createdAt && (
                   <p className="text-xs text-gray-400 mt-1">
@@ -197,8 +216,7 @@ navigate("/calendar", {
               </div>
             </div>
 
-
-            {/* Advice (since your data has this field) */}
+            {/* Advice */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#1C62A0] rounded-full"></span>
@@ -227,27 +245,14 @@ navigate("/calendar", {
                     </tr>
                   </thead>
                   <tbody>
-                    {(latestRecord?.medications || latestRecord?.medicines || latestRecord?.prescriptionItems || []).map((med, index) => {
-                      // Log medication structure to see what fields are available
-                      console.log(`Medication ${index}:`, med);
-                      return (
-                        <tr key={index} className="border-t border-gray-200">
-                          <td className="py-2 px-4 text-gray-700">
-                            {med.medicineName || med.name || med.drugName || med.medication || med.itemName || 
-                             med.medicine_name || med.medication_name || "-"}
-                          </td>
-                          <td className="py-2 px-4 text-gray-700">
-                            {med.dosage || med.dose || med.strength || med.quantity || 
-                             med.dosage_amount || med.dosage_value || "-"}
-                          </td>
-                          <td className="py-2 px-4 text-gray-700">
-                            {med.duration || med.frequency || med.period || med.days || 
-                             med.duration_days || med.frequency_days || "-"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {(latestRecord?.medications || latestRecord?.medicines || latestRecord?.prescriptionItems || []).length === 0 && (
+                    {medications.map((med, index) => (
+                      <tr key={index} className="border-t border-gray-200">
+                        <td className="py-2 px-4 text-gray-700">{med.name}</td>
+                        <td className="py-2 px-4 text-gray-700">{med.dosage}</td>
+                        <td className="py-2 px-4 text-gray-700">{med.duration}</td>
+                      </tr>
+                    ))}
+                    {medications.length === 0 && (
                       <tr className="border-t border-gray-200">
                         <td colSpan="3" className="py-2 px-4 text-gray-500 text-center">
                           No medications prescribed
@@ -259,7 +264,7 @@ navigate("/calendar", {
               </div>
             </div>
 
-            {/* Next Consultation (since your data has this field) */}
+            {/* Next Consultation */}
             {latestRecord?.next_consultation && (
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
