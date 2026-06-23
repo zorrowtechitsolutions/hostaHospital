@@ -23,6 +23,9 @@ import AddNewUser from "./components/usermanagment/AddNewUser";
 import EditUser from "./components/usermanagment/EditUser";
 import SuperAdminLayout from "./components/super admin/SuperAdminLayout";
 import HospitalHomePage from "./Authentication/HospitalHomePage";
+  import { io } from "socket.io-client";
+
+
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -78,7 +81,74 @@ function App() {
   const location = useLocation();
   const [booking, setBooking] = useState(null);
   const navigate = useNavigate();
-  
+   
+
+  const [socket, setSocket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [roomJoined, setRoomJoined] = useState(false);
+  const [debugInfo, setDebugInfo] = useState({});
+
+useEffect(() => {
+    // Connect to socket
+    const newSocket = io("https://zorrowtek.in", {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+
+    setSocket(newSocket);
+
+    newSocket.on("connect", () => {
+      console.log("✅ Connected:", newSocket.id);
+      setIsConnected(true);
+      
+      // Join room after connection
+      // console.log(`🔗 Joining room for userId: ${userId}`);
+      // newSocket.emit("join-room", userId);
+    });
+
+    newSocket.on("room-joined", (response) => {
+      console.log("✅ Room joined confirmation:", response);
+      setRoomJoined(true);
+    });
+
+    newSocket.on("REVIEW_REGISTERED", (data) => {
+      console.log("📩 Received REVIEW_REGISTERED:", data);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString(),
+        data
+      }]); 
+      
+      // Show notification
+      alert(`New review received! ${JSON.stringify(data)}`);
+    });
+
+    // Listen for ALL events for debugging
+    newSocket.onAny((event, ...args) => {
+      console.log(`📡 Event: ${event}`, args);
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      console.log("❌ Disconnected:", reason);
+      setIsConnected(false);
+      setRoomJoined(false);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.error("❌ Connection error:", error);
+    });
+
+    return () => {
+      console.log("🧹 Cleaning up");
+      newSocket.disconnect();
+    };
+  }, []);
+
+
   // State for modals from Chrome notifications
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -315,7 +385,7 @@ function App() {
                 <Route 
                   path="/doctors" 
                   element={
-                    <ProtectedRoute permissionId={2}>
+                    <ProtectedRoute>
                       <Doctors />
                     </ProtectedRoute>
                   } 
@@ -323,7 +393,7 @@ function App() {
                 <Route 
                   path="/add-doctor" 
                   element={
-                    <ProtectedRoute permissionId={3}>
+                    <ProtectedRoute>
                       <AddDoctor />
                     </ProtectedRoute>
                   } 
@@ -331,7 +401,7 @@ function App() {
                 <Route 
                   path="/edit-doctor/:id" 
                   element={
-                    <ProtectedRoute permissionId={4}>
+                    <ProtectedRoute>
                       <EditDoctor />
                     </ProtectedRoute>
                   } 
@@ -339,7 +409,7 @@ function App() {
                 <Route 
                   path="/doctor/:id" 
                   element={
-                    <ProtectedRoute permissionId={2}>
+                    <ProtectedRoute>
                       <ViewDoctor />
                     </ProtectedRoute>
                   } 
