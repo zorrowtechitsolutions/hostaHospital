@@ -286,8 +286,7 @@ const PermissionList = () => {
 
         {mainModules.length === 0 && !isLoadingPermissions ? (
           <Card className="p-8 text-center">
-            <p className="text-gray-500">No permissions found. Please check the API response structure.</p>
-            <p className="text-xs text-gray-400 mt-2">Check console for permissionsData log</p>
+            <p className="text-gray-500">No permissions found.</p>
           </Card>
         ) : (
           <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} filteredModules={filteredMainModules} />

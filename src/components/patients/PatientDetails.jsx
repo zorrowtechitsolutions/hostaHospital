@@ -761,7 +761,6 @@ const PatientDetails = () => {
     { id: "medical", label: "Medical History", icon: ClipboardList },
     { id: "documents", label: "Documents", icon: FileText },
     { id: "lab-results", label: "Lab Results", icon: Beaker },
-    { id: "insurance", label: "Insurance", icon: ShieldIcon }
   ];
 
   const renderTabContent = () => {

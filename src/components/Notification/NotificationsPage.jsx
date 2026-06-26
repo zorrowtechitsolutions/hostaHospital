@@ -13,6 +13,11 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Pagination } from '../ui/Pagination';
 import { Button, Card, Badge } from '../ui';
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerNotificationEvents, unregisterNotificationEvents } from '../../socket/notificationEvents';
+
 const NotificationsPage = () => {
   const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -65,6 +70,61 @@ const NotificationsPage = () => {
       return statusFilter === 'read' ? !isUnread : isUnread;
     });
   }
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering notification events...");
+    console.log("📡 Socket connected:", socket.connected);
+
+    registerNotificationEvents({
+      onNotificationCreated: (data) => {
+        console.log("🔔 NEW NOTIFICATION CREATED:", data);
+        refetch();
+        showSuccessToast("New notification received!", 2000);
+      },
+      onNotificationRead: (data) => {
+        console.log("📖 NOTIFICATION READ:", data);
+        refetch();
+      }
+    });
+
+    return () => {
+      console.log("🧹 Unregistering notification events...");
+      unregisterNotificationEvents();
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Notification events will work!");
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Notification events won't work!");
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, []);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);

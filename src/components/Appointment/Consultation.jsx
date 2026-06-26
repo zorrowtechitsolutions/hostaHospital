@@ -10,6 +10,11 @@ import { useCompleteBookingMutation } from "../../../app/service/request";
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerPrescriptionEvents, unregisterPrescriptionEvents } from '../../socket/prescriptionEvents';
+
 // Vital Input Component
 const VitalInput = ({ label, type = "text", unit, value, onChange, isEditing, onBlur }) => {
   return (
@@ -165,6 +170,64 @@ const Consultation = () => {
   const [emptyStomach, setEmptyStomach] = useState("");
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering prescription event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerPrescriptionEvents({
+      onPrescriptionCreated: async (data) => {
+        console.log("📋 NEW PRESCRIPTION CREATED:", data);
+        showSuccessToast(`New prescription created!`, 3000);
+      },
+      onPrescriptionUpdated: async (data) => {
+        console.log("✏️ PRESCRIPTION UPDATED:", data);
+        showSuccessToast(`Prescription updated!`, 3000);
+      },
+      onPrescriptionDeleted: async (data) => {
+        console.log("🗑️ PRESCRIPTION DELETED:", data);
+        showSuccessToast(`Prescription deleted!`, 3000);
+      }
+    });
+
+    return () => {
+      console.log("🧹 Unregistering prescription events...");
+      unregisterPrescriptionEvents();
+    };
+  }, []);
+
+  // ✅ Listen for socket connection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Prescription events will work!");
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Prescription events won't work!");
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, []);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - PRESCRIPTION: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   useEffect(() => {
     console.log("=== CONSULTATION PAGE DEBUG ===");
@@ -428,6 +491,18 @@ console.log("========================");
 
       const result = await createPrescription(prescriptionData).unwrap();
 
+      // ✅ Emit socket event for prescription created
+      if (socket && socket.connected) {
+        socket.emit('PRESCRIPTION_CREATED', {
+          prescriptionId: result?.data?.id || result?.data?._id,
+          patientId: extractedPatientId || result?.patientId,
+          doctorId: extractedDoctorId,
+          hospitalId: extractedHospitalId,
+          bookingId: bookingId,
+        });
+        console.log("📤 Emitted PRESCRIPTION_CREATED event");
+      }
+
       await updateBooking({
         id: bookingId,
         data: {
@@ -619,6 +694,7 @@ console.log("========================");
         </Card>
       </div>
 
+<<<<<<< HEAD
 <ViewMedicalHistory
   isOpen={showMedicalHistory}
   onClose={() => setShowMedicalHistory(false)}
@@ -639,6 +715,27 @@ console.log("========================");
     appointmentData.displayName
   }
 />
+=======
+      <ViewMedicalHistory
+        isOpen={showMedicalHistory}
+        onClose={() => setShowMedicalHistory(false)}
+        patientId={
+          appointmentData.patientId ||
+          appointmentData.patient?.id ||
+          appointmentData.patient?.patientId
+        }
+        department={
+          appointmentData.department ||
+          appointmentData.doctorDepartment ||
+          appointmentData.departmentName
+        }
+        doctorName={
+          appointmentData.doctor?.name ||
+          appointmentData.doctorName ||
+          appointmentData.displayName
+        }
+      />
+>>>>>>> efb28c22a899d6e589ff74c009dee22e71f5a268
     </div>
   );
 };

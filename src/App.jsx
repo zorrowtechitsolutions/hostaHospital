@@ -16,7 +16,6 @@ import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/Toast";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
-import ViewMedicalHistory from "./components/Appointment/ViewMedicalHistory";
 import HelpSupport from "./components/help/HelpSupport";
 import ProtectedRoute from "./context/ProtectedRoute";
 import Users from "./components/usermanagment/Users";
@@ -24,9 +23,9 @@ import AddNewUser from "./components/usermanagment/AddNewUser";
 import EditUser from "./components/usermanagment/EditUser";
 import SuperAdminLayout from "./components/super admin/SuperAdminLayout";
 import HospitalHomePage from "./Authentication/HospitalHomePage";
-  import { io } from "socket.io-client";
 
-
+// Import socket
+import { socket } from "./socket/socket";
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -49,6 +48,7 @@ const Pharmacy = lazy(() => import("./components/Pharmacy/Pharmacy"));
 const ViewDoctor = lazy(() => import("./components/Doctor/ViewDoctor"));
 const ViewProduct = lazy(() => import("./components/Pharmacy/ViewProduct"));
 const Consultation = lazy(() => import("./components/Appointment/Consultation"));
+const ViewMedicalHistory = lazy(() => import("./components/Appointment/ViewMedicalHistory"));
 const CalendarPage = lazy(() => import("./components/Appointment/CalendarPage"));
 const LaboratoryRegistrationForm = lazy(() => import("./components/Laborartory/LaboratoryRegistrationForm"));
 const NotificationsPage = lazy(() => import("./components/Notification/NotificationsPage"));
@@ -62,7 +62,6 @@ const AddPatient = lazy(() => import("./components/patients/AddPatientModal"));
 const ForgotPassword = lazy(() => import("./Authentication/ForgotPassword"));
 const Ambulance = lazy(() => import("./components/Ambulance/Ambulance"));
 const BloodBank = lazy(() => import("./components/BloodBank/BloodBank"));
-
 
 // Loading fallback component
 const PageLoader = () => (
@@ -81,73 +80,19 @@ function App() {
   const location = useLocation();
   const [booking, setBooking] = useState(null);
   const navigate = useNavigate();
-   
 
-  const [socket, setSocket] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [roomJoined, setRoomJoined] = useState(false);
-  const [debugInfo, setDebugInfo] = useState({});
+  // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
+  useEffect(() => {
+    socket.connect();
 
-useEffect(() => {
-    // Connect to socket
-    const newSocket = io("https://zorrowtek.in", {
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-    });
-
-    setSocket(newSocket);
-
-    newSocket.on("connect", () => {
-      console.log("✅ Connected:", newSocket.id);
-      setIsConnected(true);
-      
-      // Join room after connection
-      // console.log(`🔗 Joining room for userId: ${userId}`);
-      // newSocket.emit("join-room", userId);
-    });
-
-    newSocket.on("room-joined", (response) => {
-      console.log("✅ Room joined confirmation:", response);
-      setRoomJoined(true);
-    });
-
-    newSocket.on("REVIEW_REGISTERED", (data) => {
-      console.log("📩 Received REVIEW_REGISTERED:", data);
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        time: new Date().toLocaleTimeString(),
-        data
-      }]); 
-      
-      // Show notification
-      alert(`New review received! ${JSON.stringify(data)}`);
-    });
-
-    // Listen for ALL events for debugging
-    newSocket.onAny((event, ...args) => {
-      console.log(`📡 Event: ${event}`, args);
-    });
-
-    newSocket.on("disconnect", (reason) => {
-      console.log("❌ Disconnected:", reason);
-      setIsConnected(false);
-      setRoomJoined(false);
-    });
-
-    newSocket.on("connect_error", (error) => {
-      console.error("❌ Connection error:", error);
+    socket.on("connect", () => {
+      console.log("Socket connected:", socket.id);
     });
 
     return () => {
-      console.log("🧹 Cleaning up");
-      newSocket.disconnect();
+      socket.disconnect();
     };
   }, []);
-
 
   // State for modals from Chrome notifications
   const [showApproveModal, setShowApproveModal] = useState(false);
@@ -385,7 +330,7 @@ useEffect(() => {
                 <Route 
                   path="/doctors" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute permissionId={2}>
                       <Doctors />
                     </ProtectedRoute>
                   } 
@@ -393,7 +338,7 @@ useEffect(() => {
                 <Route 
                   path="/add-doctor" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute permissionId={3}>
                       <AddDoctor />
                     </ProtectedRoute>
                   } 
@@ -401,7 +346,7 @@ useEffect(() => {
                 <Route 
                   path="/edit-doctor/:id" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute permissionId={4}>
                       <EditDoctor />
                     </ProtectedRoute>
                   } 
@@ -409,7 +354,7 @@ useEffect(() => {
                 <Route 
                   path="/doctor/:id" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute permissionId={5}>
                       <ViewDoctor />
                     </ProtectedRoute>
                   } 

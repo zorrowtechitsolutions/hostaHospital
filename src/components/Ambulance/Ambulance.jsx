@@ -1,4 +1,3 @@
-// src/components/Ambulance/Ambulance.jsx - With Green Gradient Buttons
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -38,6 +37,11 @@ import {
   useDeleteAmbulanceMutation
 } from '../../../app/service/ambulance';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../socket/ambulanceEvents';
 
 const ambulanceTypes = [
   "Basic Life Support (BLS)",
@@ -160,6 +164,81 @@ const Ambulance = () => {
   const [updateAmbulance, { isLoading: isUpdating }] = useUpdateAmbulanceMutation();
   const [deleteAmbulance, { isLoading: isDeleting }] = useDeleteAmbulanceMutation();
 
+  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  useEffect(() => {
+    console.log("📡 Socket connected:", socket.connected);
+    
+    // Register ambulance events
+    registerAmbulanceEvents({
+      onRegistered: async (data) => {
+        showSuccessToast(`New ambulance registered!`, 3000);
+        const result = await refetch();
+      },
+
+      onUpdated: async (data) => {
+        showSuccessToast(`Ambulance updated!`, 3000);
+        const result = await refetch();
+      },
+
+      onDeleted: async (data) => {
+        showSuccessToast(`Ambulance deleted!`, 3000);
+        const result = await refetch();
+      }
+    });
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering ambulance events...");
+      unregisterAmbulanceEvents();
+    };
+  }, [refetch]); // ✅ Only refetch dependency
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      // Re-register events on reconnect
+      registerAmbulanceEvents({
+        onRegistered: async (data) => {
+          showSuccessToast(`New ambulance registered!`, 3000);
+          await refetch();
+        },
+        onUpdated: async (data) => {
+          showSuccessToast(`Ambulance updated!`, 3000);
+          await refetch();
+        },
+        onDeleted: async (data) => {
+          showSuccessToast(`Ambulance deleted!`, 3000);
+          await refetch();
+        }
+      });
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Ambulance events won't work!");
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
   // Transform API response - SEPARATE display ID from database ID
   const transformAmbulanceData = (ambulanceList) => {
     if (!ambulanceList || !Array.isArray(ambulanceList)) return [];
@@ -206,8 +285,9 @@ const Ambulance = () => {
       };
       
       const response = await createAmbulance(ambulanceToAdd).unwrap();
+      
       showSuccessToast(`${newAmbulance.serviceName} has been added successfully!`, 3000);
-      refetch();
+      await refetch();
       setShowAddModal(false);
     } catch (error) {
       console.error('Add error:', error);
@@ -230,7 +310,7 @@ const Ambulance = () => {
       }).unwrap();
       
       showSuccessToast(`${updatedAmbulance.serviceName} has been updated successfully!`, 3000);
-      refetch();
+      await refetch();
       setShowEditModal(false);
       setSelectedAmbulance(null);
     } catch (error) {
@@ -243,8 +323,9 @@ const Ambulance = () => {
     if (selectedAmbulance) {
       try {
         await deleteAmbulance(selectedAmbulance.id).unwrap();
+        
         showSuccessToast(`${selectedAmbulance.serviceName} has been deleted successfully!`, 3000);
-        refetch();
+        await refetch();
         setShowDeleteModal(false);
         setSelectedAmbulance(null);
       } catch (error) {
@@ -487,7 +568,7 @@ const Ambulance = () => {
         </div>
       </div>
 
-      {/* GRID VIEW - Original simple structure (without sticky pagination) */}
+      {/* GRID VIEW */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -563,7 +644,7 @@ const Ambulance = () => {
         </>
       )}
 
-      {/* LIST VIEW - WITH STICKY PAGINATION */}
+      {/* LIST VIEW */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -573,9 +654,7 @@ const Ambulance = () => {
             </h2>
           </div>
 
-          {/* Flex container for sticky pagination */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -641,7 +720,6 @@ const Ambulance = () => {
               </table>
             </div>
 
-            {/* Pagination - Sticks to bottom using mt-auto */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}

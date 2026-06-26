@@ -49,22 +49,50 @@ export interface GetStaffParams {
   hospitalId?: string | number;
   page?: number;
   limit?: number;
-
   name?: string;
   gender?: string;
   phone?: string;
-
   status?: string;
-
   designation?: string;
-
   staffType?: string;
-
   email?: string;
-
   staffId?: string;
-
   search_query?: string;
+}
+
+// Password Reset Request Types
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface SendOtpRequest {
+  email: string;
+}
+
+// ✅ FIX 1: Updated ChangePasswordRequest with confirmPassword
+export interface ChangePasswordRequest {
+  staffId: number;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;  // ✅ Added confirmPassword
+}
+
+// Login Types
+export interface LoginRequest {
+  email: string;
+  password: string;
+  fcmToken?: string;
+}
+
+export interface LoginPhoneRequest {
+  phone: string;
+}
+
+export interface VerifyOtpRequest {
+  phone: string;
+  otp: string;
 }
 
 // ================= API =================
@@ -72,124 +100,56 @@ export interface GetStaffParams {
 export const staffApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET STAFF =================
-    // Automatically adds hospitalId from authenticated user
-getStaff: builder.query<
-  StaffResponse,
-  GetStaffParams | void
->({
-query: (params) => {
+    // ================= GET ALL STAFF =================
+    // GET /staff
+    getStaff: builder.query<
+      StaffResponse,
+      GetStaffParams | void
+    >({
+      query: (params) => {
+        const queryParams = new URLSearchParams();
+        const hospitalId = getHospitalId();
 
-const queryParams =
-new URLSearchParams();
+        if (hospitalId) {
+          queryParams.append("hospitalId", String(hospitalId));
+        }
+        
+        if (params?.hospitalId) {
+          queryParams.set("hospitalId", String(params.hospitalId));
+        }
 
-const hospitalId =
-getHospitalId();
+        // filters
+        if (params?.name) queryParams.append("name", params.name);
+        if (params?.gender) queryParams.append("gender", params.gender);
+        if (params?.phone) queryParams.append("phone", params.phone);
+        if (params?.status) queryParams.append("status", params.status);
+        if (params?.designation) queryParams.append("designation", params.designation);
+        if (params?.staffType) queryParams.append("staffType", params.staffType);
+        if (params?.email) queryParams.append("email", params.email);
+        if (params?.staffId) queryParams.append("staffId", params.staffId);
+        if (params?.search_query) queryParams.append("search_query", params.search_query);
 
-if (hospitalId) {
-queryParams.append(
-"hospitalId",
-String(hospitalId)
-);
-}
- if (params?.hospitalId) {
-  queryParams.set("hospitalId", String(params.hospitalId));
-}
+        // pagination
+        if (params?.page) queryParams.append("page", String(params.page));
+        if (params?.limit) queryParams.append("limit", String(params.limit));
 
-// filters
-if (params?.name)
-queryParams.append(
-"name",
-params.name
-);
+        return `/staff?${queryParams.toString()}`;
+      },
+      providesTags: ["Staff"]
+    }),
 
-if (params?.gender)
-queryParams.append(
-"gender",
-params.gender
-);
-
-if (params?.phone)
-queryParams.append(
-"phone",
-params.phone
-);
-
-if (params?.status)
-queryParams.append(
-"status",
-params.status
-);
-
-if (params?.designation)
-queryParams.append(
-"designation",
-params.designation
-);
-
-if (params?.staffType)
-queryParams.append(
-"staffType",
-params.staffType
-);
-
-if (params?.email)
-queryParams.append(
-"email",
-params.email
-);
-
-if (params?.staffId)
-queryParams.append(
-"staffId",
-params.staffId
-);
-
-if (params?.search_query)
-queryParams.append(
-"search_query",
-params.search_query
-);
-
-// pagination
-if (params?.page)
-queryParams.append(
-"page",
-String(params.page)
-);
-
-if (params?.limit)
-queryParams.append(
-"limit",
-String(params.limit)
-);
-
-if (params?.id) {
-
-return `/staff/${params.id}?${queryParams.toString()}`;
-
-}
-
-return `/staff?${queryParams.toString()}`;
-
-},
-
-providesTags:
-["Staff"]
-
-}),
-
-getStaffById: builder.query<
-  StaffResponse,
-  number | string
->({
-  query: (id) => `/staff/${id}`,
-  providesTags: ["Staff"],
-}),
-
+    // ================= GET STAFF BY ID =================
+    // GET /staff/:id
+    getStaffById: builder.query<
+      StaffResponse,
+      number | string
+    >({
+      query: (id) => `/staff/${id}`,
+      providesTags: ["Staff"],
+    }),
 
     // ================= CREATE STAFF =================
-    // Automatically adds hospitalId from authenticated user
+    // POST /staff
     createStaff: builder.mutation<
       StaffResponse,
       Omit<Staff, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
@@ -210,6 +170,7 @@ getStaffById: builder.query<
     }),
 
     // ================= UPDATE STAFF =================
+    // PUT /staff/:id
     updateStaff: builder.mutation<
       StaffResponse,
       {
@@ -229,6 +190,7 @@ getStaffById: builder.query<
     }),
 
     // ================= DELETE STAFF =================
+    // DELETE /staff/:id
     deleteStaff: builder.mutation<
       { message: string },
       string | number
@@ -243,14 +205,11 @@ getStaffById: builder.query<
       ],
     }),
 
-    // ================= LOGIN =================
+    // ================= LOGIN WITH EMAIL =================
+    // POST /staff/login
     loginStaff: builder.mutation<
       StaffResponse,
-      {
-        email: string;
-        password: string;
-        fcmToken?: string;
-      }
+      LoginRequest
     >({
       query: (data) => ({
         url: "/staff/login",
@@ -266,12 +225,11 @@ getStaffById: builder.query<
       },
     }),
 
-    // ================= LOGIN PHONE =================
+    // ================= LOGIN WITH PHONE =================
+    // POST /staff/login/phone
     loginStaffPhone: builder.mutation<
       StaffResponse,
-      {
-        phone: string;
-      }
+      LoginPhoneRequest
     >({
       query: (data) => ({
         url: "/staff/login/phone",
@@ -281,12 +239,10 @@ getStaffById: builder.query<
     }),
 
     // ================= VERIFY OTP =================
+    // POST /staff/otp
     verifyStaffOtp: builder.mutation<
       StaffResponse,
-      {
-        phone: string;
-        otp: string;
-      }
+      VerifyOtpRequest
     >({
       query: (data) => ({
         url: "/staff/otp",
@@ -302,7 +258,8 @@ getStaffById: builder.query<
       },
     }),
 
-    // ================= REFRESH =================
+    // ================= REFRESH TOKEN =================
+    // POST /staff/refresh
     refreshStaff: builder.mutation<
       StaffResponse,
       void
@@ -321,6 +278,7 @@ getStaffById: builder.query<
     }),
 
     // ================= LOGOUT =================
+    // POST /staff/logout
     logoutStaff: builder.mutation<
       { message: string },
       void
@@ -338,20 +296,98 @@ getStaffById: builder.query<
         }
       },
     }),
+
+    // ================= SEND OTP FOR PASSWORD RESET =================
+    // POST /staff/auth/send-otp
+    sendStaffOtp: builder.mutation<
+      { success: boolean; message: string },
+      SendOtpRequest
+    >({
+      query: (data) => ({
+        url: "/staff/auth/send-otp",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // ================= VERIFY OTP FOR PASSWORD RESET =================
+    // POST /staff/auth/verify-otp
+    verifyStaffOtpForReset: builder.mutation<
+      StaffResponse,
+      {
+        email: string;
+        otp: string;
+      }
+    >({
+      query: (data) => ({
+        url: "/staff/auth/verify-otp",
+        method: "POST",
+        body: data,
+      }),
+      transformResponse: (response: StaffResponse) => {
+        const token = response.token;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+        }
+        return response;
+      },
+    }),
+
+    // ================= RESET PASSWORD (with OTP) =================
+    // POST /staff/auth/reset-password
+    resetStaffPassword: builder.mutation<
+      { success: boolean; message: string },
+      ResetPasswordRequest
+    >({
+      query: (data) => ({
+        url: "/staff/auth/reset-password",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // ================= CHANGE PASSWORD (with current password) =================
+    // ✅ FIX 2: Updated with confirmPassword in the request body
+    changeStaffPassword: builder.mutation<
+      { success: boolean; message: string },
+      ChangePasswordRequest
+    >({
+      query: (data) => ({
+        url: "/staff/auth/change-password",
+        method: "PUT",
+        body: {
+          staffId: data.staffId,
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+          confirmPassword: data.confirmPassword,  // ✅ Added confirmPassword
+        },
+      }),
+    }),
   }),
 });
 
 // ================= EXPORT HOOKS =================
 
 export const {
+  // GET
   useGetStaffQuery,
   useGetStaffByIdQuery,
+  
+  // POST
   useCreateStaffMutation,
-  useUpdateStaffMutation,
-  useDeleteStaffMutation,
   useLoginStaffMutation,
   useLoginStaffPhoneMutation,
   useVerifyStaffOtpMutation,
   useRefreshStaffMutation,
   useLogoutStaffMutation,
+  useSendStaffOtpMutation,
+  useVerifyStaffOtpForResetMutation,
+  useResetStaffPasswordMutation,
+  
+  // PUT
+  useUpdateStaffMutation,
+  useChangeStaffPasswordMutation,
+  
+  // DELETE
+  useDeleteStaffMutation,
 } = staffApi;

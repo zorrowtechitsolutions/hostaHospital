@@ -27,6 +27,11 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from "../../../app/service/S3";
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
 // Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
@@ -60,7 +65,6 @@ const calculateAge = (dob) => {
   return age;
 };
 
-// FIXED: Proper operator precedence for date and time extraction
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -68,10 +72,8 @@ const transformBookingsData = (bookingList) => {
     const DEFAULT_PROFILE_IMAGE = `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`;
     const bookingId = booking.id || booking._id;
     
-    // Get patient image - check multiple possible fields
     const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
 
-    // Extract raw values first to avoid operator precedence issues
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
     const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
 
@@ -198,6 +200,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // API Hooks
 const {
   data: bookingsResponse,
@@ -215,6 +220,116 @@ const {
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering booking event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerBookingEvents({
+      onBookingRegistered: async (data) => {
+        console.log("📅 NEW BOOKING REGISTERED:", data);
+        showSuccessToast(`New booking registered!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+      },
+      onBookingUpdated: async (data) => {
+        console.log("✏️ BOOKING UPDATED:", data);
+        showSuccessToast(`Booking updated!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      },
+      onBookingCancelled: async (data) => {
+        console.log("❌ BOOKING CANCELLED:", data);
+        showSuccessToast(`Booking cancelled!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (CANCELLED):", result);
+      },
+      onBookingAccepted: async (data) => {
+        console.log("✅ BOOKING ACCEPTED:", data);
+        showSuccessToast(`Booking accepted!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (ACCEPTED):", result);
+      },
+      onBookingCompleted: async (data) => {
+        console.log("✔️ BOOKING COMPLETED:", data);
+        showSuccessToast(`Booking completed!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (COMPLETED):", result);
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering booking events...");
+      unregisterBookingEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Booking events will work!");
+      if (!eventsRegistered) {
+        registerBookingEvents({
+          onBookingRegistered: async (data) => {
+            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+            showSuccessToast(`New booking registered!`, 3000);
+            await refetch();
+          },
+          onBookingUpdated: async (data) => {
+            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+            showSuccessToast(`Booking updated!`, 3000);
+            await refetch();
+          },
+          onBookingCancelled: async (data) => {
+            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+            showSuccessToast(`Booking cancelled!`, 3000);
+            await refetch();
+          },
+          onBookingAccepted: async (data) => {
+            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+            showSuccessToast(`Booking accepted!`, 3000);
+            await refetch();
+          },
+          onBookingCompleted: async (data) => {
+            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+            showSuccessToast(`Booking completed!`, 3000);
+            await refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - BOOKING: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Modal close helpers
   const closeApproveModal = () => {
@@ -610,7 +725,7 @@ const filteredRequests = useMemo(() => {
         </div>
       )}
 
-      {/* Request Table - WITH STICKY PAGINATION LIKE APPOINTMENTS */}
+      {/* Request Table */}
       {filteredRequests.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -633,9 +748,7 @@ const filteredRequests = useMemo(() => {
             </h2>
           </div>
 
-          {/* Flex container that expands to fill available space */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -655,7 +768,7 @@ const filteredRequests = useMemo(() => {
                     <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-10 h-10">
@@ -670,16 +783,16 @@ const filteredRequests = useMemo(() => {
                           </Avatar>
                           <span className="font-medium text-gray-800">{item.patientName}</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-gray-700">{item.age} yrs</span>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={CENTERED_FLEX_CLASS}>
                           <Phone size={14} className="text-gray-400" />
                           <span className="text-gray-700">{item.contact}</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={CENTERED_FLEX_CLASS}>
                           <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
@@ -687,7 +800,7 @@ const filteredRequests = useMemo(() => {
                           </div>
                           <span className="text-gray-700">{item.doctorName}</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 text-gray-600">
@@ -696,7 +809,7 @@ const filteredRequests = useMemo(() => {
                             <>at {item.consulting_time}</>
                           )}
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-3">
                           <button
@@ -714,14 +827,13 @@ const filteredRequests = useMemo(() => {
                             <X size={18} />
                           </button>
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
-               </table>
+              </table>
             </div>
 
-            {/* Pagination - Sticks to bottom using mt-auto */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}

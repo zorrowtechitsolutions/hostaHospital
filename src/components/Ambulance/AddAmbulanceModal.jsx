@@ -136,7 +136,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const validateForm = () => {
-    console.log("Validating form in modal...");
     const newErrors = {};
     
     const serviceNameError = validateServiceName(formData.serviceName);
@@ -169,13 +168,10 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       'address.pincode': true
     });
     
-    console.log("Validation errors in modal:", newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
-    console.log("===== MODAL SUBMIT =====");
-    console.log("Current form data:", formData);
     
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
@@ -190,7 +186,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       return;
     }
     
-    console.log("Form validation passed!");
     setIsSubmitting(true);
     
     const payload = {
@@ -206,15 +201,7 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
       }
     };
 
-    console.log("===== FINAL PAYLOAD FROM MODAL =====");
-    console.log("Payload:", JSON.stringify(payload, null, 2));
-    console.log("Payload details:");
-    console.log("  - serviceName:", payload.serviceName);
-    console.log("  - phone:", payload.phone);
-    console.log("  - vehicleType:", payload.vehicleType);
-    console.log("  - address:", payload.address);
-    // console.log("  - event: AMBULANCE_REGISTERED (automatically added in API service)");
-    console.log("====================================");
+ 
     
     onSave(payload);
     
@@ -231,7 +218,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
     setIsSubmitting(false);
     onClose();
     
-    console.log("Modal closed and form reset");
   };
 
   return (
