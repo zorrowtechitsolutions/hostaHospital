@@ -420,7 +420,11 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      console.log("Final Prescription Data:", JSON.stringify(prescriptionData, null, 2));
+console.log("=== PRESCRIPTION DATA ===");
+console.log(prescriptionData);
+console.log("nextConsultationDate:", nextConsultationDate);
+console.log("========================");
+
 
       const result = await createPrescription(prescriptionData).unwrap();
 
@@ -615,25 +619,26 @@ const Consultation = () => {
         </Card>
       </div>
 
-      <ViewMedicalHistory
-        isOpen={showMedicalHistory}
-        onClose={() => setShowMedicalHistory(false)}
-        patientId={
-          appointmentData.patient?.id ||
-          Number(appointmentData.patientId) ||
-          null
-        }
-        department={
-          appointmentData.department ||
-          appointmentData.doctorDepartment ||
-          appointmentData.departmentName
-        }
-        doctorName={
-          appointmentData.doctor?.name ||
-          appointmentData.doctorName ||
-          appointmentData.displayName
-        }
-      />
+<ViewMedicalHistory
+  isOpen={showMedicalHistory}
+  onClose={() => setShowMedicalHistory(false)}
+  patientId={
+    appointmentData.patient?.id ||
+    appointmentData.patient?.patientId ||
+    appointmentData.patientId ||
+    null
+  }
+  department={
+    appointmentData.department ||
+    appointmentData.doctorDepartment ||
+    appointmentData.departmentName
+  }
+  doctorName={
+    appointmentData.doctor?.name ||
+    appointmentData.doctorName ||
+    appointmentData.displayName
+  }
+/>
     </div>
   );
 };

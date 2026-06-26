@@ -18,13 +18,10 @@ import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { useGetBookingByIdQuery } from "../../../app/service/request";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 
-
 import { getHospitalId } from "../../utils/auth";
-
 
 // Component for rendering different block types
 const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTextChange, isEditable }) => {
-  // Reusable style object that uses backend styles
   const blockStyle = {
     backgroundColor: block.style?.bgColor || "transparent",
     color: block.style?.color || "#1e293b",
@@ -37,9 +34,7 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
 
   switch (block.type) {
     case "text":
-      let displayContent = block.content || block.text || "";
-      
-      // Replace placeholders with real data
+      let displayContent = block.text || block.content || "";
       displayContent = displayContent.replace(/\{doctorName\}/g, doctorData?.displayName || doctorData?.name || "Dr. Unknown");
       displayContent = displayContent.replace(/\{doctorSpecialty\}/g, doctorData?.specialization || doctorData?.department || "General Medicine");
       displayContent = displayContent.replace(/\{doctorContact\}/g, doctorData?.contact || doctorData?.phone || "N/A");
@@ -191,7 +186,7 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
   }
 };
 
-// ====================== TEMPLATE PREVIEW COMPONENT (Read-only - No Scrollbar) ======================
+// Template Preview Component (Read-only)
 const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }) => {
   if (!template || !template.design || template.design.length === 0) {
     return (
@@ -233,7 +228,7 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
   );
 };
 
-// ====================== CUSTOM TEMPLATE BUILDER (Editable - No Scrollbar) ======================
+// Custom Template Builder (Editable)
 const CustomTemplateBuilder = ({ 
   items, 
   setItems, 
@@ -294,12 +289,9 @@ const CustomTemplateBuilder = ({
 };
 
 const PrescriptionTemplate = () => {
-
   const { bookingId, patientId, doctorId } = useParams();
   const navigate = useNavigate();
-
   const hospitalId = getHospitalId();
-
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -313,34 +305,27 @@ const PrescriptionTemplate = () => {
   const { data: doctorData, isLoading: doctorLoading } = useGetDoctorByIdQuery(doctorId, { skip: !doctorId });
   const { data: bookingData, isLoading: bookingLoading } = useGetBookingByIdQuery(bookingId, { skip: !bookingId });
   
-  // Fetch existing templates
-const { data: templatesResponse, refetch: refetchTemplates } =
-  useGetPrescriptionTemplatesQuery({ hospitalId });
+  // Fetch existing templates with hospitalId
+  const { data: templatesResponse, refetch: refetchTemplates } = useGetPrescriptionTemplatesQuery({ hospitalId });
 
-  console.log("FULL RESPONSE", templatesResponse);
-  
-  
   const [createPrescriptionTemplate] = useCreatePrescriptionTemplateMutation();
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-  // Get templates from response
-const allTemplates = templatesResponse?.data || [];
-const demoPrescriptions = templatesResponse?.demoPrescription || [];
+  // Filter templates by hospital
+  const allTemplates = templatesResponse?.data || [];
+  
+  // Get demo template - either hospital-specific or global fallback
+  const demoTemplate = allTemplates.find(t => 
+    t.templateType === "demo" && 
+    (Number(t.hospitalId) === Number(hospitalId) || t.hospitalId === null || t.hospitalId === 0)
+  ) || null;
 
-const demoTemplate =
-  demoPrescriptions[0] ||
-  allTemplates.find(t => t.templateType === "demo");
-
-console.log("demoPrescriptions", demoPrescriptions);
-console.log("demoTemplate", demoTemplate);
-
-  // Custom template - from data with templateType "custom"
-const customTemplate = allTemplates.find(
-  t =>
-    t.templateType === "custom" &&
+  // Get custom template for this specific hospital only
+  const customTemplate = allTemplates.find(t => 
+    t.templateType === "custom" && 
     Number(t.hospitalId) === Number(hospitalId)
-);
+  ) || null;
 
   // Background color for custom templates
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
@@ -400,23 +385,82 @@ const customTemplate = allTemplates.find(
       setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
       setHasCustomTemplate(false);
     } else {
-      setItems([]);
-      setCustomCanvasBg("#ffffff");
+      // Create default fallback template if nothing exists
+      const defaultTemplate = getDefaultTemplate();
+      setItems(defaultTemplate.design);
+      setCustomCanvasBg(defaultTemplate.bgColor);
       setHasCustomTemplate(false);
     }
   }, [customTemplate, demoTemplate]);
 
-  // Save to localStorage when in edit mode
-  useEffect(() => {
-    if (isEditMode) {
-      localStorage.setItem("prescriptionTemplateData", JSON.stringify(items));
-    }
-  }, [items, isEditMode]);
-
-  // Save background color
-  useEffect(() => {
-    localStorage.setItem("canvasBg", customCanvasBg);
-  }, [customCanvasBg]);
+  // Default fallback template
+  const getDefaultTemplate = () => {
+    return {
+      design: [
+        {
+          id: 1,
+          type: "patientGrid",
+          x: 20,
+          y: 20,
+          width: 950,
+          height: 150,
+          style: { bgColor: "#f8fafc" }
+        },
+        {
+          id: 2,
+          type: "doctorDetails",
+          x: 20,
+          y: 180,
+          width: 400,
+          height: 80
+        },
+        {
+          id: 3,
+          type: "chiefComplaint",
+          x: 20,
+          y: 270,
+          width: 950,
+          height: 80,
+          style: { bgColor: "#fef3c7" }
+        },
+        {
+          id: 4,
+          type: "medicinesTable",
+          x: 20,
+          y: 360,
+          width: 950,
+          height: 250,
+          style: { bgColor: "#ffffff" }
+        },
+        {
+          id: 5,
+          type: "advice",
+          x: 20,
+          y: 620,
+          width: 950,
+          height: 100,
+          style: { bgColor: "#d1fae5" }
+        },
+        {
+          id: 6,
+          type: "signature",
+          x: 20,
+          y: 730,
+          width: 400,
+          height: 80
+        },
+        {
+          id: 7,
+          type: "prescriptionInfo",
+          x: 500,
+          y: 730,
+          width: 470,
+          height: 80
+        }
+      ],
+      bgColor: "#ffffff"
+    };
+  };
 
   const updatePosition = (id, x, y, width, height) => {
     setItems(prev =>
@@ -436,11 +480,17 @@ const customTemplate = allTemplates.find(
 
   const updateContent = (id, value) => {
     if (!isEditMode) return;
-    setItems((prev) => prev.map((item) => 
-      item.id === id && item.type === "text" 
-        ? { ...item, text: value } 
-        : item
-    ));
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id && item.type === "text"
+          ? {
+              ...item,
+              text: value,
+              content: value,
+            }
+          : item
+      )
+    );
   };
 
   const updateStyle = (id, key, value) => {
@@ -559,16 +609,9 @@ const customTemplate = allTemplates.find(
     }
   };
 
-
-  console.log("hospitalId", hospitalId);
-console.log("templatesResponse", templatesResponse?.data);
-console.log("customTemplate", customTemplate);
-
-  // ====================== SAVE TEMPLATE - Creates on first save, Updates on subsequent saves ======================
+  // Save Template - Creates on first save, Updates on subsequent saves
   const saveTemplate = async () => {
     if (isSaving) return;
-
-    console.log(templatesResponse?.data);
     
     setIsSaving(true);
     try {
@@ -578,34 +621,23 @@ console.log("customTemplate", customTemplate);
         return cleanBlock;
       });
 
-const payload = {
-  templateType: "custom",
-  hospitalId: hospitalId,
-  canvasBg: customCanvasBg,
-  design: designData
-};
-
-      // Check if custom template exists in the current response data
-const existingCustom = templatesResponse?.data?.find(
-  t =>
-    t.templateType === "custom" &&
-    Number(t.hospitalId) === Number(hospitalId)
-);
+      const payload = {
+        templateType: "custom",
+        hospitalId: Number(hospitalId),
+        canvasBg: customCanvasBg,
+        design: designData
+      };
 
       let result;
-      if (existingCustom) {
+      if (customTemplate) {
         // UPDATE existing custom template
-        console.log("🔄 Updating existing custom template ID:", existingCustom.id);
         result = await updatePrescriptionTemplate({
-          id: existingCustom.id,
+          id: customTemplate.id,
           data: payload,
         }).unwrap();
-        console.log("✅ Custom template updated successfully:", result);
       } else {
         // CREATE new custom template (first time save)
-        console.log("🆕 Creating new custom template (first time)");
         result = await createPrescriptionTemplate(payload).unwrap();
-        console.log("✅ Custom template created successfully:", result);
       }
       
       // Refetch to get the latest data
@@ -617,33 +649,25 @@ const existingCustom = templatesResponse?.data?.find(
       setSelectedItemId(null);
       setTimeout(() => setSaved(false), 2000);
       
-      alert(existingCustom ? "Custom template updated successfully!" : "Custom template created successfully!");
+      alert(customTemplate ? "Custom template updated successfully!" : "Custom template created successfully!");
     } catch (error) {
-      console.error("❌ Save failed:", error);
-      // More detailed error message
-      const errorMsg = error?.data?.message || error?.message || "Unknown error";
-      alert(`Save failed: ${errorMsg}`);
+      console.error("Save failed:", error);
+      alert(`Save failed: ${error?.data?.message || error?.message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-
-
-
   // Create prescription with real data - uses custom template design
   const handleCreatePrescription = async (prescriptionFormData) => {
     try {
-      // Use custom template design if available, otherwise use demo
+      // Use custom template if available for this hospital, otherwise demo
       const selectedTemplate = customTemplate || demoTemplate;
-const designToUse = customTemplate
-  ? customTemplate.design
-  : demoTemplate?.design || [];
-  
-  
+      const designToUse = selectedTemplate?.design || getDefaultTemplate().design;
+
       const prescriptionPayload = {
         bookingId: parseInt(bookingId),
-        hospitalId: hospitalId,
+        hospitalId: Number(hospitalId),
         doctorId: parseInt(doctorId),
         userId: patientData?.data?.userId,
         patientId: parseInt(patientId),
@@ -656,9 +680,9 @@ const designToUse = customTemplate
         next_consultation: prescriptionFormData.next_consultation,
         empty_stomach: prescriptionFormData.empty_stomach || false,
         
-        // Use custom template design
+        // Use hospital-specific template
         templateType: customTemplate ? "custom" : "demo",
-        canvasBg: customTemplate?.canvasBg || customCanvasBg,
+        canvasBg: customTemplate?.canvasBg || selectedTemplate?.canvasBg || "#ffffff",
         design: designToUse,
         
         temperature: prescriptionFormData.temperature,
@@ -672,18 +696,6 @@ const designToUse = customTemplate
         bsa: prescriptionFormData.bsa
       };
 
-      console.log("=== PRESCRIPTION PAYLOAD ===");
-console.log(prescriptionPayload);
-console.log("templateType", prescriptionPayload.templateType);
-console.log("design", prescriptionPayload.design);
-
-
-      console.log("hospitalId", hospitalId);
-console.log("customTemplate", customTemplate);
-console.log("demoTemplate", demoTemplate);
-console.log("designToUse", designToUse);
-console.log("templateType", customTemplate ? "custom" : "demo");
-      
       const result = await createPrescription(prescriptionPayload).unwrap();
       
       if (result.success) {
@@ -785,27 +797,9 @@ console.log("templateType", customTemplate ? "custom" : "demo");
 
   const resetToDefault = async () => {
     if (window.confirm("Reset all changes?")) {
-      if (demoTemplate) {
-        setItems(
-          (demoTemplate.design || []).map((item, index) => ({
-            ...item,
-            id: Date.now() + index,
-            text: item.content || item.text || "",
-            style: {
-              textAlign: item.style?.textAlign || "left",
-              bgColor: item.style?.bgColor || "transparent",
-              color: item.style?.color || "#1e293b",
-              fontSize: item.style?.fontSize || "16px",
-              fontWeight: item.style?.fontWeight || "normal",
-            },
-            editable: true,
-          }))
-        );
-        setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
-      } else {
-        setItems([]);
-        setCustomCanvasBg("#ffffff");
-      }
+      const defaultTemplate = getDefaultTemplate();
+      setItems(defaultTemplate.design);
+      setCustomCanvasBg(defaultTemplate.bgColor);
       setSelectedItemId(null);
     }
   };
@@ -814,7 +808,6 @@ console.log("templateType", customTemplate ? "custom" : "demo");
 
   const handleBgColorChange = (color) => {
     setCustomCanvasBg(color);
-    localStorage.setItem("prescriptionCustomCanvasBg", color);
   };
 
   const applyStyleToSelected = (styleKey, styleValue) => {
@@ -926,26 +919,26 @@ console.log("templateType", customTemplate ? "custom" : "demo");
         {/* Tab Content */}
         <div className="bg-white rounded-xl shadow p-6">
           {/* Demo Template Tab - Read Only */}
-{activeTab === "demo" && (
-  <div>
-    {console.log("Active Tab:", activeTab)}
-    {console.log("Demo Template:", demoTemplate)}
-
-    <h3 className="font-semibold mb-3 text-gray-700">
-      Demo Template
-    </h3>
-
-    {demoTemplate ? (
-      <TemplatePreview
-        template={demoTemplate}
-        patientData={patient}
-        doctorData={doctor}
-      />
-    ) : (
-      <div>No Demo Template</div>
-    )}
-  </div>
-)}
+          {activeTab === "demo" && (
+            <div>
+              <h3 className="font-semibold mb-3 text-gray-700">
+                Demo Template
+              </h3>
+              {demoTemplate ? (
+                <TemplatePreview
+                  template={demoTemplate}
+                  patientData={patient}
+                  doctorData={doctor}
+                />
+              ) : (
+                <TemplatePreview
+                  template={getDefaultTemplate()}
+                  patientData={patient}
+                  doctorData={doctor}
+                />
+              )}
+            </div>
+          )}
 
           {/* Custom Template Tab - Editable */}
           {activeTab === "custom" && (
@@ -1094,6 +1087,18 @@ console.log("templateType", customTemplate ? "custom" : "demo");
                           </option>
                         ))}
                       </select>
+
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium">
+                          Template Background
+                        </label>
+                        <input
+                          type="color"
+                          value={customCanvasBg}
+                          onChange={(e) => handleBgColorChange(e.target.value)}
+                          className="w-10 h-10 rounded cursor-pointer"
+                        />
+                      </div>
                       
                       <button
                         onClick={() => applyStyleToSelected("textAlign", "left")}
@@ -1155,27 +1160,17 @@ console.log("templateType", customTemplate ? "custom" : "demo");
         </div>
       </div>
 
-<PrescriptionReportModal
-  isOpen={isModalOpen}
-  onClose={() => setIsModalOpen(false)}
-  patient={patient}
-  doctor={doctor}
-  booking={booking}
-  existingPrescription={currentPrescription}
-  templateDesign={
-    currentPrescription?.design ||
-    customTemplate?.design ||
-    demoTemplate?.design ||
-    items
-  }
-  templateBgColor={
-    currentPrescription?.canvasBg ||
-    customTemplate?.canvasBg ||
-    demoTemplate?.canvasBg ||
-    customCanvasBg
-  }
-/>
-
+      <PrescriptionReportModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        patient={patient}
+        doctor={doctor}
+        booking={booking}
+        existingPrescription={currentPrescription}
+        templateDesign={currentPrescription?.design || customTemplate?.design || demoTemplate?.design || getDefaultTemplate().design}
+        templateBgColor={currentPrescription?.canvasBg || customTemplate?.canvasBg || demoTemplate?.canvasBg || "#ffffff"}
+        hospitalId={hospitalId}
+      />
     </div>
   );
 };

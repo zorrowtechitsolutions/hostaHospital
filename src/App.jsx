@@ -419,7 +419,7 @@ useEffect(() => {
                 <Route 
                   path="/patients" 
                   element={
-                    <ProtectedRoute permissionId={14}>
+                    <ProtectedRoute >
                       <Patients />
                     </ProtectedRoute>
                   } 
@@ -427,7 +427,7 @@ useEffect(() => {
                 <Route 
                   path="/add-patient" 
                   element={
-                    <ProtectedRoute permissionId={15}>
+                    <ProtectedRoute >
                       <AddPatient />
                     </ProtectedRoute>
                   } 
@@ -435,7 +435,7 @@ useEffect(() => {
                 <Route 
                   path="/edit-patient/:id" 
                   element={
-                    <ProtectedRoute permissionId={16}>
+                    <ProtectedRoute >
                       <EditPatientModal />
                     </ProtectedRoute>
                   } 
@@ -443,7 +443,7 @@ useEffect(() => {
                 <Route 
                   path="/patients/:id" 
                   element={
-                    <ProtectedRoute permissionId={14}>
+                    <ProtectedRoute >
                       <PatientDetails />
                     </ProtectedRoute>
                   } 

@@ -199,19 +199,19 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
 
   // API Hooks
-  const {
-    data: bookingsResponse,
-    isLoading: loading,
-    refetch,
-    isFetching
-  } = useGetBookingsQuery({
-    status: "pending",
-    page: currentPage,
-    limit: itemsPerPage,
-    ...(searchTerm && { search_query: searchTerm }),
-    ...(departmentFilter && { department: departmentFilter }),
-    ...(dateFilter && { date: dateFilter })
-  });
+const {
+  data: bookingsResponse,
+  isLoading: loading,
+  refetch,
+  isFetching
+} = useGetBookingsQuery({
+  page: currentPage,
+  limit: itemsPerPage,
+  ...(searchTerm && { search_query: searchTerm }),
+  ...(departmentFilter && { department: departmentFilter }),
+  ...(dateFilter && { date: dateFilter }),
+  ...(statusFilter && { status: statusFilter }),
+});
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
@@ -245,47 +245,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   }, [safeData, doctorId, doctorName, showAllData]);
 
   // Filter requests based on all criteria
-  const filteredRequests = useMemo(() => {
-    let filtered;
+const filteredRequests = useMemo(() => {
+  if (doctorId && !showAllData) {
+    return safeData.filter(item =>
+      matchesDoctor(item, doctorId, doctorName)
+    );
+  }
 
-    // Apply doctor filter
-    if (doctorId && !showAllData) {
-      filtered = safeData.filter(item => matchesDoctor(item, doctorId, doctorName));
-    } else {
-      filtered = [...safeData];
-    }
+  return safeData;
+}, [safeData, doctorId, doctorName, showAllData]);
 
-    const normalizedSearch = searchTerm.toLowerCase();
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(item =>
-        (item.formattedId && item.formattedId.toLowerCase().includes(normalizedSearch)) ||
-        (item.patientId && item.patientId.toLowerCase().includes(normalizedSearch)) ||
-        (item.patientName && item.patientName.toLowerCase().includes(normalizedSearch)) ||
-        (item.doctorName && item.doctorName.toLowerCase().includes(normalizedSearch)) ||
-        (item.department && item.department.toLowerCase().includes(normalizedSearch)) ||
-        (item.contact && item.contact.includes(searchTerm))
-      );
-    }
-
-    // Apply department filter
-    if (departmentFilter) {
-      filtered = filtered.filter(item => item.department === departmentFilter);
-    }
-
-    // Apply date filter
-    if (dateFilter) {
-      filtered = filtered.filter(item => item.appointmentDate === dateFilter);
-    }
-
-    // Apply status filter
-    if (statusFilter) {
-      filtered = filtered.filter(item => item.status === statusFilter);
-    }
-
-    return filtered;
-  }, [safeData, doctorId, doctorName, showAllData, searchTerm, departmentFilter, dateFilter, statusFilter]);
 
   const totalItems = filteredRequests.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);

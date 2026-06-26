@@ -15,6 +15,7 @@ import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
+import HospitalReviews from "./HospitalReviews";
 
 const TIME_OPTIONS = [
   '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
@@ -675,23 +676,25 @@ const Settings = () => {
     </div>
   );
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'General':
-        return GeneralTab;
-      case 'Security':
-        return <Security />;
-      case 'Map':
-        return <Map />;
-      case 'Prescription Template':
-        return <PrescriptionTemplate />;
-      default:
-        return null;
-    }
-  };
+const renderTabContent = () => {
+  switch (activeTab) {
+    case 'General':
+      return GeneralTab;
+    case 'Security':
+      return <Security />;
+    case 'Map':
+      return <Map />;
+    case 'Prescription Template':
+      return <PrescriptionTemplate />;
+    case 'Reviews':
+      return <HospitalReviews />;
+    default:
+      return null;
+  }
+};
 
   // Define tabs array once
-  const tabs = ['General', 'Security', 'Map', 'Prescription Template'];
+  const tabs = ['General', 'Security', 'Map', 'Prescription Template','Reviews'];
 
   if (isLoadingHospital) {
     return <SettingsSkeleton />;

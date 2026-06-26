@@ -11,16 +11,92 @@ const PrescriptionReportModal = ({
   booking,
   existingPrescription,
   templateDesign = [],
-  templateBgColor = "#ffffff"
-}) => {  
+  templateBgColor = "#ffffff",
+  hospitalId
+}) => {
   const [hasValidTemplate, setHasValidTemplate] = useState(false);
+  const [fallbackDesign, setFallbackDesign] = useState([]);
+  const [fallbackBg, setFallbackBg] = useState("#ffffff");
+
+  // Default fallback template
+  const getDefaultTemplate = () => {
+    return {
+      design: [
+        {
+          type: "patientGrid",
+          x: 20,
+          y: 20,
+          width: 950,
+          height: 150,
+          style: { bgColor: "#f8fafc" }
+        },
+        {
+          type: "doctorDetails",
+          x: 20,
+          y: 180,
+          width: 400,
+          height: 80
+        },
+        {
+          type: "chiefComplaint",
+          x: 20,
+          y: 270,
+          width: 950,
+          height: 80,
+          style: { bgColor: "#fef3c7" }
+        },
+        {
+          type: "medicinesTable",
+          x: 20,
+          y: 360,
+          width: 950,
+          height: 250,
+          style: { bgColor: "#ffffff" }
+        },
+        {
+          type: "advice",
+          x: 20,
+          y: 620,
+          width: 950,
+          height: 100,
+          style: { bgColor: "#d1fae5" }
+        },
+        {
+          type: "signature",
+          x: 20,
+          y: 730,
+          width: 400,
+          height: 80
+        },
+        {
+          type: "prescriptionInfo",
+          x: 500,
+          y: 730,
+          width: 470,
+          height: 80
+        }
+      ],
+      bgColor: "#ffffff"
+    };
+  };
 
   useEffect(() => {
+    // Validate the template design
     const hasDesignElements = templateDesign && templateDesign.length > 0;
     const hasPositioning = templateDesign.some(item => 
       typeof item.x === 'number' && typeof item.y === 'number'
     );
-    setHasValidTemplate(hasDesignElements && hasPositioning);
+    
+    if (hasDesignElements && hasPositioning) {
+      setHasValidTemplate(true);
+      setFallbackDesign([]);
+    } else {
+      // Use fallback template
+      setHasValidTemplate(false);
+      const defaultTemplate = getDefaultTemplate();
+      setFallbackDesign(defaultTemplate.design);
+      setFallbackBg(defaultTemplate.bgColor);
+    }
   }, [templateDesign]);
 
   if (!isOpen) return null;
@@ -76,8 +152,8 @@ const PrescriptionReportModal = ({
   const advice = existingPrescription?.advice || "";
   const nextConsultation = existingPrescription?.next_consultation || "";
   
-  const doctorName = doctor?.displayName || doctor?.name || existingPrescription?.doctorName || "Dr. Zedan ahrar ehthesham";
-  const doctorSpecialty = doctor?.specialization || doctor?.department || existingPrescription?.doctorSpecialization || "Ortho";
+  const doctorName = doctor?.displayName || doctor?.name || existingPrescription?.doctorName || "Dr. Unknown";
+  const doctorSpecialty = doctor?.specialization || doctor?.department || existingPrescription?.doctorSpecialization || "General Medicine";
   const doctorContact = doctor?.contact || doctor?.phone || "";
   
   const patientName = patient?.name || patient?.fullName || "N/A";
@@ -120,10 +196,8 @@ const PrescriptionReportModal = ({
     return Math.max(minHeight, calculatedHeight);
   };
 
-
-  // Render template blocks exactly as designed
+  // Render template blocks
   const renderTemplateBlock = (block, index) => {
-    // For medicines table, use dynamic height
     let blockHeight = block.height;
     let blockMinHeight = block.height;
     
@@ -133,10 +207,9 @@ const PrescriptionReportModal = ({
       blockMinHeight = dynamicHeight;
     }
 
-    // Adjust position for advice and signature based on extra height
-let adjustedTop = block.y;
+    let adjustedTop = block.y;
 
-const blockStyle = {
+    const blockStyle = {
       position: "absolute",
       left: `${block.x}px`,
       top: `${adjustedTop}px`,
@@ -154,8 +227,6 @@ const blockStyle = {
 
     switch(block.type) {
       case "text":
-
-
         return (
           <div key={index} style={blockStyle}>
             {replaceContent(block.content || block.text || "")}
@@ -175,10 +246,8 @@ const blockStyle = {
               display: "grid",
               gridTemplateColumns: "repeat(4, 1fr)",
               gap: "12px",
-              // backgroundColor: block.style?.bgColor || "#f8fafc",
               padding: "12px",
               borderRadius: "8px",
-              // border: "1px solid #e5e7eb"
             }}
           >
             <div style={{
@@ -265,8 +334,6 @@ const blockStyle = {
         );
       
       case "medicinesTable":
-
-      
         return (
           <div key="medicines-table" style={{ 
             ...blockStyle,
@@ -293,7 +360,9 @@ const blockStyle = {
                   {safeMedicines.length > 0 ? (
                     safeMedicines.map((med, idx) => (
                       <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : block.style?.bgColor || "#f9fafb" }}>
-                        <td className="p-3 font-medium" style={{ color: block.style?.color || "#1f2937" }}>{med.medicine_name || med.name || "N/A"}</td>
+                        <td className="p-3 font-medium">
+                          {med.medicine_name || med.medicineName || med.name || "N/A"}
+                        </td>
                         <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{med.dosage || "N/A"}</td>
                         <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{med.duration || "N/A"}</td>
                         <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{med.frequency || "N/A"}</td>
@@ -312,20 +381,7 @@ const blockStyle = {
           </div>
         );
       
-
-        
       case "doctorDetails":
-        console.log(
-  "MEDICINES LENGTH",
-  safeMedicines.length
-);
-
-console.log(
-  "MEDICINE HEIGHT",
-  getMedicinesTableHeight()
-);
-
-
         return (
           <div key="doctor-details" style={blockStyle}>
             <div style={{
@@ -333,38 +389,40 @@ console.log(
               color: block.style?.color || "#1f2937",
               fontSize: block.style?.fontSize || "16px",
             }}>
-               {doctorName}
+              {doctorName}
             </div>
             <div style={{ fontSize: "14px", marginTop: "4px", color: block.style?.color || "#6b7280" }}>{doctorSpecialty}</div>
             {doctorContact && <div style={{ fontSize: "12px", marginTop: "4px", color: block.style?.color || "#9ca3af" }}>{doctorContact}</div>}
           </div>
         );
       
-case "chiefComplaint":
-  console.log(
-    "COMPLAINT Y",
-    templateDesign.find(b => b.type === "chiefComplaint")?.y
-  );
-
-  console.log(
-    "MEDICINE Y",
-    templateDesign.find(b => b.type === "medicinesTable")?.y
-  );
-
-  return (
-    <div
-      key="chief-complaint"
-      style={{
-        ...blockStyle,
-        backgroundColor: "#fef3c7",
-      }}
-    >
-      <div>Chief Complaint</div>
-      <p>{complaint || "No complaint recorded"}</p>
-    </div>
-  );
-  
-  case "advice":
+      case "chiefComplaint":
+        return (
+          <div
+            key="chief-complaint"
+            style={{
+              ...blockStyle,
+              backgroundColor: block.style?.bgColor || "#fef3c7",
+              borderRadius: "8px",
+              padding: block.style?.padding || "12px 16px",
+            }}
+          >
+            <div
+              style={{
+                color: block.style?.color || "#92400e",
+                fontWeight: block.style?.fontWeight || "bold",
+                marginBottom: "6px",
+              }}
+            >
+              Chief Complaint
+            </div>
+            <p style={{ color: block.style?.color || "#374151" }}>
+              {complaint || "No complaint recorded"}
+            </p>
+          </div>
+        );
+      
+      case "advice":
         return (
           <div key="advice" style={{ 
             ...blockStyle, 
@@ -409,9 +467,9 @@ case "chiefComplaint":
             paddingTop: "16px",
             marginTop: "8px",
           }}>
-<div style={{ color: "#1f2937", fontSize: "16px", fontWeight: "500" }}>
-  {doctorName}
-</div>
+            <div style={{ color: "#1f2937", fontSize: "16px", fontWeight: "500" }}>
+              {doctorName}
+            </div>
             <div style={{ fontSize: "14px", color: block.style?.color || "#6b7280" }}>{doctorSpecialty}</div>
             <div style={{ fontSize: "12px", marginTop: "4px", fontStyle: "italic", color: block.style?.color || "#9ca3af" }}>(Digital Signature)</div>
           </div>
@@ -422,8 +480,12 @@ case "chiefComplaint":
     }
   };
 
-  // If no valid template, show a message
-  if (!hasValidTemplate || templateDesign.length === 0) {
+  // Determine which design to use
+  const activeDesign = hasValidTemplate ? templateDesign : fallbackDesign;
+  const activeBg = hasValidTemplate ? templateBgColor : fallbackBg;
+
+  // If no template design at all, show message
+  if (activeDesign.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md">
@@ -440,16 +502,16 @@ case "chiefComplaint":
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-<div
-  className="bg-white rounded-xl shadow-2xl"
-  style={{
-    width: "auto",
-    maxWidth: "90vw",
-    maxHeight: "95vh",
-    overflow: "auto"
-  }}
->
-          {/* Modal Header */}
+      <div
+        className="bg-white rounded-xl shadow-2xl"
+        style={{
+          width: "auto",
+          maxWidth: "90vw",
+          maxHeight: "95vh",
+          overflow: "auto"
+        }}
+      >
+        {/* Modal Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b bg-white sticky top-0 z-10 no-print">
           <div>
             <h2 className="text-xl font-bold text-gray-800">Prescription Details</h2>
@@ -469,23 +531,23 @@ case "chiefComplaint":
         </div>
 
         {/* Prescription Content */}
-<div
-  className="prescription-content"
-  style={{
-    padding: "5px"
-  }}
->
-<div
-  className="prescription-inner"
-  style={{
-    position: "relative",
-    width: "990px",
-    height: "920px",
-    margin: "0 auto",
-    background: templateBgColor,
-  }}
->
-              {templateDesign.map((block, index) => renderTemplateBlock(block, index))}
+        <div
+          className="prescription-content"
+          style={{
+            padding: "5px"
+          }}
+        >
+          <div
+            className="prescription-inner"
+            style={{
+              position: "relative",
+              width: "990px",
+              height: "920px",
+              margin: "0 auto",
+              background: activeBg,
+            }}
+          >
+            {activeDesign.map((block, index) => renderTemplateBlock(block, index))}
           </div>
         </div>
 

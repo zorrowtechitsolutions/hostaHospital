@@ -20,10 +20,12 @@ import {
   Calendar,
   User as UserIcon,
   IdCard,
-  Languages
+  Languages,
+  Star // Added for reviews
 } from "lucide-react";
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
+import ReviewTable from "../Doctor/ReviewTable"; // Import ReviewTable
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
@@ -44,7 +46,8 @@ const TABS = [
   { id: "basic", label: "Basic Information" },
   { id: "schedule", label: "Schedule & Consulting" },
   { id: "appointments", label: "Appointments" },
-  { id: "requests", label: "Requests" }
+  { id: "requests", label: "Requests" },
+  { id: "reviews", label: "Reviews" } // Added Reviews tab
 ];
 
 const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-4";
@@ -128,6 +131,38 @@ const InfoCard = ({ title, children, icon: Icon }) => (
     {children}
   </div>
 );
+
+// Rating Display Component for Doctor Header
+const RatingDisplay = ({ rating, totalReviews }) => {
+  if (!rating && rating !== 0) return null;
+  
+  const renderStars = () => {
+    return [...Array(5)].map((_, index) => (
+      <Star
+        key={index}
+        className={`h-4 w-4 ${
+          index < Math.floor(rating) 
+            ? "fill-yellow-400 text-yellow-400" 
+            : "text-gray-300"
+        }`}
+      />
+    ));
+  };
+
+  return (
+    <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full">
+      {renderStars()}
+      <span className="text-sm font-medium text-gray-700 ml-1">
+        {rating.toFixed(1)}
+      </span>
+      {totalReviews > 0 && (
+        <span className="text-xs text-gray-500 ml-1">
+          ({totalReviews})
+        </span>
+      )}
+    </div>
+  );
+};
 
 const ViewDoctor = () => {
   const { id } = useParams();
@@ -356,19 +391,6 @@ const ViewDoctor = () => {
             {/* Basic Information Tab */}
             {activeTab === "basic" && (
               <div className="space-y-6">
-                {/* Quick Stats Cards */}
-                {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <InfoCard title="Experience" icon={Calendar}>
-                    <p className="text-2xl font-bold text-gray-800">{doctor?.experience || 'N/A'} years</p>
-                  </InfoCard>
-                  <InfoCard title="Consultation Fee" icon={DollarSign}>
-                    <p className="text-2xl font-bold text-green-600">₹{doctor?.fees || '0'}</p>
-                  </InfoCard>
-                  <InfoCard title="Appointments" icon={Users}>
-                    <p className="text-2xl font-bold text-blue-600">{doctor?.appointmentCount || doctor?.appoimentCount || 0}</p>
-                  </InfoCard> */}
-                {/* </div> */}
-
                 {/* Personal Information */}
                 <div>
                   <SectionTitle icon={UserIcon} title="Personal Information" />
@@ -583,6 +605,14 @@ const ViewDoctor = () => {
             {/* Requests Tab */}
             {activeTab === "requests" && (
               <RequestTable 
+                doctorId={doctor?.id}
+                doctorName={doctorName}
+              />
+            )}
+
+            {/* Reviews Tab */}
+            {activeTab === "reviews" && (
+              <ReviewTable 
                 doctorId={doctor?.id}
                 doctorName={doctorName}
               />
