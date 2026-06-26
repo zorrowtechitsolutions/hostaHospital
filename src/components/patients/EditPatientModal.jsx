@@ -126,14 +126,11 @@ const EditPatient = () => {
   // Convert id to number for API call
   const numericId = id ? Number(id) : null;
   
-  console.log("Route ID (param):", id);
-  console.log("Numeric ID:", numericId);
-  
   // Get user data from auth utility
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
   
-  // Fetch patient data - FIXED: convert id to number and add skip condition
+  // Fetch patient data
   const { 
     data: patientResponse, 
     isLoading: isLoadingPatient, 
@@ -145,12 +142,8 @@ const EditPatient = () => {
   
   const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
   
-  // FIXED: Handle both response formats
+  // Handle both response formats
   const patient = patientResponse?.data || patientResponse || null;
-  
-  console.log("Patient Response:", patientResponse);
-  console.log("Extracted Patient:", patient);
-  console.log("Fetch Error:", fetchError);
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -193,8 +186,6 @@ const EditPatient = () => {
   // Load patient data into form
   useEffect(() => {
     if (patient) {
-      console.log("Loading patient data into form:", patient);
-      
       // Find country code from country name
       const country = countries.find(c => c.name === patient.location?.country);
       
@@ -402,14 +393,10 @@ const EditPatient = () => {
       try {
         const updateData = prepareUpdateData();
         
-        console.log('Updating patient data:', JSON.stringify(updateData, null, 2));
-        
         const result = await updatePatient({ 
           id: originalPatientId, 
           updatePatient: updateData 
         }).unwrap();
-        
-        console.log('✅ Patient updated successfully!', result);
         
         showUpdateToast(
           `${formData.fullName} has been updated successfully!`,
@@ -433,8 +420,6 @@ const EditPatient = () => {
         }, 1500);
         
       } catch (error) {
-        console.error('Error updating patient:', error);
-        
         if (error.status === 409) {
           showErrorToast('❌ Mobile number or email already exists!');
         } else if (error.data?.message) {
@@ -459,15 +444,12 @@ const EditPatient = () => {
 
   // Loading state
   if (isLoadingPatient) {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader
-        centered
-        text="Loading patient data..."
-      />
-    </div>
-  );
-}
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader centered text="Loading patient data..." />
+      </div>
+    );
+  }
 
   // Patient not found state - show proper message
   if (!patient && !isLoadingPatient) {

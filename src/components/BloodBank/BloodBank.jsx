@@ -1,4 +1,3 @@
-// src/components/BloodBank/BloodBank.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -16,6 +15,11 @@ import {
   useUpdateBloodBankMutation,
   useDeleteBloodBankMutation
 } from '../../../app/service/bloodbank';
+
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../socket/bloodBankEvents';
 
 // Blood groups list
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -98,8 +102,6 @@ const BloodBankSkeleton = () => {
   );
 };
 
-
-
 // Add Blood Stock Modal
 const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
   const [formData, setFormData] = useState({
@@ -107,8 +109,6 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
     count: 0
   });
  
- 
-  
   const handleSubmit = () => {
     if (formData.count < 0) {
       showErrorToast('Count cannot be negative', 3000);
@@ -316,7 +316,7 @@ const BloodBank = () => {
     localStorage.setItem('bloodBankViewMode', viewMode);
   }, [viewMode]);
 
-  // API Hooks - WITH QUERY PARAMETERS
+  // ✅ API Hooks - MUST BE CALLED BEFORE useEffect THAT USES refetch
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
@@ -332,6 +332,94 @@ const BloodBank = () => {
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
+
+  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  useEffect(() => {
+    console.log("🔄 Registering blood bank event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    // Register blood bank events
+    registerBloodBankEvents({
+      onStockCreated: async (data) => {
+        console.log("🩸 NEW BLOOD STOCK CREATED:", data);
+        showSuccessToast(`New blood stock created!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (CREATED):", result);
+      },
+
+      onStockUpdated: async (data) => {
+        console.log("✏️ BLOOD STOCK UPDATED:", data);
+        showSuccessToast(`Blood stock updated!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      },
+
+      onStockDeleted: async (data) => {
+        console.log("🗑️ BLOOD STOCK DELETED:", data);
+        showSuccessToast(`Blood stock deleted!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (DELETED):", result);
+        console.log("📊 NEW DATA:", result?.data);
+      }
+    });
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering blood bank events...");
+      unregisterBloodBankEvents();
+    };
+  }, [refetch]); // ✅ Only refetch dependency
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      // Re-register events on reconnect
+      registerBloodBankEvents({
+        onStockCreated: async (data) => {
+          console.log("🩸 NEW BLOOD STOCK CREATED (reconnect):", data);
+          showSuccessToast(`New blood stock created!`, 3000);
+          await refetch();
+        },
+        onStockUpdated: async (data) => {
+          console.log("✏️ BLOOD STOCK UPDATED (reconnect):", data);
+          showSuccessToast(`Blood stock updated!`, 3000);
+          await refetch();
+        },
+        onStockDeleted: async (data) => {
+          console.log("🗑️ BLOOD STOCK DELETED (reconnect):", data);
+          showSuccessToast(`Blood stock deleted!`, 3000);
+          await refetch();
+        }
+      });
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Blood bank events won't work!");
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
+  
 
   // Transform data from API response
   const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
@@ -362,11 +450,11 @@ const BloodBank = () => {
         count: newBloodStock.count
       };
       
-      console.log("add",stockToAdd); 
       
-      await createBloodBank(stockToAdd).unwrap();    
+      const response = await createBloodBank(stockToAdd).unwrap();
+      
       showSuccessToast(`${newBloodStock.bloodGroup} blood stock added successfully!`, 3000);
-      refetch();
+      await refetch();
       setShowAddModal(false);
     } catch (error) {
       console.error('Add error:', error);
@@ -381,13 +469,15 @@ const BloodBank = () => {
         count: updatedStock.count
       };
       
-      await updateBloodBank({ 
+      
+      const response = await updateBloodBank({ 
         id: updatedStock.id, 
         data: updateData 
       }).unwrap();
       
+      
       showSuccessToast(`${updatedStock.bloodGroup} blood stock updated successfully!`, 3000);
-      refetch();
+      await refetch();
       setShowEditModal(false);
       setSelectedBloodStock(null);
     } catch (error) {
@@ -396,12 +486,17 @@ const BloodBank = () => {
     }
   };
 
+  // ✅ Handle Delete with debug logs
   const handleDeleteBloodStock = async () => {
     if (selectedBloodStock) {
       try {
-        await deleteBloodBank(selectedBloodStock.id).unwrap();
+        
+        const response = await deleteBloodBank(selectedBloodStock.id).unwrap();
+        
         showSuccessToast(`${selectedBloodStock.bloodGroup} blood stock deleted successfully!`, 3000);
-        refetch();
+        
+        const result = await refetch();
+        
         setShowDeleteModal(false);
         setSelectedBloodStock(null);
       } catch (error) {

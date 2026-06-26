@@ -13,6 +13,11 @@ import { useCreateBookingMutation } from "../../../app/service/request";
 import { useAuth } from "../../context/AuthContext";
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import booking events (if you want to listen for events in this component)
+import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
 const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = false, appointment = null }) => {
   const { user } = useAuth();
   const [createBooking, { isLoading: isCreating }] = useCreateBookingMutation();
@@ -25,7 +30,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     patient_phone: "",
     doctorId: "",
     displayName: "",
-    speciality: "",  // Changed from 'specialist' to 'speciality' for consistency
+    speciality: "",
     booking_date: "",
     consulting_time: "",
     reason: ""
@@ -50,6 +55,39 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
 
   // Get doctors list from response
   const doctorsList = doctorsResponse?.data || [];
+
+  // ✅ Register booking event listeners when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      console.log("🔄 Registering booking events in modal...");
+      
+      registerBookingEvents({
+        onBookingRegistered: (data) => {
+          console.log("📅 Booking Registered (modal):", data);
+          // You can add specific logic here if needed
+        },
+        onBookingUpdated: (data) => {
+          console.log("✏️ Booking Updated (modal):", data);
+        },
+        onBookingCancelled: (data) => {
+          console.log("❌ Booking Cancelled (modal):", data);
+        },
+        onBookingAccepted: (data) => {
+          console.log("✅ Booking Accepted (modal):", data);
+        },
+        onBookingCompleted: (data) => {
+          console.log("✔️ Booking Completed (modal):", data);
+        }
+      });
+    }
+
+    return () => {
+      if (isOpen) {
+        console.log("🧹 Unregistering booking events from modal...");
+        unregisterBookingEvents();
+      }
+    };
+  }, [isOpen]);
 
   // Populate form when editing
   useEffect(() => {
@@ -108,7 +146,6 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
       showWarningToast('Please select appointment date', 3000);
       return false;
     }
-    // consulting_time is now optional (removed from validation)
     return true;
   };
 
@@ -119,44 +156,40 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     
     setIsSubmitting(true);
 
-          
-
     try {
-
-      console.log(formData.consulting_time);
       // EXACT PAYLOAD MATCHING BACKEND EXPECTATIONS
-const appointmentData = {
-  userId: 109,
-  hospitalId: 27,
-
-  patient_dob: formData.patient_dob,
-  patient_name: formData.patient_name,
-  patient_place: formData.patient_place,
-  patient_phone: formData.patient_phone,
-
-  doctorId: Number(formData.doctorId),
-
-  booking_date: formData.booking_date,
-
-  consulting_time: formData.consulting_time, // ADD THIS
-
-  department: formData.speciality,
-
-  displayName: formData.displayName,
-};
-
-
-      console.log( JSON.stringify(appointmentData, null, 2));
-      console.log("✅ doctorId type:", typeof appointmentData.doctorId, "value:", appointmentData.doctorId);
+      const appointmentData = {
+        userId: Number(userId),
+        hospitalId: Number(hospitalId),
+        patient_dob: formData.patient_dob,
+        patient_name: formData.patient_name,
+        patient_place: formData.patient_place,
+        patient_phone: formData.patient_phone,
+        doctorId: Number(formData.doctorId),
+        booking_date: formData.booking_date,
+        consulting_time: formData.consulting_time,
+        department: formData.speciality,
+        displayName: formData.displayName,
+      };
 
       const response = await createBooking(appointmentData).unwrap();
 
-      console.log("✅ Booking created successfully:", response);
+      // ✅ Emit socket event for new booking
+      if (socket && socket.connected) {
+        socket.emit('BOOKING_REGISTERED', {
+          bookingId: response?.data?.id || response?.data?._id,
+          patientName: formData.patient_name,
+          doctorName: formData.displayName,
+          hospitalId: hospitalId,
+          booking_date: formData.booking_date,
+          consulting_time: formData.consulting_time,
+        });
+        console.log("📤 Emitted BOOKING_REGISTERED event");
+      }
 
       if (onSave) {
         onSave(response.data);
       }
-
 
       showAddToast(
         `New appointment scheduled for ${formData.patient_name}!`,
@@ -332,27 +365,26 @@ const appointmentData = {
             icon={Calendar}
           />
 
-          {/* Consulting Time - Optional, not sent to backend */}
-<div>
-  <label className="block text-sm font-medium mb-1">
-    Consulting Time
-  </label>
-
-  <select
-    name="consulting_time"
-    value={formData.consulting_time}
-    onChange={handleChange}
-    className="w-full border rounded-lg px-3 py-2"
-  >
-    <option value="">Select Time</option>
-
-    {timeSlots.map((consulting_time) => (
-      <option key={consulting_time} value={consulting_time}>
-        {consulting_time}
-      </option>
-    ))}
-  </select>
-</div>
+          {/* Consulting Time */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Consulting Time <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="consulting_time"
+              value={formData.consulting_time}
+              onChange={handleChange}
+              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select Time</option>
+              {timeSlots.map((consulting_time) => (
+                <option key={consulting_time} value={consulting_time}>
+                  {consulting_time}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Reason - UI only, not sent to backend */}
           <div className="md:col-span-2">

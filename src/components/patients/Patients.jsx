@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - With Green Gradient Buttons
+// src/components/patients/Patients.jsx - With Green Gradient Buttons and Socket Integration
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -39,6 +39,11 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerPatientEvents, unregisterPatientEvents } from '../../socket/patientEvents';
+
 const Patients = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -69,6 +74,9 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // Get hospitalId from auth
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
@@ -89,6 +97,99 @@ const Patients = () => {
 
   const [deletePatient] = useDeletePatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering patient event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerPatientEvents({
+      onPatientRegistered: async (data) => {
+        console.log("👤 NEW PATIENT REGISTERED:", data);
+        showSuccessToast(`New patient registered!`, 3000);
+        const result = await refetchPatients();
+        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+      },
+
+      onPatientUpdated: async (data) => {
+        console.log("✏️ PATIENT UPDATED:", data);
+        showSuccessToast(`Patient updated!`, 3000);
+        const result = await refetchPatients();
+        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      },
+
+      onPatientDeleted: async (data) => {
+        console.log("🗑️ PATIENT DELETED:", data);
+        showSuccessToast(`Patient deleted!`, 3000);
+        const result = await refetchPatients();
+        console.log("📊 REFETCH RESULT (DELETED):", result);
+        console.log("📊 NEW DATA:", result?.data);
+      }
+    });
+
+    setEventsRegistered(true);
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering patient events...");
+      unregisterPatientEvents();
+      setEventsRegistered(false);
+    };
+  }, []); // ✅ Run once on mount
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Patient events will work!");
+      // Re-register events on reconnect if not registered
+      if (!eventsRegistered) {
+        registerPatientEvents({
+          onPatientRegistered: async (data) => {
+            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
+            showSuccessToast(`New patient registered!`, 3000);
+            await refetchPatients();
+          },
+          onPatientUpdated: async (data) => {
+            console.log("✏️ PATIENT UPDATED (reconnect):", data);
+            showSuccessToast(`Patient updated!`, 3000);
+            await refetchPatients();
+          },
+          onPatientDeleted: async (data) => {
+            console.log("🗑️ PATIENT DELETED (reconnect):", data);
+            showSuccessToast(`Patient deleted!`, 3000);
+            await refetchPatients();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Patient events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetchPatients, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - PATIENT: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Get patients array and pagination info from response
   const allPatients = patientsResponse?.data || [];
@@ -146,7 +247,7 @@ const Patients = () => {
     if (patientToDelete) {
       try {
         await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
-        refetchPatients();
+        await refetchPatients();
         setShowDeleteModal(false);
         setPatientToDelete(null);
         showSuccessToast(`${patientToDelete.name} has been deleted successfully!`, 2000);

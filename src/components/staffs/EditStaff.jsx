@@ -1,7 +1,7 @@
-// src/components/staffs/EditStaff.jsx - With Role Assignment (Header Removed)
+// src/components/staffs/EditStaff.jsx - With Change Password Tab
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ChevronRight, Upload, X, Shield, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Upload, X, Shield, ArrowLeft, Lock, Eye, EyeOff } from 'lucide-react';
 import {
   Button,
   Input,
@@ -18,10 +18,12 @@ import {
   showErrorToast,
   showWarningToast
 } from '../ui/Toast';
+
 import {
-  useGetStaffQuery,
+  useGetStaffByIdQuery,  // ✅ Use getStaffById instead of getStaff
   useUpdateStaffMutation,
-  useDeleteStaffMutation
+  useDeleteStaffMutation,
+  useChangeStaffPasswordMutation
 } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
@@ -39,6 +41,52 @@ const getFullImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
+// Password Input Component
+const PasswordInput = ({ 
+  label, 
+  name, 
+  value, 
+  onChange, 
+  onBlur, 
+  error, 
+  touched, 
+  showPassword, 
+  setShowPassword,
+  placeholder,
+  icon: Icon,
+  required
+}) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <div className="relative">
+      {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />}
+      <input
+        type={showPassword ? "text" : "password"}
+        name={name}
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+          error && touched ? 'border-red-500' : 'border-gray-300'
+        }`}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword(prev => !prev)}
+        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+      >
+        {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
+      </button>
+    </div>
+    {error && touched && (
+      <p className="mt-1 text-sm text-red-500">{error}</p>
+    )}
+  </div>
+);
+
 const EditStaff = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -53,6 +101,19 @@ const EditStaff = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Password change states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [passwordTouched, setPasswordTouched] = useState({});
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // Get hospital ID and hospital name from auth
   const hospitalId = getHospitalId();
@@ -80,21 +141,24 @@ const EditStaff = () => {
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  // API hooks - hospitalId is automatically injected by the API service
+  // ✅ API hooks - Use getStaffById for single staff fetch
   const {
     data: staffData,
     isLoading: loading,
     refetch
-  } = useGetStaffQuery(
-    { id }, // Only need id - hospitalId is auto-injected
+  } = useGetStaffByIdQuery(
+    id, // Pass the id directly
     { skip: !id }
   );
+  
   const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
   const [deleteStaff, { isLoading: isDeleteLoading }] = useDeleteStaffMutation();
+  const [changeStaffPassword, { isLoading: isPasswordLoading }] = useChangeStaffPasswordMutation();
 
   const [formData, setFormData] = useState({
     id: '',
     originalId: '',
+    staffId: '', // ✅ Added staffId for display
     name: '',
     gender: 'Male',
     dob: '',
@@ -146,6 +210,19 @@ const EditStaff = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
+  // Helper function to format staff ID
+  const formatStaffId = (id) => {
+    if (!id) return '#SF0000';
+    let numericId;
+    if (typeof id === 'string') {
+      const match = id.match(/\d+/);
+      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
+    } else {
+      numericId = parseInt(id) || 0;
+    }
+    return `#SF${String(numericId).padStart(4, '0')}`;
+  };
+
   // Image validation helper
   const validateImage = file => {
     if (file.size > 5 * 1024 * 1024) {
@@ -160,6 +237,105 @@ const EditStaff = () => {
     return '';
   };
 
+  // Password validation
+  const validateCurrentPassword = (password) => {
+    if (!password) return 'Current password is required';
+    return '';
+  };
+
+  const validateNewPassword = (password) => {
+    if (!password) return 'New password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    return '';
+  };
+
+  const validateConfirmPassword = (confirmPassword, newPassword) => {
+    if (!confirmPassword) return 'Please confirm your password';
+    if (confirmPassword !== newPassword) return 'Passwords do not match';
+    return '';
+  };
+
+  const validatePasswordField = (name, value) => {
+    switch (name) {
+      case 'currentPassword': return validateCurrentPassword(value);
+      case 'newPassword': return validateNewPassword(value);
+      case 'confirmPassword': return validateConfirmPassword(value, passwordData.newPassword);
+      default: return '';
+    }
+  };
+
+  const handlePasswordBlur = (e) => {
+    const { name, value } = e.target;
+    setPasswordTouched(prev => ({ ...prev, [name]: true }));
+    const error = validatePasswordField(name, value);
+    setPasswordErrors(prev => ({ ...prev, [name]: error }));
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({ ...prev, [name]: value }));
+    if (passwordErrors[name]) setPasswordErrors(prev => ({ ...prev, [name]: '' }));
+    
+    // If new password changes, re-validate confirm password
+    if (name === 'newPassword' && passwordData.confirmPassword) {
+      const confirmError = validateConfirmPassword(passwordData.confirmPassword, value);
+      setPasswordErrors(prev => ({ ...prev, confirmPassword: confirmError }));
+    }
+  };
+
+  const validatePasswordForm = () => {
+    const newErrors = {};
+    const fields = ['currentPassword', 'newPassword', 'confirmPassword'];
+    fields.forEach(field => {
+      const error = validatePasswordField(field, passwordData[field]);
+      if (error) newErrors[field] = error;
+    });
+    setPasswordErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleChangePassword = async () => {
+    if (!validatePasswordForm()) {
+      showWarningToast('Please fix the password validation errors', 3000);
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+  console.log("formData.id:", formData.id);
+
+  console.log("Password Request:", {
+    staffId: Number(formData.id),
+    currentPassword: passwordData.currentPassword,
+    newPassword: passwordData.newPassword,
+    confirmPassword: passwordData.confirmPassword,
+  });
+
+  await changeStaffPassword({
+    staffId: Number(formData.id),
+    currentPassword: passwordData.currentPassword,
+    newPassword: passwordData.newPassword,
+    confirmPassword: passwordData.confirmPassword,
+  }).unwrap();
+
+  showSuccessToast("Password changed successfully!", 3000);
+
+  setPasswordData({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  setPasswordErrors({});
+  setPasswordTouched({});
+  setIsChangingPassword(false);
+
+} catch (error) {
+  console.error("Password change error:", error);
+  setIsChangingPassword(false);
+}
+  }
   // Populate form data from API response
   useEffect(() => {
     if (staffData?.data) {
@@ -185,13 +361,14 @@ const EditStaff = () => {
     setFormData({
       id: staff.id || staff._id || '',
       originalId: staff.id || staff._id || '',
+      staffId: formatStaffId(staff.id || staff._id || ''), // ✅ Added formatted staff ID
       name: staff.name || '',
       gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : 'Male',
       dob: staff.dob ? staff.dob.split('T')[0] : '',
       mobile: staff.phone || '',
       email: staff.email || '',
       designation: staff.designation || '',
-      roleId: staff.roleId || '', // Added roleId from staff data
+      roleId: staff.roleId || '',
       appointmentDate: staff.joiningDate ? staff.joiningDate.split('T')[0] : '',
       staffType: staff.staffType || 'Permanent',
       jobType: staff.jobType || 'Full Time',
@@ -406,110 +583,110 @@ const EditStaff = () => {
   };
 
   const handleSubmit = async () => {
-  if (!validateForm()) {
-    if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
-    showWarningToast('Please fix the validation errors before submitting', 3000);
-    return;
-  }
-
-  setIsSubmitting(true);
-
-  try {
-    const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
-    const roleId = Number(formData.roleId);
-    const selectedRoleName = getRoleNameById(roleId);
-    
-    const updateData = {
-      name: formData.name,
-      email: formData.email,
-      phone: formData.mobile,
-      designation: formData.designation,
-      joiningDate: formData.appointmentDate || undefined,
-      jobType: formData.jobType || undefined,
-      staffType: formData.staffType || undefined,
-      dob: formData.dob || undefined,
-      gender: formData.gender.toLowerCase(),
-      knowLanguages: formData.knowLanguages,
-      qualification: formData.qualification || undefined,
-      roleId: roleId, // ✅ ADD roleId to updateData
-      hospitalName: hospitalName,
-      address: {
-        country: formData.country || undefined,
-        state: formData.state || undefined,
-        district: formData.city || undefined,
-        place: combinedPlace || formData.place || undefined,
-        pincode: formData.pincode ? Number(formData.pincode) : undefined
-      },
-      isActive: formData.isActive,
-      imageUrl: formData.imageUrl,
-      profileImage: formData.profileImage,
-      imageKey: formData.imageKey,
-    };
-
-    removeUndefined(updateData);
-    if (updateData.address) {
-      removeUndefined(updateData.address);
+    if (!validateForm()) {
+      if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
+      showWarningToast('Please fix the validation errors before submitting', 3000);
+      return;
     }
 
-    console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
-    console.log("🏥 Hospital Name being sent:", hospitalName);
-    console.log("👤 Role ID being sent:", roleId);
+    setIsSubmitting(true);
 
-    await updateStaff({
-      id: formData.id,
-      data: updateData
-    }).unwrap();
-
-    // Update role permission if roleId changed
-    if (roleId) {
-      const payload = {
-        hospitalId: Number(hospitalId),
-        roleId: roleId,
-        userType: "staff",
-        staffIds: [
-          {
-            id: Number(formData.id),
-            roleId: roleId
-          }
-        ]
-      };
+    try {
+      const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
+      const roleId = Number(formData.roleId);
+      const selectedRoleName = getRoleNameById(roleId);
       
-      console.log("📤 UPDATING ROLE PERMISSION:", payload);
-      await assignPermissions(payload).unwrap();
-    }
+      const updateData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.mobile,
+        designation: formData.designation,
+        joiningDate: formData.appointmentDate || undefined,
+        jobType: formData.jobType || undefined,
+        staffType: formData.staffType || undefined,
+        dob: formData.dob || undefined,
+        gender: formData.gender.toLowerCase(),
+        knowLanguages: formData.knowLanguages,
+        qualification: formData.qualification || undefined,
+        roleId: roleId,
+        hospitalName: hospitalName,
+        address: {
+          country: formData.country || undefined,
+          state: formData.state || undefined,
+          district: formData.city || undefined,
+          place: combinedPlace || formData.place || undefined,
+          pincode: formData.pincode ? Number(formData.pincode) : undefined
+        },
+        isActive: formData.isActive,
+        imageUrl: formData.imageUrl,
+        profileImage: formData.profileImage,
+        imageKey: formData.imageKey,
+      };
 
-    await refetch();
-    
-    showUpdateToast(
-      `${formData.name}'s information has been updated successfully!`,
-      4000,
-      {
-        'Name': formData.name,
-        'ID': formData.id,
-        'Designation': formData.designation,
-        'Role': selectedRoleName,
-        'Hospital': hospitalName,
-        'Status': formData.isActive ? 'Active' : 'Inactive'
+      removeUndefined(updateData);
+      if (updateData.address) {
+        removeUndefined(updateData.address);
       }
-    );
-    
-    setIsSubmitting(false);
-    setSubmitSuccess(true);
-    setTimeout(() => navigate('/staffs'), 1500);
-  } catch (error) {
-    console.error("Update error:", error);
-    showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
-    setIsSubmitting(false);
-    setSubmitError(error?.data?.message || 'Failed to update staff');
-  }
-};
+
+      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
+
+      await updateStaff({
+        id: formData.id,
+        data: updateData
+      }).unwrap();
+
+      // Update role permission if roleId changed
+      if (roleId) {
+        const payload = {
+          hospitalId: Number(hospitalId),
+          roleId: roleId,
+          userType: "staff",
+          staffIds: [
+            {
+              id: Number(formData.id),
+              roleId: roleId
+            }
+          ]
+        };
+        
+        await assignPermissions(payload).unwrap();
+      }
+
+      await refetch();
+      
+      showUpdateToast(
+        `${formData.name}'s information has been updated successfully!`,
+        4000,
+        {
+          'Name': formData.name,
+          'ID': formData.id,
+          'Designation': formData.designation,
+          'Role': selectedRoleName,
+          'Hospital': hospitalName,
+          'Status': formData.isActive ? 'Active' : 'Inactive'
+        }
+      );
+      
+      setIsSubmitting(false);
+      setSubmitSuccess(true);
+      setTimeout(() => navigate('/staffs'), 1500);
+    } catch (error) {
+      console.error("Update error:", error);
+      showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
+      setIsSubmitting(false);
+      setSubmitError(error?.data?.message || 'Failed to update staff');
+    }
+  };
 
   const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
   const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin'];
   const states = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
   const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
 
-  const tabs = [{ id: 'basic', label: 'Basic Info' }];
+  const tabs = [
+    { id: 'basic', label: 'Basic Info' },
+    { id: 'password', label: 'Change Password' }
+  ];
 
   const isFormSubmitting = isSubmitting || isUpdateLoading || isAssigning;
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
@@ -519,8 +696,6 @@ const EditStaff = () => {
   if (isLoadingData) {
     return (
       <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9' }}>
-        {/* REMOVED: White header section */}
-        
         <div className="p-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="border-b border-gray-200 px-6 pt-4">
@@ -565,8 +740,6 @@ const EditStaff = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {/* REMOVED: White header section with "Edit Staff" title and breadcrumb */}
-      
       {submitSuccess && <Alert type="success" message="Staff updated successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
       {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
@@ -587,7 +760,6 @@ const EditStaff = () => {
 
       <div className="p-6">
         <Card>
-          {/* Added back button in the Card header */}
           <div className="border-b border-gray-200 px-6 py-4">
             <div className="flex items-center gap-3">
               <button onClick={() => navigate('/staffs')} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
@@ -683,11 +855,28 @@ const EditStaff = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
+                {/* ✅ Staff ID field - Added back */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
-                  <input type="text" value={formData.id} disabled className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50" />
+                  <input 
+                    type="text" 
+                    value={formData.staffId || formData.id} 
+                    disabled 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600" 
+                  />
                 </div>
-                <Input label="Full Name" name="name" value={formData.name} onChange={handleChange} onBlur={handleBlur} error={errors.name} touched={touched.name} required placeholder="Enter full name" />
+                
+                <Input 
+                  label="Full Name *" 
+                  name="name" 
+                  value={formData.name} 
+                  onChange={handleChange} 
+                  onBlur={handleBlur} 
+                  error={errors.name} 
+                  touched={touched.name} 
+                  required 
+                  placeholder="Enter full name" 
+                />
                 
                 {/* Assign Role - Dynamic dropdown */}
                 <div className="md:col-span-2">
@@ -722,9 +911,9 @@ const EditStaff = () => {
                 
                 <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} />
                 <Input label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} />
-                <Input label="Mobile Number" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
-                <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required placeholder="staff@example.com" />
-                <Select label="Designation" name="designation" options={designations} value={formData.designation} onChange={handleChange} onBlur={handleBlur} error={errors.designation} touched={touched.designation} required />
+                <Input label="Mobile Number *" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
+                <Input label="Email *" name="email" type="email" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required placeholder="staff@example.com" />
+                <Select label="Designation *" name="designation" options={designations} value={formData.designation} onChange={handleChange} onBlur={handleBlur} error={errors.designation} touched={touched.designation} required />
                 <Input label="Joining Date" name="appointmentDate" type="date" value={formData.appointmentDate} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentDate} touched={touched.appointmentDate} />
                 <Input label="Qualification" name="qualification" value={formData.qualification} onChange={handleChange} placeholder="MBA, B.Tech, etc." />
                 <Select label="Staff Type" name="staffType" options={['Permanent', 'Contract', 'Temporary', 'Intern']} value={formData.staffType} onChange={handleChange} onBlur={handleBlur} error={errors.staffType} touched={touched.staffType} />
@@ -758,6 +947,79 @@ const EditStaff = () => {
                       Staff is currently INACTIVE
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'password' && (
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Lock className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">Change Password</h3>
+                  <p className="text-sm text-gray-500">Update your account password</p>
+                </div>
+              </div>
+
+              <div className="max-w-lg space-y-4">
+                <PasswordInput
+                  label="Current Password *"
+                  name="currentPassword"
+                  value={passwordData.currentPassword}
+                  onChange={handlePasswordChange}
+                  onBlur={handlePasswordBlur}
+                  error={passwordErrors.currentPassword}
+                  touched={passwordTouched.currentPassword}
+                  showPassword={showCurrentPassword}
+                  setShowPassword={setShowCurrentPassword}
+                  placeholder="Enter current password"
+                  icon={Lock}
+                  required
+                />
+
+                <PasswordInput
+                  label="New Password *"
+                  name="newPassword"
+                  value={passwordData.newPassword}
+                  onChange={handlePasswordChange}
+                  onBlur={handlePasswordBlur}
+                  error={passwordErrors.newPassword}
+                  touched={passwordTouched.newPassword}
+                  showPassword={showNewPassword}
+                  setShowPassword={setShowNewPassword}
+                  placeholder="Enter new password (min 8 characters)"
+                  icon={Lock}
+                  required
+                />
+
+                <PasswordInput
+                  label="Confirm New Password *"
+                  name="confirmPassword"
+                  value={passwordData.confirmPassword}
+                  onChange={handlePasswordChange}
+                  onBlur={handlePasswordBlur}
+                  error={passwordErrors.confirmPassword}
+                  touched={passwordTouched.confirmPassword}
+                  showPassword={showConfirmPassword}
+                  setShowPassword={setShowConfirmPassword}
+                  placeholder="Confirm new password"
+                  icon={Lock}
+                  required
+                />
+
+                <div className="pt-4 border-t border-gray-200">
+                  <Button
+                    variant="primary"
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword || isPasswordLoading}
+                    loading={isChangingPassword || isPasswordLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    {isChangingPassword || isPasswordLoading ? 'Changing...' : 'Change Password'}
+                  </Button>
                 </div>
               </div>
             </div>

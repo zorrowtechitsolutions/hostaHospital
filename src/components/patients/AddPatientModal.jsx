@@ -128,9 +128,6 @@ const AddPatient = () => {
   // Only get hospitalId from JWT payload
   const hospitalId = authUser?.id;        // hospitals.id
   
-  console.log("Auth User:", authUser);
-  console.log("Hospital ID (authUser.id):", hospitalId);
-  
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
   const [formData, setFormData] = useState({
@@ -331,7 +328,6 @@ const AddPatient = () => {
     // Check if hospitalId is available
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
-      console.error('Missing Hospital ID:', { hospitalId });
       return;
     }
     
@@ -350,16 +346,10 @@ const AddPatient = () => {
       try {
         const patientData = preparePatientData();
         
-        console.log('Sending patient data:', JSON.stringify(patientData, null, 2));
-        
         const result = await createPatient(patientData).unwrap();
         
-        const patientId = result?.data?.patientId || result?.data?.id || result?.data?._id;
-        console.log('✅ Patient created successfully! Patient ID:', patientId);
-        console.log('Response:', result);
-        
         showSuccessToast(
-          `${formData.fullName} has been added successfully as ${formData.patientType} with Patient ID: ${patientId}`
+          `${formData.fullName} has been added successfully as ${formData.patientType}`
         );
         
         setIsSubmitting(false);

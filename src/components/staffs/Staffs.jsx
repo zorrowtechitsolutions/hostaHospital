@@ -1,4 +1,3 @@
-// src/components/staffs/Staffs.jsx - With Server-Side Pagination
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -43,6 +42,11 @@ import {
 
 import { getS3ImageUrl } from '../../../app/service/S3';
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
+
 // Helper function to get S3 image URL
 const getS3ImageUrlHelper = (imageKey) => {
   if (!imageKey) return "";
@@ -71,6 +75,9 @@ const Staffs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // ✅ API Hooks with pagination parameters - server-side pagination
   const {
     data: staffApiResponse,
@@ -88,6 +95,122 @@ const Staffs = () => {
   });
 
   const [deleteStaff] = useDeleteStaffMutation();
+
+  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  useEffect(() => {
+    console.log("🔄 Registering staff event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    // Register staff events
+    registerStaffEvents({
+      onStaffRegistered: async (data) => {
+        console.log("👤 NEW STAFF REGISTERED:", data);
+        showSuccessToast(`New staff registered!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+      },
+
+      onStaffUpdated: async (data) => {
+        console.log("✏️ STAFF UPDATED:", data);
+        showSuccessToast(`Staff updated!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      },
+
+      onStaffDeleted: async (data) => {
+        console.log("🗑️ STAFF DELETED:", data);
+        showSuccessToast(`Staff deleted!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (DELETED):", result);
+        console.log("📊 NEW DATA:", result?.data);
+      },
+
+      onStaffPasswordReset: async (data) => {
+        console.log("🔑 STAFF PASSWORD RESET:", data);
+        showSuccessToast(`Staff password reset!`, 3000);
+        await refetch();
+      },
+
+      onStaffPasswordChanged: async (data) => {
+        console.log("🔐 STAFF PASSWORD CHANGED:", data);
+        showSuccessToast(`Staff password changed!`, 3000);
+        await refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering staff events...");
+      unregisterStaffEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]); // ✅ Only refetch dependency
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Staff events will work!");
+      // Re-register events on reconnect if not registered
+      if (!eventsRegistered) {
+        registerStaffEvents({
+          onStaffRegistered: async (data) => {
+            console.log("👤 NEW STAFF REGISTERED (reconnect):", data);
+            showSuccessToast(`New staff registered!`, 3000);
+            await refetch();
+          },
+          onStaffUpdated: async (data) => {
+            console.log("✏️ STAFF UPDATED (reconnect):", data);
+            showSuccessToast(`Staff updated!`, 3000);
+            await refetch();
+          },
+          onStaffDeleted: async (data) => {
+            console.log("🗑️ STAFF DELETED (reconnect):", data);
+            showSuccessToast(`Staff deleted!`, 3000);
+            await refetch();
+          },
+          onStaffPasswordReset: async (data) => {
+            console.log("🔑 STAFF PASSWORD RESET (reconnect):", data);
+            showSuccessToast(`Staff password reset!`, 3000);
+            await refetch();
+          },
+          onStaffPasswordChanged: async (data) => {
+            console.log("🔐 STAFF PASSWORD CHANGED (reconnect):", data);
+            showSuccessToast(`Staff password changed!`, 3000);
+            await refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Staff events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Helper function to format staff ID
   const formatStaffId = (id) => {
@@ -164,9 +287,6 @@ const Staffs = () => {
   const totalItems = staffApiResponse?.pagination?.totalItems || 0;
   const totalPages = staffApiResponse?.pagination?.totalPages || 1;
 
-  // ✅ Remove client-side filtering - let API handle it
-  // const filteredStaffs = getFilteredStaffs(); // ← REMOVED
-
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -178,9 +298,6 @@ const Staffs = () => {
     const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
   };
-
-  // ✅ Remove client-side filtering - API handles it
-  // const getFilteredStaffs = () => { ... }; // ← REMOVED
 
   const clearAllFilters = () => {
     setDesignationFilter('all');

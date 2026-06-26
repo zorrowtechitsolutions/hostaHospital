@@ -33,6 +33,11 @@ import {
 
 import { getHospitalId } from '@/utils/auth';
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerRoleEvents, unregisterRoleEvents } from '../../socket/roleEvents';
+
 // Constants
 const ADMIN_ROLE_ID = 2;
 const ITEMS_PER_PAGE = 5;
@@ -289,6 +294,9 @@ const UserPermissions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // FIXED: Properly destructure data from useGetRolesQuery and merge with error response
   const {
     data,
@@ -322,6 +330,95 @@ const UserPermissions = () => {
   // Form states
   const [newRole, setNewRole] = useState({ name: '', description: '' });
   const [editRole, setEditRole] = useState({ name: '', description: '' });
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering role event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerRoleEvents({
+      onRoleRegistered: async (data) => {
+        console.log("👤 NEW ROLE REGISTERED:", data);
+        showSuccessToast(`New role registered!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+      },
+      onRoleUpdated: async (data) => {
+        console.log("✏️ ROLE UPDATED:", data);
+        showSuccessToast(`Role updated!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      },
+      onRoleDeleted: async (data) => {
+        console.log("🗑️ ROLE DELETED:", data);
+        showSuccessToast(`Role deleted!`, 3000);
+        const result = await refetch();
+        console.log("📊 REFETCH RESULT (DELETED):", result);
+        console.log("📊 NEW DATA:", result?.data);
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering role events...");
+      unregisterRoleEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Role events will work!");
+      if (!eventsRegistered) {
+        registerRoleEvents({
+          onRoleRegistered: async (data) => {
+            console.log("👤 NEW ROLE REGISTERED (reconnect):", data);
+            showSuccessToast(`New role registered!`, 3000);
+            await refetch();
+          },
+          onRoleUpdated: async (data) => {
+            console.log("✏️ ROLE UPDATED (reconnect):", data);
+            showSuccessToast(`Role updated!`, 3000);
+            await refetch();
+          },
+          onRoleDeleted: async (data) => {
+            console.log("🗑️ ROLE DELETED (reconnect):", data);
+            showSuccessToast(`Role deleted!`, 3000);
+            await refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Role events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ROLE: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Reset page when search changes
   useEffect(() => {

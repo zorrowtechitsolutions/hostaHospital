@@ -1,4 +1,4 @@
-// src/components/staffs/AddStaff.jsx - WITH hospitalId auto-injected by API and Role Assignment
+// src/components/staffs/AddStaff.jsx - WITH Confirm Password
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -79,6 +79,12 @@ const validatePassword = password => {
   return password.length < 8 ? 'Password must be at least 8 characters' : '';
 };
 
+const validateConfirmPassword = (confirmPassword, password) => {
+  if (!confirmPassword) return 'Please confirm your password';
+  if (confirmPassword !== password) return 'Passwords do not match';
+  return '';
+};
+
 const validateDesignation = designation => !designation ? 'Designation is required' : '';
 
 const validateRole = roleId => !roleId ? 'Please select a role' : '';
@@ -112,32 +118,51 @@ const validators = {
   phone: validatePhone,
   email: validateEmail,
   password: validatePassword,
+  confirmPassword: validateConfirmPassword,
   designation: validateDesignation,
   roleId: validateRole,
   dob: validateDob
 };
 
-const validateField = (name, value) => validators[name]?.(value) || '';
+const validateField = (name, value, formData) => {
+  if (name === 'confirmPassword') {
+    return validateConfirmPassword(value, formData.password);
+  }
+  return validators[name]?.(value) || '';
+};
 
 const buildPlace = (line1, line2) => `${line1} ${line2}`.trim();
 
-const PasswordInput = ({ value, onChange, onBlur, error, touched, showPassword, setShowPassword }) => (
+const PasswordInput = ({ 
+  label, 
+  name, 
+  value, 
+  onChange, 
+  onBlur, 
+  error, 
+  touched, 
+  showPassword, 
+  setShowPassword,
+  placeholder,
+  icon: Icon,
+  required
+}) => (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-1">
-      Password * <span className="text-red-500">*</span>
+      {label} {required && <span className="text-red-500">*</span>}
     </label>
     <div className="relative">
-      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+      {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />}
       <input
         type={showPassword ? "text" : "password"}
-        name="password"
+        name={name}
         value={value}
         onChange={onChange}
         onBlur={onBlur}
-        className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+        className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
           error && touched ? 'border-red-500' : 'border-gray-300'
         }`}
-        placeholder="Enter password (min 8 characters)"
+        placeholder={placeholder}
       />
       <button
         type="button"
@@ -162,6 +187,7 @@ const AddStaff = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [languagesInput, setLanguagesInput] = useState('');
   
   // Role assignment state
@@ -169,12 +195,9 @@ const AddStaff = () => {
   
   // Get hospital ID and hospital name from auth
   const hospitalId = getHospitalId();
-  console.log("AUTH USER:", getAuthUser());
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
   
-  console.log("🏥 Hospital ID from auth:", hospitalId);
-  console.log("🏥 Hospital Name from auth:", hospitalName);
   
   // Fetch roles from API
   const {
@@ -195,6 +218,7 @@ const AddStaff = () => {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
     designation: '',
     roleId: '',
@@ -272,7 +296,7 @@ const AddStaff = () => {
 
   const handleBlur = (e) => {
     const { name, value } = e.target;
-    const error = validateField(name, value);
+    const error = validateField(name, value, formData);
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
@@ -287,6 +311,12 @@ const AddStaff = () => {
       }));
     } else {
       updateFormData({ [name]: type === 'checkbox' ? checked : value });
+    }
+    
+    // If password changes, re-validate confirm password
+    if (name === 'password' && formData.confirmPassword) {
+      const confirmError = validateConfirmPassword(formData.confirmPassword, value);
+      setErrors(prev => ({ ...prev, confirmPassword: confirmError }));
     }
     
     if (errors[name]) clearFieldError(name);
@@ -390,9 +420,14 @@ const AddStaff = () => {
     const newErrors = {};
     const requiredFields = ['name', 'phone', 'email', 'password', 'designation', 'roleId'];
     requiredFields.forEach(field => {
-      const error = validateField(field, formData[field]);
+      const error = validateField(field, formData[field], formData);
       if (error) newErrors[field] = error;
     });
+    
+    // Validate confirm password
+    const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
+    if (confirmError) newErrors.confirmPassword = confirmError;
+    
     const dobError = validateDob(formData.dob);
     if (dobError) newErrors.dob = dobError;
     setErrors(newErrors);
@@ -466,15 +501,11 @@ const AddStaff = () => {
         removeUndefined(staffData.address);
       }
 
-      console.log(JSON.stringify(staffData, null, 2));
-      console.log("🏥 Hospital ID (auto-injected by API):", hospitalId);
-      console.log("🏥 Hospital Name being sent:", hospitalName);
 
       // Create staff
       const response = await createStaff(staffData).unwrap();
       const staff = response.data;
       
-      console.log("📥 API RESPONSE:", response);
       
       // Assign role permission to the created staff
       if (staff?.id && roleId) {
@@ -490,7 +521,6 @@ const AddStaff = () => {
           ]
         };
         
-        console.log("📤 ASSIGNING ROLE PERMISSION:", payload);
         await assignPermissions(payload).unwrap();
       }
       
@@ -542,8 +572,6 @@ const AddStaff = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {/* REMOVED: White header section with "Add New Staff" */}
-      
       {submitSuccess && <Alert type="success" message="Staff added successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
       {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
@@ -641,6 +669,8 @@ const AddStaff = () => {
                 />
                 
                 <PasswordInput
+                  label="Password *"
+                  name="password"
                   value={formData.password}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -648,6 +678,24 @@ const AddStaff = () => {
                   touched={true}
                   showPassword={showPassword}
                   setShowPassword={setShowPassword}
+                  placeholder="Enter password (min 8 characters)"
+                  icon={Lock}
+                  required
+                />
+                
+                <PasswordInput
+                  label="Confirm Password *"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.confirmPassword}
+                  touched={true}
+                  showPassword={showConfirmPassword}
+                  setShowPassword={setShowConfirmPassword}
+                  placeholder="Confirm your password"
+                  icon={Lock}
+                  required
                 />
                 
                 <Input 
