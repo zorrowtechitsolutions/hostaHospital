@@ -264,6 +264,20 @@ export const doctorApi = api.injectEndpoints({
         "Doctor",
       ],
     }),
+
+    // ==============================
+    // RECOVER DOCTOR (NEW)
+    // ==============================
+    recoverDoctor: builder.mutation<{ message: string }, string>({
+      query: (doctorId) => ({
+        url: `/doctor/recover/${doctorId}`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, doctorId) => [
+        { type: "Doctor", doctorId },
+        "Doctor",
+      ],
+    }),
   }),
 
   overrideExisting: false,
@@ -281,5 +295,6 @@ export const {
   useAddNewDoctorMutation,
   useUpdateDoctorMutation,
   useDeleteDoctorMutation,
+  useRecoverDoctorMutation, // 👈 Added
   useGetSpecialitiesQuery, 
 } = doctorApi;

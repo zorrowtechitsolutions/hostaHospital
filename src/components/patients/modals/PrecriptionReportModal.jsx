@@ -207,7 +207,27 @@ const PrescriptionReportModal = ({
       blockMinHeight = dynamicHeight;
     }
 
-    let adjustedTop = block.y;
+
+
+const medicinesTableHeight = getMedicinesTableHeight();
+
+const medicinesBlock = activeDesign.find(
+  item => item.type === "medicinesTable"
+);
+
+const originalMedicineHeight = medicinesBlock?.height || 250;
+const heightDifference = medicinesTableHeight - originalMedicineHeight;
+
+
+let adjustedTop = block.y;
+
+// Move only blocks below medicine table
+if (
+  block.type !== "medicinesTable" &&
+  block.y > medicinesBlock?.y
+) {
+  adjustedTop += heightDifference;
+}
 
     const blockStyle = {
       position: "absolute",
@@ -337,7 +357,7 @@ const PrescriptionReportModal = ({
         return (
           <div key="medicines-table" style={{ 
             ...blockStyle,
-            overflow: "auto",
+overflow: "visible",
             height: `${getMedicinesTableHeight()}px`,
             minHeight: `${getMedicinesTableHeight()}px`,
           }}>
@@ -484,6 +504,19 @@ const PrescriptionReportModal = ({
   const activeDesign = hasValidTemplate ? templateDesign : fallbackDesign;
   const activeBg = hasValidTemplate ? templateBgColor : fallbackBg;
 
+  const medicinesBlock = activeDesign.find(
+  item => item.type === "medicinesTable"
+);
+
+const medicinesTableHeight = getMedicinesTableHeight();
+
+const extraHeight = Math.max(
+  0,
+  medicinesTableHeight - (medicinesBlock?.height || 250)
+);
+
+const containerHeight = 920 + extraHeight;
+
   // If no template design at all, show message
   if (activeDesign.length === 0) {
     return (
@@ -537,17 +570,17 @@ const PrescriptionReportModal = ({
             padding: "5px"
           }}
         >
-          <div
-            className="prescription-inner"
-            style={{
-              position: "relative",
-              width: "990px",
-              height: "920px",
-              margin: "0 auto",
-              background: activeBg,
-            }}
-          >
-            {activeDesign.map((block, index) => renderTemplateBlock(block, index))}
+<div
+  className="prescription-inner"
+  style={{
+    position: "relative",
+    width: "990px",
+    height: `${containerHeight}px`,
+    margin: "0 auto",
+    background: activeBg,
+  }}
+>
+              {activeDesign.map((block, index) => renderTemplateBlock(block, index))}
           </div>
         </div>
 

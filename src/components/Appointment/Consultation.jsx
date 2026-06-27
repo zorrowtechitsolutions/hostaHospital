@@ -694,28 +694,6 @@ console.log("========================");
         </Card>
       </div>
 
-<<<<<<< HEAD
-<ViewMedicalHistory
-  isOpen={showMedicalHistory}
-  onClose={() => setShowMedicalHistory(false)}
-  patientId={
-    appointmentData.patient?.id ||
-    appointmentData.patient?.patientId ||
-    appointmentData.patientId ||
-    null
-  }
-  department={
-    appointmentData.department ||
-    appointmentData.doctorDepartment ||
-    appointmentData.departmentName
-  }
-  doctorName={
-    appointmentData.doctor?.name ||
-    appointmentData.doctorName ||
-    appointmentData.displayName
-  }
-/>
-=======
       <ViewMedicalHistory
         isOpen={showMedicalHistory}
         onClose={() => setShowMedicalHistory(false)}
@@ -735,7 +713,6 @@ console.log("========================");
           appointmentData.displayName
         }
       />
->>>>>>> efb28c22a899d6e589ff74c009dee22e71f5a268
     </div>
   );
 };

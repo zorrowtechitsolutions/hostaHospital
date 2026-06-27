@@ -1,38 +1,35 @@
 import { io } from "socket.io-client";
+import { getAuthUser } from "../utils/auth";
 
 export const socket = io("https://zorrowtek.in", {
   transports: ["websocket", "polling"],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
+  autoConnect: true,
 });
 
 export const initSocket = () => {
   socket.connect();
 
   socket.on("connect", () => {
-    console.log("✅ Socket connected:", socket.id);
+    console.log("✅ Connected:", socket.id);
+
+    const authUser = getAuthUser();
+
+    if (authUser?.id) {
+      const room = `hospital_${authUser.id}`;
+
+      console.log("Joining:", room);
+
+      socket.emit("join-room", room);
+    }
   });
 
   socket.on("disconnect", (reason) => {
-    console.log("❌ Socket disconnected:", reason);
+    console.log("Disconnected:", reason);
   });
 
-  socket.on("connect_error", (error) => {
-    console.error("❌ Socket connection error:", error);
-  });
-
-  // Optional: Log all events for debugging (remove in production)
   socket.onAny((event, ...args) => {
-    console.log(`📡 Event: ${event}`, args);
+    console.log("📡", event, args);
   });
 
   return socket;
-};
-
-export const disconnectSocket = () => {
-  if (socket.connected) {
-    socket.disconnect();
-    console.log("🔌 Socket disconnected manually");
-  }
 };

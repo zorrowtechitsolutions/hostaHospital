@@ -1,3 +1,5 @@
+// Staffs.jsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -10,7 +12,8 @@ import {
   Users as UsersIcon,
   RefreshCcw,
   Upload,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 
 import {
@@ -26,7 +29,8 @@ import DeleteModal from '../patients/DeleteModel';
 
 import {
   useGetStaffQuery,
-  useDeleteStaffMutation
+  useDeleteStaffMutation,
+  useRecoverStaffMutation
 } from '../../../app/service/staffApi';
 
 import {
@@ -42,20 +46,9 @@ import {
 
 import { getS3ImageUrl } from '../../../app/service/S3';
 
-// ✅ Import socket
+// Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
-
-// Helper function to get S3 image URL
-const getS3ImageUrlHelper = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return imageKey;
-  }
-  const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
 
 const Staffs = () => {
   const navigate = useNavigate();
@@ -75,10 +68,13 @@ const Staffs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
+  // Track if showing deleted staff
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ API Hooks with pagination parameters - server-side pagination
+  // API Hooks with pagination parameters
   const {
     data: staffApiResponse,
     isLoading: loading,
@@ -91,38 +87,35 @@ const Staffs = () => {
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date: dateFilter || undefined,
     page: currentPage,
-    limit: itemsPerPage
+    limit: itemsPerPage,
+    includeDeleted: showDeleted
   });
 
   const [deleteStaff] = useDeleteStaffMutation();
+  const [recoverStaff] = useRecoverStaffMutation();
 
-  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  // Register socket event listeners
   useEffect(() => {
     console.log("🔄 Registering staff event listeners...");
     console.log("📡 Socket connected:", socket.connected);
     
-    // Register staff events
     registerStaffEvents({
       onStaffRegistered: async (data) => {
         console.log("👤 NEW STAFF REGISTERED:", data);
         showSuccessToast(`New staff registered!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+        await refetch();
       },
 
       onStaffUpdated: async (data) => {
         console.log("✏️ STAFF UPDATED:", data);
         showSuccessToast(`Staff updated!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
+        await refetch();
       },
 
       onStaffDeleted: async (data) => {
         console.log("🗑️ STAFF DELETED:", data);
         showSuccessToast(`Staff deleted!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (DELETED):", result);
-        console.log("📊 NEW DATA:", result?.data);
+        await refetch();
       },
 
       onStaffPasswordReset: async (data) => {
@@ -140,19 +133,17 @@ const Staffs = () => {
 
     setEventsRegistered(true);
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
       console.log("🧹 Unregistering staff events...");
       unregisterStaffEvents();
       setEventsRegistered(false);
     };
-  }, [refetch]); // ✅ Only refetch dependency
+  }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ Socket CONNECTED - Staff events will work!");
-      // Re-register events on reconnect if not registered
       if (!eventsRegistered) {
         registerStaffEvents({
           onStaffRegistered: async (data) => {
@@ -199,7 +190,7 @@ const Staffs = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
+  // Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
       console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
@@ -230,25 +221,17 @@ const Staffs = () => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
     return staffList.map((staff, index) => {
-      // Get the image key from the staff object - prioritize imageUrl, then profileImage, then imageKey
+      console.log("STAFF DATA:", staff);
+      
       const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
       
-      // Properly map status from API response
-      let staffStatus = 'Inactive'; // Default to Inactive
+      // Modified status logic
+      let staffStatus = 'Inactive';
       
-      // Check status from various possible sources in the API response
-      if (staff.status === 'active') {
+      if (staff.isDelete) {
+        staffStatus = 'Blacklisted';
+      } else if (staff.isActive) {
         staffStatus = 'Active';
-      } else if (staff.status === 'inactive') {
-        staffStatus = 'Inactive';
-      } else if (staff.isActive === true) {
-        staffStatus = 'Active';
-      } else if (staff.isActive === false) {
-        staffStatus = 'Inactive';
-      } else if (staff.active === true) {
-        staffStatus = 'Active';
-      } else if (staff.active === false) {
-        staffStatus = 'Inactive';
       }
       
       return {
@@ -275,14 +258,15 @@ const Staffs = () => {
         joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         department: staff.designation || '',
         staffType: staff.staffType || '',
-        isActive: staffStatus === 'Active',
-        // Keep original status for debugging
+        // Updated isActive and isDelete
+        isActive: staff.isActive || false,
+        isDelete: staff.isDelete || false,
+        deleteDate: staff.deleteDate || null,
         originalStatus: staff.status
       };
     });
   };
 
-  // ✅ Use server-side pagination values from API response
   const staffsData = transformStaffData(staffApiResponse?.data || []);
   const totalItems = staffApiResponse?.pagination?.totalItems || 0;
   const totalPages = staffApiResponse?.pagination?.totalPages || 1;
@@ -290,10 +274,9 @@ const Staffs = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter, showDeleted]);
 
   const getAllDesignations = () => {
-    // Use all data from API response if available
     const allData = staffApiResponse?.allData || staffsData;
     const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
@@ -324,8 +307,9 @@ const Staffs = () => {
       'Email': staff.email,
       'Appointment Date': staff.appointmentDateDisplay,
       'Department': staff.department,
-      'Status': staff.status,
-      'Joining Date': staff.joiningDate
+      'Status': staff.isDelete ? 'Blacklisted' : staff.status,
+      'Joining Date': staff.joiningDate,
+      'Delete Date': staff.deleteDate || 'N/A'
     }));
     
     const link = document.createElement('a');
@@ -356,12 +340,22 @@ const Staffs = () => {
     event.target.value = '';
   };
 
+  // ✅ View Details - Only for Active/Inactive staff
   const handleViewDetails = (staff) => {
+    if (staff.isDelete) {
+      showErrorToast('Cannot view details of blacklisted staff', 3000);
+      return;
+    }
     setSelectedStaff(staff);
     setShowDetailsModal(true);
   };
 
+  // ✅ Edit - Only for Active/Inactive staff
   const handleEditStaff = (staff) => {
+    if (staff.isDelete) {
+      showErrorToast('Cannot edit blacklisted staff', 3000);
+      return;
+    }
     const encodedId = encodeURIComponent(staff.id);
     navigate(`/edit-staff/${encodedId}`, { state: { staff } });
   };
@@ -386,6 +380,18 @@ const Staffs = () => {
     }
   };
 
+  // ✅ Recover handler
+  const handleRecoverStaff = async (staff) => {
+    try {
+      await recoverStaff(staff.id).unwrap();
+      showSuccessToast(`${staff.name} recovered successfully!`, 2000);
+      refetch();
+    } catch (error) {
+      console.error('Recover error:', error);
+      showErrorToast(error?.data?.message || 'Failed to recover staff member', 3000);
+    }
+  };
+
   const handleAddStaff = () => navigate('/add-staff');
   
   const getActiveFilterCount = () =>
@@ -394,11 +400,14 @@ const Staffs = () => {
       genderFilter !== 'all',
       statusFilter !== 'all',
       !!dateFilter,
-      !!searchTerm
+      !!searchTerm,
+      showDeleted
     ].filter(Boolean).length;
 
+  // ✅ StaffDetailsModal - Only shown for Active/Inactive staff
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
+    
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
@@ -418,30 +427,88 @@ const Staffs = () => {
             </div>
           </div>
         </div>
+        
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-xs font-medium text-gray-500">Designation</label><p className="text-sm text-gray-800">{staff.designation}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Department</label><p className="text-sm text-gray-800">{staff.department || 'N/A'}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Gender</label><p className="text-sm text-gray-800">{staff.gender}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Phone</label><p className="text-sm text-gray-800">{staff.phone}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Email</label><p className="text-sm text-gray-800">{staff.email}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Joining Date</label><p className="text-sm text-gray-800">{staff.joiningDate}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-800">{staff.dob}</p></div>
-          <div><label className="block text-xs font-medium text-gray-500">Status</label>
-            <Badge variant={staff.status === 'Active' ? 'success' : 'danger'}>{staff.status}</Badge>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Designation</label>
+            <p className="text-sm text-gray-800">{staff.designation || 'N/A'}</p>
           </div>
-          <div className="col-span-2"><label className="block text-xs font-medium text-gray-500">Address</label><p className="text-sm text-gray-800">{staff.address}</p></div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Department</label>
+            <p className="text-sm text-gray-800">{staff.department || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Gender</label>
+            <p className="text-sm text-gray-800">{staff.gender || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Phone</label>
+            <p className="text-sm text-gray-800">{staff.phone || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Email</label>
+            <p className="text-sm text-gray-800">{staff.email || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Joining Date</label>
+            <p className="text-sm text-gray-800">{staff.joiningDate || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Date of Birth</label>
+            <p className="text-sm text-gray-800">{staff.dob || 'N/A'}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Status</label>
+            <Badge
+              variant={
+                staff.isDelete
+                  ? 'secondary'
+                  : staff.isActive
+                  ? 'success'
+                  : 'danger'
+              }
+            >
+              {staff.isDelete ? 'Blacklisted' : staff.isActive ? 'Active' : 'Inactive'}
+            </Badge>
+          </div>
+          
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-500">Address</label>
+            <p className="text-sm text-gray-800">{staff.address || 'N/A'}</p>
+          </div>
+          
+          {/* Show Staff Type if available */}
+          {staff.staffType && (
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500">Staff Type</label>
+              <p className="text-sm text-gray-800">{staff.staffType}</p>
+            </div>
+          )}
+          
+          {/* Show Job Type if available */}
+          {staff.jobType && (
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500">Job Type</label>
+              <p className="text-sm text-gray-800">{staff.jobType}</p>
+            </div>
+          )}
         </div>
+        
         <div className="flex gap-2 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
-          <Button variant="primary" onClick={() => { handleEditStaff(staff); onClose(); }} fullWidth>Edit Staff</Button>
+          <Button variant="primary" onClick={() => { handleEditStaff(staff); onClose(); }} fullWidth>
+            Edit Staff
+          </Button>
         </div>
       </Modal>
     );
   };
 
+  // ✅ Updated RowActionMenu - View & Edit only for Active/Inactive, Recover for Blacklisted
   const RowActionMenu = ({ staff }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
+    
     useEffect(() => {
       const handleClickOutside = (e) => {
         if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
@@ -449,6 +516,7 @@ const Staffs = () => {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+    
     return (
       <div className="relative inline-block" ref={menuRef}>
         <Button variant="ghost" size="sm" onClick={() => setShowMenu(prev => !prev)} className="p-2">
@@ -456,16 +524,45 @@ const Staffs = () => {
         </Button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button onClick={() => { handleViewDetails(staff); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
-              <Eye size={16} /> View Details
-            </button>
-            <button onClick={() => { handleEditStaff(staff); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              <Edit size={16} /> Edit
-            </button>
-            <div className="border-t border-gray-100 my-1"></div>
-            <button onClick={() => { handleDeleteClick(staff); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
-              <Trash2 size={16} /> Delete
-            </button>
+            {/* ✅ View Details - Only for Active/Inactive staff */}
+            {!staff.isDelete && (
+              <button 
+                onClick={() => { handleViewDetails(staff); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+              >
+                <Eye size={16} /> View Details
+              </button>
+            )}
+            
+            {/* ✅ Edit - Only for Active/Inactive staff */}
+            {!staff.isDelete && (
+              <button 
+                onClick={() => { handleEditStaff(staff); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Edit size={16} /> Edit
+              </button>
+            )}
+            
+            {/* Show divider only if there are items above */}
+            {!staff.isDelete && <div className="border-t border-gray-100 my-1"></div>}
+            
+            {/* ✅ Show Delete or Recover based on isDelete status */}
+            {staff.isDelete ? (
+              <button 
+                onClick={() => { handleRecoverStaff(staff); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+              >
+                <RotateCcw size={16} /> Recover Staff
+              </button>
+            ) : (
+              <button 
+                onClick={() => { handleDeleteClick(staff); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+              >
+                <Trash2 size={16} /> Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -573,6 +670,18 @@ const Staffs = () => {
             <Button variant="outline" size="sm" onClick={handleExport} title="Export">
               <Download size={16} />
             </Button>
+            
+            {/* Toggle to show deleted staff */}
+            <Button 
+              variant={showDeleted ? "primary" : "outline"} 
+              size="sm" 
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="flex items-center gap-1"
+            >
+              <Trash2 size={14} />
+              {showDeleted ? "Hide Deleted" : "Show Deleted"}
+            </Button>
+            
             <button
               onClick={() => setShowFilters(prev => !prev)}
               className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -657,18 +766,25 @@ const Staffs = () => {
           </div>
         )}
 
-        {/* Staff Table - WITH STICKY PAGINATION USING SERVER-SIDE TOTALPAGES */}
+        {/* Staff Table */}
         {staffsData.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
+            <p className="text-sm text-gray-500">
+              {showDeleted ? "No deleted staff members found" : "Try adjusting your search or filters"}
+            </p>
           </div>
         ) : (
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
-                Total Staffs 
-                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+                {showDeleted ? "Deleted Staffs" : "Total Staffs"}
+                <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${
+                  showDeleted ? 'bg-gray-500' : 'bg-red-500'
+                }`}>
+                  {totalItems}
+                </span>
               </h2>
             </div>
             
@@ -689,8 +805,17 @@ const Staffs = () => {
                   </thead>
                   <tbody>
                     {staffsData.map((staff, index) => (
-                      <tr key={staff.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                        <td className="px-6 py-4 text-[#1C62A0] font-medium">{staff.formattedId}</td>
+                      <tr 
+                        key={staff.id || index} 
+                        className={`hover:bg-gray-50 border-b border-gray-100 ${
+                          staff.isDelete ? 'bg-gray-50' : ''
+                        }`}
+                      >
+                        <td className={`px-6 py-4 font-medium ${
+                          staff.isDelete ? 'text-gray-500' : 'text-[#1C62A0]'
+                        }`}>
+                          {staff.formattedId}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <Avatar className="w-10 h-10">
@@ -698,20 +823,39 @@ const Staffs = () => {
                                 src={getS3ImageUrl(staff.imageUrl)} 
                                 alt={staff.name} 
                               />
-                              <AvatarFallback className="text-sm font-medium">
+                              <AvatarFallback className={`text-sm font-medium ${
+                                staff.isDelete ? 'bg-gray-200 text-gray-500' : ''
+                              }`}>
                                 {staff.name?.charAt(0)?.toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="font-medium text-gray-800">{staff.name}</span>
+                            <span className={`font-medium ${
+                              staff.isDelete ? 'text-gray-500' : 'text-gray-800'
+                            }`}>
+                              {staff.name}
+                            </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-gray-600">{staff.gender}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.designation}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.phone}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.gender || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.designation || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.phone || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay || 'N/A'}</td>
                         <td className="px-6 py-4">
-                          <Badge variant={staff.status === 'Active' ? 'success' : 'danger'} className="text-xs">
-                            {staff.status}
+                          <Badge
+                            variant={
+                              staff.isDelete
+                                ? 'secondary'
+                                : staff.isActive
+                                ? 'success'
+                                : 'danger'
+                            }
+                            className="text-xs"
+                          >
+                            {staff.isDelete
+                              ? 'Blacklisted'
+                              : staff.isActive
+                              ? 'Active'
+                              : 'Inactive'}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -725,7 +869,7 @@ const Staffs = () => {
                 </table>
               </div>
               
-              {/* Pagination - Using server-side totalPages */}
+              {/* Pagination */}
               <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}
@@ -741,8 +885,10 @@ const Staffs = () => {
         )}
       </div>
 
-      {/* Staff Details Modal */}
-      {showDetailsModal && selectedStaff && <StaffDetailsModal staff={selectedStaff} onClose={() => setShowDetailsModal(false)} />}
+      {/* Staff Details Modal - Only shown for Active/Inactive staff */}
+      {showDetailsModal && selectedStaff && !selectedStaff.isDelete && (
+        <StaffDetailsModal staff={selectedStaff} onClose={() => setShowDetailsModal(false)} />
+      )}
 
       {/* Delete Confirmation Modal */}
       <DeleteModal 

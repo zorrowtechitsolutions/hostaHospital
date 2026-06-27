@@ -34,6 +34,9 @@ export interface Staff {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
+  isActive?: boolean;
+  isDelete?: boolean;
+  deleteDate?: string | null;
 }
 
 export interface StaffResponse {
@@ -42,6 +45,12 @@ export interface StaffResponse {
   data?: Staff | Staff[];
   token?: string;
   refreshToken?: string;
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    itemsPerPage: number;
+  };
 }
 
 export interface GetStaffParams {
@@ -58,6 +67,7 @@ export interface GetStaffParams {
   email?: string;
   staffId?: string;
   search_query?: string;
+  includeDeleted?: boolean;
 }
 
 // Password Reset Request Types
@@ -71,12 +81,11 @@ export interface SendOtpRequest {
   email: string;
 }
 
-// ✅ FIX 1: Updated ChangePasswordRequest with confirmPassword
 export interface ChangePasswordRequest {
   staffId: number;
   currentPassword: string;
   newPassword: string;
-  confirmPassword: string;  // ✅ Added confirmPassword
+  confirmPassword: string;
 }
 
 // Login Types
@@ -101,7 +110,6 @@ export const staffApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ================= GET ALL STAFF =================
-    // GET /staff
     getStaff: builder.query<
       StaffResponse,
       GetStaffParams | void
@@ -128,6 +136,7 @@ export const staffApi = api.injectEndpoints({
         if (params?.email) queryParams.append("email", params.email);
         if (params?.staffId) queryParams.append("staffId", params.staffId);
         if (params?.search_query) queryParams.append("search_query", params.search_query);
+        if (params?.includeDeleted) queryParams.append("includeDeleted", String(params.includeDeleted));
 
         // pagination
         if (params?.page) queryParams.append("page", String(params.page));
@@ -139,7 +148,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= GET STAFF BY ID =================
-    // GET /staff/:id
     getStaffById: builder.query<
       StaffResponse,
       number | string
@@ -149,7 +157,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= CREATE STAFF =================
-    // POST /staff
     createStaff: builder.mutation<
       StaffResponse,
       Omit<Staff, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
@@ -162,7 +169,7 @@ export const staffApi = api.injectEndpoints({
           method: "POST",
           body: {
             ...data,
-            hospitalId: hospitalId, // Auto-inject from auth
+            hospitalId: hospitalId,
           },
         };
       },
@@ -170,7 +177,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= UPDATE STAFF =================
-    // PUT /staff/:id
     updateStaff: builder.mutation<
       StaffResponse,
       {
@@ -190,7 +196,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= DELETE STAFF =================
-    // DELETE /staff/:id
     deleteStaff: builder.mutation<
       { message: string },
       string | number
@@ -205,8 +210,22 @@ export const staffApi = api.injectEndpoints({
       ],
     }),
 
+    // ================= RECOVER STAFF =================
+    recoverStaff: builder.mutation<
+      { success: boolean; message: string; data?: Staff },
+      string | number
+    >({
+      query: (id) => ({
+        url: `/staff/recover/${id}`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Staff", id },
+        "Staff",
+      ],
+    }),
+
     // ================= LOGIN WITH EMAIL =================
-    // POST /staff/login
     loginStaff: builder.mutation<
       StaffResponse,
       LoginRequest
@@ -226,7 +245,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= LOGIN WITH PHONE =================
-    // POST /staff/login/phone
     loginStaffPhone: builder.mutation<
       StaffResponse,
       LoginPhoneRequest
@@ -239,7 +257,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= VERIFY OTP =================
-    // POST /staff/otp
     verifyStaffOtp: builder.mutation<
       StaffResponse,
       VerifyOtpRequest
@@ -259,7 +276,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= REFRESH TOKEN =================
-    // POST /staff/refresh
     refreshStaff: builder.mutation<
       StaffResponse,
       void
@@ -278,7 +294,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= LOGOUT =================
-    // POST /staff/logout
     logoutStaff: builder.mutation<
       { message: string },
       void
@@ -298,7 +313,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= SEND OTP FOR PASSWORD RESET =================
-    // POST /staff/auth/send-otp
     sendStaffOtp: builder.mutation<
       { success: boolean; message: string },
       SendOtpRequest
@@ -311,7 +325,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= VERIFY OTP FOR PASSWORD RESET =================
-    // POST /staff/auth/verify-otp
     verifyStaffOtpForReset: builder.mutation<
       StaffResponse,
       {
@@ -334,7 +347,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= RESET PASSWORD (with OTP) =================
-    // POST /staff/auth/reset-password
     resetStaffPassword: builder.mutation<
       { success: boolean; message: string },
       ResetPasswordRequest
@@ -347,7 +359,6 @@ export const staffApi = api.injectEndpoints({
     }),
 
     // ================= CHANGE PASSWORD (with current password) =================
-    // ✅ FIX 2: Updated with confirmPassword in the request body
     changeStaffPassword: builder.mutation<
       { success: boolean; message: string },
       ChangePasswordRequest
@@ -359,7 +370,7 @@ export const staffApi = api.injectEndpoints({
           staffId: data.staffId,
           currentPassword: data.currentPassword,
           newPassword: data.newPassword,
-          confirmPassword: data.confirmPassword,  // ✅ Added confirmPassword
+          confirmPassword: data.confirmPassword,
         },
       }),
     }),
@@ -387,6 +398,7 @@ export const {
   // PUT
   useUpdateStaffMutation,
   useChangeStaffPasswordMutation,
+  useRecoverStaffMutation,
   
   // DELETE
   useDeleteStaffMutation,

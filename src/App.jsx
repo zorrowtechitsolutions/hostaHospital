@@ -25,7 +25,7 @@ import SuperAdminLayout from "./components/super admin/SuperAdminLayout";
 import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
-import { socket } from "./socket/socket";
+import { initSocket } from './socket/socket';
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -81,16 +81,18 @@ function App() {
   const [booking, setBooking] = useState(null);
   const navigate = useNavigate();
 
-  // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
+ // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
   useEffect(() => {
-    socket.connect();
+    // ✅ Initialize socket connection when app loads
+    const socketInstance = initSocket();
+    
+    console.log("📡 Socket initialized:", socketInstance);
 
-    socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-    });
-
+    // ✅ Cleanup on unmount
     return () => {
-      socket.disconnect();
+      console.log("🧹 Cleaning up socket...");
+      // Optionally disconnect, but you might want to keep it connected
+      // disconnectSocket();
     };
   }, []);
 

@@ -1,6 +1,7 @@
+// src/socket/bookingEvents.js
 import { socket } from "./socket";
 
-// Booking Events Listener - EXACT MATCH with backend
+// Booking Events Listener - Using system_event pattern
 export const registerBookingEvents = (handlers = {}) => {
   console.log("✅ Booking listeners registered");
   console.log("📡 Socket connected:", socket.connected);
@@ -11,34 +12,42 @@ export const registerBookingEvents = (handlers = {}) => {
     console.log("📡 ALL SOCKET EVENTS - BOOKING:", event, args);
   });
 
-  // ✅ BOOKING REGISTERED EVENT
-  socket.on("BOOKING_REGISTERED", (data) => {
-    console.log("📅 Booking Registered:", data);
-    handlers.onBookingRegistered?.(data);
-  });
+  // ✅ UNIFIED SYSTEM EVENT LISTENER
+  socket.on("system_event", (payload) => {
+    console.log("🔥 SYSTEM EVENT (BOOKING):", payload);
 
-  // ✅ BOOKING UPDATED EVENT
-  socket.on("BOOKING_UPDATED", (data) => {
-    console.log("✏️ Booking Updated:", data);
-    handlers.onBookingUpdated?.(data);
-  });
+    // Extract event type from message (format: [EVENT_TYPE] message)
+    const event = payload.message?.match(/\[(.*?)\]/)?.[1];
 
-  // ✅ BOOKING CANCELLED EVENT
-  socket.on("BOOKING_CANCELLED", (data) => {
-    console.log("❌ Booking Cancelled:", data);
-    handlers.onBookingCancelled?.(data);
-  });
+    switch (event) {
+      case "BOOKING_REGISTERED":
+        console.log("📅 Booking Registered:", payload.data);
+        handlers.onBookingRegistered?.(payload.data);
+        break;
 
-  // ✅ BOOKING ACCEPTED EVENT
-  socket.on("BOOKING_ACCEPTED", (data) => {
-    console.log("✅ Booking Accepted:", data);
-    handlers.onBookingAccepted?.(data);
-  });
+      case "BOOKING_UPDATED":
+        console.log("✏️ Booking Updated:", payload.data);
+        handlers.onBookingUpdated?.(payload.data);
+        break;
 
-  // ✅ BOOKING COMPLETED EVENT
-  socket.on("BOOKING_COMPLETED", (data) => {
-    console.log("✔️ Booking Completed:", data);
-    handlers.onBookingCompleted?.(data);
+      case "BOOKING_CANCELLED":
+        console.log("❌ Booking Cancelled:", payload.data);
+        handlers.onBookingCancelled?.(payload.data);
+        break;
+
+      case "BOOKING_ACCEPTED":
+        console.log("✅ Booking Accepted:", payload.data);
+        handlers.onBookingAccepted?.(payload.data);
+        break;
+
+      case "BOOKING_COMPLETED":
+        console.log("✔️ Booking Completed:", payload.data);
+        handlers.onBookingCompleted?.(payload.data);
+        break;
+
+      default:
+        console.log("Unknown booking event:", event);
+    }
   });
 
   console.log("✅ Booking listeners setup complete");
@@ -46,14 +55,11 @@ export const registerBookingEvents = (handlers = {}) => {
 
 // Unregister booking events (cleanup)
 export const unregisterBookingEvents = () => {
-  socket.off("BOOKING_REGISTERED");
-  socket.off("BOOKING_UPDATED");
-  socket.off("BOOKING_CANCELLED");
-  socket.off("BOOKING_ACCEPTED");
-  socket.off("BOOKING_COMPLETED");
+  // Remove system_event listener
+  socket.off("system_event");
   
-  // Also remove the onAny listener
+  // Remove the onAny listener
   socket.offAny();
-  
+
   console.log("🧹 Booking events unregistered");
 };

@@ -4,8 +4,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Modal, Pagination, Button } from '../ui';
-import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
+import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi"; // 👈 Added useRecoverDoctorMutation
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { showSuccessToast, showErrorToast } from "../ui/Toast"; // 👈 Added for toast notifications
 
 // S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
@@ -49,7 +50,7 @@ const getDepartmentDisplay = (doctor) => {
 };
 
 // Reusable Doctor Action Menu Component
-const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment }) => {
+const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => { // 👈 Added onRecover prop
   if (activeMenu !== doctor.id) return null;
   
   return (
@@ -92,6 +93,22 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
         </svg>
         Delete
       </button>
+      
+      {/* 👇 NEW: Recover button - only show for deleted doctors */}
+      {doctor.isDelete && (
+        <>
+          <div className="border-t border-gray-100 my-1"></div>
+          <button
+            onClick={() => onRecover(doctor)}
+            className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Recover Doctor
+          </button>
+        </>
+      )}
     </div>
   );
 });
@@ -190,6 +207,9 @@ const Doctors = () => {
 
   const fileInputRef = useRef(null);
 
+  // 👇 NEW: Add recoverDoctor mutation
+  const [recoverDoctor] = useRecoverDoctorMutation();
+
   // API Query with pagination parameters - server-side pagination
   const {
     data: response,
@@ -236,6 +256,10 @@ const Doctors = () => {
   // Get total pages and total items from API response (server-side pagination)
   const totalPages = response?.pagination?.totalPages || 1;
   const totalItems = response?.pagination?.totalItems || 0;
+
+  useEffect(() => {
+  console.log(doctors);
+}, [doctors]);
 
   // Handle location state for department filter
   useEffect(() => {
@@ -352,6 +376,19 @@ const Doctors = () => {
     setShowDelete(true);
     setActiveMenu(null);
   }, []);
+
+  // 👇 NEW: Handle recover doctor
+  const handleRecoverDoctor = useCallback(async (doctor) => {
+    try {
+      await recoverDoctor(doctor.id).unwrap();
+      refetch();
+      setActiveMenu(null);
+      showSuccessToast(`${getDoctorName(doctor)} recovered successfully`);
+    } catch (error) {
+      console.error(error);
+      showErrorToast(error?.data?.message || "Failed to recover doctor");
+    }
+  }, [recoverDoctor, refetch]);
 
   const handleDeleteDoctor = useCallback(async (deletedDoctorId) => {
     await refetch();
@@ -611,6 +648,7 @@ const Doctors = () => {
                       onEdit={handleEdit}
                       onDelete={handleDeleteClick}
                       onAppointment={handleAppointmentManagement}
+                      onRecover={handleRecoverDoctor} /* 👈 Added */
                     />
                   </div>
                 </div>
@@ -626,7 +664,11 @@ const Doctors = () => {
                   </Avatar>
                   <div
                     className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
-                      doctor.isActive ? "bg-green-500" : "bg-red-500"
+                      doctor.isDelete
+                        ? "bg-black"
+                        : doctor.isActive
+                        ? "bg-green-500"
+                        : "bg-red-500"
                     }`}
                   />
                 </div>
@@ -730,10 +772,20 @@ const Doctors = () => {
                       <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
                       <td className="px-6 py-4">
                         <Badge
-                          variant={doctor.isActive ? "success" : "danger"}
+                          variant={
+                            doctor.isDelete
+                              ? "dark"
+                              : doctor.isActive
+                              ? "success"
+                              : "danger"
+                          }
                           className="text-xs"
                         >
-                          {doctor.isActive ? "Active" : "Inactive"}
+                          {doctor.isDelete
+                            ? "Blacklisted"
+                            : doctor.isActive
+                            ? "Active"
+                            : "Inactive"}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right relative menu-container">
@@ -752,6 +804,7 @@ const Doctors = () => {
                             onEdit={handleEdit}
                             onDelete={handleDeleteClick}
                             onAppointment={handleAppointmentManagement}
+                            onRecover={handleRecoverDoctor} /* 👈 Added */
                           />
                         </div>
                       </td>
