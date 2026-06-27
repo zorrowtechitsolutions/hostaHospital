@@ -34,7 +34,7 @@ export const registerPatientEvents = (handlers = {}) => {
 });
 }
 export const unregisterPatientEvents = () => {
-  socket.off("patient_event");
+  socket.off("system_event");
 
   if (onAnyListener) {
     socket.offAny(onAnyListener);

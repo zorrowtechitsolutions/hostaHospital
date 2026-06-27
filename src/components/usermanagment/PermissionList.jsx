@@ -10,6 +10,10 @@ import {
 import { useGetPermissionsQuery } from "../../../app/service/permission";
 import { getHospitalId } from '../../utils/auth';
 
+// ✅ Import socket event listeners
+import { registerPermissionEvents, unregisterPermissionEvents } from '../../socket/permissionEvents';
+import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../socket/rolePermissionEvents';
+
 const PermissionList = () => {
   const { roleId } = useParams();
   const navigate = useNavigate();
@@ -25,16 +29,62 @@ const PermissionList = () => {
   const [createRolePermission] = useCreateRolePermissionMutation();
 
   // Get all permissions data
-  const { data: permissionsData, isLoading: isLoadingPermissions } = useGetPermissionsQuery();
+  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
   
+  // Get role permissions data
+  const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
+    roleId,
+  });
+
+  // ✅ Register socket event listeners for real-time updates
+  useEffect(() => {
+    console.log("🔄 Registering permission event listeners...");
+    
+    // Register permission events
+    registerPermissionEvents({
+      onPermissionRegistered: (data) => {
+        console.log("🔑 New permission registered:", data);
+        showSuccessToast(`New permission created!`, 3000);
+        refetchPermissions();
+      },
+      
+      onPermissionUpdated: (data) => {
+        console.log("✏️ Permission updated:", data);
+        showSuccessToast(`Permission updated!`, 3000);
+        refetchPermissions();
+      },
+      
+      onPermissionDeleted: (data) => {
+        console.log("🗑️ Permission deleted:", data);
+        showSuccessToast(`Permission deleted!`, 3000);
+        refetchPermissions();
+      }
+    });
+
+    // Register role permission events
+    registerRolePermissionEvents({
+      onRolePermissionUpdated: (data) => {
+        console.log("🔐 Role permission updated:", data);
+        showSuccessToast(`Role permissions updated!`, 3000);
+        refetchRolePermissions();
+        
+        // Also refetch permissions to get latest data
+        refetchPermissions();
+      }
+    });
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering permission events...");
+      unregisterPermissionEvents();
+      unregisterRolePermissionEvents();
+    };
+  }, [refetchPermissions, refetchRolePermissions]);
+
   // Log the permissions data to see the structure
   useEffect(() => {
     console.log("permissionsData", permissionsData);
   }, [permissionsData]);
-
-  const { data: permissionData } = useGetRolePermissionsQuery({
-    roleId,
-  });
 
   // Dynamically build modules from permissionsData using module and action fields
   useEffect(() => {
@@ -178,6 +228,11 @@ const PermissionList = () => {
       console.log("Save result:", result);
 
       showSuccessToast("Permission saved successfully");
+      
+      // ✅ Refetch data after save to ensure UI is in sync
+      await refetchPermissions();
+      await refetchRolePermissions();
+      
     } catch (error) {
       console.error("Save error:", error);
       showErrorToast("Failed to save permission");

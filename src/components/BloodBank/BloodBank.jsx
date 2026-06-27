@@ -344,22 +344,18 @@ const BloodBank = () => {
         console.log("🩸 NEW BLOOD STOCK CREATED:", data);
         showSuccessToast(`New blood stock created!`, 3000);
         const result = await refetch();
-        console.log("📊 REFETCH RESULT (CREATED):", result);
       },
 
       onStockUpdated: async (data) => {
         console.log("✏️ BLOOD STOCK UPDATED:", data);
         showSuccessToast(`Blood stock updated!`, 3000);
         const result = await refetch();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
       },
 
       onStockDeleted: async (data) => {
         console.log("🗑️ BLOOD STOCK DELETED:", data);
         showSuccessToast(`Blood stock deleted!`, 3000);
         const result = await refetch();
-        console.log("📊 REFETCH RESULT (DELETED):", result);
-        console.log("📊 NEW DATA:", result?.data);
       }
     });
 

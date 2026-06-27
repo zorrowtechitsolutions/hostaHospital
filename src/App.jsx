@@ -26,7 +26,6 @@ import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
 import { initSocket } from './socket/socket';
-
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
 const PatientDetails = lazy(() => import("./components/patients/PatientDetails"));
