@@ -1,11 +1,13 @@
+// src/components/NotificationsPage.jsx
 import React, { useState, useEffect } from 'react';
-import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw } from 'lucide-react';
+import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, CheckCircle, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   useGetNotificationsByHospitalQuery,
   useMarkAllNotificationsAsReadByHospitalMutation,
   useDeleteNotificationMutation,
+  useUpdateNotificationMutation,
   useDeleteNotificationsByHospitalMutation,
 } from '../../../app/service/notification';
 import { getHospitalId, getUserRole } from '../../utils/auth';
@@ -48,6 +50,7 @@ const NotificationsPage = () => {
   const [markAllAsRead] = useMarkAllNotificationsAsReadByHospitalMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
   const [deleteAllNotifications] = useDeleteNotificationsByHospitalMutation();
+  const [updateNotification] = useUpdateNotificationMutation();
 
   let notifications = notificationsData?.data || [];
   const totalNotifications = notificationsData?.total || 0;
@@ -130,6 +133,37 @@ const NotificationsPage = () => {
     setCurrentPage(1);
   }, [typeFilter, statusFilter]);
 
+  // ✅ Mark a single notification as read
+  const handleMarkAsRead = async (notificationId) => {
+    try {
+      console.log("📖 Marking notification as read:", notificationId);
+      
+      const response = await updateNotification({
+        id: notificationId,
+        body: {
+          hospitalReadStatus: {
+            [hospitalId]: true
+          }
+        }
+      }).unwrap();
+      
+      console.log("✅ Mark as read response:", response);
+      
+      // ✅ Emit socket event for real-time updates
+      socket.emit("notification_read", {
+        notificationId: notificationId,
+        hospitalId: hospitalId,
+        userId: userRole
+      });
+      
+      await refetch();
+      showSuccessToast("Notification marked as read", 2000);
+    } catch (error) {
+      console.error("❌ Mark as read error:", error);
+      showErrorToast("Failed to mark as read", 2000);
+    }
+  };
+
   const handleMarkAllAsRead = async () => {
     try {
       if (!hospitalId) return;
@@ -146,6 +180,13 @@ const NotificationsPage = () => {
         hospitalId: Number(hospitalId),
         notificationIds,
       }).unwrap();
+
+      // ✅ Emit socket event for real-time updates
+      socket.emit("notifications_read_all", {
+        hospitalId: hospitalId,
+        userId: userRole,
+        count: notificationIds.length
+      });
 
       await refetch();
 
@@ -169,12 +210,26 @@ const NotificationsPage = () => {
     try {
       if (selectedNotificationId === 'all') {
         await deleteAllNotifications(hospitalId).unwrap();
+        
+        // ✅ Emit socket event for real-time updates
+        socket.emit("notifications_deleted_all", {
+          hospitalId: hospitalId,
+          userId: userRole
+        });
+        
         showSuccessToast('All notifications deleted successfully');
         if (filteredNotifications.length === 1 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
       } else {
         await deleteNotification(selectedNotificationId).unwrap();
+        
+        // ✅ Emit socket event for real-time updates
+        socket.emit("notification_deleted", {
+          notificationId: selectedNotificationId,
+          hospitalId: hospitalId
+        });
+        
         if (filteredNotifications.length === 1 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
@@ -335,7 +390,7 @@ const NotificationsPage = () => {
             )}
           </button>
           {unreadCount > 0 && (
-            <Button onClick={handleMarkAllAsRead} className="flex items-center gap-2">
+            <Button onClick={handleMarkAllAsRead} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <CheckCheck size={16} /> Mark all as read
             </Button>
           )}
@@ -428,13 +483,13 @@ const NotificationsPage = () => {
                   <div
                     key={notif.id}
                     className={`group p-6 hover:bg-gray-50 transition-all duration-200 ${
-                      isUnread ? 'bg-blue-50/30' : ''
+                      isUnread ? 'bg-purple-50/30 border-l-4 border-l-purple-500' : ''
                     }`}
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          isUnread ? 'bg-blue-100' : 'bg-gray-100'
+                          isUnread ? 'bg-purple-100' : 'bg-gray-100'
                         }`}>
                           {getIcon(notif.type)}
                         </div>
@@ -451,7 +506,7 @@ const NotificationsPage = () => {
                                 {typeInfo.label}
                               </span>
                               {isUnread && (
-                                <Badge variant="info" size="sm" className="text-xs">
+                                <Badge variant="info" size="sm" className="text-xs bg-purple-100 text-purple-700">
                                   New
                                 </Badge>
                               )}
@@ -465,15 +520,33 @@ const NotificationsPage = () => {
                               <span className="text-xs text-gray-400">
                                 {formatTime(notif.createdAt)}
                               </span>
+                              {!isUnread && (
+                                <span className="text-xs text-gray-400 flex items-center gap-1">
+                                  <Eye size={12} /> Read
+                                </span>
+                              )}
                             </div>
                           </div>
                           
-                          <button
-                            onClick={() => handleDeleteClick(notif.id)}
-                            className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"
-                          >
-                            <Trash2 size={16} className="text-gray-400 hover:text-red-500" />
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* ✅ Mark as read button - Only show for unread notifications */}
+                            {isUnread && (
+                              <button
+                                onClick={() => handleMarkAsRead(notif.id)}
+                                className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-purple-100 transition-all"
+                                title="Mark as read"
+                              >
+                                <CheckCircle size={16} className="text-purple-500 hover:text-purple-600" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteClick(notif.id)}
+                              className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} className="text-gray-400 hover:text-red-500" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

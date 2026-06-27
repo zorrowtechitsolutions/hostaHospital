@@ -212,6 +212,7 @@ const {
 } = useGetBookingsQuery({
   page: currentPage,
   limit: itemsPerPage,
+  status: statusFilter || "pending",
   ...(searchTerm && { search_query: searchTerm }),
   ...(departmentFilter && { department: departmentFilter }),
   ...(dateFilter && { date: dateFilter }),

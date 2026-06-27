@@ -1,4 +1,4 @@
-// src/components/Doctor/Doctors.jsx - With Green Gradient Buttons
+// src/components/Doctor/Doctors.jsx - With Green Gradient Buttons and Socket Integration
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
@@ -6,6 +6,10 @@ import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Modal, Pagination, Button } from '../ui';
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { showSuccessToast, showErrorToast } from '../ui/Toast';
+
+// ✅ Import socket event listeners
+import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
 
 // S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
@@ -204,6 +208,49 @@ const Doctors = () => {
     page: currentPage,
     limit: itemsPerPage
   });
+
+  // ✅ Register socket event listeners for real-time updates
+  useEffect(() => {
+    console.log("🔄 Registering doctor event listeners...");
+    
+    registerDoctorEvents({
+      onDoctorRegistered: (data) => {
+        console.log("👨‍⚕️ New doctor registered:", data);
+        showSuccessToast(`New doctor registered!`, 3000);
+        refetch();
+      },
+      
+      onDoctorUpdated: (data) => {
+        console.log("✏️ Doctor updated:", data);
+        showSuccessToast(`Doctor updated!`, 3000);
+        refetch();
+      },
+      
+      onDoctorDeleted: (data) => {
+        console.log("🗑️ Doctor deleted:", data);
+        showSuccessToast(`Doctor deleted!`, 3000);
+        refetch();
+      },
+      
+      onDoctorPasswordReset: (data) => {
+        console.log("🔑 Doctor password reset:", data);
+        showSuccessToast(`Doctor password reset initiated!`, 3000);
+        // Optionally refetch or handle password reset UI
+      },
+      
+      onDoctorPasswordChanged: (data) => {
+        console.log("🔐 Doctor password changed:", data);
+        showSuccessToast(`Doctor password changed successfully!`, 3000);
+        // Optionally refetch or handle password change UI
+      }
+    });
+
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering doctor events...");
+      unregisterDoctorEvents();
+    };
+  }, [refetch]);
 
   // Save view mode to localStorage
   useEffect(() => {

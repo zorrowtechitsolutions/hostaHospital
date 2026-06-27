@@ -1,45 +1,45 @@
 import { socket } from "./socket";
 
-// Patient Events Listener - EXACT MATCH with backend
+let onAnyListener = null;
+
 export const registerPatientEvents = (handlers = {}) => {
-  console.log("✅ Patient listeners registered");
-  console.log("📡 Socket connected:", socket.connected);
-  console.log("📡 Socket ID:", socket.id);
+  console.log("✅ Registering Patient Socket Events");
 
-  // Log ALL socket events for debugging
-  socket.onAny((event, ...args) => {
-    console.log("📡 ALL SOCKET EVENTS - PATIENT:", event, args);
-  });
+  if (!onAnyListener) {
+    onAnyListener = (event, ...args) => {
+      console.log("📡 SOCKET EVENT:", event, args);
+    };
 
-  // ✅ PATIENT REGISTERED EVENT
-  socket.on("PATIENT_REGISTERED", (data) => {
-    console.log("👤 Patient Registered:", data);
-    handlers.onPatientRegistered?.(data);
-  });
+    socket.onAny(onAnyListener);
+  }
 
-  // ✅ PATIENT UPDATED EVENT
-  socket.on("PATIENT_UPDATED", (data) => {
-    console.log("✏️ Patient Updated:", data);
-    handlers.onPatientUpdated?.(data);
-  });
+  socket.off("patient_event");
 
-  // ✅ PATIENT DELETED EVENT
-  socket.on("PATIENT_DELETED", (data) => {
-    console.log("🗑️ Patient Deleted:", data);
-    handlers.onPatientDeleted?.(data);
-  });
+ socket.on("system_event", (payload) => {
+  console.log("🔥 INSIDE SYSTEM EVENT", payload);
 
-  console.log("✅ Patient listeners setup complete");
-};
+  const event = payload.message?.match(/\[(.*?)\]/)?.[1];
 
-// Unregister patient events (cleanup)
+  if (event === "PATIENT_REGISTERED") {
+    handlers.onPatientRegistered?.(payload.data);
+  }
+
+  if (event === "PATIENT_UPDATED") {
+    handlers.onPatientUpdated?.(payload.data);
+  }
+
+  if (event === "PATIENT_DELETED") {
+    handlers.onPatientDeleted?.(payload.data);
+  }
+});
+}
 export const unregisterPatientEvents = () => {
-  socket.off("PATIENT_REGISTERED");
-  socket.off("PATIENT_UPDATED");
-  socket.off("PATIENT_DELETED");
-  
-  // Also remove the onAny listener
-  socket.offAny();
-  
-  console.log("🧹 Patient events unregistered");
+  socket.off("system_event");
+
+  if (onAnyListener) {
+    socket.offAny(onAnyListener);
+    onAnyListener = null;
+  }
+
+  console.log("🧹 Patient events removed");
 };

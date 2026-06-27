@@ -95,11 +95,11 @@ export const categoryApi = api.injectEndpoints({
 
         // If ID is provided, get single category
         if (params?.id) {
-          return `/categories/${params.id}${queryString ? `?${queryString}` : ""}`;
+          return `/category/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
         // Otherwise get all categories
-        return `/categories${queryString ? `?${queryString}` : ""}`;
+        return `/category${queryString ? `?${queryString}` : ""}`;
       },
 
       providesTags: (result, error, params) => {

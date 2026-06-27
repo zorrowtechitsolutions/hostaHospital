@@ -74,9 +74,6 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
-  const [eventsRegistered, setEventsRegistered] = useState(false);
-
   // Get hospitalId from auth
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
@@ -98,75 +95,66 @@ const Patients = () => {
   const [deletePatient] = useDeletePatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // ✅ Register socket event listeners
-  useEffect(() => {
-    console.log("🔄 Registering patient event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
-    registerPatientEvents({
-      onPatientRegistered: async (data) => {
-        console.log("👤 NEW PATIENT REGISTERED:", data);
-        showSuccessToast(`New patient registered!`, 3000);
+
+// ✅ Register socket event listeners
+useEffect(() => {
+  console.log("🔄 Registering patient event listeners...");
+  console.log("📡 Socket connected:", socket.connected);
+  
+  registerPatientEvents({
+    onPatientRegistered: async (data) => {
+      console.log("👤 PATIENT REGISTERED:", data);
+      showSuccessToast(`New patient registered!`, 3000);
+      try {
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (REGISTERED):", result);
-      },
+      } catch (error) {
+        console.error("❌ Error refetching patients:", error);
+        showErrorToast("Failed to refresh patient list", 3000);
+      }
+    },
 
-      onPatientUpdated: async (data) => {
-        console.log("✏️ PATIENT UPDATED:", data);
-        showSuccessToast(`Patient updated!`, 3000);
+    onPatientUpdated: async (data) => {
+      console.log("✏️ PATIENT UPDATED:", data);
+      showSuccessToast(`Patient updated!`, 3000);
+      try {
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (UPDATED):", result);
-      },
+      } catch (error) {
+        console.error("❌ Error refetching patients:", error);
+        showErrorToast("Failed to refresh patient list", 3000);
+      }
+    },
 
-      onPatientDeleted: async (data) => {
-        console.log("🗑️ PATIENT DELETED:", data);
-        showSuccessToast(`Patient deleted!`, 3000);
+    onPatientDeleted: async (data) => {
+      console.log("🗑️ PATIENT DELETED:", data);
+      showSuccessToast(`Patient deleted!`, 3000);
+      try {
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (DELETED):", result);
         console.log("📊 NEW DATA:", result?.data);
+      } catch (error) {
+        console.error("❌ Error refetching patients:", error);
+        showErrorToast("Failed to refresh patient list", 3000);
       }
-    });
+    }
+  });
 
-    setEventsRegistered(true);
+  // ✅ Cleanup: Unregister events when component unmounts
+  return () => {
+    console.log("🧹 Unregistering patient events...");
+    unregisterPatientEvents();
+  };
+}, [refetchPatients]); // ✅ Dependencies include refetchPatients
 
-    // ✅ Cleanup: Unregister events when component unmounts
-    return () => {
-      console.log("🧹 Unregistering patient events...");
-      unregisterPatientEvents();
-      setEventsRegistered(false);
-    };
-  }, []); // ✅ Run once on mount
-
-  // ✅ Listen for socket connection/disconnection
+  // ✅ Listen for socket connection/disconnection - FIXED: Added proper cleanup
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ Socket CONNECTED - Patient events will work!");
-      // Re-register events on reconnect if not registered
-      if (!eventsRegistered) {
-        registerPatientEvents({
-          onPatientRegistered: async (data) => {
-            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
-            showSuccessToast(`New patient registered!`, 3000);
-            await refetchPatients();
-          },
-          onPatientUpdated: async (data) => {
-            console.log("✏️ PATIENT UPDATED (reconnect):", data);
-            showSuccessToast(`Patient updated!`, 3000);
-            await refetchPatients();
-          },
-          onPatientDeleted: async (data) => {
-            console.log("🗑️ PATIENT DELETED (reconnect):", data);
-            showSuccessToast(`Patient deleted!`, 3000);
-            await refetchPatients();
-          }
-        });
-        setEventsRegistered(true);
-      }
     };
 
     const handleDisconnect = () => {
       console.log("❌ Socket DISCONNECTED - Patient events won't work!");
-      setEventsRegistered(false);
     };
 
     socket.on("connect", handleConnect);
@@ -176,20 +164,9 @@ const Patients = () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [refetchPatients, eventsRegistered]);
+  }, []); // ✅ Empty dependency array - only run once
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PATIENT: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
+  // ✅ REMOVED: Duplicate onAny listener - patientEvents.js already handles this
 
   // Get patients array and pagination info from response
   const allPatients = patientsResponse?.data || [];
