@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx - With proper parent/child active states, hospital name
+// src/components/Sidebar.jsx - With proper parent/child active states
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -37,7 +37,6 @@ const menu = [
     items: [
       { label: "Patients", icon: Users, path: "/patients" },
       { label: "Doctors", icon: Stethoscope, path: "/doctors" },
-      // {label: "Specialities", icon: Pill, path: "/specialities"},
       { label: "Requests", icon: ClipboardList, path: "/requests" },
       {
         label: "Appointments",
@@ -51,16 +50,6 @@ const menu = [
       { label: "Visits", icon: Activity, path: "/visits" },
       { label: "Ambulance", icon: Ambulance, path: "/ambulance" },
       { label: "Blood Bank", icon: Droplet, path: "/blood" },
-      // {
-      //   label: "Laboratory",
-      //   icon: FlaskConical,
-      //   hasDropdown: true,
-      //   dropdownItems: [
-      //     { label: "Register Lab", icon: PlusCircle, path: "/laboratory" },
-      //     { label: "Lab Tests", icon: Microscope, path: "/lab/tests" },
-      //     { label: "Lab Results", icon: FileText, path: "/lab/results" },
-      //   ],
-      // },
     ],
   },
   {
@@ -103,7 +92,7 @@ const menu = [
 export default function Sidebar({ sidebarOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth(); // Get logged-in hospital data
+  const { user } = useAuth();
   const [openDropdowns, setOpenDropdowns] = useState({});
 
   const toggleDropdown = (label) => {
@@ -112,19 +101,16 @@ export default function Sidebar({ sidebarOpen }) {
     }));
   };
 
-  // FIXED: Exact match for highlighting active items
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  // FIXED: Keep dropdown open if any child path matches (including nested routes)
   const shouldKeepOpen = (dropdownItems) => {
     return dropdownItems?.some(
       (item) => location.pathname.startsWith(item.path)
     );
   };
 
-  // Check if any dropdown item is active for parent styling
   const isDropdownItemActive = (dropdownItems) => {
     return dropdownItems?.some(
       (item) => location.pathname === item.path
@@ -143,21 +129,24 @@ export default function Sidebar({ sidebarOpen }) {
     setOpenDropdowns((prev) => ({ ...prev, ...newOpenState }));
   }, [location.pathname]);
 
+  // Get hospital name from auth context
+  const hospitalName = user?.name || user?.hospitalName || "Hospital";
+
   return (
     <div
       className={`${
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-      {/* Updated Logo Section with dynamic hospital name */}
+      {/* Logo Section with dynamic hospital name - "Dreams EMR" removed */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
           <h1 className="text-lg font-semibold truncate">
-            {user?.name || "Dreams EMR"}
+            {hospitalName}
           </h1>
         ) : (
           <h1 className="text-lg font-semibold text-center">
-            {(user?.name || "D").charAt(0).toUpperCase()}
+            {hospitalName.charAt(0).toUpperCase()}
           </h1>
         )}
       </div>
@@ -172,14 +161,12 @@ export default function Sidebar({ sidebarOpen }) {
 
             <div className="space-y-1">
               {section.items.map((item) => {
-                // For items with dropdown (Appointments, User Management)
                 if (item.hasDropdown) {
                   const dropdownActive = isDropdownItemActive(item.dropdownItems);
                   const isOpen = openDropdowns[item.label] || shouldKeepOpen(item.dropdownItems);
 
                   return (
                     <div key={item.label}>
-                      {/* Dropdown Button */}
                       <button
                         onClick={() => {
                           if (sidebarOpen) {
@@ -194,7 +181,7 @@ export default function Sidebar({ sidebarOpen }) {
                           rounded-md text-sm transition
                           ${
                             dropdownActive
-                              ? "bg-slate-700 text-white"  // Softer active state when child is active
+                              ? "bg-slate-700 text-white"
                               : "text-gray-300 hover:bg-slate-700"
                           }
                         `}
@@ -208,7 +195,6 @@ export default function Sidebar({ sidebarOpen }) {
                         )}
                       </button>
 
-                      {/* Dropdown Items */}
                       {sidebarOpen && isOpen && (
                         <div className="ml-6 mt-1 space-y-1">
                           {item.dropdownItems.map((dropdownItem) => {
@@ -229,7 +215,7 @@ export default function Sidebar({ sidebarOpen }) {
                                   rounded-md text-sm transition relative group
                                   ${
                                     dropdownItemActive
-                                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md" // Bright blue for exact match
+                                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
                                       : "text-gray-400 hover:bg-slate-700 hover:text-gray-200"
                                   }
                                 `}
@@ -242,7 +228,6 @@ export default function Sidebar({ sidebarOpen }) {
                         </div>
                       )}
 
-                      {/* Collapsed sidebar tooltip */}
                       {!sidebarOpen && (
                         <div className="relative group">
                           <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50 shadow-lg">
@@ -254,7 +239,6 @@ export default function Sidebar({ sidebarOpen }) {
                   );
                 }
 
-                // Regular items without dropdown
                 const active = isActive(item.path);
 
                 return (
@@ -275,7 +259,6 @@ export default function Sidebar({ sidebarOpen }) {
                     <item.icon size={18} />
                     {sidebarOpen && item.label}
 
-                    {/* Tooltip for collapsed sidebar */}
                     {!sidebarOpen && (
                       <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-50 shadow-lg">
                         {item.label}
