@@ -16,6 +16,6 @@ export { FilterBar } from './FilterBar';
 export { DataTable } from './DataTable';
 export { Breadcrumb } from './Breadcrumb';
 export { Switch } from './Switch';
-export { Avatar } from './Avatar';
-export { Checkbox } from './Checkbox';
+export { Avatar } from './avatar';
+export { Checkbox } from './CheckBox';
 export { RadioGroup } from './RadioGroup';
