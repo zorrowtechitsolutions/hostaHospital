@@ -1,4 +1,4 @@
-// src/components/patients/PatientDetails.jsx - With Lab Results Tab
+// src/components/patients/PatientDetails.jsx - With Fixed Prescription Doctor Names
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon, Beaker } from "lucide-react";
@@ -15,7 +15,7 @@ import PrescriptionTab from "./tabs/PrescriptionTab";
 import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
 import DocumentsTab from "./tabs/DocumentsTab";
 import LabResultsTab from "./tabs/LabResultsTab";
-import InsuranceTab from "./tabs/InsuranceTab"; // ✅ ADDED
+import InsuranceTab from "./tabs/InsuranceTab";
 
 // Import Modals
 import AppointmentDetailsModal from "./modals/AppointmentDetailsModal";
@@ -30,6 +30,7 @@ import { useGetPatientByIdQuery } from "../../../app/service/patients";
 import { useGetBookingsQuery } from "../../../app/service/request";
 import { useGetPrescriptionsQuery, useDeletePrescriptionMutation } from "../../../app/service/prescription";
 import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../app/service/vitals";
+import { useGetDoctorsQuery } from "../../../app/service/doctorApi"; // ✅ ADDED for doctor lookup
 import { Loader } from "../ui";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
@@ -128,6 +129,12 @@ const PatientDetails = () => {
     }
   );
 
+  // ✅ FETCH DOCTORS FOR LOOKUP
+  const {
+    data: doctorsData,
+    isLoading: isLoadingDoctors,
+  } = useGetDoctorsQuery({ limit: 1000 });
+
   // Delete prescription mutation
   const [deletePrescription] = useDeletePrescriptionMutation();
   
@@ -140,6 +147,25 @@ const PatientDetails = () => {
   console.log("VITALS RESPONSE", vitalsResponse);
   console.log("PRESCRIPTIONS RESPONSE", prescriptionsResponse);
   
+  // ✅ Create doctor lookup map
+  const doctorMap = React.useMemo(() => {
+    const map = {};
+    const doctors = doctorsData?.data || doctorsData?.rows || doctorsData?.doctors || [];
+    doctors.forEach(doc => {
+      const docId = doc.id || doc._id;
+      if (docId) {
+        // Store multiple name variations
+        map[docId] = {
+          name: doc.name || doc.displayName || doc.fullName || `Dr. ${docId}`,
+          specialization: doc.speciality || doc.specialization || doc.department || "General Medicine",
+          email: doc.email,
+          phone: doc.phone
+        };
+      }
+    });
+    return map;
+  }, [doctorsData]);
+
   // Filter appointments for current patient
   const patientAppointments = React.useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
@@ -207,7 +233,7 @@ const PatientDetails = () => {
       });
   }, [bookingResponse, patientData]);
 
-  // Transform prescriptions from API with proper doctor info extraction
+  // ✅ FIXED: Transform prescriptions from API with proper doctor info extraction
   const formattedPrescriptions = React.useMemo(() => {
     const apiPrescriptions = prescriptionsResponse?.data || [];
     
@@ -218,6 +244,7 @@ const PatientDetails = () => {
 
       let booking = null;
       
+      // Find booking by bookingId
       if (prescription.bookingId) {
         booking = bookingList.find(
           (b) => Number(b.id) === Number(prescription.bookingId) ||
@@ -226,16 +253,31 @@ const PatientDetails = () => {
         );
       }
       
+      // ✅ STEP 1: Try to get doctor name from doctorMap using doctorId
       let doctorName = null;
+      let doctorSpecialization = null;
+      const doctorInfo = doctorMap[prescription.doctorId];
       
-      if (booking) {
+      if (doctorInfo) {
+        doctorName = doctorInfo.name;
+        doctorSpecialization = doctorInfo.specialization;
+        console.log(`✅ Found doctor in map: ID=${prescription.doctorId}, Name=${doctorName}`);
+      }
+      
+      // ✅ STEP 2: If not found in map, try to get from booking
+      if (!doctorName && booking) {
         if (booking.doctor_name) doctorName = booking.doctor_name;
         else if (booking.displayName) doctorName = booking.displayName;
         else if (booking.doctorName) doctorName = booking.doctorName;
         else if (booking.doctor?.name) doctorName = booking.doctor?.name;
+        
+        if (booking.department) doctorSpecialization = booking.department;
+        else if (booking.specialization) doctorSpecialization = booking.specialization;
+        else if (booking.doctor_department) doctorSpecialization = booking.doctor_department;
       }
       
-      if (!doctorName || doctorName === "null" || doctorName === "undefined") {
+      // ✅ STEP 3: Try to get from prescription itself
+      if (!doctorName) {
         if (prescription.doctorName && prescription.doctorName !== "null" && prescription.doctorName !== "undefined") {
           doctorName = prescription.doctorName;
         } else if (prescription.prescribedBy && prescription.prescribedBy !== "Doctor" && prescription.prescribedBy !== "null") {
@@ -245,15 +287,7 @@ const PatientDetails = () => {
         }
       }
       
-      let doctorSpecialization = null;
-      
-      if (booking) {
-        if (booking.department) doctorSpecialization = booking.department;
-        else if (booking.specialization) doctorSpecialization = booking.specialization;
-        else if (booking.doctor_department) doctorSpecialization = booking.doctor_department;
-      }
-      
-      if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
+      if (!doctorSpecialization) {
         if (prescription.doctorSpecialization && prescription.doctorSpecialization !== "null" && prescription.doctorSpecialization !== "undefined") {
           doctorSpecialization = prescription.doctorSpecialization;
         } else if (prescription.specialization) {
@@ -265,8 +299,10 @@ const PatientDetails = () => {
         }
       }
       
+      // ✅ STEP 4: Final fallback - use doctorId with "Dr." prefix
       if (!doctorName || doctorName === "null" || doctorName === "undefined") {
         doctorName = `Dr. ${prescription.doctorId || "Unknown"}`;
+        console.log(`⚠️ Using fallback doctor name: ${doctorName} for ID=${prescription.doctorId}`);
       }
       
       if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
@@ -290,14 +326,15 @@ const PatientDetails = () => {
         investigations: prescription.investigations,
         vitals: prescription.vitals,
         medications: prescription.medications,
-        next_consultation: prescription.next_consultation
+        next_consultation: prescription.next_consultation,
+        doctorId: prescription.doctorId // Keep for reference
       };
     });
-  }, [prescriptionsResponse, bookingResponse]);
+  }, [prescriptionsResponse, bookingResponse, doctorMap]);
 
   // Transform vitals from API AND extract from prescriptions
   const formattedVitals = React.useMemo(() => {
-    // FIX: Safely handle vitalsResponse.data - ensure it's an array
+    // Safely handle vitalsResponse.data - ensure it's an array
     let apiVitals = [];
     const vitalsData = vitalsResponse?.data;
     
@@ -336,20 +373,34 @@ const PatientDetails = () => {
           booking = bookingList.find(b => Number(b.id) === Number(prescription.bookingId));
         }
         
-        let doctorName = prescription.doctorName;
-        if (!doctorName && booking) {
-          doctorName = booking.doctor_name || booking.displayName || booking.doctorName;
-        }
-        if (!doctorName) {
-          doctorName = prescription.prescribedBy || "Dr. Unknown";
+        // Use doctorMap for doctor names in vitals too
+        let doctorName = null;
+        let doctorSpecialization = null;
+        const doctorInfo = doctorMap[prescription.doctorId];
+        
+        if (doctorInfo) {
+          doctorName = doctorInfo.name;
+          doctorSpecialization = doctorInfo.specialization;
         }
         
-        let doctorSpecialization = prescription.doctorSpecialization;
-        if (!doctorSpecialization && booking) {
-          doctorSpecialization = booking.department || booking.specialization || booking.doctor_department;
+        if (!doctorName) {
+          doctorName = prescription.doctorName;
+          if (!doctorName && booking) {
+            doctorName = booking.doctor_name || booking.displayName || booking.doctorName;
+          }
+          if (!doctorName) {
+            doctorName = prescription.prescribedBy || `Dr. ${prescription.doctorId || "Unknown"}`;
+          }
         }
+        
         if (!doctorSpecialization) {
-          doctorSpecialization = "General Medicine";
+          doctorSpecialization = prescription.doctorSpecialization;
+          if (!doctorSpecialization && booking) {
+            doctorSpecialization = booking.department || booking.specialization || booking.doctor_department;
+          }
+          if (!doctorSpecialization) {
+            doctorSpecialization = "General Medicine";
+          }
         }
         
         return {
@@ -454,7 +505,7 @@ const PatientDetails = () => {
       return dateB - dateA;
     });
     
-  }, [vitalsResponse, prescriptionsResponse, bookingResponse]);
+  }, [vitalsResponse, prescriptionsResponse, bookingResponse, doctorMap]);
 
   // Combined patient state
   const [patient, setPatient] = useState({
@@ -523,8 +574,8 @@ const PatientDetails = () => {
         bloodPressure: patientData.bloodPressure || '',
         appointmentsList: patientAppointments,
         visitHistoryList: patientVisits,
-        vitalsList: formattedVitals, // ✅ FIXED: Only assigned once
-        prescriptionsList: formattedPrescriptions, // ✅ FIXED: Only assigned once
+        vitalsList: formattedVitals,
+        prescriptionsList: formattedPrescriptions,
         medicalHistoryList: patientData.medicalHistory || [],
         documentsList: patientData.documents || [],
         labResultsList: patientData.labResults || patientData.lab_results || [],
