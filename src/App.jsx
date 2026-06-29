@@ -11,7 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import Sidebar from "./pages/Sidebar";
-import TopBar from "./pages/TopBar";
+import TopBar from "./pages/Topbar";
 import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/Toast";
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
