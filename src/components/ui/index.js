@@ -10,7 +10,7 @@ export { Loader } from './Loader';
 export { Pagination } from './Pagination';
 export { Tabs } from './Tabs';
 export { Alert } from './Alert';
-export { Card } from './Card';
+export { Card } from './card';
 export { SearchBar } from './SearchBar';
 export { FilterBar } from './FilterBar';
 export { DataTable } from './DataTable';
