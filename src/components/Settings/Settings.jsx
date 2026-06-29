@@ -1,4 +1,4 @@
-// src/components/Settings/Settings.jsx - WITH PRESCRIPTION TEMPLATE TAB
+// src/components/Settings/Settings.jsx - WITH PRESCRIPTION TEMPLATE TAB & SOCKET INTEGRATION
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -9,13 +9,18 @@ import {
 } from '../ui';
 import Security from './Security';
 import Map from './Map';
-import PrescriptionTemplate from './PrescriptionTemplate'; // Import the prescription template
+import PrescriptionTemplate from './PrescriptionTemplate';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { MapPin, ChevronDown } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
+
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
 
 const TIME_OPTIONS = [
   '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
@@ -200,6 +205,9 @@ const Settings = () => {
   });
   const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   const [hospitalInfo, setHospitalInfo] = useState({
     name: '',
     email: '',
@@ -232,6 +240,108 @@ const Settings = () => {
   const states = State.getStatesOfCountry(editForm.countryCode);
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
   const isFormSaving = isSaving || isUpdating;
+
+  // ✅ Register socket event listeners for hospital events
+  useEffect(() => {
+    console.log("🔄 Registering hospital event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerHospitalEvents({
+      onHospitalRegistered: (data) => {
+        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
+        showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+      },
+      
+      onHospitalUpdated: (data) => {
+        console.log("✏️ HOSPITAL UPDATED:", data);
+        showSuccessToast(`Hospital ${data.name || 'Hospital'} updated successfully!`, 3000);
+        // Refetch hospital data to update the UI
+        refetch();
+      },
+      
+      onHospitalDeleted: (data) => {
+        console.log("🗑️ HOSPITAL DELETED:", data);
+        showSuccessToast(`Hospital deleted!`, 3000);
+      },
+      
+      onHospitalBlacklisted: (data) => {
+        console.log("🚫 HOSPITAL BLACKLISTED:", data);
+        showSuccessToast(`Hospital blacklisted!`, 3000);
+      },
+      
+      onHospitalRecovered: (data) => {
+        console.log("♻️ HOSPITAL RECOVERED:", data);
+        showSuccessToast(`Hospital recovered successfully!`, 3000);
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering hospital events...");
+      unregisterHospitalEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Hospital events will work!");
+      if (!eventsRegistered) {
+        registerHospitalEvents({
+          onHospitalRegistered: (data) => {
+            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
+            showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+          },
+          onHospitalUpdated: (data) => {
+            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
+            showSuccessToast(`Hospital ${data.name || 'Hospital'} updated successfully!`, 3000);
+            refetch();
+          },
+          onHospitalDeleted: (data) => {
+            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
+            showSuccessToast(`Hospital deleted!`, 3000);
+          },
+          onHospitalBlacklisted: (data) => {
+            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
+            showSuccessToast(`Hospital blacklisted!`, 3000);
+          },
+          onHospitalRecovered: (data) => {
+            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
+            showSuccessToast(`Hospital recovered successfully!`, 3000);
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   useEffect(() => {
     if (fetchError?.status === 401) {
@@ -313,10 +423,26 @@ const Settings = () => {
         }
       };
       
-      await updateHospital({ 
+      const result = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 
       }).unwrap();
+      
+      // ✅ Emit socket event for hospital update
+      socket.emit("hospital_event", {
+        event: "HOSPITAL_UPDATED",
+        data: {
+          hospitalId: hospitalId,
+          hospitalName: editForm.name,
+          email: editForm.email,
+          type: editForm.hospitalType,
+          phone: editForm.mobileNumber,
+          address: updateData.address,
+          timestamp: new Date().toISOString(),
+          staffIds: result?.data?.staffIds || [],
+          doctorIds: result?.data?.doctorIds || []
+        }
+      });
       
       const now = new Date();
       const formattedDate = now.toLocaleString('en-US', {
@@ -676,24 +802,23 @@ const Settings = () => {
     </div>
   );
 
-const renderTabContent = () => {
-  switch (activeTab) {
-    case 'General':
-      return GeneralTab;
-    case 'Security':
-      return <Security />;
-    case 'Map':
-      return <Map />;
-    case 'Prescription Template':
-      return <PrescriptionTemplate />;
-    case 'Reviews':
-      return <HospitalReviews />;
-    default:
-      return null;
-  }
-};
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'General':
+        return GeneralTab;
+      case 'Security':
+        return <Security />;
+      case 'Map':
+        return <Map />;
+      case 'Prescription Template':
+        return <PrescriptionTemplate />;
+      case 'Reviews':
+        return <HospitalReviews />;
+      default:
+        return null;
+    }
+  };
 
-  // Define tabs array once
   const tabs = ['General', 'Security', 'Map', 'Prescription Template','Reviews'];
 
   if (isLoadingHospital) {

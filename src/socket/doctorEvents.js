@@ -40,6 +40,11 @@ export const registerDoctorEvents = (handlers = {}) => {
         handlers.onDoctorDeleted?.(payload.data);
         break;
 
+      case "DOCTOR_RECOVERED":
+        console.log("♻️ Doctor Recovered:", payload.data);
+        handlers.onDoctorRecovered?.(payload.data);
+        break;
+
       case "DOCTOR_PASSWORD_RESET":
         console.log("🔑 Doctor Password Reset:", payload.data);
         handlers.onDoctorPasswordReset?.(payload.data);
@@ -71,6 +76,11 @@ export const registerDoctorEvents = (handlers = {}) => {
     handlers.onDoctorDeleted?.(data);
   });
 
+  socket.on("DOCTOR_RECOVERED", (data) => {
+    console.log("♻️ Doctor Recovered (direct):", data);
+    handlers.onDoctorRecovered?.(data);
+  });
+
   socket.on("DOCTOR_PASSWORD_RESET", (data) => {
     console.log("🔑 Doctor Password Reset (direct):", data);
     handlers.onDoctorPasswordReset?.(data);
@@ -93,6 +103,7 @@ export const unregisterDoctorEvents = () => {
   socket.off("DOCTOR_REGISTERED");
   socket.off("DOCTOR_UPDATED");
   socket.off("DOCTOR_DELETED");
+  socket.off("DOCTOR_RECOVERED");
   socket.off("DOCTOR_PASSWORD_RESET");
   socket.off("DOCTOR_PASSWORD_CHANGED");
   

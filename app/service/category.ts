@@ -1,4 +1,4 @@
-// app/service/category.ts - Category API service (GET only, no hospitalId)
+// app/service/category.ts - Complete Category API service
 
 import { api } from "./api";
 
@@ -42,12 +42,30 @@ export interface GetCategoryParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  isActive?: boolean;
+  parentCategoryId?: string | number | null;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  isActive?: boolean;
+  parentCategoryId?: string | number | null;
+}
+
 // ================= API =================
 
 export const categoryApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET CATEGORIES =================
+    // ================= GET CATEGORIES (LIST) =================
     getCategory: builder.query<
       CategoryResponse,
       GetCategoryParams | void
@@ -111,11 +129,71 @@ export const categoryApi = api.injectEndpoints({
         return ["Category"];
       },
     }),
+
+    // ================= GET CATEGORY BY ID =================
+    getCategoryById: builder.query<
+      CategoryResponse,
+      string | number
+    >({
+      query: (id) => `/category/${id}`,
+      providesTags: (result, error, id) => [{ type: "Category", id }],
+    }),
+
+    // ================= CREATE CATEGORY =================
+    createCategory: builder.mutation<
+      CategoryResponse,
+      CreateCategoryRequest
+    >({
+      query: (categoryData) => ({
+        url: "/category",
+        method: "POST",
+        body: categoryData,
+      }),
+      invalidatesTags: ["Category"],
+    }),
+
+    // ================= UPDATE CATEGORY =================
+    updateCategory: builder.mutation<
+      CategoryResponse,
+      { id: string | number; data: UpdateCategoryRequest }
+    >({
+      query: ({ id, data }) => ({
+        url: `/category/${id}`,
+        method: "PUT",
+        body: data,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Category", id },
+        "Category",
+      ],
+    }),
+
+    // ================= DELETE CATEGORY =================
+    deleteCategory: builder.mutation<
+      CategoryResponse,
+      string | number
+    >({
+      query: (id) => ({
+        url: `/category/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Category", id },
+        "Category",
+      ],
+    }),
   }),
 });
 
 // ================= EXPORT HOOKS =================
 
 export const {
+  // Query hooks
   useGetCategoryQuery,
+  useGetCategoryByIdQuery,
+  
+  // Mutation hooks
+  useCreateCategoryMutation,
+  useUpdateCategoryMutation,
+  useDeleteCategoryMutation,
 } = categoryApi;

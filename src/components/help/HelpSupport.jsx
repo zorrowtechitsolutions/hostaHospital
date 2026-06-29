@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Mail,
   Phone,
+  User,
   X,
 } from 'lucide-react';
 import { Button, Card } from '../ui';
@@ -46,8 +47,8 @@ const HelpSupport = () => {
           <div className="p-6 space-y-4">
             {/* Phone */}
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-              <Phone className="w-5 h-5 text-green-600" />
-              <span className="text-gray-700">1234567890</span>
+              <User className="w-5 h-5 text-green-600" />
+              <span className="text-gray-700">Muhammed Safvan</span>
             </div>
 
             {/* Email */}

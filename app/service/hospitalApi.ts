@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password, Forgot Password & Super Admin Login
+// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password, Forgot Password, Super Admin Login & Recover
 import { api } from "./api";
 
 // Type definitions
@@ -22,6 +22,9 @@ export interface Hospital {
   createdAt?: string;
   updatedAt?: string;
   lastPasswordChange?: string;
+  isActive?: boolean;
+  isDelete?: boolean;
+  deleteDate?: string | null;
 }
 
 export interface LoginCredentials {
@@ -138,6 +141,26 @@ export interface AuthResponse {
   role?: string;
   roleDetected?: string;
   hospitals?: any[];
+}
+
+// Hospital List Response with Pagination
+export interface HospitalListResponse {
+  success?: boolean;
+  data?: Hospital[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    itemsPerPage: number;
+  };
+}
+
+// Get Hospitals Params
+export interface GetHospitalsParams {
+  includeDeleted?: boolean;
+  search_query?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const hospitalApi = api.injectEndpoints({
@@ -367,9 +390,54 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    getAllHospitals: builder.query<Hospital[], void>({
-      query: () => "/hospital",
+    // ========== HOSPITAL MANAGEMENT ENDPOINTS ==========
+
+    // ✅ Updated getAllHospitals with includeDeleted parameter
+    getAllHospitals: builder.query<HospitalListResponse | Hospital[], GetHospitalsParams | void>({
+      query: (params) => {
+        const queryParams = new URLSearchParams();
+        
+        if (params?.includeDeleted !== undefined) {
+          queryParams.append("includeDeleted", String(params.includeDeleted));
+        }
+        
+        if (params?.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
+        
+        if (params?.page) {
+          queryParams.append("page", String(params.page));
+        }
+        
+        if (params?.limit) {
+          queryParams.append("limit", String(params.limit));
+        }
+        
+        const url = `/hospital${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        console.log("📡 GET Hospitals URL:", url);
+        
+        return url;
+      },
       providesTags: ["Hospital"],
+      transformResponse: (response: HospitalListResponse | Hospital[]) => {
+        // If response has pagination, return as is
+        if (response && 'pagination' in response) {
+          return response;
+        }
+        // If response is just an array, wrap it
+        if (Array.isArray(response)) {
+          return {
+            data: response,
+            pagination: {
+              totalItems: response.length,
+              totalPages: 1,
+              currentPage: 1,
+              itemsPerPage: response.length
+            }
+          };
+        }
+        return response;
+      },
     }),
 
     getHospitalById: builder.query<{ data?: Hospital } | Hospital, string>({
@@ -418,6 +486,32 @@ export const hospitalApi = api.injectEndpoints({
       }),
       invalidatesTags: ["Hospital"],
     }),
+
+    // ========== ✅ RECOVER HOSPITAL ENDPOINT ==========
+    recoverHospital: builder.mutation<
+      { success: boolean; message: string; data?: Hospital },
+      string
+    >({
+      query: (id) => ({
+        url: `/hospital/recover/${id}`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Hospital", id },
+        "Hospital",
+      ],
+      transformResponse: (response: { success: boolean; message: string; data?: Hospital }) => {
+        console.log("📦 Recover hospital response:", response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        console.error("❌ Recover hospital error:", response);
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to recover hospital",
+        };
+      },
+    }),
   }),
 });
 
@@ -426,7 +520,7 @@ export const {
   // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
-  useLoginSuperAdminMutation,  // Export the new Super Admin login hook
+  useLoginSuperAdminMutation,
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,
@@ -444,4 +538,5 @@ export const {
   useAddNewHospitalMutation,
   useUpdateHospitalMutation,
   useDeleteHospitalMutation,
+  useRecoverHospitalMutation, // ✅ Added recover hook
 } = hospitalApi;

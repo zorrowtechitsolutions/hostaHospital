@@ -20,6 +20,11 @@ import {
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { getS3ImageUrl, uploadToS3 } from '../../../app/service/S3';
 
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerAdEvents, unregisterAdEvents } from '../../socket/adEvents';
+
 // Helper function to format date
 const formatDate = (date) => {
   if (!date) return 'N/A';
@@ -618,6 +623,9 @@ const Ads = () => {
   // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // API Hooks
   const { 
     data: adsResponse, 
@@ -630,21 +638,16 @@ const Ads = () => {
     search_query: searchTerm || undefined
   });
 
-  // ✅ FIXED: Handle multiple possible response structures
   const ads = adsResponse?.data || adsResponse?.ads || [];
-  
-  // ✅ FIXED: Handle pagination from different response formats
   const totalPages = adsResponse?.pagination?.totalPages || 
                      adsResponse?.totalPages || 
                      Math.ceil(ads.length / itemsPerPage) || 1;
-                     
   const totalItems = adsResponse?.pagination?.totalItems || 
                      adsResponse?.totalItems || 
                      ads.length;
 
   const { data: hospitalsData } = useGetAllHospitalsQuery();
   
-  // Extract hospitals array from response
   let hospitals = [];
   if (Array.isArray(hospitalsData)) {
     hospitals = hospitalsData;
@@ -674,6 +677,93 @@ const Ads = () => {
     return hospitalMap.get(hospitalId) || `Hospital ID: ${hospitalId}`;
   };
 
+  // ✅ Register socket event listeners for ad events
+  useEffect(() => {
+    console.log("🔄 Registering ad event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerAdEvents({
+      onAdCreated: (data) => {
+        console.log("📢 NEW AD CREATED:", data);
+        showSuccessToast(`New ad created for hospital ${data.hospitalName || 'Hospital'}!`, 3000);
+        refetch();
+      },
+      
+      onAdUpdated: (data) => {
+        console.log("✏️ AD UPDATED:", data);
+        showSuccessToast(`Ad updated successfully!`, 3000);
+        refetch();
+      },
+      
+      onAdDeleted: (data) => {
+        console.log("🗑️ AD DELETED:", data);
+        showSuccessToast(`Ad deleted!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering ad events...");
+      unregisterAdEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Ad events will work!");
+      if (!eventsRegistered) {
+        registerAdEvents({
+          onAdCreated: (data) => {
+            console.log("📢 NEW AD CREATED (reconnect):", data);
+            showSuccessToast(`New ad created!`, 3000);
+            refetch();
+          },
+          onAdUpdated: (data) => {
+            console.log("✏️ AD UPDATED (reconnect):", data);
+            showSuccessToast(`Ad updated!`, 3000);
+            refetch();
+          },
+          onAdDeleted: (data) => {
+            console.log("🗑️ AD DELETED (reconnect):", data);
+            showSuccessToast(`Ad deleted!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Ad events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - ADS: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
   // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
@@ -693,7 +783,22 @@ const Ads = () => {
   // CRUD Handlers
   const handleAddAd = async (newAd) => {
     try {
-      await createAd(newAd).unwrap();
+      const response = await createAd(newAd).unwrap();
+      
+      // ✅ Emit socket event for ad created
+      socket.emit("ad_event", {
+        event: "AD_CREATED",
+        data: {
+          adId: response.data?.id || response.id,
+          hospitalId: newAd.hospitalId,
+          hospitalName: getHospitalName(newAd.hospitalId),
+          startDate: newAd.startDate,
+          endDate: newAd.endDate,
+          kilometer: newAd.kilometer,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       showSuccessToast('Ad created successfully!', 3000);
       refetch();
       setShowAddModal(false);
@@ -710,6 +815,21 @@ const Ads = () => {
         data: updatedAd 
       }).unwrap();
       
+      // ✅ Emit socket event for ad updated
+      socket.emit("ad_event", {
+        event: "AD_UPDATED",
+        data: {
+          adId: updatedAd.id,
+          hospitalId: updatedAd.hospitalId,
+          hospitalName: getHospitalName(updatedAd.hospitalId),
+          startDate: updatedAd.startDate,
+          endDate: updatedAd.endDate,
+          kilometer: updatedAd.kilometer,
+          isActive: updatedAd.isActive,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       showSuccessToast('Ad updated successfully!', 3000);
       refetch();
       setShowEditModal(false);
@@ -722,12 +842,26 @@ const Ads = () => {
 
   const handleToggleStatus = async (ad) => {
     try {
+      const newStatus = !ad.isActive;
       await updateAd({ 
         id: ad.id, 
-        data: { isActive: !ad.isActive } 
+        data: { isActive: newStatus } 
       }).unwrap();
       
-      showSuccessToast(`Ad ${!ad.isActive ? 'activated' : 'deactivated'} successfully!`, 3000);
+      // ✅ Emit socket event for ad updated (status change)
+      socket.emit("ad_event", {
+        event: "AD_UPDATED",
+        data: {
+          adId: ad.id,
+          hospitalId: ad.hospitalId,
+          hospitalName: getHospitalName(ad.hospitalId),
+          isActive: newStatus,
+          statusChanged: true,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      showSuccessToast(`Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
       refetch();
     } catch (error) {
       console.error('Toggle error:', error);
@@ -739,6 +873,18 @@ const Ads = () => {
     if (selectedAd) {
       try {
         await deleteAd(selectedAd.id).unwrap();
+        
+        // ✅ Emit socket event for ad deleted
+        socket.emit("ad_event", {
+          event: "AD_DELETED",
+          data: {
+            adId: selectedAd.id,
+            hospitalId: selectedAd.hospitalId,
+            hospitalName: getHospitalName(selectedAd.hospitalId),
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast('Ad deleted successfully!', 3000);
         refetch();
         setShowDeleteModal(false);

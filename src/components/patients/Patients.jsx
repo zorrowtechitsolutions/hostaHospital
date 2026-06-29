@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - With Green Gradient Buttons and Socket Integration
+// src/components/patients/Patients.jsx - With Deleted/Blacklisted Support and Recover Functionality
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -19,7 +19,8 @@ import {
   Upload,
   Trash2,
   Filter,
-  Search
+  Search,
+  RotateCcw
 } from 'lucide-react';
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
@@ -32,7 +33,11 @@ import {
   SearchBar,
   Card
 } from '../ui';
-import { useGetPatientsQuery, useDeletePatientMutation } from '../../../app/service/patients';
+import { 
+  useGetPatientsQuery, 
+  useDeletePatientMutation,
+  useRecoverPatientMutation 
+} from '../../../app/service/patients';
 import { useCreateBookingMutation } from '../../../app/service/request';
 import { getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -56,6 +61,9 @@ const Patients = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
   
+  // Track if showing deleted patients
+  const [showDeleted, setShowDeleted] = useState(false);
+  
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
@@ -74,6 +82,9 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // Get hospitalId from auth
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
@@ -90,71 +101,96 @@ const Patients = () => {
     page: currentPage,
     limit: itemsPerPage,
     ...(genderFilter && { gender: genderFilter }),
+    includeDeleted: showDeleted // ✅ Include deleted patients when showDeleted is true
   });
 
   const [deletePatient] = useDeletePatientMutation();
+  const [recoverPatient] = useRecoverPatientMutation(); // ✅ Add recover mutation
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-
-// ✅ Register socket event listeners
-useEffect(() => {
-  console.log("🔄 Registering patient event listeners...");
-  console.log("📡 Socket connected:", socket.connected);
-  
-  registerPatientEvents({
-    onPatientRegistered: async (data) => {
-      console.log("👤 PATIENT REGISTERED:", data);
-      showSuccessToast(`New patient registered!`, 3000);
-      try {
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    console.log("🔄 Registering patient event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerPatientEvents({
+      onPatientRegistered: async (data) => {
+        console.log("👤 NEW PATIENT REGISTERED:", data);
+        showSuccessToast(`New patient registered!`, 3000);
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (REGISTERED):", result);
-      } catch (error) {
-        console.error("❌ Error refetching patients:", error);
-        showErrorToast("Failed to refresh patient list", 3000);
-      }
-    },
+      },
 
-    onPatientUpdated: async (data) => {
-      console.log("✏️ PATIENT UPDATED:", data);
-      showSuccessToast(`Patient updated!`, 3000);
-      try {
+      onPatientUpdated: async (data) => {
+        console.log("✏️ PATIENT UPDATED:", data);
+        showSuccessToast(`Patient updated!`, 3000);
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (UPDATED):", result);
-      } catch (error) {
-        console.error("❌ Error refetching patients:", error);
-        showErrorToast("Failed to refresh patient list", 3000);
-      }
-    },
+      },
 
-    onPatientDeleted: async (data) => {
-      console.log("🗑️ PATIENT DELETED:", data);
-      showSuccessToast(`Patient deleted!`, 3000);
-      try {
+      onPatientDeleted: async (data) => {
+        console.log("🗑️ PATIENT DELETED:", data);
+        showSuccessToast(`Patient deleted!`, 3000);
         const result = await refetchPatients();
         console.log("📊 REFETCH RESULT (DELETED):", result);
         console.log("📊 NEW DATA:", result?.data);
-      } catch (error) {
-        console.error("❌ Error refetching patients:", error);
-        showErrorToast("Failed to refresh patient list", 3000);
+      },
+
+      // ✅ Handle PATIENT_RECOVERED event
+      onPatientRecovered: async (data) => {
+        console.log("♻️ PATIENT RECOVERED:", data);
+        showSuccessToast(`Patient recovered successfully!`, 3000);
+        const result = await refetchPatients();
+        console.log("📊 REFETCH RESULT (RECOVERED):", result);
       }
-    }
-  });
+    });
 
-  // ✅ Cleanup: Unregister events when component unmounts
-  return () => {
-    console.log("🧹 Unregistering patient events...");
-    unregisterPatientEvents();
-  };
-}, [refetchPatients]); // ✅ Dependencies include refetchPatients
+    setEventsRegistered(true);
 
-  // ✅ Listen for socket connection/disconnection - FIXED: Added proper cleanup
+    // ✅ Cleanup: Unregister events when component unmounts
+    return () => {
+      console.log("🧹 Unregistering patient events...");
+      unregisterPatientEvents();
+      setEventsRegistered(false);
+    };
+  }, []); // ✅ Run once on mount
+
+  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ Socket CONNECTED - Patient events will work!");
+      // Re-register events on reconnect if not registered
+      if (!eventsRegistered) {
+        registerPatientEvents({
+          onPatientRegistered: async (data) => {
+            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
+            showSuccessToast(`New patient registered!`, 3000);
+            await refetchPatients();
+          },
+          onPatientUpdated: async (data) => {
+            console.log("✏️ PATIENT UPDATED (reconnect):", data);
+            showSuccessToast(`Patient updated!`, 3000);
+            await refetchPatients();
+          },
+          onPatientDeleted: async (data) => {
+            console.log("🗑️ PATIENT DELETED (reconnect):", data);
+            showSuccessToast(`Patient deleted!`, 3000);
+            await refetchPatients();
+          },
+          // ✅ Handle PATIENT_RECOVERED on reconnect
+          onPatientRecovered: async (data) => {
+            console.log("♻️ PATIENT RECOVERED (reconnect):", data);
+            showSuccessToast(`Patient recovered successfully!`, 3000);
+            await refetchPatients();
+          }
+        });
+        setEventsRegistered(true);
+      }
     };
 
     const handleDisconnect = () => {
       console.log("❌ Socket DISCONNECTED - Patient events won't work!");
+      setEventsRegistered(false);
     };
 
     socket.on("connect", handleConnect);
@@ -164,26 +200,60 @@ useEffect(() => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, []); // ✅ Empty dependency array - only run once
+  }, [refetchPatients, eventsRegistered]);
 
-  // ✅ REMOVED: Duplicate onAny listener - patientEvents.js already handles this
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - PATIENT: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Get patients array and pagination info from response
   const allPatients = patientsResponse?.data || [];
   const totalItems = patientsResponse?.pagination?.totalItems || 0;
   const totalPages = patientsResponse?.pagination?.totalPages || 1;
 
-  console.log("ALL PATIENTS:", allPatients);
+  // ✅ Transform patient data to include isDelete and isActive flags
+  const transformPatientData = (patients) => {
+    if (!patients || !Array.isArray(patients)) return [];
+    
+    return patients.map((patient) => {
+      // Determine status based on isDelete flag
+      let status = 'Active';
+      if (patient.isDelete) {
+        status = 'Blacklisted';
+      } else if (patient.isActive === false) {
+        status = 'Inactive';
+      }
+      
+      return {
+        ...patient,
+        // Ensure these flags exist
+        isDelete: patient.isDelete || false,
+        isActive: patient.isActive !== undefined ? patient.isActive : true,
+        displayStatus: status
+      };
+    });
+  };
+
+  const transformedPatients = transformPatientData(allPatients);
 
   // Separate patients into outpatient and inpatient based on patientType
-  const outpatientPatients = allPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
-  const inpatientPatients = allPatients.filter(p => p.patientType === 'Inpatient');
+  const outpatientPatients = transformedPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
+  const inpatientPatients = transformedPatients.filter(p => p.patientType === 'Inpatient');
 
   // Get active patients based on tab (client-side filtering for tabs)
   const getActivePatients = () => {
     if (activeTab === 'outpatient') return outpatientPatients;
     if (activeTab === 'inpatient') return inpatientPatients;
-    return allPatients;
+    return transformedPatients;
   };
 
   const activePatients = getActivePatients();
@@ -202,10 +272,15 @@ useEffect(() => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, genderFilter, departmentFilter, activeTab]);
+  }, [searchTerm, genderFilter, departmentFilter, activeTab, showDeleted]);
 
   // Navigation handlers
   const handleViewDetails = (patient) => {
+    // ✅ Don't allow viewing details of blacklisted patients
+    if (patient.isDelete) {
+      showErrorToast('Cannot view details of blacklisted patient', 3000);
+      return;
+    }
     navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
   };
 
@@ -214,6 +289,11 @@ useEffect(() => {
   };
 
   const handleEditPatient = (patient) => {
+    // ✅ Don't allow editing of blacklisted patients
+    if (patient.isDelete) {
+      showErrorToast('Cannot edit blacklisted patient', 3000);
+      return;
+    }
     navigate(`/edit-patient/${patient.id || patient._id}`, { state: { patient } });
   };
 
@@ -234,6 +314,18 @@ useEffect(() => {
         console.error('Error deleting patient:', error);
         showErrorToast('Failed to delete patient. Please try again.', 3000);
       }
+    }
+  };
+
+  // ✅ Recover handler
+  const handleRecoverPatient = async (patient) => {
+    try {
+      await recoverPatient(patient.id || patient._id).unwrap();
+      showSuccessToast(`${patient.name} recovered successfully!`, 2000);
+      refetchPatients();
+    } catch (error) {
+      console.error('Recover error:', error);
+      showErrorToast(error?.data?.message || 'Failed to recover patient', 3000);
     }
   };
 
@@ -258,6 +350,7 @@ useEffect(() => {
       'Email': patient.email || '',
       'Blood Group': patient.bloodGroup,
       'Patient Type': patient.patientType || 'Outpatient',
+      'Status': patient.isDelete ? 'Blacklisted' : (patient.isActive ? 'Active' : 'Inactive'),
       'Created At': patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : ''
     }));
     
@@ -292,6 +385,11 @@ useEffect(() => {
   };
 
   const handleAddAppointmentModal = (patient) => {
+    // ✅ Don't allow appointments for blacklisted patients
+    if (patient.isDelete) {
+      showErrorToast('Cannot create appointment for blacklisted patient', 3000);
+      return;
+    }
     setAppointmentPatient(patient);
     setShowAppointmentModal(true);
   };
@@ -395,12 +493,13 @@ useEffect(() => {
     if (genderFilter) count++;
     if (searchTerm) count++;
     if (activeTab !== 'all') count++;
+    if (showDeleted) count++;
     return count;
   };
 
   // Get unique departments for filter dropdown
   const getAllDepartments = () => {
-    const departments = [...new Set(allPatients.map(p => p.department).filter(Boolean))];
+    const departments = [...new Set(transformedPatients.map(p => p.department).filter(Boolean))];
     return departments.sort();
   };
 
@@ -415,7 +514,7 @@ useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Row Action Menu Component
+  // ✅ Updated RowActionMenu Component - Shows Recover for Blacklisted patients
   const RowActionMenu = ({ patient }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -437,19 +536,55 @@ useEffect(() => {
         </button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button onClick={() => { handleViewDetails(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
-              <Eye size={16} /> View Details
-            </button>
-            <button onClick={() => { handleEditPatient(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              <Edit size={16} /> Edit
-            </button>
-            <button onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100">
-              <Calendar size={16} /> Appointment
-            </button>
-            <div className="border-t border-gray-100 my-1"></div>
-            <button onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
-              <Trash2 size={16} /> Delete
-            </button>
+            {/* ✅ View Details - Only for Active/Inactive patients */}
+            {!patient.isDelete && (
+              <button 
+                onClick={() => { handleViewDetails(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+              >
+                <Eye size={16} /> View Details
+              </button>
+            )}
+            
+            {/* ✅ Edit - Only for Active/Inactive patients */}
+            {!patient.isDelete && (
+              <button 
+                onClick={() => { handleEditPatient(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Edit size={16} /> Edit
+              </button>
+            )}
+            
+            {/* ✅ Appointment - Only for Active/Inactive patients */}
+            {!patient.isDelete && (
+              <button 
+                onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
+              >
+                <Calendar size={16} /> Appointment
+              </button>
+            )}
+            
+            {/* Show divider only if there are items above */}
+            {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
+            
+            {/* ✅ Show Delete or Recover based on isDelete status */}
+            {patient.isDelete ? (
+              <button 
+                onClick={() => { handleRecoverPatient(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+              >
+                <RotateCcw size={16} /> Recover Patient
+              </button>
+            ) : (
+              <button 
+                onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+              >
+                <Trash2 size={16} /> Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -459,7 +594,7 @@ useEffect(() => {
   const activeFilterCount = getActiveFilterCount();
 
   // Centered loader
-  if (isLoadingPatients && !allPatients.length) {
+  if (isLoadingPatients && !transformedPatients.length) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
         <Loader />
@@ -591,6 +726,17 @@ useEffect(() => {
             <Download size={16} />
           </button>
 
+          {/* Toggle to show deleted patients */}
+          <Button 
+            variant={showDeleted ? "primary" : "outline"} 
+            size="sm" 
+            onClick={() => setShowDeleted(!showDeleted)}
+            className="flex items-center gap-1"
+          >
+            <Trash2 size={14} />
+            {showDeleted ? "Hide Deleted" : "Show Deleted"}
+          </Button>
+
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -674,87 +820,129 @@ useEffect(() => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
+          <p className="text-sm text-gray-500">
+            {showDeleted ? "No deleted patients found" : "Try adjusting your search or filters"}
+          </p>
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {allPatients.map((patient) => (
-              <div key={patient.id || patient._id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden cursor-pointer" onClick={() => handleViewDetails(patient)}>
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-12 h-12">
-                        <AvatarImage 
-                          src={getS3ImageUrl(patient.imageKey)} 
-                          alt={patient.name}
-                          className="object-cover"
-                        />
-                        <AvatarFallback className="bg-blue-100 text-blue-600 text-base font-medium">
-                          {patient.name?.charAt(0)?.toUpperCase() || "P"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="default" className="text-xs font-mono">
-                            #PT00{patient.id || patient._id?.slice(-6)}
-                          </Badge>
-                          <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
-                            {patient.patientType || 'Outpatient'}
-                          </Badge>
+            {filteredPatients.map((patient) => {
+              const isBlacklisted = patient.isDelete;
+              return (
+                <div 
+                  key={patient.id || patient._id} 
+                  className={`bg-white rounded-xl border ${isBlacklisted ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} shadow-sm hover:shadow-md transition-shadow overflow-hidden ${!isBlacklisted ? 'cursor-pointer' : ''}`}
+                  onClick={() => !isBlacklisted && handleViewDetails(patient)}
+                >
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className={`w-12 h-12 ${isBlacklisted ? 'opacity-60' : ''}`}>
+                          <AvatarImage 
+                            src={getS3ImageUrl(patient.imageKey)} 
+                            alt={patient.name}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className={`${isBlacklisted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
+                            {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="default" className="text-xs font-mono">
+                              #PT00{patient.id || patient._id?.slice(-6)}
+                            </Badge>
+                            {isBlacklisted ? (
+                              <Badge variant="secondary" className="text-xs">
+                                Blacklisted
+                              </Badge>
+                            ) : (
+                              <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
+                                {patient.patientType || 'Outpatient'}
+                              </Badge>
+                            )}
+                          </div>
+                          <h3 className={`font-semibold text-lg mt-1 ${isBlacklisted ? 'text-gray-500' : 'text-gray-900'}`}>
+                            {patient.name}
+                          </h3>
+                          <p className={`text-xs ${isBlacklisted ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
+                          </p>
                         </div>
-                        <h3 className="font-semibold text-gray-900 text-lg mt-1">{patient.name}</h3>
-                        <p className="text-xs text-gray-500">{patient.age || 'N/A'} years • {patient.gender || 'N/A'}</p>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="space-y-3 mb-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="w-4 h-4" />
-                        <span>Mobile</span>
+                    
+                    <div className="space-y-3 mb-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Phone className="w-4 h-4" />
+                          <span>Mobile</span>
+                        </div>
+                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
+                          {patient.mobileNumber}
+                        </span>
                       </div>
-                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.mobileNumber}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Mail className="w-4 h-4" />
-                        <span>Email</span>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Mail className="w-4 h-4" />
+                          <span>Email</span>
+                        </div>
+                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
+                          {patient.email || 'N/A'}
+                        </span>
                       </div>
-                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{patient.email || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Activity className="w-4 h-4" />
-                        <span>Blood Group</span>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Activity className="w-4 h-4" />
+                          <span>Blood Group</span>
+                        </div>
+                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
+                          {patient.bloodGroup || 'N/A'}
+                        </span>
                       </div>
-                      <span className="font-medium text-gray-900">{patient.bloodGroup || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Calendar className="w-4 h-4" />
-                        <span>Created</span>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Calendar className="w-4 h-4" />
+                          <span>Created</span>
+                        </div>
+                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
+                          {formatDisplayDate(patient.createdAt)}
+                        </span>
                       </div>
-                      <span className="font-medium text-gray-900">{formatDisplayDate(patient.createdAt)}</span>
                     </div>
-                  </div>
-                  
-                  <div className="flex gap-2 border-t border-gray-100 pt-4">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddAppointmentModal(patient);
-                      }} 
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                    >
-                      <Calendar className="w-4 h-4" /> 
-                      Add Appointment
-                    </button>
+                    
+                    {/* Action buttons - Show Recover for blacklisted, Appointment for active */}
+                    <div className="flex gap-2 border-t border-gray-100 pt-4">
+                      {isBlacklisted ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRecoverPatient(patient);
+                          }} 
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                        >
+                          <RotateCcw className="w-4 h-4" /> 
+                          Recover
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddAppointmentModal(patient);
+                          }} 
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                        >
+                          <Calendar className="w-4 h-4" /> 
+                          Add Appointment
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Pagination for Grid View - Using server-side totalPages */}
@@ -777,8 +965,10 @@ useEffect(() => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
-              Total Patients
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+              {showDeleted ? "Deleted Patients" : "Total Patients"}
+              <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${
+                showDeleted ? 'bg-gray-500' : 'bg-red-500'
+              }`}>
                 {totalFilteredItems}
               </span>
             </h2>
@@ -797,50 +987,87 @@ useEffect(() => {
                     <th className="px-6 py-3">Mobile Number</th>
                     <th className="px-6 py-3">Blood Group</th>
                     <th className="px-6 py-3">Type</th>
+                    <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right w-16">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {allPatients.map((patient) => (
-                    <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                        #PT00{patient.id || patient._id?.slice(-6)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8">
-                            <AvatarImage 
-                              src={getS3ImageUrl(patient.imageKey)} 
-                              alt={patient.name}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                              {patient.name?.charAt(0)?.toUpperCase() || "P"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span 
-                            onClick={() => handleViewDetails(patient)} 
-                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                  {filteredPatients.map((patient) => {
+                    const isBlacklisted = patient.isDelete;
+                    return (
+                      <tr 
+                        key={patient.id || patient._id} 
+                        className={`hover:bg-gray-50 border-b border-gray-100 ${isBlacklisted ? 'bg-gray-50' : ''}`}
+                      >
+                        <td className={`px-6 py-4 font-medium ${isBlacklisted ? 'text-gray-500' : 'text-[#1C62A0]'}`}>
+                          #PT00{patient.id || patient._id?.slice(-6)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className={`w-8 h-8 ${isBlacklisted ? 'opacity-60' : ''}`}>
+                              <AvatarImage 
+                                src={getS3ImageUrl(patient.imageKey)} 
+                                alt={patient.name}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className={`${isBlacklisted ? 'bg-gray-200 text-gray-500' : 'bg-gray-200 text-gray-600'} text-xs font-medium`}>
+                                {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span 
+                              onClick={() => !isBlacklisted && handleViewDetails(patient)} 
+                              className={`font-medium ${isBlacklisted ? 'text-gray-500 cursor-default' : 'text-gray-800 cursor-pointer hover:text-[#1C62A0]'}`}
+                            >
+                              {patient.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {patient.gender || 'N/A'}
+                        </td>
+                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {patient.mobileNumber}
+                        </td>
+                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {patient.bloodGroup || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {isBlacklisted ? (
+                            <Badge variant="secondary" className="text-xs">
+                              Blacklisted
+                            </Badge>
+                          ) : (
+                            <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
+                              {patient.patientType || 'Outpatient'}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge
+                            variant={
+                              isBlacklisted
+                                ? 'secondary'
+                                : patient.isActive
+                                ? 'success'
+                                : 'danger'
+                            }
+                            className="text-xs"
                           >
-                            {patient.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
-                      <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
-                      <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
-                          {patient.patientType || 'Outpatient'}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end">
-                          <RowActionMenu patient={patient} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {isBlacklisted
+                              ? 'Blacklisted'
+                              : patient.isActive
+                              ? 'Active'
+                              : 'Inactive'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end">
+                            <RowActionMenu patient={patient} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

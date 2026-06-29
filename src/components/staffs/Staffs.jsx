@@ -1,5 +1,4 @@
-// Staffs.jsx
-
+// Staffs.jsx - Complete file with Deleted/Blacklisted Support and Recover Functionality
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -94,7 +93,7 @@ const Staffs = () => {
   const [deleteStaff] = useDeleteStaffMutation();
   const [recoverStaff] = useRecoverStaffMutation();
 
-  // Register socket event listeners
+  // ✅ Register socket event listeners
   useEffect(() => {
     console.log("🔄 Registering staff event listeners...");
     console.log("📡 Socket connected:", socket.connected);
@@ -115,6 +114,13 @@ const Staffs = () => {
       onStaffDeleted: async (data) => {
         console.log("🗑️ STAFF DELETED:", data);
         showSuccessToast(`Staff deleted!`, 3000);
+        await refetch();
+      },
+
+      // ✅ Handle STAFF_RECOVERED event
+      onStaffRecovered: async (data) => {
+        console.log("♻️ STAFF RECOVERED:", data);
+        showSuccessToast(`Staff recovered successfully!`, 3000);
         await refetch();
       },
 
@@ -140,7 +146,7 @@ const Staffs = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection/disconnection
+  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ Socket CONNECTED - Staff events will work!");
@@ -159,6 +165,12 @@ const Staffs = () => {
           onStaffDeleted: async (data) => {
             console.log("🗑️ STAFF DELETED (reconnect):", data);
             showSuccessToast(`Staff deleted!`, 3000);
+            await refetch();
+          },
+          // ✅ Handle STAFF_RECOVERED on reconnect
+          onStaffRecovered: async (data) => {
+            console.log("♻️ STAFF RECOVERED (reconnect):", data);
+            showSuccessToast(`Staff recovered successfully!`, 3000);
             await refetch();
           },
           onStaffPasswordReset: async (data) => {
@@ -190,10 +202,10 @@ const Staffs = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // Log all socket events for debugging
+  // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
+      console.log(`📡 ALL SOCKET EVENTS - STAFF: ${event}:`, args);
     };
 
     socket.onAny(handleAnyEvent);
@@ -258,7 +270,6 @@ const Staffs = () => {
         joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         department: staff.designation || '',
         staffType: staff.staffType || '',
-        // Updated isActive and isDelete
         isActive: staff.isActive || false,
         isDelete: staff.isDelete || false,
         deleteDate: staff.deleteDate || null,
@@ -671,7 +682,7 @@ const Staffs = () => {
               <Download size={16} />
             </Button>
             
-            {/* Toggle to show deleted staff */}
+            {/* ✅ Toggle to show deleted staff */}
             <Button 
               variant={showDeleted ? "primary" : "outline"} 
               size="sm" 
@@ -681,7 +692,7 @@ const Staffs = () => {
               <Trash2 size={14} />
               {showDeleted ? "Hide Deleted" : "Show Deleted"}
             </Button>
-            
+
             <button
               onClick={() => setShowFilters(prev => !prev)}
               className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -696,7 +707,7 @@ const Staffs = () => {
                 </span>
               )}
             </button>
-            <Button onClick={handleAddStaff} className="flex items-center gap-2">
+            <Button onClick={handleAddStaff} className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <Plus size={16} /> New Staff
             </Button>
           </div>

@@ -1,4 +1,4 @@
-// src/components/visits/Visits.jsx - With Green Gradient Buttons
+// src/components/visits/Visits.jsx - With Green Gradient Buttons & Socket Integration
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -14,9 +14,14 @@ import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
 import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/service/request';
-import { showSuccessToast, showErrorToast } from '../ui/Toast';
+import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
+
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
 // Helper functions for date formatting
 const formatDate = (dateString) => {
@@ -67,6 +72,9 @@ const Visits = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // API Hooks - With server-side pagination parameters
   const { 
     data: bookingsResponse, 
@@ -84,6 +92,115 @@ const Visits = () => {
 
   // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
+
+  // ✅ Register socket event listeners for booking events
+  useEffect(() => {
+    console.log("🔄 Registering booking event listeners for Visits...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerBookingEvents({
+      onBookingRegistered: (data) => {
+        console.log("📅 NEW BOOKING REGISTERED:", data);
+        showSuccessToast(`New booking received!`, 3000);
+        refetch();
+      },
+      
+      onBookingUpdated: (data) => {
+        console.log("✏️ BOOKING UPDATED:", data);
+        showSuccessToast(`Booking updated!`, 3000);
+        refetch();
+      },
+      
+      onBookingCancelled: (data) => {
+        console.log("❌ BOOKING CANCELLED:", data);
+        showWarningToast(`Booking cancelled!`, 3000);
+        refetch();
+      },
+      
+      onBookingAccepted: (data) => {
+        console.log("✅ BOOKING ACCEPTED (New Visit):", data);
+        showSuccessToast(`New visit added: ${data.patientName || 'Patient'}`, 3000);
+        refetch();
+      },
+      
+      onBookingCompleted: (data) => {
+        console.log("✔️ BOOKING COMPLETED:", data);
+        showSuccessToast(`Visit completed!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering booking events for Visits...");
+      unregisterBookingEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Booking events will work!");
+      if (!eventsRegistered) {
+        registerBookingEvents({
+          onBookingRegistered: (data) => {
+            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+            showSuccessToast(`New booking received!`, 3000);
+            refetch();
+          },
+          onBookingUpdated: (data) => {
+            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+            showSuccessToast(`Booking updated!`, 3000);
+            refetch();
+          },
+          onBookingCancelled: (data) => {
+            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+            showWarningToast(`Booking cancelled!`, 3000);
+            refetch();
+          },
+          onBookingAccepted: (data) => {
+            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+            showSuccessToast(`New visit added!`, 3000);
+            refetch();
+          },
+          onBookingCompleted: (data) => {
+            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+            showSuccessToast(`Visit completed!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - BOOKING/VISIT: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Use server-side pagination values from API response
   const totalItems = bookingsResponse?.pagination?.totalItems || 0;
@@ -112,11 +229,22 @@ const Visits = () => {
         booking.approveData?.token ||
         "N/A";
       
+      // ✅ Get the actual patient ID (without #PT prefix)
+      let actualPatientId = booking.patientId || booking.userId || index + 1;
+      
+      // If patientId is a string with #PT prefix, extract the number
+      if (typeof actualPatientId === 'string' && actualPatientId.startsWith('#PT')) {
+        const match = actualPatientId.match(/\d+/);
+        actualPatientId = match ? parseInt(match[0]) : actualPatientId;
+      }
+      
       return {
         id: booking.id || booking._id,
         visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
-        patientId: booking.patientId || `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
+        // ✅ Store the actual patient ID without #PT prefix
+        patientId: actualPatientId,
+        patientIdDisplay: `PT${String(actualPatientId).padStart(4, '0')}`,
         doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
         department: booking.doctor_department || booking.department || "General",
         visitDate: booking.booking_date || booking.date || "",
@@ -219,6 +347,20 @@ const Visits = () => {
   };
   
   const handleSaveEdit = (updatedData) => {
+    // ✅ Emit socket event for booking updated
+    if (editingVisit) {
+      socket.emit("booking_event", {
+        event: "BOOKING_UPDATED",
+        data: {
+          bookingId: editingVisit.id,
+          patientName: editingVisit.patientName,
+          doctorName: editingVisit.doctorName,
+          updatedData: updatedData,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+    
     setShowEditModal(false);
     setEditingVisit(null);
     refetch();
@@ -243,6 +385,17 @@ const Visits = () => {
     
     try {
       await deleteBooking(visitToDelete.id).unwrap();
+      
+      // ✅ Emit socket event for booking deleted
+      socket.emit("booking_event", {
+        event: "BOOKING_DELETED",
+        data: {
+          bookingId: visitToDelete.id,
+          patientName: visitToDelete.patientName,
+          doctorName: visitToDelete.doctorName,
+          timestamp: new Date().toISOString()
+        }
+      });
       
       showErrorToast(
         `Visit ${visitToDelete.visitId} deleted successfully!`,
@@ -286,7 +439,7 @@ const Visits = () => {
           <div>
             <h3 className="font-semibold text-gray-800 text-lg">{visit.patientName}</h3>
             <p className="text-sm text-gray-500">{visit.visitId}</p>
-            <p className="text-xs text-gray-400">User ID: {visit.patientId}</p>
+            <p className="text-xs text-gray-400">ID: {visit.patientId}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -375,6 +528,7 @@ const Visits = () => {
       id: visit.id,
       patientName: visit.patientName,
       patientId: visit.patientId,
+      patientIdDisplay: visit.patientIdDisplay,
       patientImageKey: visit.patientImageKey,
       patientAvatar: visit.patientAvatar,
       visitDate: visit.visitDate,
@@ -612,7 +766,7 @@ const Visits = () => {
                     </ShadcnAvatar>
                     <div>
                       <div className="font-semibold text-gray-900">{visit.patientName}</div>
-                      <div className="text-xs text-gray-500">Patient ID: {visit.patientId}</div>
+                      <div className="text-xs text-gray-500">ID: {visit.patientId}</div>
                       <div className="text-xs text-gray-500">Token: #{visit.token || 'N/A'}</div>
                     </div>
                   </div>
@@ -697,7 +851,7 @@ const Visits = () => {
                           </ShadcnAvatar>
                           <div>
                             <span className="font-medium text-gray-800">{visit.patientName}</span>
-                            <p className="text-xs text-gray-400">{visit.patientId}</p>
+                            <p className="text-xs text-gray-400">ID: {visit.patientId}</p>
                           </div>
                         </div>
                       </td>

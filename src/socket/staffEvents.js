@@ -40,6 +40,12 @@ export const registerStaffEvents = (handlers = {}) => {
         handlers.onStaffDeleted?.(payload.data);
         break;
 
+      // ✅ NEW: Handle STAFF_RECOVERED event
+      case "STAFF_RECOVERED":
+        console.log("♻️ Staff Recovered:", payload.data);
+        handlers.onStaffRecovered?.(payload.data);
+        break;
+
       case "STAFF_PASSWORD_RESET":
         console.log("🔑 Staff Password Reset:", payload.data);
         handlers.onStaffPasswordReset?.(payload.data);
@@ -71,6 +77,12 @@ export const registerStaffEvents = (handlers = {}) => {
     handlers.onStaffDeleted?.(data);
   });
 
+  // ✅ NEW: Individual listener for STAFF_RECOVERED
+  socket.on("STAFF_RECOVERED", (data) => {
+    console.log("♻️ Staff Recovered (direct):", data);
+    handlers.onStaffRecovered?.(data);
+  });
+
   socket.on("STAFF_PASSWORD_RESET", (data) => {
     console.log("🔑 Staff Password Reset (direct):", data);
     handlers.onStaffPasswordReset?.(data);
@@ -93,6 +105,7 @@ export const unregisterStaffEvents = () => {
   socket.off("STAFF_REGISTERED");
   socket.off("STAFF_UPDATED");
   socket.off("STAFF_DELETED");
+  socket.off("STAFF_RECOVERED");
   socket.off("STAFF_PASSWORD_RESET");
   socket.off("STAFF_PASSWORD_CHANGED");
   

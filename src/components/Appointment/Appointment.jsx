@@ -1,4 +1,4 @@
-// src/components/Appointment/Appointment.jsx - With Green Gradient Buttons
+// src/components/Appointment/Appointment.jsx - With Green Gradient Buttons & Socket Integration
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -24,6 +24,11 @@ import {
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
+
+// ✅ Import socket
+import { socket } from '../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
@@ -211,6 +216,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   // API Hooks
   const { 
     data: bookingsResponse, 
@@ -229,6 +237,115 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
   const [deleteBooking] = useDeleteBookingMutation();
+
+  // ✅ Register socket event listeners for booking events
+  useEffect(() => {
+    console.log("🔄 Registering booking event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerBookingEvents({
+      onBookingRegistered: (data) => {
+        console.log("📅 NEW BOOKING REGISTERED:", data);
+        showSuccessToast(`New booking received!`, 3000);
+        refetch();
+      },
+      
+      onBookingUpdated: (data) => {
+        console.log("✏️ BOOKING UPDATED:", data);
+        showSuccessToast(`Booking updated!`, 3000);
+        refetch();
+      },
+      
+      onBookingCancelled: (data) => {
+        console.log("❌ BOOKING CANCELLED:", data);
+        showWarningToast(`Booking cancelled!`, 3000);
+        refetch();
+      },
+      
+      onBookingAccepted: (data) => {
+        console.log("✅ BOOKING ACCEPTED:", data);
+        showSuccessToast(`Booking accepted!`, 3000);
+        refetch();
+      },
+      
+      onBookingCompleted: (data) => {
+        console.log("✔️ BOOKING COMPLETED:", data);
+        showSuccessToast(`Booking completed!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering booking events...");
+      unregisterBookingEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Booking events will work!");
+      if (!eventsRegistered) {
+        registerBookingEvents({
+          onBookingRegistered: (data) => {
+            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+            showSuccessToast(`New booking received!`, 3000);
+            refetch();
+          },
+          onBookingUpdated: (data) => {
+            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+            showSuccessToast(`Booking updated!`, 3000);
+            refetch();
+          },
+          onBookingCancelled: (data) => {
+            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+            showWarningToast(`Booking cancelled!`, 3000);
+            refetch();
+          },
+          onBookingAccepted: (data) => {
+            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+            showSuccessToast(`Booking accepted!`, 3000);
+            refetch();
+          },
+          onBookingCompleted: (data) => {
+            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+            showSuccessToast(`Booking completed!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - BOOKING: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Helper function to format ID for display
   const formatAppointmentId = (id) => {
@@ -524,6 +641,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         }
       }).unwrap();
       
+      // ✅ Emit socket event for booking accepted
+      socket.emit("booking_event", {
+        event: "BOOKING_ACCEPTED",
+        data: {
+          bookingId: selectedRequest.id,
+          patientName: selectedRequest.patientName,
+          doctorName: selectedRequest.doctorName,
+          date: appointmentData.date,
+          consulting_time: appointmentData.consulting_time,
+          token: appointmentData.token,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       showSuccessToast(
         `Appointment ${selectedRequest.formattedId} approved successfully!`,
         4000
@@ -556,6 +687,18 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         data: { reason: rejectReason }
       }).unwrap();
       
+      // ✅ Emit socket event for booking cancelled
+      socket.emit("booking_event", {
+        event: "BOOKING_CANCELLED",
+        data: {
+          bookingId: selectedRequest.id,
+          patientName: selectedRequest.patientName,
+          doctorName: selectedRequest.doctorName,
+          reason: rejectReason,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       showErrorToast(
         `Appointment ${selectedRequest.formattedId} rejected successfully!`,
         4000
@@ -573,6 +716,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleSaveEdit = (updatedData) => {
+    // ✅ Emit socket event for booking updated
+    if (appointmentToEdit) {
+      socket.emit("booking_event", {
+        event: "BOOKING_UPDATED",
+        data: {
+          bookingId: appointmentToEdit.id,
+          patientName: appointmentToEdit.patientName,
+          doctorName: appointmentToEdit.doctorName,
+          updatedData: updatedData,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+    
     setShowEditModal(false);
     setAppointmentToEdit(null);
     refetch();
@@ -590,6 +747,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     
     try {
       await deleteBooking(appointmentToDelete.id).unwrap();
+      
+      // ✅ Emit socket event for booking deleted
+      socket.emit("booking_event", {
+        event: "BOOKING_DELETED",
+        data: {
+          bookingId: appointmentToDelete.id,
+          patientName: appointmentToDelete.patientName,
+          doctorName: appointmentToDelete.doctorName,
+          timestamp: new Date().toISOString()
+        }
+      });
       
       showErrorToast(
         `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
