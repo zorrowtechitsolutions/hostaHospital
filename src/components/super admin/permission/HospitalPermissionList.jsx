@@ -10,6 +10,12 @@ import {
 } from "../../../../app/service/rolePermission";
 import { useGetPermissionsQuery } from "../../../../app/service/permission";
 
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
+import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
+
 const HospitalPermissionList = () => {
   const { hospitalId, roleId } = useParams();
   const navigate = useNavigate();
@@ -20,26 +26,132 @@ const HospitalPermissionList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
   const [createRolePermission] = useCreateRolePermissionMutation();
 
   // Get all permissions data
-  const { data: permissionsData, isLoading: isLoadingPermissions } = useGetPermissionsQuery();
+  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
   
+  // Get role permissions - uses roleId from params
+  const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
+    roleId,
+  });
+
+  // ✅ Register socket event listeners for real-time updates
+  useEffect(() => {
+    console.log("🔄 Registering permission event listeners for Hospital Permission...");
+    
+    registerPermissionEvents({
+      onPermissionRegistered: (data) => {
+        console.log("🔑 New permission registered:", data);
+        showSuccessToast(`New permission created!`, 3000);
+        refetchPermissions();
+      },
+      
+      onPermissionUpdated: (data) => {
+        console.log("✏️ Permission updated:", data);
+        showSuccessToast(`Permission updated!`, 3000);
+        refetchPermissions();
+      },
+      
+      onPermissionDeleted: (data) => {
+        console.log("🗑️ Permission deleted:", data);
+        showSuccessToast(`Permission deleted!`, 3000);
+        refetchPermissions();
+      }
+    });
+
+    registerRolePermissionEvents({
+      onRolePermissionUpdated: (data) => {
+        console.log("🔐 Role permission updated:", data);
+        showSuccessToast(`Role permissions updated!`, 3000);
+        refetchRolePermissions();
+        refetchPermissions();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering permission events for Hospital Permission...");
+      unregisterPermissionEvents();
+      unregisterRolePermissionEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetchPermissions, refetchRolePermissions]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Permission events will work!");
+      if (!eventsRegistered) {
+        registerPermissionEvents({
+          onPermissionRegistered: (data) => {
+            console.log("🔑 New permission registered (reconnect):", data);
+            showSuccessToast(`New permission created!`, 3000);
+            refetchPermissions();
+          },
+          onPermissionUpdated: (data) => {
+            console.log("✏️ Permission updated (reconnect):", data);
+            showSuccessToast(`Permission updated!`, 3000);
+            refetchPermissions();
+          },
+          onPermissionDeleted: (data) => {
+            console.log("🗑️ Permission deleted (reconnect):", data);
+            showSuccessToast(`Permission deleted!`, 3000);
+            refetchPermissions();
+          }
+        });
+        registerRolePermissionEvents({
+          onRolePermissionUpdated: (data) => {
+            console.log("🔐 Role permission updated (reconnect):", data);
+            showSuccessToast(`Role permissions updated!`, 3000);
+            refetchRolePermissions();
+            refetchPermissions();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Permission events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetchPermissions, refetchRolePermissions, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - PERMISSION/HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
   // Log the permissions data to see the structure
   useEffect(() => {
     console.log("permissionsData", permissionsData);
   }, [permissionsData]);
 
-  // Get role permissions - uses roleId from params
-  const { data: permissionData } = useGetRolePermissionsQuery({
-    roleId,
-  });
-
   // Dynamically build modules from permissionsData using module and action fields
   useEffect(() => {
     if (!permissionsData?.data?.length) return;
 
-    // Define modules to hide/exclude
     const hiddenModules = [
       "users",
       "donors",
@@ -59,7 +171,6 @@ const HospitalPermissionList = () => {
       const moduleName = permission.module;
       const action = permission.action;
 
-      // Skip hidden modules
       if (hiddenModules.includes(moduleName?.toLowerCase())) {
         return;
       }
@@ -160,7 +271,6 @@ const HospitalPermissionList = () => {
         if (module.view && module.viewId) permissionIds.push(module.viewId);
       });
 
-      // Log what's being saved
       console.log("Saving permissions:", permissionIds);
       console.log("Saving permissions details:", {
         roleId: Number(roleId),
@@ -176,6 +286,18 @@ const HospitalPermissionList = () => {
       const result = await createRolePermission(payload).unwrap();
       console.log("Save result:", result);
 
+      // ✅ Emit socket event for role permission updated
+      socket.emit("role_permission_event", {
+        event: "ROLEPERMISSION_UPDATED",
+        data: {
+          roleId: Number(roleId),
+          hospitalId: hospitalId,
+          permissionIds: permissionIds,
+          count: permissionIds.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+
       showSuccessToast("Permission saved successfully");
     } catch (error) {
       console.error("Save error:", error);
@@ -190,6 +312,16 @@ const HospitalPermissionList = () => {
       showWarningToast("Changes discarded. Permissions restored to previous state.", 3000);
       window.location.reload();
     }
+  };
+
+  // ✅ Handle back navigation - go to Hospital User Permissions
+  const handleBack = () => {
+    navigate(`/super-admin/hospital-users/${hospitalId}/permissions`, {
+      state: {
+        hospitalName: hospitalName,
+        from: "HospitalPermissionList"
+      }
+    });
   };
 
   const PermissionCheckbox = ({ checked, onToggle, disabled = false }) => (
@@ -256,7 +388,6 @@ const HospitalPermissionList = () => {
     </Card>
   );
 
-  // Show loading state while fetching permissions
   if (isLoadingPermissions) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
@@ -275,7 +406,7 @@ const HospitalPermissionList = () => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => navigate(-1)} 
+            onClick={handleBack} 
             className="mb-3 text-sm flex items-center gap-1"
           >
             <ArrowLeft size={16} />

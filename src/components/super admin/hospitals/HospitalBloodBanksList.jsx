@@ -6,6 +6,11 @@ import { Card, Button, Pagination, Badge, Modal } from '../../ui';
 import { useGetBloodBankQuery, useDeleteBloodBankMutation } from '../../../../app/service/bloodbank';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../../socket/bloodBankEvents';
+
 // Helper function to format blood bank ID
 const formatBloodBankId = (id) => {
   if (!id) return '#BB0000';
@@ -21,6 +26,9 @@ const HospitalBloodBanksList = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [bloodBankToDelete, setBloodBankToDelete] = useState(null);
   const itemsPerPage = 10;
+
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const { data: bloodBankData, isLoading, refetch } = useGetBloodBankQuery({
     hospitalId: id,
@@ -54,6 +62,93 @@ const HospitalBloodBanksList = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // ✅ Register socket event listeners for blood bank events
+  useEffect(() => {
+    console.log("🔄 Registering blood bank event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerBloodBankEvents({
+      onStockCreated: (data) => {
+        console.log("🩸 NEW BLOOD STOCK CREATED:", data);
+        showSuccessToast(`New blood stock "${data.bloodGroup || 'Blood'}" added!`, 3000);
+        refetch();
+      },
+      
+      onStockUpdated: (data) => {
+        console.log("✏️ BLOOD STOCK UPDATED:", data);
+        showSuccessToast(`Blood stock "${data.bloodGroup || 'Blood'}" updated!`, 3000);
+        refetch();
+      },
+      
+      onStockDeleted: (data) => {
+        console.log("🗑️ BLOOD STOCK DELETED:", data);
+        showSuccessToast(`Blood stock deleted!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering blood bank events...");
+      unregisterBloodBankEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Blood Bank events will work!");
+      if (!eventsRegistered) {
+        registerBloodBankEvents({
+          onStockCreated: (data) => {
+            console.log("🩸 NEW BLOOD STOCK CREATED (reconnect):", data);
+            showSuccessToast(`New blood stock added!`, 3000);
+            refetch();
+          },
+          onStockUpdated: (data) => {
+            console.log("✏️ BLOOD STOCK UPDATED (reconnect):", data);
+            showSuccessToast(`Blood stock updated!`, 3000);
+            refetch();
+          },
+          onStockDeleted: (data) => {
+            console.log("🗑️ BLOOD STOCK DELETED (reconnect):", data);
+            showSuccessToast(`Blood stock deleted!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Blood Bank events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - BLOOD BANK: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   const getBloodGroupColor = (bloodGroup) => {
     const colors = {
@@ -104,6 +199,18 @@ const HospitalBloodBanksList = () => {
     if (bloodBankToDelete) {
       try {
         await deleteBloodBank(bloodBankToDelete.id).unwrap();
+        
+        // ✅ Emit socket event for stock deleted
+        socket.emit("blood_bank_event", {
+          event: "STOCK_DELETED",
+          data: {
+            stockId: bloodBankToDelete.id,
+            bloodGroup: bloodBankToDelete.bloodGroup,
+            hospitalId: id,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast(`${bloodBankToDelete.bloodGroup} blood stock has been deleted successfully!`, 2000);
         refetch();
         setShowDeleteModal(false);
@@ -200,7 +307,7 @@ const HospitalBloodBanksList = () => {
           <Button
             variant="primary"
             onClick={handleAddBloodBank}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Blood Stock
@@ -299,7 +406,7 @@ const HospitalBloodBanksList = () => {
           <Button
             variant="primary"
             onClick={handleAddBloodBank}
-            className="mt-4 flex items-center gap-2 mx-auto"
+            className="mt-4 flex items-center gap-2 mx-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Your First Blood Stock

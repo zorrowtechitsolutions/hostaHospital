@@ -5,6 +5,12 @@ import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, 
 import { Card, Button, Pagination, Badge } from '../../ui';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
+import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerBookingEvents, unregisterBookingEvents } from '../../../socket/bookingEvents';
 
 const HospitalAppointmentsList = () => {
   const { id } = useParams();
@@ -12,6 +18,9 @@ const HospitalAppointmentsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // ✅ FIXED: Pass hospitalId to API so backend can filter
   const { data: bookingsData, isLoading: isLoadingAppointments, refetch } = useGetBookingsQuery({
@@ -42,6 +51,115 @@ const HospitalAppointmentsList = () => {
   const allAppointments = bookingsData?.data || [];
   const totalItems = bookingsData?.pagination?.totalItems || allAppointments.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Register socket event listeners for booking events
+  useEffect(() => {
+    console.log("🔄 Registering booking event listeners for Hospital Appointments...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerBookingEvents({
+      onBookingRegistered: (data) => {
+        console.log("📅 NEW BOOKING REGISTERED:", data);
+        showSuccessToast(`New booking received!`, 3000);
+        refetch();
+      },
+      
+      onBookingUpdated: (data) => {
+        console.log("✏️ BOOKING UPDATED:", data);
+        showSuccessToast(`Booking updated!`, 3000);
+        refetch();
+      },
+      
+      onBookingCancelled: (data) => {
+        console.log("❌ BOOKING CANCELLED:", data);
+        showSuccessToast(`Booking cancelled!`, 3000);
+        refetch();
+      },
+      
+      onBookingAccepted: (data) => {
+        console.log("✅ BOOKING ACCEPTED:", data);
+        showSuccessToast(`Booking accepted!`, 3000);
+        refetch();
+      },
+      
+      onBookingCompleted: (data) => {
+        console.log("✔️ BOOKING COMPLETED:", data);
+        showSuccessToast(`Booking completed!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering booking events for Hospital Appointments...");
+      unregisterBookingEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Booking events will work!");
+      if (!eventsRegistered) {
+        registerBookingEvents({
+          onBookingRegistered: (data) => {
+            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+            showSuccessToast(`New booking received!`, 3000);
+            refetch();
+          },
+          onBookingUpdated: (data) => {
+            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+            showSuccessToast(`Booking updated!`, 3000);
+            refetch();
+          },
+          onBookingCancelled: (data) => {
+            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+            showSuccessToast(`Booking cancelled!`, 3000);
+            refetch();
+          },
+          onBookingAccepted: (data) => {
+            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+            showSuccessToast(`Booking accepted!`, 3000);
+            refetch();
+          },
+          onBookingCompleted: (data) => {
+            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+            showSuccessToast(`Booking completed!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - BOOKING/HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Debug logging
   useEffect(() => {

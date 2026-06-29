@@ -6,6 +6,11 @@ import { Card, Button, Pagination, Modal } from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { useGetDoctorsQuery, useDeleteDoctorMutation } from '../../../../app/service/doctorApi';
 
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerDoctorEvents, unregisterDoctorEvents } from '../../../socket/doctorEvents';
+
 const HospitalDoctorsList = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -14,6 +19,9 @@ const HospitalDoctorsList = () => {
   const [showModal, setShowModal] = useState(false);
   const [doctorToDelete, setDoctorToDelete] = useState(null);
   const itemsPerPage = 10;
+
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // ✅ FIXED: Pass hospitalId to API so backend can filter
   const { data: doctorsData, isLoading, refetch } = useGetDoctorsQuery({
@@ -28,6 +36,126 @@ const HospitalDoctorsList = () => {
   const allDoctors = doctorsData?.data || [];
   const totalItems = doctorsData?.pagination?.totalItems || allDoctors.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Register socket event listeners for doctor events
+  useEffect(() => {
+    console.log("🔄 Registering doctor event listeners for Hospital Doctors...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerDoctorEvents({
+      onDoctorRegistered: (data) => {
+        console.log("👨‍⚕️ NEW DOCTOR REGISTERED:", data);
+        showSuccessToast(`New doctor registered!`, 3000);
+        refetch();
+      },
+      
+      onDoctorUpdated: (data) => {
+        console.log("✏️ DOCTOR UPDATED:", data);
+        showSuccessToast(`Doctor updated!`, 3000);
+        refetch();
+      },
+      
+      onDoctorDeleted: (data) => {
+        console.log("🗑️ DOCTOR DELETED:", data);
+        showSuccessToast(`Doctor deleted!`, 3000);
+        refetch();
+      },
+      
+      onDoctorRecovered: (data) => {
+        console.log("♻️ DOCTOR RECOVERED:", data);
+        showSuccessToast(`Doctor recovered!`, 3000);
+        refetch();
+      },
+      
+      onDoctorPasswordReset: (data) => {
+        console.log("🔑 DOCTOR PASSWORD RESET:", data);
+        showSuccessToast(`Doctor password reset!`, 3000);
+        refetch();
+      },
+      
+      onDoctorPasswordChanged: (data) => {
+        console.log("🔐 DOCTOR PASSWORD CHANGED:", data);
+        showSuccessToast(`Doctor password changed!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering doctor events for Hospital Doctors...");
+      unregisterDoctorEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Doctor events will work!");
+      if (!eventsRegistered) {
+        registerDoctorEvents({
+          onDoctorRegistered: (data) => {
+            console.log("👨‍⚕️ NEW DOCTOR REGISTERED (reconnect):", data);
+            showSuccessToast(`New doctor registered!`, 3000);
+            refetch();
+          },
+          onDoctorUpdated: (data) => {
+            console.log("✏️ DOCTOR UPDATED (reconnect):", data);
+            showSuccessToast(`Doctor updated!`, 3000);
+            refetch();
+          },
+          onDoctorDeleted: (data) => {
+            console.log("🗑️ DOCTOR DELETED (reconnect):", data);
+            showSuccessToast(`Doctor deleted!`, 3000);
+            refetch();
+          },
+          onDoctorRecovered: (data) => {
+            console.log("♻️ DOCTOR RECOVERED (reconnect):", data);
+            showSuccessToast(`Doctor recovered!`, 3000);
+            refetch();
+          },
+          onDoctorPasswordReset: (data) => {
+            console.log("🔑 DOCTOR PASSWORD RESET (reconnect):", data);
+            showSuccessToast(`Doctor password reset!`, 3000);
+            refetch();
+          },
+          onDoctorPasswordChanged: (data) => {
+            console.log("🔐 DOCTOR PASSWORD CHANGED (reconnect):", data);
+            showSuccessToast(`Doctor password changed!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Doctor events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - DOCTOR/HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Debug logging
   useEffect(() => {
@@ -90,6 +218,18 @@ const HospitalDoctorsList = () => {
     if (doctorToDelete) {
       try {
         await deleteDoctor(doctorToDelete.id).unwrap();
+        
+        // ✅ Emit socket event for doctor deleted
+        socket.emit("doctor_event", {
+          event: "DOCTOR_DELETED",
+          data: {
+            doctorId: doctorToDelete.id,
+            doctorName: formatDoctorName(doctorToDelete),
+            hospitalId: id,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast(`${formatDoctorName(doctorToDelete)} deleted successfully!`);
         await refetch();
         setShowModal(false);
@@ -120,7 +260,7 @@ const HospitalDoctorsList = () => {
           <Button
             variant="primary"
             onClick={handleAddDoctor}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Doctor
@@ -243,7 +383,7 @@ const HospitalDoctorsList = () => {
           <Button
             variant="primary"
             onClick={handleAddDoctor}
-            className="mt-4 flex items-center gap-2 mx-auto"
+            className="mt-4 flex items-center gap-2 mx-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Your First Doctor
