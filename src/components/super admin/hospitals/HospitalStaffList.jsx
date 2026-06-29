@@ -7,6 +7,11 @@ import { useGetStaffQuery, useDeleteStaffMutation } from '../../../../app/servic
 import StaffDetails from '../hospitals/staff/staffDetails';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerStaffEvents, unregisterStaffEvents } from '../../../socket/staffEvents';
+
 const HospitalStaffList = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -17,6 +22,9 @@ const HospitalStaffList = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [staffToDelete, setStaffToDelete] = useState(null);
   const itemsPerPage = 10;
+
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // API hook
   const { data: staffData, isLoading, refetch, isFetching } = useGetStaffQuery({
@@ -31,6 +39,126 @@ const HospitalStaffList = () => {
   const allStaff = staffData?.data || [];
   const totalItems = staffData?.pagination?.totalItems || allStaff.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Register socket event listeners for staff events
+  useEffect(() => {
+    console.log("🔄 Registering staff event listeners for Hospital Staff...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerStaffEvents({
+      onStaffRegistered: (data) => {
+        console.log("👤 NEW STAFF REGISTERED:", data);
+        showSuccessToast(`New staff registered!`, 3000);
+        refetch();
+      },
+      
+      onStaffUpdated: (data) => {
+        console.log("✏️ STAFF UPDATED:", data);
+        showSuccessToast(`Staff updated!`, 3000);
+        refetch();
+      },
+      
+      onStaffDeleted: (data) => {
+        console.log("🗑️ STAFF DELETED:", data);
+        showSuccessToast(`Staff deleted!`, 3000);
+        refetch();
+      },
+      
+      onStaffRecovered: (data) => {
+        console.log("♻️ STAFF RECOVERED:", data);
+        showSuccessToast(`Staff recovered!`, 3000);
+        refetch();
+      },
+      
+      onStaffPasswordReset: (data) => {
+        console.log("🔑 STAFF PASSWORD RESET:", data);
+        showSuccessToast(`Staff password reset!`, 3000);
+        refetch();
+      },
+      
+      onStaffPasswordChanged: (data) => {
+        console.log("🔐 STAFF PASSWORD CHANGED:", data);
+        showSuccessToast(`Staff password changed!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering staff events for Hospital Staff...");
+      unregisterStaffEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Staff events will work!");
+      if (!eventsRegistered) {
+        registerStaffEvents({
+          onStaffRegistered: (data) => {
+            console.log("👤 NEW STAFF REGISTERED (reconnect):", data);
+            showSuccessToast(`New staff registered!`, 3000);
+            refetch();
+          },
+          onStaffUpdated: (data) => {
+            console.log("✏️ STAFF UPDATED (reconnect):", data);
+            showSuccessToast(`Staff updated!`, 3000);
+            refetch();
+          },
+          onStaffDeleted: (data) => {
+            console.log("🗑️ STAFF DELETED (reconnect):", data);
+            showSuccessToast(`Staff deleted!`, 3000);
+            refetch();
+          },
+          onStaffRecovered: (data) => {
+            console.log("♻️ STAFF RECOVERED (reconnect):", data);
+            showSuccessToast(`Staff recovered!`, 3000);
+            refetch();
+          },
+          onStaffPasswordReset: (data) => {
+            console.log("🔑 STAFF PASSWORD RESET (reconnect):", data);
+            showSuccessToast(`Staff password reset!`, 3000);
+            refetch();
+          },
+          onStaffPasswordChanged: (data) => {
+            console.log("🔐 STAFF PASSWORD CHANGED (reconnect):", data);
+            showSuccessToast(`Staff password changed!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Staff events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - STAFF/HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
 
   // Helper function to format address from object to string
   const formatAddress = (address) => {
@@ -124,6 +252,18 @@ const HospitalStaffList = () => {
     if (staffToDelete) {
       try {
         await deleteStaff(staffToDelete.id).unwrap();
+        
+        // ✅ Emit socket event for staff deleted
+        socket.emit("staff_event", {
+          event: "STAFF_DELETED",
+          data: {
+            staffId: staffToDelete.id,
+            staffName: staffToDelete.name,
+            hospitalId: id,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast(`${staffToDelete.name} has been deleted successfully!`, 2000);
         refetch();
         setShowDeleteModal(false);
@@ -225,7 +365,7 @@ const HospitalStaffList = () => {
           <Button
             variant="primary"
             onClick={handleAddStaff}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Staff
@@ -346,7 +486,7 @@ const HospitalStaffList = () => {
           <Button
             variant="primary"
             onClick={handleAddStaff}
-            className="mt-4 flex items-center gap-2 mx-auto"
+            className="mt-4 flex items-center gap-2 mx-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Your First Staff Member

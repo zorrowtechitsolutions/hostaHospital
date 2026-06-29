@@ -12,6 +12,7 @@ import HospitalPatientsList from './hospitals/HospitalPatientsList';
 import HospitalDoctorsList from './hospitals/HospitalDoctorsList';
 import HospitalStaffList from './hospitals/HospitalStaffList';
 import HospitalAppointmentsList from './hospitals/HospitalAppointmentsList';
+import HospitalVisitList from './hospitals/HospitalVisitList'; // ✅ ADDED
 import HospitalAmbulancesList from './hospitals/HospitalAmbulancesList';
 import HospitalBloodBanksList from './hospitals/HospitalBloodBanksList';
 import AddHospital from './hospitals/AddHospital';
@@ -42,6 +43,7 @@ import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
 
 // Hospital Roles imports
 import HospitalRoles from './permission/HospitalRoles';
+import HospitalNotificationList from './hospitals/notification/HospitalNotificationList';
 
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -80,8 +82,10 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/doctors" element={<HospitalDoctorsList />} />
               <Route path="hospitals/:id/staff" element={<HospitalStaffList />} />
               <Route path="hospitals/:id/appointments" element={<HospitalAppointmentsList />} />
+              <Route path="hospitals/:id/visits" element={<HospitalVisitList />} /> {/* ✅ ADDED - Visits Route */}
               <Route path="hospitals/:id/ambulances" element={<HospitalAmbulancesList />} />
               <Route path="hospitals/:id/blood-banks" element={<HospitalBloodBanksList />} />
+              <Route path="hospitals/:id/notifications" element={<HospitalNotificationList />} />
               
               {/* Category & Specialty Routes */}
               <Route path="categories" element={<Categories />} />

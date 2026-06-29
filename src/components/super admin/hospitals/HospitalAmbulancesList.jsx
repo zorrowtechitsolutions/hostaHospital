@@ -7,6 +7,11 @@ import { useGetAmbulanceQuery, useDeleteAmbulanceMutation } from '../../../../ap
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import ViewAmbulanceModal from '../../Ambulance/ViewAmbulanceModal';
 
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../../socket/ambulanceEvents';
+
 // Helper function to format ambulance ID
 const formatAmbulanceId = (id) => {
   if (!id) return '#AMB0000';
@@ -24,6 +29,9 @@ const HospitalAmbulancesList = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
   const itemsPerPage = 10;
+
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const { data: ambulanceData, isLoading, refetch } = useGetAmbulanceQuery({
     hospitalId: id
@@ -58,6 +66,93 @@ const HospitalAmbulancesList = () => {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // ✅ Register socket event listeners for ambulance events
+  useEffect(() => {
+    console.log("🔄 Registering ambulance event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerAmbulanceEvents({
+      onRegistered: (data) => {
+        console.log("🚑 NEW AMBULANCE REGISTERED:", data);
+        showSuccessToast(`New ambulance "${data.serviceName || 'Ambulance'}" registered!`, 3000);
+        refetch();
+      },
+      
+      onUpdated: (data) => {
+        console.log("✏️ AMBULANCE UPDATED:", data);
+        showSuccessToast(`Ambulance "${data.serviceName || 'Ambulance'}" updated!`, 3000);
+        refetch();
+      },
+      
+      onDeleted: (data) => {
+        console.log("🗑️ AMBULANCE DELETED:", data);
+        showSuccessToast(`Ambulance deleted!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering ambulance events...");
+      unregisterAmbulanceEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Ambulance events will work!");
+      if (!eventsRegistered) {
+        registerAmbulanceEvents({
+          onRegistered: (data) => {
+            console.log("🚑 NEW AMBULANCE REGISTERED (reconnect):", data);
+            showSuccessToast(`New ambulance registered!`, 3000);
+            refetch();
+          },
+          onUpdated: (data) => {
+            console.log("✏️ AMBULANCE UPDATED (reconnect):", data);
+            showSuccessToast(`Ambulance updated!`, 3000);
+            refetch();
+          },
+          onDeleted: (data) => {
+            console.log("🗑️ AMBULANCE DELETED (reconnect):", data);
+            showSuccessToast(`Ambulance deleted!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Ambulance events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - AMBULANCE: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
   const getVehicleTypeBadge = (type) => {
     if (!type) return <Badge className="bg-gray-100 text-gray-800">Standard</Badge>;
     return <Badge className="bg-blue-100 text-blue-800">{type}</Badge>;
@@ -90,6 +185,18 @@ const HospitalAmbulancesList = () => {
     if (ambulanceToDelete) {
       try {
         await deleteAmbulance(ambulanceToDelete.id).unwrap();
+        
+        // ✅ Emit socket event for ambulance deleted
+        socket.emit("ambulance_event", {
+          event: "AMBULANCE_DELETED",
+          data: {
+            ambulanceId: ambulanceToDelete.id,
+            serviceName: ambulanceToDelete.serviceName,
+            hospitalId: id,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast(`${ambulanceToDelete.serviceName} has been deleted successfully!`, 2000);
         refetch();
         setShowDeleteModal(false);
@@ -186,7 +293,7 @@ const HospitalAmbulancesList = () => {
           <Button
             variant="primary"
             onClick={handleAddAmbulance}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Ambulance
@@ -274,7 +381,7 @@ const HospitalAmbulancesList = () => {
           <Button
             variant="primary"
             onClick={handleAddAmbulance}
-            className="mt-4 flex items-center gap-2 mx-auto"
+            className="mt-4 flex items-center gap-2 mx-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={18} />
             Add Your First Ambulance

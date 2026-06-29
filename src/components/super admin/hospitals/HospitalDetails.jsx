@@ -15,7 +15,13 @@ import {
   Phone,
   MapPin,
   Globe,
-  Loader2
+  Loader2,
+  ChevronRight,
+  Bell,
+  Clock,
+  TrendingUp,
+  UserCheck,
+  Hospital
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { useGetHospitalByIdQuery } from '../../../../app/service/hospitalApi';
@@ -25,6 +31,7 @@ import { useGetStaffQuery } from '../../../../app/service/staffApi';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
+import { useGetNotificationsByHospitalQuery } from '../../../../app/service/notification';
 
 const HospitalDetails = () => {
   const { id } = useParams();
@@ -67,6 +74,13 @@ const HospitalDetails = () => {
     hospitalId: id
   });
 
+  // ✅ Fetch notifications for this hospital
+  const { data: notificationsData, isLoading: notificationsLoading } = useGetNotificationsByHospitalQuery({
+    hospitalId: id,
+    page: 1,
+    limit: 1000
+  });
+
   // ✅ DEBUG LOGS - Check what the API is actually returning
   useEffect(() => {
     if (doctorsData?.data) {
@@ -79,8 +93,9 @@ const HospitalDetails = () => {
       console.log("Bookings Data:", bookingsData?.data);
       console.log("Ambulance Data:", ambulanceData?.data);
       console.log("Blood Bank Data:", bloodBankData?.data);
+      console.log("Notifications Data:", notificationsData?.data);
     }
-  }, [id, doctorsData, patientsData, staffData, bookingsData, ambulanceData, bloodBankData]);
+  }, [id, doctorsData, patientsData, staffData, bookingsData, ambulanceData, bloodBankData, notificationsData]);
 
   // ✅ FIXED: Filter counts by hospitalId manually since API might not be filtering
   const patientsCount = patientsData?.data?.filter(
@@ -107,10 +122,17 @@ const HospitalDetails = () => {
     bank => String(bank.hospitalId) === String(id)
   ).length || 0;
   
-  // Visits count - using appointments as visits for now
-  const visitsCount = appointmentsCount;
+  // Visits count - appointments with status "accepted"
+  const visitsCount = bookingsData?.data?.filter(
+    booking => String(booking.hospitalId) === String(id) && booking.status === 'accepted'
+  ).length || 0;
 
-  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading;
+  // ✅ Notifications count - unread notifications for this hospital
+  const notificationCount = notificationsData?.data?.filter(
+    notification => !notification.hospitalReadStatus?.[id]
+  ).length || 0;
+
+  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || notificationsLoading;
 
   const getFullAddress = (address) => {
     if (!address) return 'N/A';
@@ -147,6 +169,11 @@ const HospitalDetails = () => {
     navigate(`/super-admin/hospitals/${id}/blood-banks`);
   };
 
+  // ✅ Navigation to notifications
+  const navigateToNotifications = () => {
+    navigate(`/super-admin/hospitals/${id}/notifications`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -170,63 +197,122 @@ const HospitalDetails = () => {
     );
   }
 
+  // Stat cards configuration
   const statCards = [
     { 
       title: 'Total Patients', 
       value: patientsCount, 
       icon: Users, 
       bgColor: 'bg-blue-50',
+      iconBgColor: 'bg-blue-100',
       textColor: 'text-blue-600',
+      borderColor: 'border-blue-200',
+      hoverBg: 'hover:bg-blue-50/50',
       onClick: navigateToPatients,
+      description: 'View all patients',
+      trend: '+12%',
+      trendColor: 'text-green-600'
     },
     { 
       title: 'Total Doctors', 
       value: doctorsCount, 
       icon: Stethoscope, 
       bgColor: 'bg-green-50',
+      iconBgColor: 'bg-green-100',
       textColor: 'text-green-600',
+      borderColor: 'border-green-200',
+      hoverBg: 'hover:bg-green-50/50',
       onClick: navigateToDoctors,
+      description: 'View all doctors',
+      trend: '+5%',
+      trendColor: 'text-green-600'
     },
     { 
       title: 'Total Staff', 
       value: staffCount, 
       icon: Briefcase, 
       bgColor: 'bg-purple-50',
+      iconBgColor: 'bg-purple-100',
       textColor: 'text-purple-600',
+      borderColor: 'border-purple-200',
+      hoverBg: 'hover:bg-purple-50/50',
       onClick: navigateToStaff,
+      description: 'View all staff',
+      trend: '+8%',
+      trendColor: 'text-green-600'
     },
     { 
       title: 'Appointments', 
       value: appointmentsCount, 
       icon: Calendar, 
       bgColor: 'bg-orange-50',
+      iconBgColor: 'bg-orange-100',
       textColor: 'text-orange-600',
+      borderColor: 'border-orange-200',
+      hoverBg: 'hover:bg-orange-50/50',
       onClick: navigateToAppointments,
+      description: 'View all appointments',
+      trend: '+15%',
+      trendColor: 'text-green-600'
     },
     { 
       title: 'Total Visits', 
       value: visitsCount, 
       icon: Activity, 
       bgColor: 'bg-indigo-50',
+      iconBgColor: 'bg-indigo-100',
       textColor: 'text-indigo-600',
+      borderColor: 'border-indigo-200',
+      hoverBg: 'hover:bg-indigo-50/50',
       onClick: navigateToVisits,
+      description: 'View all visits',
+      trend: '+10%',
+      trendColor: 'text-green-600'
     },
     { 
       title: 'Ambulances', 
       value: ambulancesCount, 
       icon: Ambulance, 
       bgColor: 'bg-red-50',
+      iconBgColor: 'bg-red-100',
       textColor: 'text-red-600',
+      borderColor: 'border-red-200',
+      hoverBg: 'hover:bg-red-50/50',
       onClick: navigateToAmbulances,
+      description: 'View all ambulances',
+      trend: '0%',
+      trendColor: 'text-gray-500'
     },
     { 
       title: 'Blood Banks', 
       value: bloodBanksCount, 
       icon: Droplet, 
       bgColor: 'bg-pink-50',
+      iconBgColor: 'bg-pink-100',
       textColor: 'text-pink-600',
+      borderColor: 'border-pink-200',
+      hoverBg: 'hover:bg-pink-50/50',
       onClick: navigateToBloodBanks,
+      description: 'View blood bank inventory',
+      trend: '+3%',
+      trendColor: 'text-green-600'
+    },
+    // ✅ Notification Card
+    { 
+      title: 'Notifications', 
+      value: notificationCount, 
+      icon: Bell, 
+      bgColor: 'bg-yellow-50',
+      iconBgColor: 'bg-yellow-100',
+      textColor: 'text-yellow-600',
+      borderColor: 'border-yellow-200',
+      hoverBg: 'hover:bg-yellow-50/50',
+      onClick: navigateToNotifications,
+      description: `${notificationCount} unread notifications`,
+      trend: notificationCount > 0 ? `${notificationCount} new` : 'All read',
+      trendColor: notificationCount > 0 ? 'text-red-500' : 'text-green-600'
     }
+    
   ];
 
   return (
@@ -250,6 +336,12 @@ const HospitalDetails = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{hospital.name}</h1>
               <p className="text-sm text-gray-500 mt-1">ID: {hospital.id}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-400">Status:</span>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+                <span className="text-xs text-gray-400 ml-2">Last Updated:</span>
+                <span className="text-xs text-gray-500">{new Date().toLocaleDateString()}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -308,7 +400,7 @@ const HospitalDetails = () => {
         )}
       </Card>
 
-      {/* Statistics Cards Grid - Clickable Cards */}
+      {/* Statistics Cards Grid - Notification Style like Patients */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Overview Statistics</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -318,17 +410,32 @@ const HospitalDetails = () => {
               <div 
                 key={index} 
                 onClick={stat.onClick}
-                className="cursor-pointer transition-all duration-200 hover:scale-105"
+                className={`group cursor-pointer transition-all duration-300 hover:scale-[1.02]`}
               >
-                <Card className="p-4 hover:shadow-lg transition-shadow">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500">{stat.title}</p>
-                      <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
+                <Card className={`p-5 border ${stat.borderColor} hover:shadow-lg transition-all duration-300 ${stat.hoverBg}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                        {stat.title}
+                        {stat.trend && (
+                          <span className={`text-xs font-medium ${stat.trendColor}`}>
+                            {stat.trend}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-1 group-hover:text-gray-600 transition-colors">
+                        {stat.description}
+                      </p>
                     </div>
-                    <div className={`${stat.bgColor} p-3 rounded-xl`}>
-                      <Icon size={24} className={stat.textColor} />
+                    <div className={`${stat.iconBgColor || stat.bgColor} p-3 rounded-xl group-hover:scale-110 transition-transform duration-300 flex-shrink-0`}>
+                      <Icon size={22} className={stat.textColor} />
                     </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end">
+                    <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors flex items-center gap-1">
+                      View Details <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </span>
                   </div>
                 </Card>
               </div>

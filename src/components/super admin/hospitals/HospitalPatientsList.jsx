@@ -1,9 +1,15 @@
 // src/components/super-admin/HospitalPatientsList.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2, Calendar, Droplet } from 'lucide-react';
 import { Card, Button, Pagination } from '../../ui';
 import { useGetPatientsQuery } from '../../../../app/service/patients';
+import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerPatientEvents, unregisterPatientEvents } from '../../../socket/patientEvents';
 
 const HospitalPatientsList = () => {
   const { id } = useParams();
@@ -12,7 +18,10 @@ const HospitalPatientsList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const { data: patientsData, isLoading } = useGetPatientsQuery({
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+
+  const { data: patientsData, isLoading, refetch } = useGetPatientsQuery({
     hospitalId: id,
     page: currentPage,
     limit: itemsPerPage,
@@ -22,6 +31,109 @@ const HospitalPatientsList = () => {
   const patients = patientsData?.data || [];
   const totalItems = patientsData?.pagination?.totalItems || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Register socket event listeners for patient events
+  useEffect(() => {
+    console.log("🔄 Registering patient event listeners for Hospital Patients...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerPatientEvents({
+      onPatientRegistered: (data) => {
+        console.log("👤 NEW PATIENT REGISTERED:", data);
+        showSuccessToast(`New patient registered!`, 3000);
+        refetch();
+      },
+      
+      onPatientUpdated: (data) => {
+        console.log("✏️ PATIENT UPDATED:", data);
+        showSuccessToast(`Patient updated!`, 3000);
+        refetch();
+      },
+      
+      onPatientDeleted: (data) => {
+        console.log("🗑️ PATIENT DELETED:", data);
+        showSuccessToast(`Patient deleted!`, 3000);
+        refetch();
+      },
+      
+      onPatientRecovered: (data) => {
+        console.log("♻️ PATIENT RECOVERED:", data);
+        showSuccessToast(`Patient recovered!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering patient events for Hospital Patients...");
+      unregisterPatientEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Patient events will work!");
+      if (!eventsRegistered) {
+        registerPatientEvents({
+          onPatientRegistered: (data) => {
+            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
+            showSuccessToast(`New patient registered!`, 3000);
+            refetch();
+          },
+          onPatientUpdated: (data) => {
+            console.log("✏️ PATIENT UPDATED (reconnect):", data);
+            showSuccessToast(`Patient updated!`, 3000);
+            refetch();
+          },
+          onPatientDeleted: (data) => {
+            console.log("🗑️ PATIENT DELETED (reconnect):", data);
+            showSuccessToast(`Patient deleted!`, 3000);
+            refetch();
+          },
+          onPatientRecovered: (data) => {
+            console.log("♻️ PATIENT RECOVERED (reconnect):", data);
+            showSuccessToast(`Patient recovered!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Patient events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - PATIENT/HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   if (isLoading) {
     return (
@@ -34,9 +146,11 @@ const HospitalPatientsList = () => {
   return (
     <div>
       <div className="mb-6">
-        <Button variant="secondary" size="sm" onClick={() => navigate(-1)} className="mb-4">
-          <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
-        </Button>
+        <div className="flex justify-between items-center mb-4">
+          <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
+          </Button>
+        </div>
         <h1 className="text-2xl font-bold text-gray-800">Patients List</h1>
         <p className="text-sm text-gray-500 mt-1">Total Patients: {totalItems}</p>
       </div>
@@ -56,7 +170,7 @@ const HospitalPatientsList = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {patients.map((patient) => (
-          <Card key={patient.id} className="p-4 hover:shadow-md transition-shadow">
+          <Card key={patient.id || patient._id} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                 <User size={20} className="text-blue-600" />
