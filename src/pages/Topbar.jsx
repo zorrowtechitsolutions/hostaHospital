@@ -1,3 +1,4 @@
+// src/components/TopBar.jsx - "Dreams EMR" removed
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -36,7 +37,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
-  const hospitalName = user?.name || storedUser?.name || "Dreams EMR";
+  // "Dreams EMR" removed - use actual hospital name from auth context
+  const hospitalName = user?.name || storedUser?.name || "Hospital";
   const hospitalEmail = user?.email || storedUser?.email || "";
   const hospitalType = user?.type || storedUser?.type || "Administrator";
   
@@ -45,7 +47,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     ?.map((word) => word[0])
     ?.join("")
     ?.slice(0, 2)
-    ?.toUpperCase() || "DE";
+    ?.toUpperCase() || "H";
   
   const notifications = notificationsData?.data || [];
   
