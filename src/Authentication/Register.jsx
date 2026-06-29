@@ -1,4 +1,4 @@
-// src/Authentication/Register.jsx - COMPLETE FIXED VERSION WITH CATEGORY API CONNECTION
+// src/Authentication/Register.jsx - COMPLETE FIXED VERSION WITH CATEGORY API CONNECTION & SOCKET INTEGRATION
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -12,8 +12,13 @@ import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showI
 import { Country, State, City } from 'country-state-city';
 import { useRegisterMutation } from '../../app/service/hospitalApi';  
 import { useAuth } from '../context/AuthContext'; 
-import { useGetCategoryQuery } from '../../app/service/category'; // ✅ Import category hook
+import { useGetCategoryQuery } from '../../app/service/category';
 import logo from "../assets/logo.jpeg";
+
+// ✅ Import socket
+import { socket } from '../socket/socket';
+// ✅ Import socket event listeners
+import { registerHospitalEvents, unregisterHospitalEvents } from '../socket/hospitalEvents';
 
 const SearchableDropdown = ({ 
   label, 
@@ -219,25 +224,27 @@ const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
+  
   // ✅ Fetch categories from API
   const { 
     data: categoriesResponse, 
     isLoading: isCategoriesLoading,
     error: categoriesError
   } = useGetCategoryQuery({
-    isActive: true, // Only fetch active categories
-    limit: 100 // Fetch all categories
+    isActive: true,
+    limit: 100
   });
 
   // Extract categories from response
   const categories = categoriesResponse?.data || [];
-  // Create a map of category name -> category object for easy lookup
   const categoryMap = categories.reduce((acc, cat) => {
     acc[cat.name] = cat;
     return acc;
   }, {});
 
-  // ✅ State for selected category (store the category object)
+  // State for selected category
   const [selectedCategory, setSelectedCategory] = useState(null);
   
   const [hospitalName, setHospitalName] = useState("");
@@ -287,6 +294,105 @@ const Register = () => {
   const [registerError, setRegisterError] = useState('');
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // ✅ Register socket event listeners for hospital events
+  useEffect(() => {
+    console.log("🔄 Registering hospital event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerHospitalEvents({
+      onHospitalRegistered: (data) => {
+        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
+        showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+      },
+      
+      onHospitalUpdated: (data) => {
+        console.log("✏️ HOSPITAL UPDATED:", data);
+        showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
+      },
+      
+      onHospitalDeleted: (data) => {
+        console.log("🗑️ HOSPITAL DELETED:", data);
+        showSuccessToast(`Hospital deleted!`, 3000);
+      },
+      
+      onHospitalBlacklisted: (data) => {
+        console.log("🚫 HOSPITAL BLACKLISTED:", data);
+        showSuccessToast(`Hospital blacklisted!`, 3000);
+      },
+      
+      onHospitalRecovered: (data) => {
+        console.log("♻️ HOSPITAL RECOVERED:", data);
+        showSuccessToast(`Hospital recovered successfully!`, 3000);
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering hospital events...");
+      unregisterHospitalEvents();
+      setEventsRegistered(false);
+    };
+  }, []);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Hospital events will work!");
+      if (!eventsRegistered) {
+        registerHospitalEvents({
+          onHospitalRegistered: (data) => {
+            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
+            showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+          },
+          onHospitalUpdated: (data) => {
+            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
+            showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
+          },
+          onHospitalDeleted: (data) => {
+            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
+            showSuccessToast(`Hospital deleted!`, 3000);
+          },
+          onHospitalBlacklisted: (data) => {
+            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
+            showSuccessToast(`Hospital blacklisted!`, 3000);
+          },
+          onHospitalRecovered: (data) => {
+            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
+            showSuccessToast(`Hospital recovered successfully!`, 3000);
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
   useEffect(() => {
     const checkGoogleMaps = setInterval(() => {
       if (window.google && window.google.maps && typeof window.google.maps.Geocoder === 'function') {
@@ -297,7 +403,7 @@ const Register = () => {
     return () => clearInterval(checkGoogleMaps);
   }, []);
 
-  // ✅ Log categories when loaded
+  // Log categories when loaded
   useEffect(() => {
     if (categories.length > 0) {
       console.log("✅ Categories loaded:", categories);
@@ -504,7 +610,7 @@ const Register = () => {
           pincode: Number(pincode)
         },
         type: hospitalType,
-        categoryId: selectedCategory?.id || null, // ✅ Send category ID
+        categoryId: selectedCategory?.id || null,
         emergencyContact: emergencyNumber,
         latitude: latitude ? Number(parseFloat(latitude).toFixed(6)) : null,
         longitude: longitude ? Number(parseFloat(longitude).toFixed(6)) : null,
@@ -519,6 +625,19 @@ const Register = () => {
       try {
         const response = await register(hospitalData).unwrap();
         console.log("Registration successful with tokens:", response);
+        
+        // ✅ Emit socket event for hospital registration
+        socket.emit("hospital_event", {
+          event: "HOSPITAL_REGISTERED",
+          data: {
+            hospitalId: response.data.id,
+            hospitalName: response.data.name,
+            email: response.data.email,
+            type: response.data.type,
+            categoryId: selectedCategory?.id,
+            timestamp: new Date().toISOString()
+          }
+        });
         
         // Extract hospital data from response.data
         if (!response.data) {
@@ -540,7 +659,6 @@ const Register = () => {
           type: response.data.type,
         });
         
-        // Tokens are automatically stored by transformResponse in the API
         const accessToken = localStorage.getItem("accessToken");
         const refreshToken = localStorage.getItem("refreshToken");
         console.log("Access token stored:", !!accessToken);
@@ -550,7 +668,6 @@ const Register = () => {
         
         setIsSubmitting(false);
         
-        // Navigate directly to dashboard
         setTimeout(() => {
           navigate('/dashboard');
         }, 2000);
@@ -588,7 +705,6 @@ const Register = () => {
           <div className="grid md:grid-cols-2 gap-5">
             <Input label="Hospital Name" placeholder="Enter hospital name" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} />
             
-            {/* ✅ Hospital Type Dropdown - Connected to Category API */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Hospital Category <span className="text-red-500">*</span>

@@ -6,7 +6,6 @@ import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Modal, Pagination, Button } from '../ui';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi"; // 👈 Added useRecoverDoctorMutation
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { showSuccessToast, showErrorToast } from "../ui/Toast"; // 👈 Added for toast notifications
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ Import socket event listeners
@@ -252,6 +251,13 @@ const Doctors = () => {
         refetch();
       },
       
+      // 👇 NEW: Handle doctor recovered event
+      onDoctorRecovered: (data) => {
+        console.log("♻️ Doctor recovered:", data);
+        showSuccessToast(`Doctor recovered successfully!`, 3000);
+        refetch();
+      },
+      
       onDoctorPasswordReset: (data) => {
         console.log("🔑 Doctor password reset:", data);
         showSuccessToast(`Doctor password reset initiated!`, 3000);
@@ -272,6 +278,7 @@ const Doctors = () => {
     };
   }, [refetch]);
 
+  
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('doctorViewMode', viewMode);

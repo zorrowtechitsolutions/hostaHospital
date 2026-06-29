@@ -1,4 +1,4 @@
-// src/app/service/patients.ts
+// src/app/service/patients.ts - Add recover endpoint and includeDeleted parameter
 
 import { api } from "./api";
 
@@ -17,7 +17,7 @@ export interface Location {
 export interface Patient {
   id?: string;
   _id?: string;
-  name: string; // Changed from firstName + lastName
+  name: string;
   bloodGroup?: string;
   gender: string;
   maritalStatus?: string;
@@ -28,7 +28,7 @@ export interface Patient {
   emergencyNumber?: string;
   guardianName?: string;
   guardianRelation?: string | null;
-  addressLine: string; // Changed from addressLine1
+  addressLine: string;
   location: Location;
   hospitalId: string | number;
   email?: string;
@@ -37,6 +37,8 @@ export interface Patient {
   occupation?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  isDelete?: boolean; // ✅ Add isDelete field
+  deleteDate?: string | null; // ✅ Add deleteDate field
 }
 
 export interface CreatePatientData {
@@ -96,49 +98,54 @@ export const patientsApi = api.injectEndpoints({
     // ==============================
 
     getPatients: builder.query({
-  query: (params = {}) => {
-    const queryParams = new URLSearchParams();
+      query: (params = {}) => {
+        const queryParams = new URLSearchParams();
 
-    if (params.name) {
-      queryParams.append("name", params.name);
-    }
+        if (params.name) {
+          queryParams.append("name", params.name);
+        }
 
-    if (params.phone) {
-      queryParams.append("phone", params.phone);
-    }
+        if (params.phone) {
+          queryParams.append("phone", params.phone);
+        }
 
-    if (params.patientId) {
-      queryParams.append("patientId", params.patientId);
-    }
+        if (params.patientId) {
+          queryParams.append("patientId", params.patientId);
+        }
 
-    if (params.addressLine) {
-      queryParams.append("addressLine", params.addressLine);
-    }
+        if (params.addressLine) {
+          queryParams.append("addressLine", params.addressLine);
+        }
 
-    if (params.email) {
-      queryParams.append("email", params.email);
-    }
+        if (params.email) {
+          queryParams.append("email", params.email);
+        }
 
-    if (params.guardianName) {
-      queryParams.append("guardianName", params.guardianName);
-    }
+        if (params.guardianName) {
+          queryParams.append("guardianName", params.guardianName);
+        }
 
-    if (params.hospitalId) {
-      queryParams.append("hospitalId", String(params.hospitalId));
-    }
+        if (params.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
+        }
 
-    queryParams.append("page", String(params.page || 1));
-    queryParams.append("limit", String(params.limit || 10));
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
 
-    if (params.search_query) {
-      queryParams.append("search_query", params.search_query);
-    }
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
 
-    return `/patients?${queryParams.toString()}`;
-  },
+        // ✅ Add includeDeleted parameter
+        if (params.includeDeleted) {
+          queryParams.append("includeDeleted", String(params.includeDeleted));
+        }
 
-  providesTags: ["Patient"],
-}),
+        return `/patients?${queryParams.toString()}`;
+      },
+
+      providesTags: ["Patient"],
+    }),
 
     // ==============================
     // GET SINGLE PATIENT
@@ -190,13 +197,25 @@ export const patientsApi = api.injectEndpoints({
       invalidatesTags: ["Patient"],
     }),
 
+    // ==============================
+    // ✅ RECOVER PATIENT (SOFT DELETE)
+    // ==============================
 
-
-
+    recoverPatient: builder.mutation<
+      { success: boolean; message: string; data?: Patient },
+      string
+    >({
+      query: (id) => ({
+        url: `/patients/recover/${id}`,
+        method: "PUT",
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: "Patient", id },
+        "Patient",
+      ],
+    }),
 
   }),
-
-
 });
 
 // ==============================
@@ -209,4 +228,5 @@ export const {
   useCreatePatientMutation,
   useUpdatePatientMutation,
   useDeletePatientMutation,
+  useRecoverPatientMutation, // ✅ Export the new hook
 } = patientsApi;

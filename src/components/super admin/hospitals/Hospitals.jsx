@@ -1,5 +1,5 @@
 // src/components/super-admin/Hospitals.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -10,14 +10,22 @@ import {
   MapPin,
   Mail,
   Phone,
-  Plus
+  Plus,
+  RotateCcw,
+  Eye
 } from 'lucide-react';
-import { Card, Button, Modal, Pagination } from '../../ui';
+import { Card, Button, Modal, Pagination, Badge } from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { 
   useGetAllHospitalsQuery, 
-  useDeleteHospitalMutation 
+  useDeleteHospitalMutation,
+  useRecoverHospitalMutation
 } from '../../../../app/service/hospitalApi';
+
+// ✅ Import socket
+import { socket } from '../../../socket/socket';
+// ✅ Import socket event listeners
+import { registerHospitalEvents, unregisterHospitalEvents } from '../../../socket/hospitalEvents';
 
 const Hospitals = () => {
   const navigate = useNavigate();
@@ -25,19 +33,175 @@ const Hospitals = () => {
   const [hospitalToDelete, setHospitalToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showDeleted, setShowDeleted] = useState(false);
   const itemsPerPage = 6;
 
-  // API hooks
-  const { data: hospitalsData, isLoading, refetch } = useGetAllHospitalsQuery();
-  const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
+  // ✅ Track if events are registered
+  const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Get hospitals array from response
-  const hospitals = hospitalsData?.data || hospitalsData || [];
+  // API hooks
+  const { 
+    data: hospitalsData, 
+    isLoading, 
+    refetch,
+    isFetching 
+  } = useGetAllHospitalsQuery({
+    includeDeleted: showDeleted
+  });
+  
+  const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
+  const [recoverHospital, { isLoading: isRecovering }] = useRecoverHospitalMutation();
+
+  // ✅ Register socket event listeners for hospital events
+  useEffect(() => {
+    console.log("🔄 Registering hospital event listeners...");
+    console.log("📡 Socket connected:", socket.connected);
+    
+    registerHospitalEvents({
+      onHospitalRegistered: (data) => {
+        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
+        showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
+        refetch();
+      },
+      
+      onHospitalUpdated: (data) => {
+        console.log("✏️ HOSPITAL UPDATED:", data);
+        showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
+        refetch();
+      },
+      
+      onHospitalDeleted: (data) => {
+        console.log("🗑️ HOSPITAL DELETED:", data);
+        showSuccessToast(`Hospital deleted!`, 3000);
+        refetch();
+      },
+      
+      onHospitalBlacklisted: (data) => {
+        console.log("🚫 HOSPITAL BLACKLISTED:", data);
+        showSuccessToast(`Hospital blacklisted!`, 3000);
+        refetch();
+      },
+      
+      onHospitalRecovered: (data) => {
+        console.log("♻️ HOSPITAL RECOVERED:", data);
+        showSuccessToast(`Hospital recovered successfully!`, 3000);
+        refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      console.log("🧹 Unregistering hospital events...");
+      unregisterHospitalEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log("✅ Socket CONNECTED - Hospital events will work!");
+      if (!eventsRegistered) {
+        registerHospitalEvents({
+          onHospitalRegistered: (data) => {
+            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
+            showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
+            refetch();
+          },
+          onHospitalUpdated: (data) => {
+            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
+            showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
+            refetch();
+          },
+          onHospitalDeleted: (data) => {
+            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
+            showSuccessToast(`Hospital deleted!`, 3000);
+            refetch();
+          },
+          onHospitalBlacklisted: (data) => {
+            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
+            showSuccessToast(`Hospital blacklisted!`, 3000);
+            refetch();
+          },
+          onHospitalRecovered: (data) => {
+            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
+            showSuccessToast(`Hospital recovered successfully!`, 3000);
+            refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
+  // ✅ Log all socket events for debugging
+  useEffect(() => {
+    const handleAnyEvent = (event, ...args) => {
+      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
+    };
+
+    socket.onAny(handleAnyEvent);
+
+    return () => {
+      socket.offAny(handleAnyEvent);
+    };
+  }, []);
+
+  // Transform hospital data to include isDelete and isActive flags
+  const transformHospitals = (hospitals) => {
+    if (!hospitals || !Array.isArray(hospitals)) return [];
+    
+    return hospitals.map((hospital) => {
+      // Determine status based on isDelete flag
+      let status = 'Active';
+      if (hospital.isDelete) {
+        status = 'Blacklisted';
+      } else if (hospital.isActive === false) {
+        status = 'Inactive';
+      }
+      
+      return {
+        ...hospital,
+        // Ensure these flags exist
+        isDelete: hospital.isDelete || false,
+        isActive: hospital.isActive !== undefined ? hospital.isActive : true,
+        displayStatus: status
+      };
+    });
+  };
+
+  const hospitals = transformHospitals(hospitalsData?.data || hospitalsData || []);
+  const totalItems = hospitalsData?.pagination?.totalItems || hospitals.length;
 
   const handleDelete = async () => {
     if (hospitalToDelete) {
       try {
         await deleteHospital(hospitalToDelete.id).unwrap();
+        
+        // ✅ Emit socket event for hospital deletion
+        socket.emit("hospital_event", {
+          event: "HOSPITAL_DELETED",
+          data: {
+            hospitalId: hospitalToDelete.id,
+            hospitalName: hospitalToDelete.name,
+            timestamp: new Date().toISOString()
+          }
+        });
+        
         showSuccessToast(`${hospitalToDelete.name} deleted successfully!`);
         refetch();
         setShowModal(false);
@@ -49,18 +213,57 @@ const Hospitals = () => {
     }
   };
 
+  // Recover handler
+  const handleRecoverHospital = async (hospital, e) => {
+    e.stopPropagation();
+    try {
+      await recoverHospital(hospital.id).unwrap();
+      
+      // ✅ Emit socket event for hospital recovery
+      socket.emit("hospital_event", {
+        event: "HOSPITAL_RECOVERED",
+        data: {
+          hospitalId: hospital.id,
+          hospitalName: hospital.name,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      showSuccessToast(`${hospital.name} recovered successfully!`);
+      refetch();
+    } catch (error) {
+      console.error('Error recovering hospital:', error);
+      showErrorToast(error?.data?.message || 'Failed to recover hospital');
+    }
+  };
+
   const handleDeleteClick = (hospital, e) => {
     e.stopPropagation();
+    // Don't allow deleting already blacklisted hospitals
+    if (hospital.isDelete) {
+      showErrorToast('Cannot delete a blacklisted hospital', 3000);
+      return;
+    }
     setHospitalToDelete(hospital);
     setShowModal(true);
   };
 
   const handleEditClick = (hospital, e) => {
     e.stopPropagation();
+    // Don't allow editing blacklisted hospitals
+    if (hospital.isDelete) {
+      showErrorToast('Cannot edit blacklisted hospital', 3000);
+      return;
+    }
     navigate(`/super-admin/hospitals/edit/${hospital.id}`, { state: { hospital } });
   };
 
-  const handleCardClick = (hospitalId) => {
+  const handleCardClick = (hospitalId, hospital) => {
+    // Don't allow viewing details of blacklisted hospitals
+    if (hospital.isDelete) {
+      showErrorToast('Cannot view details of blacklisted hospital', 3000);
+      return;
+    }
     navigate(`/super-admin/hospitals/${hospitalId}`);
   };
 
@@ -84,6 +287,11 @@ const Hospitals = () => {
     currentPage * itemsPerPage
   );
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, showDeleted]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -99,19 +307,32 @@ const Hospitals = () => {
   return (
     <div>
       {/* Header with Add Hospital Button */}
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-6 flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Hospitals Management</h1>
           <p className="text-sm text-gray-500 mt-1">Click on any hospital to view details</p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => navigate('/super-admin/hospitals/add')}
-          className="flex items-center gap-2"
-        >
-          <Plus size={18} />
-          Add Hospital
-        </Button>
+        <div className="flex gap-2">
+          {/* ✅ Toggle to show deleted hospitals */}
+          <Button
+            variant={showDeleted ? "primary" : "outline"}
+            size="sm"
+            onClick={() => setShowDeleted(!showDeleted)}
+            className="flex items-center gap-1"
+          >
+            <Trash2 size={14} />
+            {showDeleted ? "Hide Deleted" : "Show Deleted"}
+          </Button>
+
+          <Button
+            variant="primary"
+            onClick={() => navigate('/super-admin/hospitals/add')}
+            className="flex items-center gap-2"
+          >
+            <Plus size={18} />
+            Add Hospital
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -130,71 +351,118 @@ const Hospitals = () => {
 
       {/* Hospitals Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {paginatedHospitals.map((hospital) => (
-          <div
-            key={hospital.id}
-            onClick={() => handleCardClick(hospital.id)}
-            className="cursor-pointer transition-transform hover:scale-[1.02]"
-          >
-            <Card className="h-[340px] p-6 hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
-              {/* Top Section */}
-              <div>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Building2 size={24} className="text-white" />
+        {paginatedHospitals.map((hospital) => {
+          const isBlacklisted = hospital.isDelete;
+          
+          return (
+            <div
+              key={hospital.id}
+              onClick={() => handleCardClick(hospital.id, hospital)}
+              className={`transition-transform hover:scale-[1.02] ${!isBlacklisted ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <Card className={`h-[360px] p-6 hover:shadow-lg transition-all duration-300 flex flex-col justify-between ${
+                isBlacklisted ? 'bg-gray-50 border-gray-300' : ''
+              }`}>
+                {/* Top Section */}
+                <div>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        isBlacklisted 
+                          ? 'bg-gray-400' 
+                          : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                      }`}>
+                        <Building2 size={24} className="text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-semibold text-lg truncate ${
+                          isBlacklisted ? 'text-gray-500' : 'text-gray-900'
+                        }`}>
+                          {hospital.name}
+                        </h3>
+                        <p className={`text-xs ${isBlacklisted ? 'text-gray-400' : 'text-gray-500'}`}>
+                          ID: {hospital.id}
+                        </p>
+                        {/* Status Badge */}
+                        <div className="mt-1">
+                          {isBlacklisted ? (
+                            <Badge variant="secondary" className="text-xs">
+                              Blacklisted
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" className="text-xs">
+                              Active
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-lg truncate">
-                        {hospital.name}
-                      </h3>
-                      <p className="text-xs text-gray-500">ID: {hospital.id}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className={`flex items-center gap-2 text-sm ${
+                      isBlacklisted ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      <Mail size={14} className="text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{hospital.email}</span>
                     </div>
+                    <div className={`flex items-center gap-2 text-sm ${
+                      isBlacklisted ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      <Phone size={14} className="text-gray-400 flex-shrink-0" />
+                      <span>{hospital.phone || 'N/A'}</span>
+                    </div>
+                    {hospital.address && (
+                      <div className={`flex items-start gap-2 text-sm ${
+                        isBlacklisted ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <MapPin size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2 text-sm">
+                          {getFullAddress(hospital.address)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Mail size={14} className="text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{hospital.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Phone size={14} className="text-gray-400 flex-shrink-0" />
-                    <span>{hospital.phone || 'N/A'}</span>
-                  </div>
-                  {hospital.address && (
-                    <div className="flex items-start gap-2 text-sm text-gray-600">
-                      <MapPin size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
-                      <span className="line-clamp-2 text-sm">
-                        {getFullAddress(hospital.address)}
-                      </span>
-                    </div>
+                {/* Bottom Section - Buttons */}
+                <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
+                  {isBlacklisted ? (
+                    <Button
+                      size="sm"
+                      variant="success"
+                      onClick={(e) => handleRecoverHospital(hospital, e)}
+                      disabled={isRecovering}
+                      className="flex items-center gap-1"
+                    >
+                      <RotateCcw size={14} />
+                      Recover
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => handleEditClick(hospital, e)}
+                      >
+                        <Edit size={14} className="mr-1" />
+                        Edit
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="danger" 
+                        onClick={(e) => handleDeleteClick(hospital, e)}
+                        disabled={isDeleting}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </>
                   )}
                 </div>
-              </div>
-
-              {/* Bottom Section - Buttons */}
-              <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => handleEditClick(hospital, e)}
-                >
-                  <Edit size={14} className="mr-1" />
-                  Edit
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="danger" 
-                  onClick={(e) => handleDeleteClick(hospital, e)}
-                  disabled={isDeleting}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-            </Card>
-          </div>
-        ))}
+              </Card>
+            </div>
+          );
+        })}
       </div>
 
       {/* Pagination */}
@@ -215,7 +483,9 @@ const Hospitals = () => {
       {filteredHospitals.length === 0 && (
         <div className="text-center py-12">
           <Building2 size={48} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">No hospitals found</p>
+          <p className="text-gray-500">
+            {showDeleted ? "No deleted hospitals found" : "No hospitals found"}
+          </p>
         </div>
       )}
 

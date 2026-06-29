@@ -4,6 +4,7 @@ import { MoreVertical, Eye, Trash2, Activity } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 import { useGetBookingsQuery } from "../../../../app/service/request";
+import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
 
 const VitalsTab = ({ 
   patient, 
@@ -21,17 +22,15 @@ const VitalsTab = ({
   
   // Fetch bookings to get doctor info from appointments
   const { data: bookingResponse, error: bookingError, isLoading: bookingLoading } = useGetBookingsQuery({});
+  
+  // Fetch prescriptions to get doctor info
+  const { data: prescriptionsResponse, isLoading: prescriptionsLoading } = useGetPrescriptionsQuery({});
 
   const vitalsList = patient?.vitalsList || [];
   
   // Debug logs for API responses
-  console.log("=== VitalsTab Debug Logs ===");
-  console.log("Doctors Data:", doctorsData);
-  console.log("Doctors Error:", doctorsError);
-  console.log("Booking Response:", bookingResponse);
-  console.log("Booking Error:", bookingError);
   console.log("Original Vitals List:", vitalsList);
-  
+
   // Log first vital item structure
   if (vitalsList.length > 0) {
     console.log("First Vital Item Keys:", Object.keys(vitalsList[0]));
@@ -79,6 +78,25 @@ const VitalsTab = ({
     return doctors;
   }, [doctorsData]);
 
+  // Get prescriptions list
+  const prescriptionsList = useMemo(() => {
+    if (!prescriptionsResponse) return [];
+    
+    let prescriptions = [];
+    if (Array.isArray(prescriptionsResponse)) {
+      prescriptions = prescriptionsResponse;
+    } else if (prescriptionsResponse.data && Array.isArray(prescriptionsResponse.data)) {
+      prescriptions = prescriptionsResponse.data;
+    } else if (prescriptionsResponse.prescriptions && Array.isArray(prescriptionsResponse.prescriptions)) {
+      prescriptions = prescriptionsResponse.prescriptions;
+    } else if (prescriptionsResponse.result && Array.isArray(prescriptionsResponse.result)) {
+      prescriptions = prescriptionsResponse.result;
+    }
+    
+    console.log("Processed Prescriptions List:", prescriptions);
+    return prescriptions;
+  }, [prescriptionsResponse]);
+
   // Helper function to safely get nested property
   const getNestedValue = (obj, path, defaultValue = null) => {
     if (!obj) return defaultValue;
@@ -99,6 +117,13 @@ const VitalsTab = ({
   // Map vitals with correct doctor information
   const mappedVitalsList = useMemo(() => {
     if (!vitalsList || vitalsList.length === 0) return [];
+
+    console.log("=== VitalsTab Debug Logs ===");
+    console.log("Doctors Data:", doctorsData);
+    console.log("Doctors Error:", doctorsError);
+    console.log("Booking Response:", bookingResponse);
+    console.log("Booking Error:", bookingError);
+    console.log("Prescriptions Response:", prescriptionsResponse);
     
     return vitalsList.map((item, index) => {
       let doctor = null;
@@ -108,6 +133,7 @@ const VitalsTab = ({
       console.log(`\n--- Processing Vital Item ${index} ---`);
       console.log("Item ID:", item.id || item._id || 'unknown');
       console.log("Full Item:", item);
+      console.log(JSON.stringify(item, null, 2));
       
       // Get all possible doctor ID sources
       const possibleDoctorIds = [
@@ -150,11 +176,14 @@ const VitalsTab = ({
       ];
       
       // Filter out null/undefined/empty values and "Dr. Unknown"
-      const validDoctorNames = possibleDoctorNames.filter(name => 
-        name !== null && name !== undefined && name !== "" && 
-        name !== "null" && name !== "undefined" 
+      const validDoctorNames = possibleDoctorNames.filter(
+        name =>
+          name &&
+          name !== "Dr. Unknown" &&
+          name !== "null" &&
+          name !== "undefined"
       );
-      
+
       console.log("Valid Doctor Names found:", validDoctorNames);
       
       // Get all possible specialization sources
@@ -169,6 +198,8 @@ const VitalsTab = ({
         getNestedValue(item, 'fullData.department'),
         getNestedValue(item, 'consultation.specialization'),
         getNestedValue(item, 'consultation.department'),
+        getNestedValue(item, 'prescription.specialization'),
+        getNestedValue(item, 'prescription.department'),
         getNestedValue(item, 'appointment.specialization'),
         getNestedValue(item, 'appointment.department'),
       ];
@@ -205,12 +236,10 @@ const VitalsTab = ({
             const docName1 = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
             const docName2 = (doc.fullName || "").toLowerCase().trim();
             
-            return docName1 === searchName || 
-                   docName2 === searchName ||
-                   docName1.includes(searchName) ||
-                   searchName.includes(docName1) ||
-                   docName2.includes(searchName) ||
-                   searchName.includes(docName2);
+            return (
+              docName1 === searchName ||
+              docName2 === searchName
+            );
           });
           
           if (foundDoctor) {
@@ -335,7 +364,7 @@ const VitalsTab = ({
         }
       }
       
-      // STRATEGY 5: Try to find from prescription data
+      // STRATEGY 5: Try to find from prescription data (nested)
       if (!doctor && !doctorName) {
         const prescription = item.prescription || getNestedValue(item, 'fullData.prescription');
         if (prescription) {
@@ -373,6 +402,128 @@ const VitalsTab = ({
           }
         }
       }
+
+      // STRATEGY 6: Get doctor from prescription by ID (ENHANCED)
+      if (!doctor && !doctorName) {
+        // Check both top-level and nested fullData for prescriptionId
+        const prescriptionId = 
+          item.prescriptionId ||
+          item.prescription_id ||
+          getNestedValue(item, 'fullData.prescriptionId') ||
+          getNestedValue(item, 'fullData.prescription_id') ||
+          getNestedValue(item, 'prescription.id') ||
+          getNestedValue(item, 'fullData.prescription.id');
+
+        console.log("Looking for prescription ID:", prescriptionId);
+
+        if (prescriptionId && prescriptionsList.length > 0) {
+          const prescription = prescriptionsList.find(
+            (p) => {
+              const pId = p.id || p._id || p.prescriptionId || p.prescription_id;
+              return String(pId) === String(prescriptionId);
+            }
+          );
+
+          console.log("Prescription lookup result:", { prescriptionId, prescription });
+          console.log("Full prescription object:", JSON.stringify(prescription, null, 2));
+
+          if (prescription) {
+            // Log all possible doctor-related fields in the prescription
+            console.log("Prescription doctor fields:", {
+              doctorName: prescription.doctorName,
+              doctor_name: prescription.doctor_name,
+              prescribedBy: prescription.prescribedBy,
+              doctor: prescription.doctor,
+              doctorId: prescription.doctorId,
+              doctor_id: prescription.doctor_id,
+              doctorSpecialization: prescription.doctorSpecialization,
+              specialization: prescription.specialization,
+              department: prescription.department,
+              doctorSpeciality: prescription.doctorSpeciality
+            });
+
+            // Get doctor name from prescription - try all possible paths
+            const prescriptionDoctorName = 
+              prescription.doctorName ||
+              prescription.doctor_name ||
+              prescription.prescribedBy ||
+              prescription.doctor?.name ||
+              prescription.doctor?.displayName ||
+              prescription.doctor?.doctorName ||
+              getNestedValue(prescription, 'doctor.name') ||
+              getNestedValue(prescription, 'doctor.displayName') ||
+              getNestedValue(prescription, 'doctor.doctorName') ||
+              getNestedValue(prescription, 'prescribedBy.name') ||
+              getNestedValue(prescription, 'doctor.fullName') ||
+              getNestedValue(prescription, 'doctorName.name');
+
+            // Get specialization from prescription - try all possible paths
+            const prescriptionSpecialization = 
+              prescription.doctorSpecialization ||
+              prescription.specialization ||
+              prescription.department ||
+              prescription.doctor?.specialization ||
+              prescription.doctor?.department ||
+              getNestedValue(prescription, 'doctor.specialization') ||
+              getNestedValue(prescription, 'doctor.department') ||
+              getNestedValue(prescription, 'specialization.name') ||
+              prescription.doctorSpeciality ||
+              getNestedValue(prescription, 'doctor.speciality');
+
+            console.log("Extracted prescription doctor data:", { 
+              prescriptionDoctorName, 
+              prescriptionSpecialization 
+            });
+
+            if (prescriptionDoctorName) {
+              // Try to find the doctor in doctors list
+              if (doctorsList.length > 0) {
+                const searchName = String(prescriptionDoctorName).toLowerCase().trim();
+                const foundDoctor = doctorsList.find(doc => {
+                  const docName = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
+                  return docName === searchName || 
+                         docName.includes(searchName) || 
+                         searchName.includes(docName);
+                });
+                
+                if (foundDoctor) {
+                  doctor = foundDoctor;
+                  console.log("Found doctor from prescription ID lookup:", doctor);
+                }
+              }
+
+              // If doctor not found in doctors list, use the prescription data
+              if (!doctor) {
+                doctorName = prescriptionDoctorName;
+                doctorSpecialization = prescriptionSpecialization || "General Medicine";
+                console.log("Using prescription doctor info from ID lookup:", { doctorName, doctorSpecialization });
+              }
+            } else {
+              // If no doctor name found in prescription, try to get it from doctor ID
+              const prescriptionDoctorId = 
+                prescription.doctorId ||
+                prescription.doctor_id ||
+                prescription.doctor?.id ||
+                getNestedValue(prescription, 'doctor.doctorId') ||
+                getNestedValue(prescription, 'doctor.id');
+
+              console.log("Looking for doctor by ID from prescription:", prescriptionDoctorId);
+
+              if (prescriptionDoctorId && doctorsList.length > 0) {
+                const foundDoctor = doctorsList.find(doc => {
+                  const docId = doc.id || doc._id || doc.doctorId;
+                  return String(docId) === String(prescriptionDoctorId);
+                });
+                
+                if (foundDoctor) {
+                  doctor = foundDoctor;
+                  console.log("Found doctor by ID from prescription:", doctor);
+                }
+              }
+            }
+          }
+        }
+      }
       
       // If doctor found from any strategy, get the name and specialization
       if (doctor) {
@@ -404,7 +555,7 @@ const VitalsTab = ({
       
       return result;
     });
-  }, [vitalsList, doctorsList, bookingsList]);
+  }, [vitalsList, doctorsList, bookingsList, prescriptionsList]);
 
   const totalItems = mappedVitalsList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -544,7 +695,7 @@ const VitalsTab = ({
   };
 
   // Loading state
-  if (doctorsLoading || bookingLoading) {
+  if (doctorsLoading || bookingLoading || prescriptionsLoading) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
         <div className="flex justify-center items-center py-12">

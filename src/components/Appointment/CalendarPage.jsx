@@ -541,7 +541,7 @@ const CalendarPage = () => {
 
                         {/* Doctor and Department */}
                         <div className="grid grid-cols-2 gap-3 pt-2">
-                          <div className="bg-gray-50 rounded-lg p-2">
+                          {/* <div className="bg-gray-50 rounded-lg p-2">
                             <p className="text-[10px] font-medium text-gray-500">Doctor</p>
                             <p className="text-xs text-gray-700 font-medium mt-0.5">
                               {selectedVisitDetails.doctor || "Not specified"}
@@ -552,7 +552,7 @@ const CalendarPage = () => {
                             <p className="text-xs text-gray-700 font-medium mt-0.5">
                               {selectedVisitDetails.department || "Not specified"}
                             </p>
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     </div>
