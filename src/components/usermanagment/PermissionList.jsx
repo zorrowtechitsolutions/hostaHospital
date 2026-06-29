@@ -248,6 +248,15 @@ const PermissionList = () => {
     }
   };
 
+  // ✅ Handle back navigation - go to User Permissions tab
+  const handleBack = () => {
+    navigate("/roles", { 
+      state: { 
+        tab: "User Permissions" 
+      } 
+    });
+  };
+
   const PermissionCheckbox = ({ checked, onToggle, disabled = false }) => (
     <TableCell className="text-center">
       <Checkbox checked={checked} onChange={onToggle} disabled={disabled} />
@@ -328,7 +337,14 @@ const PermissionList = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/settings", { state: { tab: "User Permissions" } })} className="mb-3 text-sm flex items-center gap-1">← Back</Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleBack} 
+            className="mb-3 text-sm flex items-center gap-1"
+          >
+            ← Back
+          </Button>
           <h1 className="text-2xl font-bold text-gray-800">Edit Permission</h1>
           <p className="text-sm text-gray-500 mt-1">Users | <span className="text-gray-800 font-medium">{roleId}</span></p>
         </div>

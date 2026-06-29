@@ -11,6 +11,7 @@ import { Input, Button, Alert } from '../../ui';
 import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '../../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { useRegisterMutation } from '../../../../app/service/hospitalApi';
+import { useGetCategoryQuery } from '../../../../app/service/category';
 
 const SearchableDropdown = ({ 
   label, 
@@ -215,6 +216,17 @@ const AddHospital = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   
+  // Fetch categories from API
+  const { data: categoriesData, isLoading: isLoadingCategories, error: categoriesError } = useGetCategoryQuery({
+    isActive: true,
+    limit: 100
+  });
+
+  // Extract categories from response
+  const categories = categoriesData?.data && Array.isArray(categoriesData.data) 
+    ? categoriesData.data 
+    : [];
+  
   const [hospitalName, setHospitalName] = useState("");
   const [about, setAbout] = useState("");
   const [email, setEmail] = useState("");
@@ -223,7 +235,7 @@ const AddHospital = () => {
   const [emergencyNumber, setEmergencyNumber] = useState("");
   const [longitude, setLongitude] = useState("");
   const [latitude, setLatitude] = useState("");
-  const [hospitalType, setHospitalType] = useState("");
+  const [hospitalCategory, setHospitalCategory] = useState(""); // Changed from hospitalType
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
@@ -380,7 +392,7 @@ const AddHospital = () => {
     if (!cityName) { setRegisterError('City is required'); showWarningToast('City is required', 3000); return false; }
     if (!pincode) { setRegisterError('Pincode is required'); showWarningToast('Pincode is required', 3000); return false; }
     if (!/^\d{5,6}$/.test(pincode)) { setRegisterError('Please enter a valid pincode (5-6 digits)'); showWarningToast('Please enter a valid pincode (5-6 digits)', 3000); return false; }
-    if (!hospitalType) { setRegisterError('Please select hospital type'); showWarningToast('Please select hospital type', 3000); return false; }
+    if (!hospitalCategory) { setRegisterError('Please select hospital category'); showWarningToast('Please select hospital category', 3000); return false; }
     if (!password) { setRegisterError('Password is required'); showWarningToast('Password is required', 3000); return false; }
     if (password.length < 8) { setRegisterError('Password must be at least 8 characters'); showWarningToast('Password must be at least 8 characters', 3000); return false; }
     if (password !== confirmPassword) { setRegisterError('Passwords do not match'); showWarningToast('Passwords do not match', 3000); return false; }
@@ -443,6 +455,9 @@ const AddHospital = () => {
         });
       });
 
+      // Find the selected category object to get its ID
+      const selectedCategory = categories.find(cat => cat._id === hospitalCategory || cat.id === hospitalCategory);
+      
       const hospitalData = {
         name: hospitalName,
         email,
@@ -455,7 +470,8 @@ const AddHospital = () => {
           place: streetAddress,
           pincode: Number(pincode)
         },
-        type: hospitalType,
+        categoryId: selectedCategory?._id || selectedCategory?.id || hospitalCategory, // Send category ID
+        categoryName: selectedCategory?.name || "", // Optional: send category name as well
         emergencyContact: emergencyNumber,
         latitude: latitude ? Number(parseFloat(latitude).toFixed(6)) : null,
         longitude: longitude ? Number(parseFloat(longitude).toFixed(6)) : null,
@@ -531,24 +547,40 @@ const AddHospital = () => {
 
               <div className="grid md:grid-cols-2 gap-5">
                 <Input label="Hospital Name" placeholder="Enter hospital name" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} required />
+                
+                {/* Category Dropdown - Replaces Hospital Type */}
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">Hospital Type <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Category <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                    <select value={hospitalType} onChange={(e) => setHospitalType(e.target.value)} className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer">
-                      <option value="">Select hospital type</option>
-                      <option value="Allopathy">Allopathy</option>
-                      <option value="Homeopathy">Homeopathy</option>
-                      <option value="Ayurveda">Ayurveda</option>
-                      <option value="Unani">Unani</option>
-                      <option value="Physiotherapy">Physiotherapy</option>
-                      <option value="Mental Health">Mental Health</option>
-                      <option value="Laboratory">Laboratory</option>
-                      <option value="Other">Other</option>
+                    <select 
+                      value={hospitalCategory} 
+                      onChange={(e) => setHospitalCategory(e.target.value)}
+                      className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer"
+                      disabled={isLoadingCategories}
+                    >
+                      <option value="">
+                        {isLoadingCategories ? 'Loading categories...' : 'Select hospital category'}
+                      </option>
+                      {categories.map((category) => (
+                        <option key={category._id || category.id} value={category._id || category.id}>
+                          {category.name}
+                          {category.description && ` - ${category.description}`}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
                   </div>
+                  {categoriesError && (
+                    <p className="text-xs text-red-500 mt-1">Failed to load categories. Please refresh.</p>
+                  )}
+                  {categories.length === 0 && !isLoadingCategories && !categoriesError && (
+                    <p className="text-xs text-amber-500 mt-1">No categories available. Please add categories first.</p>
+                  )}
                 </div>
+
                 <Input label="Email" type="email" placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 <div className="grid grid-cols-2 gap-3">
                   <Input label="Mobile Number" placeholder="Enter mobile number" value={phone} onChange={(e) => setPhone(e.target.value)} required />
