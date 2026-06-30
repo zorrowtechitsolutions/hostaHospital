@@ -487,6 +487,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
+
+  console.log("Current Page:", currentPage);
+console.log("Bookings:", bookingList.length);
+console.log("Pagination:", bookingsResponse?.pagination);
+
   // Get unique departments from ALL data
   const getAllDepartments = () => {
     const allData = bookingsResponse?.allData || appointmentsData;
@@ -534,10 +539,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const filteredAppointments = getFilteredAppointments();
 
   // Paginate filtered appointments
-  const paginatedAppointments = filteredAppointments.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+const paginatedAppointments = filteredAppointments;
+
 
   useEffect(() => {
     setCurrentPage(1);
