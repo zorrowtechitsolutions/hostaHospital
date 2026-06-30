@@ -10,18 +10,19 @@ export interface PrescriptionPayload {
   patientId?: number | string | null;
   userId?: number | string | null;
 
-  doctorName?: string;
-doctorSpecialization?: string;
-type?: string;
+  prescribedBy?: string;        // ✅ ADDED - Backend expects this field
+  doctorName?: string;          // Keep for frontend display
+  doctorSpecialization?: string;
+  type?: string;
 
   complaint: string;
   medications: any;
   investigations: any;
   advice: string;
 
-design?: any[];
-canvasBg?: string;
-templateType?: string;  
+  design?: any[];
+  canvasBg?: string;
+  templateType?: string;  
 
   next_consultation?: string;
   empty_stomach?: boolean;
@@ -39,7 +40,6 @@ templateType?: string;
   hospitalId?: number | string;
 }
 
-
 export interface PrescriptionResponse {
   success: boolean;
   message: string;
@@ -56,52 +56,54 @@ export const prescriptionApi = api.injectEndpoints({
       PrescriptionResponse,
       PrescriptionPayload
     >({
-query: (data) => {
-  const hospitalId = getHospitalId();
+      query: (data) => {
+        const hospitalId = getHospitalId();
 
-  const payload = {
-    bookingId: data.bookingId,
-    hospitalId,
-    doctorId: data.doctorId,
+        const payload = {
+          bookingId: data.bookingId,
+          hospitalId,
+          doctorId: data.doctorId,
 
-    doctorName: data.doctorName,
-    doctorSpecialization: data.doctorSpecialization,
+          // ✅ Send BOTH doctorName AND prescribedBy
+          prescribedBy: data.doctorName || data.prescribedBy,  // Backend expects this
+          doctorName: data.doctorName,                         // For frontend display
+          doctorSpecialization: data.doctorSpecialization,
 
-    patientId: data.patientId,
-    userId: data.userId,
+          patientId: data.patientId,
+          userId: data.userId,
 
-    complaint: data.complaint,
-    medications: data.medications,
-    investigations: data.investigations,
-    advice: data.advice,
+          complaint: data.complaint,
+          medications: data.medications,
+          investigations: data.investigations,
+          advice: data.advice,
 
-    templateType: data.templateType,
-    canvasBg: data.canvasBg,
-    design: data.design,
+          templateType: data.templateType,
+          canvasBg: data.canvasBg,
+          design: data.design,
 
-    next_consultation: data.next_consultation,
-    empty_stomach: data.empty_stomach,
+          next_consultation: data.next_consultation,
+          empty_stomach: data.empty_stomach,
 
-    temperature: data?.temperature || 0,
-    pulse: data?.pulse || 0,
-    respiratoryRate: data?.respiratoryRate || 0,
-    spo2: data?.spo2 || 0,
-    height: data?.height || 0,
-    weight: data?.weight || 0,
-    bmi: data?.bmi || 0,
-    waist: data?.waist || 0,
-    bsa: data?.bsa || 0,
-  };
+          temperature: data?.temperature || 0,
+          pulse: data?.pulse || 0,
+          respiratoryRate: data?.respiratoryRate || 0,
+          spo2: data?.spo2 || 0,
+          height: data?.height || 0,
+          weight: data?.weight || 0,
+          bmi: data?.bmi || 0,
+          waist: data?.waist || 0,
+          bsa: data?.bsa || 0,
+        };
 
-  console.log("🚀 Prescription Payload:");
-  console.log(JSON.stringify(payload, null, 2));
+        console.log("🚀 Prescription Payload:");
+        console.log(JSON.stringify(payload, null, 2));
 
-  return {
-    url: "/prescription",
-    method: "POST",
-    body: payload,
-  };
-},
+        return {
+          url: "/prescription",
+          method: "POST",
+          body: payload,
+        };
+      },
       invalidatesTags: ["Prescription"],
     }),
 
