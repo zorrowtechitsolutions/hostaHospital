@@ -386,6 +386,7 @@ const Consultation = () => {
     return null;
   };
 
+  // ✅ UPDATED: This is the fixed handleEndConsultation function
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -428,6 +429,8 @@ const Consultation = () => {
       const extractedDoctorName = appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName || appointmentData.doctor?.displayName || null;
       const extractedDoctorSpecialization = appointmentData.doctor?.specialization || appointmentData.doctor?.department || appointmentData.department || appointmentData.specialization || null;
       
+      console.log("Doctor Name:", extractedDoctorName);
+      
       if (!bookingId) throw new Error("Missing Booking ID");
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
@@ -450,13 +453,17 @@ const Consultation = () => {
       
       console.log("Selected Template for prescription:", selectedTemplate);
 
-      // Create prescription data with template fields
+      // ✅ FIXED: Create prescription data with prescribedBy field
       const prescriptionData = {
         bookingId: Number(bookingId),
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
-        doctorName: extractedDoctorName,
+        
+        // ✅ IMPORTANT: Send prescribedBy instead of doctorName for backend
+        prescribedBy: extractedDoctorName,      // Backend expects this field
+        doctorName: extractedDoctorName,        // Keep for frontend display
         doctorSpecialization: extractedDoctorSpecialization,
+        
         patientId: extractedPatientId || undefined,
         userId: extractedUserId || undefined,
         complaint: complaint.trim(),
@@ -483,11 +490,10 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-console.log("=== PRESCRIPTION DATA ===");
-console.log(prescriptionData);
-console.log("nextConsultationDate:", nextConsultationDate);
-console.log("========================");
-
+      console.log("=== PRESCRIPTION DATA ===");
+      console.log(prescriptionData);
+      console.log("nextConsultationDate:", nextConsultationDate);
+      console.log("========================");
 
       const result = await createPrescription(prescriptionData).unwrap();
 
@@ -557,7 +563,12 @@ console.log("========================");
           </div>
           <div className="p-4 flex flex-wrap justify-between items-center gap-3">
             <div className="flex items-center gap-3">
-              <img src={appointmentData.patientAvatar || "https://randomuser.me/api/portraits/men/32.jpg"} className="w-10 h-10 rounded-lg object-cover" alt="patient" />
+              {/* Avatar with first letter fallback */}
+              <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
+                {(appointmentData.patientName || appointmentData.patient?.name || "P")
+                  .charAt(0)
+                  .toUpperCase()}
+              </div>
               <div>
                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
                 <p className="font-semibold text-gray-800 text-sm mt-1">{appointmentData.patientName || appointmentData.patient?.name || "Patient"}</p>
