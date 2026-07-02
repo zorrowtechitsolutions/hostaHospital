@@ -19,10 +19,7 @@ import {
   useDeleteCategoryMutation,
 } from '../../../app/service/category';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerCategoryEvents, unregisterCategoryEvents } from '../../socket/categoryEvents';
 
 const Categories = () => {
@@ -32,7 +29,6 @@ const Categories = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const menuRef = useRef(null);
   
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -44,7 +40,6 @@ const Categories = () => {
     parentCategoryId: null
   });
 
-  // API hooks
   const { 
     data: categoriesData, 
     isLoading, 
@@ -60,26 +55,18 @@ const Categories = () => {
   const [updateCategory, { isLoading: isUpdating }] = useUpdateCategoryMutation();
   const [deleteCategory, { isLoading: isDeleting }] = useDeleteCategoryMutation();
 
-  // ✅ Register socket event listeners for category events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering category event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerCategoryEvents({
       onCategoryRegistered: (data) => {
-        console.log("📁 NEW CATEGORY REGISTERED:", data);
         showSuccessToast(`New category "${data.name || 'Category'}" created!`, 3000);
         refetch();
       },
-      
       onCategoryUpdated: (data) => {
-        console.log("✏️ CATEGORY UPDATED:", data);
         showSuccessToast(`Category "${data.name || 'Category'}" updated!`, 3000);
         refetch();
       },
-      
-      onCategoryDeleted: (data) => {
-        console.log("🗑️ CATEGORY DELETED:", data);
+      onCategoryDeleted: () => {
         showSuccessToast(`Category deleted!`, 3000);
         refetch();
       }
@@ -88,30 +75,25 @@ const Categories = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering category events...");
       unregisterCategoryEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Category events will work!");
       if (!eventsRegistered) {
         registerCategoryEvents({
           onCategoryRegistered: (data) => {
-            console.log("📁 NEW CATEGORY REGISTERED (reconnect):", data);
             showSuccessToast(`New category "${data.name || 'Category'}" created!`, 3000);
             refetch();
           },
           onCategoryUpdated: (data) => {
-            console.log("✏️ CATEGORY UPDATED (reconnect):", data);
             showSuccessToast(`Category "${data.name || 'Category'}" updated!`, 3000);
             refetch();
           },
-          onCategoryDeleted: (data) => {
-            console.log("🗑️ CATEGORY DELETED (reconnect):", data);
+          onCategoryDeleted: () => {
             showSuccessToast(`Category deleted!`, 3000);
             refetch();
           }
@@ -120,34 +102,13 @@ const Categories = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Category events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - CATEGORY: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -158,17 +119,14 @@ const Categories = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Extract categories from response
   const categories = categoriesData?.data && Array.isArray(categoriesData.data) 
     ? categoriesData.data 
     : [];
 
-  // Handle search
   const filteredCategories = categories.filter(category => 
     category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Handle modal open for create
   const handleOpenCreateModal = () => {
     setEditingCategory(null);
     setFormData({
@@ -182,7 +140,6 @@ const Categories = () => {
     setIsModalOpen(true);
   };
 
-  // Handle modal open for edit
   const handleOpenEditModal = (category) => {
     setEditingCategory(category);
     setFormData({
@@ -197,7 +154,6 @@ const Categories = () => {
     setOpenMenuId(null);
   };
 
-  // Handle modal close
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingCategory(null);
@@ -211,7 +167,6 @@ const Categories = () => {
     });
   };
 
-  // Handle form input change
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -220,20 +175,16 @@ const Categories = () => {
     }));
   };
 
-  // Handle form submit (create/update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      let response;
       if (editingCategory) {
-        // Update existing category
-        response = await updateCategory({
+        await updateCategory({
           id: editingCategory._id || editingCategory.id,
           data: formData
         }).unwrap();
         
-        // ✅ Emit socket event for category updated
         socket.emit("category_event", {
           event: "CATEGORY_UPDATED",
           data: {
@@ -248,12 +199,9 @@ const Categories = () => {
         });
         
         showSuccessToast(`✅ Category "${formData.name}" updated successfully!`);
-        console.log('Category updated:', response);
       } else {
-        // Create new category
-        response = await createCategory(formData).unwrap();
+        const response = await createCategory(formData).unwrap();
         
-        // ✅ Emit socket event for category registered
         socket.emit("category_event", {
           event: "CATEGORY_REGISTERED",
           data: {
@@ -268,20 +216,17 @@ const Categories = () => {
         });
         
         showSuccessToast(`✅ Category "${formData.name}" created successfully!`);
-        console.log('Category created:', response);
       }
       
       handleCloseModal();
-      refetch(); // Refresh the list
+      refetch();
       
     } catch (error) {
-      console.error('Error saving category:', error);
       const errorMessage = error.data?.message || 'Failed to save category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
     }
   };
 
-  // Handle delete category
   const handleDelete = async (category) => {
     setOpenMenuId(null);
     if (!window.confirm(`Are you sure you want to delete "${category.name}"? This action cannot be undone.`)) {
@@ -289,9 +234,8 @@ const Categories = () => {
     }
 
     try {
-      const response = await deleteCategory(category._id || category.id).unwrap();
+      await deleteCategory(category._id || category.id).unwrap();
       
-      // ✅ Emit socket event for category deleted
       socket.emit("category_event", {
         event: "CATEGORY_DELETED",
         data: {
@@ -302,29 +246,24 @@ const Categories = () => {
       });
       
       showSuccessToast(`✅ Category "${category.name}" deleted successfully!`);
-      console.log('Category deleted:', response);
       refetch();
     } catch (error) {
-      console.error('Error deleting category:', error);
       const errorMessage = error.data?.message || 'Failed to delete category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
     }
   };
 
-  // ✅ Handle toggle status (active/inactive)
   const handleToggleStatus = async (category) => {
     setOpenMenuId(null);
     const newStatus = !category.isActive;
     const action = newStatus ? 'activate' : 'deactivate';
 
     try {
-      // Use updateCategory to toggle status
-      const response = await updateCategory({
+      await updateCategory({
         id: category._id || category.id,
         data: { isActive: newStatus }
       }).unwrap();
       
-      // ✅ Emit socket event for category updated
       socket.emit("category_event", {
         event: "CATEGORY_UPDATED",
         data: {
@@ -336,16 +275,13 @@ const Categories = () => {
       });
       
       showSuccessToast(`✅ Category "${category.name}" ${action}d successfully!`);
-      console.log('Status toggled:', response);
       refetch();
     } catch (error) {
-      console.error('Error toggling status:', error);
       const errorMessage = error.data?.message || `Failed to ${action} category. Please try again.`;
       showErrorToast(`❌ ${errorMessage}`);
     }
   };
 
-  // Get random color for icon placeholder
   const getInitialColor = (name) => {
     const colors = [
       '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
@@ -359,7 +295,6 @@ const Categories = () => {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Toggle menu
   const toggleMenu = (categoryId) => {
     setOpenMenuId(openMenuId === categoryId ? null : categoryId);
   };
@@ -458,7 +393,6 @@ const Categories = () => {
                 {/* Dropdown Menu */}
                 {openMenuId === (category._id || category.id) && (
                   <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-
                     {/* Edit */}
                     <button
                       onClick={() => handleOpenEditModal(category)}

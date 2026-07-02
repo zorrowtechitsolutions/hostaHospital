@@ -17,10 +17,7 @@ import { Card, Button, Badge, Pagination } from '../../ui';
 import { useGetRolesQuery, useDeleteRoleMutation } from '../../../../app/service/role';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import DeleteModal from '../../patients/DeleteModel';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerRoleEvents, unregisterRoleEvents } from '../../../socket/roleEvents';
 
 const HospitalRoles = () => {
@@ -35,37 +32,27 @@ const HospitalRoles = () => {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const { data: rolesData, isLoading, refetch } = useGetRolesQuery({ 
-    hospitalId: hospitalId,
-    limit: 100
+    hospitalId: hospitalId
   });
   const [deleteRole] = useDeleteRoleMutation();
 
   const roles = rolesData?.data || [];
 
-  // ✅ Register socket event listeners for role events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering role event listeners for Hospital Roles...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerRoleEvents({
-      onRoleRegistered: (data) => {
-        console.log("👤 NEW ROLE REGISTERED:", data);
-        showSuccessToast(`New role "${data.name || 'Role'}" created!`, 3000);
+      onRoleRegistered: () => {
+        showSuccessToast(`New role created!`, 3000);
         refetch();
       },
-      
-      onRoleUpdated: (data) => {
-        console.log("✏️ ROLE UPDATED:", data);
-        showSuccessToast(`Role "${data.name || 'Role'}" updated!`, 3000);
+      onRoleUpdated: () => {
+        showSuccessToast(`Role updated!`, 3000);
         refetch();
       },
-      
-      onRoleDeleted: (data) => {
-        console.log("🗑️ ROLE DELETED:", data);
+      onRoleDeleted: () => {
         showSuccessToast(`Role deleted!`, 3000);
         refetch();
       }
@@ -74,30 +61,25 @@ const HospitalRoles = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering role events for Hospital Roles...");
       unregisterRoleEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Role events will work!");
       if (!eventsRegistered) {
         registerRoleEvents({
-          onRoleRegistered: (data) => {
-            console.log("👤 NEW ROLE REGISTERED (reconnect):", data);
+          onRoleRegistered: () => {
             showSuccessToast(`New role created!`, 3000);
             refetch();
           },
-          onRoleUpdated: (data) => {
-            console.log("✏️ ROLE UPDATED (reconnect):", data);
+          onRoleUpdated: () => {
             showSuccessToast(`Role updated!`, 3000);
             refetch();
           },
-          onRoleDeleted: (data) => {
-            console.log("🗑️ ROLE DELETED (reconnect):", data);
+          onRoleDeleted: () => {
             showSuccessToast(`Role deleted!`, 3000);
             refetch();
           }
@@ -106,32 +88,12 @@ const HospitalRoles = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Role events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ROLE/HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Filter roles
   const filteredRoles = roles.filter(role =>
@@ -157,7 +119,6 @@ const HospitalRoles = () => {
   };
 
   const handleViewRole = (role) => {
-    // View role details - could navigate to role details page
     navigate(`/super-admin/hospital-roles/${hospitalId}/view/${role.id}`, {
       state: { role, hospitalName }
     });
@@ -186,7 +147,6 @@ const HospitalRoles = () => {
       try {
         await deleteRole(roleToDelete.id).unwrap();
         
-        // ✅ Emit socket event for role deleted
         socket.emit("role_event", {
           event: "ROLE_DELETED",
           data: {
@@ -213,7 +173,6 @@ const HospitalRoles = () => {
     });
   };
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -262,12 +221,12 @@ const HospitalRoles = () => {
             placeholder="Search roles by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0]"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
           />
         </div>
       </div>
 
-      {/* Roles Grid - Like Hospital Admin UserPermissions */}
+      {/* Roles Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {paginatedRoles.map((role) => {
           const badgeColor = getRoleBadgeColor(role.name);

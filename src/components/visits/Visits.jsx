@@ -17,10 +17,7 @@ import { useGetBookingsQuery, useDeleteBookingMutation } from '../../../app/serv
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
 // Helper functions for date formatting
@@ -72,10 +69,8 @@ const Visits = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks - With server-side pagination parameters
   const { 
     data: bookingsResponse, 
     isLoading: loading, 
@@ -90,41 +85,28 @@ const Visits = () => {
     ...(dateFilter && { date: dateFilter })
   });
 
-  // Delete booking mutation
   const [deleteBooking] = useDeleteBookingMutation();
 
-  // ✅ Register socket event listeners for booking events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners for Visits...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
       onBookingRegistered: (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
         showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
-      
       onBookingUpdated: (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
         showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
-      
       onBookingCancelled: (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
         showWarningToast(`Booking cancelled!`, 3000);
         refetch();
       },
-      
       onBookingAccepted: (data) => {
-        console.log("✅ BOOKING ACCEPTED (New Visit):", data);
         showSuccessToast(`New visit added: ${data.patientName || 'Patient'}`, 3000);
         refetch();
       },
-      
       onBookingCompleted: (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
         showSuccessToast(`Visit completed!`, 3000);
         refetch();
       }
@@ -133,40 +115,33 @@ const Visits = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering booking events for Visits...");
       unregisterBookingEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
       if (!eventsRegistered) {
         registerBookingEvents({
           onBookingRegistered: (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
             showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
           onBookingUpdated: (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
             showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
           onBookingCancelled: (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
             showWarningToast(`Booking cancelled!`, 3000);
             refetch();
           },
           onBookingAccepted: (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
             showSuccessToast(`New visit added!`, 3000);
             refetch();
           },
           onBookingCompleted: (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
             showSuccessToast(`Visit completed!`, 3000);
             refetch();
           }
@@ -175,38 +150,16 @@ const Visits = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING/VISIT: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Use server-side pagination values from API response
   const totalItems = bookingsResponse?.pagination?.totalItems || 0;
   const totalPages = bookingsResponse?.pagination?.totalPages || 1;
 
-  // Clean mapping - Backend already sends only accepted bookings
   const allVisitsData = useMemo(() => {
     const bookingList =
       Array.isArray(bookingsResponse)
@@ -229,10 +182,8 @@ const Visits = () => {
         booking.approveData?.token ||
         "N/A";
       
-      // ✅ Get the actual patient ID (without #PT prefix)
       let actualPatientId = booking.patientId || booking.userId || index + 1;
       
-      // If patientId is a string with #PT prefix, extract the number
       if (typeof actualPatientId === 'string' && actualPatientId.startsWith('#PT')) {
         const match = actualPatientId.match(/\d+/);
         actualPatientId = match ? parseInt(match[0]) : actualPatientId;
@@ -242,7 +193,6 @@ const Visits = () => {
         id: booking.id || booking._id,
         visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
-        // ✅ Store the actual patient ID without #PT prefix
         patientId: actualPatientId,
         patientIdDisplay: `PT${String(actualPatientId).padStart(4, '0')}`,
         doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
@@ -258,7 +208,6 @@ const Visits = () => {
     });
   }, [bookingsResponse]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter]);
@@ -347,7 +296,6 @@ const Visits = () => {
   };
   
   const handleSaveEdit = (updatedData) => {
-    // ✅ Emit socket event for booking updated
     if (editingVisit) {
       socket.emit("booking_event", {
         event: "BOOKING_UPDATED",
@@ -386,7 +334,6 @@ const Visits = () => {
     try {
       await deleteBooking(visitToDelete.id).unwrap();
       
-      // ✅ Emit socket event for booking deleted
       socket.emit("booking_event", {
         event: "BOOKING_DELETED",
         data: {
@@ -412,7 +359,6 @@ const Visits = () => {
       refetch();
       
     } catch (error) {
-      console.error('Delete error:', error);
       showErrorToast(error?.data?.message || 'Failed to delete visit. Please try again.', 4000);
       setShowDeleteModal(false);
       setVisitToDelete(null);
@@ -522,7 +468,6 @@ const Visits = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Recent visits from API data (already paginated)
   const recentVisits = useMemo(() => {
     return allVisitsData.slice(0, 3).map(visit => ({
       id: visit.id,
@@ -539,7 +484,6 @@ const Visits = () => {
     }));
   }, [allVisitsData]);
 
-  // Get unique departments from visits data for filter dropdown
   const getAllDepartments = () => {
     return [...new Set(allVisitsData.map(v => v.department).filter(Boolean))].sort();
   };
@@ -549,7 +493,6 @@ const Visits = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Skeleton Loader Component
   const SkeletonLoader = () => (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       <div className="mb-6">
@@ -817,9 +760,7 @@ const Visits = () => {
             </h2>
           </div>
 
-          {/* Flex container that expands to fill available space */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -875,7 +816,6 @@ const Visits = () => {
             </div>
           </div>
           
-          {/* Pagination */}
           <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
             <Pagination
               currentPage={currentPage}

@@ -54,8 +54,7 @@ const ForgotPassword = () => {
     }
     
     try {
-      const response = await sendOtp({ email }).unwrap();
-      console.log("OTP sent successfully:", response);
+      await sendOtp({ email }).unwrap();
       
       showSuccessToast('📧 OTP sent to your email! Please check your inbox.', 4000);
       setStep(2);
@@ -73,7 +72,6 @@ const ForgotPassword = () => {
       }, 1000);
       
     } catch (error) {
-      console.error("Send OTP error:", error);
       const errorMessage = error.data?.message || "Failed to send OTP. Please try again.";
       setError(errorMessage);
       showErrorToast(`❌ ${errorMessage}`, 4000);
@@ -86,7 +84,7 @@ const ForgotPassword = () => {
     
     setIsResending(true);
     try {
-      const response = await sendOtp({ email }).unwrap();
+      await sendOtp({ email }).unwrap();
       showSuccessToast('📧 OTP resent successfully!', 4000);
       
       // Reset timer
@@ -120,14 +118,12 @@ const ForgotPassword = () => {
     }
     
     try {
-      const response = await verifyOtp({ email, otp }).unwrap();
-      console.log("OTP verified successfully:", response);
+      await verifyOtp({ email, otp }).unwrap();
       
       showSuccessToast('✅ OTP verified successfully!', 3000);
       setStep(3);
       
     } catch (error) {
-      console.error("Verify OTP error:", error);
       const errorMessage = error.data?.message || "Invalid OTP. Please try again.";
       setError(errorMessage);
       showErrorToast(`❌ ${errorMessage}`, 4000);
@@ -153,12 +149,10 @@ const ForgotPassword = () => {
     }
     
     try {
-      const response = await resetPassword({ 
+      await resetPassword({ 
         email, 
         newPassword 
       }).unwrap();
-      
-      console.log("Password reset successfully:", response);
       
       showSuccessToast('🔐 Password reset successfully! Please login with your new password.', 5000);
       
@@ -168,7 +162,6 @@ const ForgotPassword = () => {
       }, 2000);
       
     } catch (error) {
-      console.error("Reset password error:", error);
       const errorMessage = error.data?.message || "Failed to reset password. Please try again.";
       setError(errorMessage);
       showErrorToast(`❌ ${errorMessage}`, 4000);

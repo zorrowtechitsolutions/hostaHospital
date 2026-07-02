@@ -32,10 +32,7 @@ import {
 } from "../../../app/service/role";
 
 import { getHospitalId } from '@/utils/auth';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerRoleEvents, unregisterRoleEvents } from '../../socket/roleEvents';
 
 // Constants
@@ -56,7 +53,7 @@ const updateRoleField = (setter) => (field) => (value) => {
   }));
 };
 
-// Modal Footer Component - Fixed loading prop
+// Modal Footer Component
 const ModalFooter = ({ onCancel, onSubmit, isSubmitting, submitText = "Save", cancelText = "Cancel" }) => (
   <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
     <Button type="button" variant="outline" onClick={onCancel}>
@@ -68,7 +65,7 @@ const ModalFooter = ({ onCancel, onSubmit, isSubmitting, submitText = "Save", ca
   </div>
 );
 
-// Role Form Modal (reusable for both create and edit)
+// Role Form Modal
 const RoleFormModal = memo(({
   isOpen,
   onClose,
@@ -223,7 +220,7 @@ const RoleDropdown = memo(({ role, onView, onEdit, onDelete, onPermissions }) =>
   );
 });
 
-// Loading Skeleton Component - Centered on full page
+// Loading Skeleton Component
 const RoleSkeleton = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
     <div className="mb-6">
@@ -284,20 +281,14 @@ const EditRoleModal = memo(({ showEditRoleModal, setShowEditRoleModal, editRole,
 const UserPermissions = () => {
   const navigate = useNavigate();
 
-  // Get hospitalId from auth utility
   const hospitalId = getHospitalId();
   
-  // Search state
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // FIXED: Properly destructure data from useGetRolesQuery and merge with error response
   const {
     data,
     isLoading,
@@ -305,16 +296,12 @@ const UserPermissions = () => {
     error,
   } = useGetRolesQuery({ hospitalId });
   
-  // Merge success + error response - handle both cases
   const rolesResponse = data ?? error?.data ?? {};
-
-  console.log("Roles Response:", rolesResponse);
 
   const [createRole] = useCreateRoleMutation();
   const [updateRole] = useUpdateRoleMutation();
   const [deleteRole] = useDeleteRoleMutation();
 
-  // Modal states
   const [showNewRoleModal, setShowNewRoleModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -322,69 +309,52 @@ const UserPermissions = () => {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Dropdown state
   const [openDropdown, setOpenDropdown] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const dropdownRefs = useRef({});
 
-  // Form states
   const [newRole, setNewRole] = useState({ name: '', description: '' });
   const [editRole, setEditRole] = useState({ name: '', description: '' });
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering role event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerRoleEvents({
-      onRoleRegistered: async (data) => {
-        console.log("👤 NEW ROLE REGISTERED:", data);
+      onRoleRegistered: async () => {
         showSuccessToast(`New role registered!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+        await refetch();
       },
-      onRoleUpdated: async (data) => {
-        console.log("✏️ ROLE UPDATED:", data);
+      onRoleUpdated: async () => {
         showSuccessToast(`Role updated!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
+        await refetch();
       },
-      onRoleDeleted: async (data) => {
-        console.log("🗑️ ROLE DELETED:", data);
+      onRoleDeleted: async () => {
         showSuccessToast(`Role deleted!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (DELETED):", result);
-        console.log("📊 NEW DATA:", result?.data);
+        await refetch();
       }
     });
 
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering role events...");
       unregisterRoleEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Role events will work!");
       if (!eventsRegistered) {
         registerRoleEvents({
-          onRoleRegistered: async (data) => {
-            console.log("👤 NEW ROLE REGISTERED (reconnect):", data);
+          onRoleRegistered: async () => {
             showSuccessToast(`New role registered!`, 3000);
             await refetch();
           },
-          onRoleUpdated: async (data) => {
-            console.log("✏️ ROLE UPDATED (reconnect):", data);
+          onRoleUpdated: async () => {
             showSuccessToast(`Role updated!`, 3000);
             await refetch();
           },
-          onRoleDeleted: async (data) => {
-            console.log("🗑️ ROLE DELETED (reconnect):", data);
+          onRoleDeleted: async () => {
             showSuccessToast(`Role deleted!`, 3000);
             await refetch();
           }
@@ -393,39 +363,18 @@ const UserPermissions = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Role events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ROLE: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Close modal helpers
   const closeEditModal = () => {
     setShowEditRoleModal(false);
     setSelectedRole(null);
@@ -441,7 +390,6 @@ const UserPermissions = () => {
     setShowDeleteModal(false);
   };
 
-  // Update field helpers
   const updateNewRoleField = updateRoleField(setNewRole);
   const updateEditRoleField = updateRoleField(setEditRole);
 
@@ -551,7 +499,6 @@ const UserPermissions = () => {
 
   const toggleDropdown = useCallback((roleId) => setOpenDropdown(openDropdown === roleId ? null : roleId), [openDropdown]);
 
-  // Filter roles based on search term
   const filterRoles = (roles, searchTerm) => {
     if (!searchTerm.trim()) return roles;
     const term = searchTerm.toLowerCase();
@@ -561,7 +508,6 @@ const UserPermissions = () => {
     );
   };
 
-  // FIXED: Filter only Admin role by ID (id === 2) and name "Admin"
   const filteredAdminRoles = filterRoles(
     (rolesResponse?.admin || []).filter(
       role => role?.id === ADMIN_ROLE_ID && role?.name === "Admin"
@@ -569,19 +515,16 @@ const UserPermissions = () => {
     searchTerm
   );
 
-  // FIXED: Show hospital roles from data array (not empty array)
   const filteredHospitalRoles = filterRoles(
     rolesResponse?.data || [],
     searchTerm
   );
 
-  // Combine and paginate hospital roles only (admin roles are always shown at top)
   const totalHospitalRoles = filteredHospitalRoles.length;
   const totalPages = Math.ceil(totalHospitalRoles / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedHospitalRoles = filteredHospitalRoles.slice(startIndex, startIndex + itemsPerPage);
 
-  // Calculate total roles count - both admin and hospital roles
   const totalFilteredRoles = filteredAdminRoles.length + filteredHospitalRoles.length;
 
   const handlePageChange = useCallback((page) => {
@@ -624,7 +567,6 @@ const UserPermissions = () => {
               <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
             </div>
             <div className="flex gap-3">
-              {/* Search Bar */}
               <div className="relative">
                 <input
                   type="text"
@@ -658,7 +600,6 @@ const UserPermissions = () => {
           </div>
         </div>
         
-        {/* Show message when no results found in search */}
         {totalFilteredRoles === 0 && searchTerm && (
           <div className="p-8 text-center">
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -684,7 +625,6 @@ const UserPermissions = () => {
                 <TableHeader>Actions</TableHeader>
               </tr>
             </thead>
-            {/* Admin Roles Section - Always shown, no pagination */}
             {filteredAdminRoles.length > 0 && (
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredAdminRoles.map((admin) => (
@@ -712,7 +652,6 @@ const UserPermissions = () => {
               </tbody>
             )}
             
-            {/* Hospital Roles Section - With pagination */}
             {paginatedHospitalRoles.length > 0 && (
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedHospitalRoles.map((role) => (
@@ -748,7 +687,6 @@ const UserPermissions = () => {
            </table>
         </div>
 
-        {/* Pagination Component - Only shown when there are hospital roles */}
         {totalHospitalRoles > 0 && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
             <Pagination
@@ -762,7 +700,6 @@ const UserPermissions = () => {
           </div>
         )}
 
-        {/* Show message when no roles found - UPDATED with API message */}
         {totalFilteredRoles === 0 && !searchTerm && (
           <div className="p-8 text-center">
             <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -790,14 +727,12 @@ const UserPermissions = () => {
         isSubmitting={isSubmitting}
       />
 
-      {/* View Role Modal */}
       <ViewRoleModal
         isOpen={showViewModal}
         onClose={closeViewModal}
         role={selectedRole}
       />
 
-      {/* Delete Role Modal */}
       <DeleteRoleModal
         isOpen={roleToDelete !== null}
         onClose={closeDeleteModal}

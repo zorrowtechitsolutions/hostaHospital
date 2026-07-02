@@ -2,14 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ChevronRight, Plus, Filter, Download, MoreVertical, Eye, 
+  Filter, Download, MoreVertical, Eye, 
   Edit, Users as UsersIcon, RefreshCcw, Upload, Search, Trash2,
   PlayCircle, Check, X
 } from 'lucide-react';
 import { 
-  Button, Card, Table, TableHead, TableBody, TableRow, 
-  TableHeader, TableCell, Avatar, SearchBar, 
-  Pagination, Loader, Badge
+  Button, Card, Pagination
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
@@ -33,7 +31,7 @@ import { registerBookingEvents, unregisterBookingEvents } from '../../socket/boo
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
 
-// Skeleton Components (keep as is)
+// Skeleton Components
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
   <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
 );
@@ -68,64 +66,6 @@ const SkeletonTableRow = () => (
     <td className="px-6 py-4"><SkeletonBadge /></td>
     <td className="px-6 py-4 text-right"><SkeletonButton /></td>
   </tr>
-);
-
-const SkeletonTable = ({ rows = 5 }) => (
-  <Card>
-    <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-      <SkeletonText width="w-40" height="h-5" />
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm text-left">
-        <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-          <tr>
-            <th className="px-6 py-3"><SkeletonText width="w-24" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-20" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-24" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-20" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-28" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-24" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-32" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
-            <th className="px-6 py-3"><SkeletonText width="w-16" height="h-3" /></th>
-            <th className="px-6 py-3 text-right"><SkeletonText width="w-12" height="h-3" /></th>
-          </tr>
-        </thead>
-        <tbody>
-          {Array(rows).fill().map((_, index) => (
-            <SkeletonTableRow key={index} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-between">
-      <SkeletonText width="w-48" height="h-4" />
-      <div className="flex gap-2">
-        <SkeletonButton className="w-20 h-8" />
-        <SkeletonButton className="w-12 h-8" />
-        <SkeletonButton className="w-20 h-8" />
-      </div>
-    </div>
-  </Card>
-);
-
-const SkeletonFilters = () => (
-  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-          <div className="animate-pulse bg-gray-200 w-5 h-5 rounded"></div>
-        </div>
-        <SkeletonText width="w-32" height="h-6" />
-      </div>
-      <SkeletonText width="w-24" height="h-4" />
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-      <SkeletonText width="w-full" height="h-12" className="rounded-xl" />
-      <SkeletonText width="w-full" height="h-12" className="rounded-xl" />
-      <SkeletonText width="w-full" height="h-12" className="rounded-xl" />
-    </div>
-  </div>
 );
 
 // Skeleton Loader Component
@@ -240,36 +180,28 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // ✅ Register socket event listeners for booking events
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
       onBookingRegistered: (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
         showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
       
       onBookingUpdated: (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
         showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
       
       onBookingCancelled: (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
         showWarningToast(`Booking cancelled!`, 3000);
         refetch();
       },
       
       onBookingAccepted: (data) => {
-        console.log("✅ BOOKING ACCEPTED:", data);
         showSuccessToast(`Booking accepted!`, 3000);
         refetch();
       },
       
       onBookingCompleted: (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
         showSuccessToast(`Booking completed!`, 3000);
         refetch();
       }
@@ -278,7 +210,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering booking events...");
       unregisterBookingEvents();
       setEventsRegistered(false);
     };
@@ -287,31 +218,25 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
       if (!eventsRegistered) {
         registerBookingEvents({
           onBookingRegistered: (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
             showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
           onBookingUpdated: (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
             showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
           onBookingCancelled: (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
             showWarningToast(`Booking cancelled!`, 3000);
             refetch();
           },
           onBookingAccepted: (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
             showSuccessToast(`Booking accepted!`, 3000);
             refetch();
           },
           onBookingCompleted: (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
             showSuccessToast(`Booking completed!`, 3000);
             refetch();
           }
@@ -321,7 +246,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
       setEventsRegistered(false);
     };
 
@@ -333,19 +257,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Helper function to format ID for display
   const formatAppointmentId = (id) => {
@@ -389,7 +300,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[displayStatus] || classes.Pending;
   };
 
-  // Get booking status badge class (single definition)
+  // Get booking status badge class
   const getBookingStatusBadgeClass = (bookingStatus) => {
     const classes = {
       "hospital booking": "bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium",
@@ -487,11 +398,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-
-  console.log("Current Page:", currentPage);
-console.log("Bookings:", bookingList.length);
-console.log("Pagination:", bookingsResponse?.pagination);
-
   // Get unique departments from ALL data
   const getAllDepartments = () => {
     const allData = bookingsResponse?.allData || appointmentsData;
@@ -539,8 +445,7 @@ console.log("Pagination:", bookingsResponse?.pagination);
   const filteredAppointments = getFilteredAppointments();
 
   // Paginate filtered appointments
-const paginatedAppointments = filteredAppointments;
-
+  const paginatedAppointments = filteredAppointments;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -597,7 +502,6 @@ const paginatedAppointments = filteredAppointments;
   };
 
   const handleStartConsultation = (appointment) => {
-    console.log("Appointment sent to consultation:", appointment);
     navigate('/appointments/consultation', {
       state: {
         appointment,

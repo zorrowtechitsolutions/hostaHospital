@@ -114,6 +114,12 @@ export interface SuperAdmin {
   createdAt?: string;
 }
 
+export interface SuperAdminLoginCredentials {
+  email: string;
+  password: string;
+  fcmToken?: string;
+}
+
 export interface SuperAdminLoginResponse {
   success?: boolean;
   token?: string;
@@ -173,18 +179,13 @@ export const hospitalApi = api.injectEndpoints({
         body: hospitalData,
       }),
       transformResponse: (response: AuthResponse) => {
-        console.log("📦 Register API response:", response);
-        
         const token = response.token || response.accessToken;
         if (token) {
           localStorage.setItem("accessToken", token);
-          console.log("✅ Token stored in localStorage");
         }
         if (response.refreshToken) {
           localStorage.setItem("refreshToken", response.refreshToken);
-          console.log("✅ Refresh token stored in localStorage");
         }
-        
         return response;
       },
       invalidatesTags: ["Hospital"],
@@ -205,6 +206,36 @@ export const hospitalApi = api.injectEndpoints({
           localStorage.setItem("refreshToken", response.refreshToken);
         }
         return response;
+      },
+      invalidatesTags: ["Hospital"],
+    }),
+
+    // ✅ Super Admin Login endpoint
+    loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, SuperAdminLoginCredentials>({
+      query: (loginData) => ({
+        url: `/users/login`,
+        method: "POST",
+        body: loginData,
+      }),
+      transformResponse: (response: SuperAdminLoginResponse) => {
+        const token = response.token || response.accessToken;
+        if (token) {
+          localStorage.setItem("accessToken", token);
+        }
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+        }
+        // Store roleId for Super Admin detection
+        if (response.roleId !== undefined) {
+          localStorage.setItem("roleId", String(response.roleId));
+        }
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Super Admin login failed",
+        };
       },
       invalidatesTags: ["Hospital"],
     }),
@@ -263,7 +294,7 @@ export const hospitalApi = api.injectEndpoints({
           localStorage.removeItem("authData");
           localStorage.removeItem("permissions");
         } catch (error) {
-          console.error("Logout error:", error);
+          // Silently handle logout error
         }
       },
     }),
@@ -276,11 +307,9 @@ export const hospitalApi = api.injectEndpoints({
         body: { currentPassword, newPassword },
       }),
       transformResponse: (response: ChangePasswordResponse) => {
-        console.log("📦 Change password API response:", response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Change password API error:", response);
         return {
           status: response.status,
           message: response.data?.message || "Failed to change password",
@@ -299,11 +328,9 @@ export const hospitalApi = api.injectEndpoints({
         body: otpData,
       }),
       transformResponse: (response: OtpResponse) => {
-        console.log("📦 Send OTP response:", response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Send OTP error:", response);
         return {
           status: response.status,
           message: response.data?.message || "Failed to send OTP",
@@ -319,11 +346,9 @@ export const hospitalApi = api.injectEndpoints({
         body: otpData,
       }),
       transformResponse: (response: OtpResponse) => {
-        console.log("📦 Verify OTP response:", response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Verify OTP error:", response);
         return {
           status: response.status,
           message: response.data?.message || "Invalid OTP",
@@ -339,11 +364,9 @@ export const hospitalApi = api.injectEndpoints({
         body: resetData,
       }),
       transformResponse: (response: ResetPasswordResponse) => {
-        console.log("📦 Reset password response:", response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Reset password error:", response);
         return {
           status: response.status,
           message: response.data?.message || "Failed to reset password",
@@ -353,7 +376,6 @@ export const hospitalApi = api.injectEndpoints({
 
     // ========== HOSPITAL MANAGEMENT ENDPOINTS ==========
 
-    // ✅ Updated getAllHospitals with includeDeleted parameter
     getAllHospitals: builder.query<HospitalListResponse | Hospital[], GetHospitalsParams | void>({
       query: (params) => {
         const queryParams = new URLSearchParams();
@@ -375,8 +397,6 @@ export const hospitalApi = api.injectEndpoints({
         }
         
         const url = `/hospital${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-        console.log("📡 GET Hospitals URL:", url);
-        
         return url;
       },
       providesTags: ["Hospital"],
@@ -448,7 +468,7 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // ========== ✅ RECOVER HOSPITAL ENDPOINT ==========
+    // ========== RECOVER HOSPITAL ENDPOINT ==========
     recoverHospital: builder.mutation<
       { success: boolean; message: string; data?: Hospital },
       string
@@ -462,11 +482,9 @@ export const hospitalApi = api.injectEndpoints({
         "Hospital",
       ],
       transformResponse: (response: { success: boolean; message: string; data?: Hospital }) => {
-        console.log("📦 Recover hospital response:", response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Recover hospital error:", response);
         return {
           status: response.status,
           message: response.data?.message || "Failed to recover hospital",
@@ -481,6 +499,7 @@ export const {
   // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
+  useLoginSuperAdminMutation, // ✅ Added Super Admin login hook
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,
@@ -498,5 +517,5 @@ export const {
   useAddNewHospitalMutation,
   useUpdateHospitalMutation,
   useDeleteHospitalMutation,
-  useRecoverHospitalMutation, // ✅ Added recover hook
+  useRecoverHospitalMutation,
 } = hospitalApi;

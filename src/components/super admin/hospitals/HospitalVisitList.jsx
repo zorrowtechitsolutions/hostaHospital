@@ -8,10 +8,7 @@ import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../../app/service/S3';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerBookingEvents, unregisterBookingEvents } from '../../../socket/bookingEvents';
 
 // Helper functions for date formatting
@@ -54,10 +51,8 @@ const HospitalVisitList = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks - Get only accepted (visit) bookings
   const { data: bookingsData, isLoading, refetch, isFetching } = useGetBookingsQuery({
     hospitalId: id,
     status: "accepted",
@@ -68,14 +63,11 @@ const HospitalVisitList = () => {
     ...(dateFilter && { date: dateFilter })
   });
 
-  // Fetch doctors to get doctor names
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery({
     hospitalId: id,
-    page: 1,
-    limit: 1000
+    page: 1
   });
 
-  // Create a doctor lookup map
   const doctorMap = new Map();
   const allDoctors = doctorsData?.data || [];
   allDoctors.forEach(doctor => {
@@ -91,38 +83,26 @@ const HospitalVisitList = () => {
   const totalItems = bookingsData?.pagination?.totalItems || allVisits.length;
   const totalPages = bookingsData?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
-  // ✅ Register socket event listeners for booking events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners for Hospital Visits...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
-      onBookingRegistered: (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
+      onBookingRegistered: () => {
         showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
-      
-      onBookingUpdated: (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
+      onBookingUpdated: () => {
         showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
-      
-      onBookingCancelled: (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
+      onBookingCancelled: () => {
         showWarningToast(`Booking cancelled!`, 3000);
         refetch();
       },
-      
-      onBookingAccepted: (data) => {
-        console.log("✅ BOOKING ACCEPTED (New Visit):", data);
+      onBookingAccepted: () => {
         showSuccessToast(`New visit added!`, 3000);
         refetch();
       },
-      
-      onBookingCompleted: (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
+      onBookingCompleted: () => {
         showSuccessToast(`Visit completed!`, 3000);
         refetch();
       }
@@ -131,40 +111,33 @@ const HospitalVisitList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering booking events for Hospital Visits...");
       unregisterBookingEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
       if (!eventsRegistered) {
         registerBookingEvents({
-          onBookingRegistered: (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+          onBookingRegistered: () => {
             showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
-          onBookingUpdated: (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+          onBookingUpdated: () => {
             showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
-          onBookingCancelled: (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+          onBookingCancelled: () => {
             showWarningToast(`Booking cancelled!`, 3000);
             refetch();
           },
-          onBookingAccepted: (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+          onBookingAccepted: () => {
             showSuccessToast(`New visit added!`, 3000);
             refetch();
           },
-          onBookingCompleted: (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+          onBookingCompleted: () => {
             showSuccessToast(`Visit completed!`, 3000);
             refetch();
           }
@@ -173,34 +146,13 @@ const HospitalVisitList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING/VISIT: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Reset to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter]);

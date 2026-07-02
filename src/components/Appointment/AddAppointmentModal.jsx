@@ -60,31 +60,27 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
   // ✅ Register booking event listeners when modal opens
   useEffect(() => {
     if (isOpen) {
-      console.log("🔄 Registering booking events in modal...");
-      
       registerBookingEvents({
         onBookingRegistered: (data) => {
-          console.log("📅 Booking Registered (modal):", data);
           // You can add specific logic here if needed
         },
         onBookingUpdated: (data) => {
-          console.log("✏️ Booking Updated (modal):", data);
+          // Handle update if needed
         },
         onBookingCancelled: (data) => {
-          console.log("❌ Booking Cancelled (modal):", data);
+          // Handle cancellation if needed
         },
         onBookingAccepted: (data) => {
-          console.log("✅ Booking Accepted (modal):", data);
+          // Handle acceptance if needed
         },
         onBookingCompleted: (data) => {
-          console.log("✔️ Booking Completed (modal):", data);
+          // Handle completion if needed
         }
       });
     }
 
     return () => {
       if (isOpen) {
-        console.log("🧹 Unregistering booking events from modal...");
         unregisterBookingEvents();
       }
     };
@@ -174,8 +170,6 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
         displayName: formData.displayName,
       };
 
-      console.log("📤 Creating booking with payload:", appointmentData);
-
       const response = await createBooking(appointmentData).unwrap();
 
       // ✅ Emit socket event for new booking
@@ -189,7 +183,6 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
           booking_date: formData.booking_date,
           consulting_time: formData.consulting_time,
         });
-        console.log("📤 Emitted BOOKING_REGISTERED event");
       }
 
       if (onSave) {
@@ -212,8 +205,6 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
       onClose();
       
     } catch (error) {
-      console.error('❌ Error creating booking:', error);
-      console.error('Error response:', error?.data);
       showErrorToast(error?.data?.message || 'Failed to create appointment. Please try again.', 4000);
     } finally {
       setIsSubmitting(false);

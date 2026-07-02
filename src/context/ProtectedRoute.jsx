@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const ProtectedRoute = ({
   children,
   permissionId = null,
-  requireSuperAdmin = false, // Add this new prop
+  requireSuperAdmin = false,
 }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -27,15 +27,9 @@ const ProtectedRoute = ({
     const roleId = Number(localStorage.getItem("roleId"));
     const userRole = localStorage.getItem("userRole");
     
-    console.log("🔒 Super Admin check - roleId:", roleId, "userRole:", userRole);
-    
-    // Check if user is Super Admin (roleId === 1 or userRole === "super_admin")
     if (roleId !== 1 && userRole !== "super_admin") {
-      console.log("🚫 Access denied - Not Super Admin");
       return <Navigate to="/dashboard" replace />;
     }
-    
-    console.log("✅ Super Admin access granted");
   }
 
   // Permission check

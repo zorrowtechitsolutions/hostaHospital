@@ -50,79 +50,26 @@ const AdminDashboard = () => {
 
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [allAppointments, setAllAppointments] = useState([]);
 
-  // ✅ FIX: For Super Admin, we need to fetch ALL appointments across all hospitals
-  // We'll use a larger limit and skip hospital filter
-  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery({
-    limit: 1000,
-    page: 1
-  });
+  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
   
   const { data: doctorsData, isLoading: loadingDoctors } = useGetDoctorsQuery({
-    page: 1,
-    limit: 1000,
-    skipHospitalFilter: true  // Super Admin sees all doctors
+    skipHospitalFilter: true
   });
   
-  const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery({
-    page: 1,
-    limit: 1000
+  const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery();
+  
+  const { data: appointmentsData, isLoading: loadingAppointments } = useGetBookingsQuery({
+    skipHospitalFilter: true,
   });
   
-  // In AdminDashboard.jsx - update the useGetBookingsQuery call
-const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetchAppointments } = useGetBookingsQuery({
-  page: 1,
-  limit: 10000,
-  skipHospitalFilter: true, // ✅ IMPORTANT: Skip hospital filter for Super Admin
-});
+  const { data: adsData, isLoading: loadingAds } = useGetAdsQuery();
   
-  const { data: adsData, isLoading: loadingAds } = useGetAdsQuery({
-    page: 1,
-    limit: 1000
-  });
-  
-  const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery({
-    page: 1,
-    limit: 1000,
-  });
+  const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery();
 
-  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery({});
-  const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery({});
+  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery();
+  const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery();
 
-  // ✅ NEW: Fetch appointments for each hospital if needed
-  // This is a fallback if the main query doesn't work
-  const fetchAllAppointments = async () => {
-    try {
-      // If appointmentsData is undefined, try to fetch from all hospitals
-      if (!appointmentsData) {
-        console.log('🔄 Appointments data is undefined, trying alternative method...');
-        
-        // Get all hospitals first
-        const hospitals = hospitalsData?.data || hospitalsData || [];
-        
-        // Fetch appointments for each hospital (if your API supports this)
-        // Note: This might not work if the API doesn't support hospitalId filtering
-        let allAppts = [];
-        for (const hospital of hospitals) {
-          try {
-            // You would need to implement a way to fetch appointments by hospitalId
-            // This is just a placeholder
-            console.log(`Fetching appointments for hospital: ${hospital.id}`);
-          } catch (error) {
-            console.error(`Error fetching appointments for hospital ${hospital.id}:`, error);
-          }
-        }
-        return allAppts;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
-      return [];
-    }
-  };
-
-  // Calculate dashboard stats from real data
   useEffect(() => {
     const loadData = async () => {
       if (loadingHospitals || loadingDoctors || loadingPatients || loadingAppointments || 
@@ -130,23 +77,16 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         return;
       }
 
-      // Extract data from responses
       const hospitals = hospitalsData?.data || hospitalsData || [];
       const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
       const patients = patientsData?.data || [];
       
-      // ✅ FIXED: Better extraction of appointments data
       let appointments = [];
       
-      console.log('📊 Raw Appointments Data:', appointmentsData);
-      
-      // Check different possible response structures
       if (appointmentsData) {
-        // If data is an array, use it directly
         if (Array.isArray(appointmentsData)) {
           appointments = appointmentsData;
         } 
-        // If data has data property
         else if (appointmentsData.data) {
           if (Array.isArray(appointmentsData.data)) {
             appointments = appointmentsData.data;
@@ -155,7 +95,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
           } else if (appointmentsData.data.bookings && Array.isArray(appointmentsData.data.bookings)) {
             appointments = appointmentsData.data.bookings;
           } else if (typeof appointmentsData.data === 'object' && !Array.isArray(appointmentsData.data)) {
-            // Try to find any array property
             for (const key in appointmentsData.data) {
               if (Array.isArray(appointmentsData.data[key]) && appointmentsData.data[key].length > 0) {
                 appointments = appointmentsData.data[key];
@@ -164,15 +103,12 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
             }
           }
         } 
-        // If data has bookings property
         else if (appointmentsData.bookings && Array.isArray(appointmentsData.bookings)) {
           appointments = appointmentsData.bookings;
         } 
-        // If data has rows property
         else if (appointmentsData.rows && Array.isArray(appointmentsData.rows)) {
           appointments = appointmentsData.rows;
         } else {
-          // Try to find any array in the response
           for (const key in appointmentsData) {
             if (Array.isArray(appointmentsData[key]) && appointmentsData[key].length > 0) {
               appointments = appointmentsData[key];
@@ -182,13 +118,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         }
       }
       
-      console.log('📊 Extracted Appointments:', appointments);
-      console.log('📊 Total Appointments Count:', appointments.length);
-      
-      // Store appointments for later use
-      setAllAppointments(appointments);
-      
-      // ✅ FIXED: Count appointments by status with case-insensitive comparison
       const pending = appointments.filter(a => {
         const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
         return status === 'pending' || status === 'requested';
@@ -216,19 +145,9 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
       
       const total = appointments.length;
 
-      console.log('📊 Status Counts:', {
-        pending,
-        accepted,
-        completed,
-        declined,
-        cancelled,
-        total
-      });
-
       const ads = adsData?.data || adsData?.ads || [];
       const ambulances = ambulanceData?.data || [];
       
-      // Extract staff data properly
       let staff = [];
       if (staffData?.data?.rows) {
         staff = staffData.data.rows;
@@ -240,7 +159,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         staff = Array.isArray(staffData.staff) ? staffData.staff : [];
       }
       
-      // Calculate total blood units
       const bloodBanks = bloodBankData?.data || [];
       const totalBloodUnits = bloodBanks.length;
 
@@ -261,10 +179,8 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         totalStaff: staff.length
       });
 
-      // Generate recent activity from latest appointments and hospitals
       const activities = [];
       
-      // Add recent appointments
       appointments
         .slice(0, 3)
         .forEach((appointment) => {
@@ -302,7 +218,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
           });
         });
 
-      // Add recent hospitals
       hospitals
         .slice(0, 2)
         .forEach((hospital) => {
@@ -340,7 +255,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
     loadingBloodBank
   ]);
 
-  // Updated stat cards with real data
   const statCards = [
     { 
       label: 'Total Hospitals', 
@@ -480,7 +394,7 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
                 <div 
                   className="bg-blue-500 h-2 rounded-full" 
                   style={{ width: stats.totalHospitals > 0 ? `${(stats.activeHospitals / stats.totalHospitals) * 100}%` : '0%' }}
-                ></div>
+                />
               </div>
             </div>
             <div>

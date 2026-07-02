@@ -7,19 +7,14 @@ import {
   Tag,
   Stethoscope,
   Megaphone,
-  DollarSign,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
   Shield,
-  Users,
   UserCog,
   ChevronDown,
   ChevronRight as ChevronRightIcon,
   Hospital,
-  Key,
-  UserCheck,
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';

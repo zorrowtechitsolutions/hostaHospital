@@ -27,7 +27,6 @@ import { useGetStaffQuery } from '../../../../app/service/staffApi';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
-// ✅ Import the correct notification hooks (same as HospitalNotificationList)
 import { 
   useGetUnreadNotificationsQuery,
   useGetReadNotificationsQuery 
@@ -37,33 +36,27 @@ const HospitalDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // Fetch hospital details
   const { data: hospitalData, isLoading: isHospitalLoading, error } = useGetHospitalByIdQuery(id);
   const hospital = hospitalData?.data || hospitalData;
 
-  // Fetch data for this hospital
   const { data: patientsData, isLoading: patientsLoading } = useGetPatientsQuery({ 
     hospitalId: id,
-    page: 1,
-    limit: 1000
+    page: 1
   });
   
   const { data: doctorsData, isLoading: doctorsLoading } = useGetDoctorsQuery({ 
     hospitalId: id,
-    page: 1,
-    limit: 1000
+    page: 1
   });
   
   const { data: staffData, isLoading: staffLoading } = useGetStaffQuery({ 
     hospitalId: id,
-    page: 1,
-    limit: 1000
+    page: 1
   });
   
   const { data: bookingsData, isLoading: bookingsLoading } = useGetBookingsQuery({ 
     hospitalId: id,
-    page: 1,
-    limit: 1000
+    page: 1
   });
   
   const { data: ambulanceData, isLoading: ambulanceLoading } = useGetAmbulanceQuery({ 
@@ -74,7 +67,6 @@ const HospitalDetails = () => {
     hospitalId: id
   });
 
-  // ✅ Fetch unread notifications using the same endpoint as HospitalNotificationList
   const { 
     data: unreadData, 
     isLoading: unreadLoading 
@@ -85,7 +77,6 @@ const HospitalDetails = () => {
     skip: !id,
   });
 
-  // ✅ Fetch read notifications using the same endpoint as HospitalNotificationList
   const { 
     data: readData, 
     isLoading: readLoading 
@@ -96,20 +87,10 @@ const HospitalDetails = () => {
     skip: !id,
   });
 
-  // ✅ Get notifications from responses (same as HospitalNotificationList)
   const unreadNotifications = unreadData?.data || [];
   const readNotifications = readData?.data || [];
-  const allNotifications = [...unreadNotifications, ...readNotifications];
-  
-  // ✅ Count unread notifications directly from the unread endpoint (same as HospitalNotificationList)
   const notificationCount = unreadNotifications.length;
 
-  console.log('📊 HospitalDetails - Unread Notifications:', unreadNotifications);
-  console.log('📊 HospitalDetails - Read Notifications:', readNotifications);
-  console.log('📊 HospitalDetails - Total Notifications:', allNotifications.length);
-  console.log('📊 HospitalDetails - Notification Count:', notificationCount);
-
-  // Filter counts by hospitalId manually
   const patientsCount = patientsData?.data?.filter(
     patient => String(patient.hospitalId) === String(id)
   ).length || 0;
@@ -134,7 +115,6 @@ const HospitalDetails = () => {
     bank => String(bank.hospitalId) === String(id)
   ).length || 0;
   
-  // Visits count - appointments with status "accepted"
   const visitsCount = bookingsData?.data?.filter(
     booking => String(booking.hospitalId) === String(id) && booking.status === 'accepted'
   ).length || 0;
@@ -147,7 +127,6 @@ const HospitalDetails = () => {
     return parts.length > 0 ? parts.join(', ') : 'N/A';
   };
 
-  // Navigation handlers
   const navigateToPatients = () => {
     navigate(`/super-admin/hospitals/${id}/patients`);
   };
@@ -304,7 +283,6 @@ const HospitalDetails = () => {
 
   return (
     <div>
-      {/* Header with Back Button */}
       <div className="mb-6">
         <Button 
           variant="secondary" 
@@ -334,7 +312,6 @@ const HospitalDetails = () => {
         </div>
       </div>
 
-      {/* Hospital Information Card */}
       <Card className="p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Hospital Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -387,7 +364,6 @@ const HospitalDetails = () => {
         )}
       </Card>
 
-      {/* Statistics Cards Grid */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Overview Statistics</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

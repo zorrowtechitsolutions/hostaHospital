@@ -6,13 +6,9 @@ import { Card, Button, Pagination, Badge, Modal } from '../../ui';
 import { useGetAmbulanceQuery, useDeleteAmbulanceMutation } from '../../../../app/service/ambulance';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import ViewAmbulanceModal from '../../Ambulance/ViewAmbulanceModal';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../../socket/ambulanceEvents';
 
-// Helper function to format ambulance ID
 const formatAmbulanceId = (id) => {
   if (!id) return '#AMB0000';
   const numericId = parseInt(id) || 0;
@@ -28,10 +24,8 @@ const HospitalAmbulancesList = () => {
   const [ambulanceToDelete, setAmbulanceToDelete] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
-  const itemsPerPage = 10;
-
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
+  const itemsPerPage = 10;
 
   const { data: ambulanceData, isLoading, refetch } = useGetAmbulanceQuery({
     hospitalId: id
@@ -41,7 +35,6 @@ const HospitalAmbulancesList = () => {
 
   const ambulances = ambulanceData?.data || [];
   
-  // Transform ambulances to include formattedId
   const transformedAmbulances = ambulances.map(ambulance => ({
     ...ambulance,
     formattedId: formatAmbulanceId(ambulance.id)
@@ -61,31 +54,21 @@ const HospitalAmbulancesList = () => {
     currentPage * itemsPerPage
   );
 
-  // Reset to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // ✅ Register socket event listeners for ambulance events
   useEffect(() => {
-    console.log("🔄 Registering ambulance event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerAmbulanceEvents({
       onRegistered: (data) => {
-        console.log("🚑 NEW AMBULANCE REGISTERED:", data);
         showSuccessToast(`New ambulance "${data.serviceName || 'Ambulance'}" registered!`, 3000);
         refetch();
       },
-      
       onUpdated: (data) => {
-        console.log("✏️ AMBULANCE UPDATED:", data);
         showSuccessToast(`Ambulance "${data.serviceName || 'Ambulance'}" updated!`, 3000);
         refetch();
       },
-      
       onDeleted: (data) => {
-        console.log("🗑️ AMBULANCE DELETED:", data);
         showSuccessToast(`Ambulance deleted!`, 3000);
         refetch();
       }
@@ -94,30 +77,24 @@ const HospitalAmbulancesList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering ambulance events...");
       unregisterAmbulanceEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Ambulance events will work!");
       if (!eventsRegistered) {
         registerAmbulanceEvents({
           onRegistered: (data) => {
-            console.log("🚑 NEW AMBULANCE REGISTERED (reconnect):", data);
             showSuccessToast(`New ambulance registered!`, 3000);
             refetch();
           },
           onUpdated: (data) => {
-            console.log("✏️ AMBULANCE UPDATED (reconnect):", data);
             showSuccessToast(`Ambulance updated!`, 3000);
             refetch();
           },
           onDeleted: (data) => {
-            console.log("🗑️ AMBULANCE DELETED (reconnect):", data);
             showSuccessToast(`Ambulance deleted!`, 3000);
             refetch();
           }
@@ -127,7 +104,6 @@ const HospitalAmbulancesList = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Ambulance events won't work!");
       setEventsRegistered(false);
     };
 
@@ -140,53 +116,29 @@ const HospitalAmbulancesList = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - AMBULANCE: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  const getVehicleTypeBadge = (type) => {
-    if (!type) return <Badge className="bg-gray-100 text-gray-800">Standard</Badge>;
-    return <Badge className="bg-blue-100 text-blue-800">{type}</Badge>;
-  };
-
-  // Handler for adding new ambulance
   const handleAddAmbulance = () => {
     navigate('/super-admin/ambulance/add', { state: { hospitalId: id } });
   };
 
-  // Handler for viewing ambulance details - Using Modal
   const handleViewDetails = (ambulance) => {
     setSelectedAmbulance(ambulance);
     setShowViewModal(true);
   };
 
-  // Handler for editing ambulance
   const handleEditAmbulance = (ambulance) => {
     navigate(`/super-admin/ambulance/edit/${ambulance.id}`, { state: { ambulance, hospitalId: id } });
   };
 
-  // Handler for delete click
   const handleDeleteClick = (ambulance) => {
     setAmbulanceToDelete(ambulance);
     setShowDeleteModal(true);
   };
 
-  // Confirm delete handler
   const handleConfirmDelete = async () => {
     if (ambulanceToDelete) {
       try {
         await deleteAmbulance(ambulanceToDelete.id).unwrap();
         
-        // ✅ Emit socket event for ambulance deleted
         socket.emit("ambulance_event", {
           event: "AMBULANCE_DELETED",
           data: {
@@ -202,13 +154,11 @@ const HospitalAmbulancesList = () => {
         setShowDeleteModal(false);
         setAmbulanceToDelete(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete ambulance', 3000);
       }
     }
   };
 
-  // Three-dot menu component
   const ActionMenu = ({ ambulance }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -284,7 +234,6 @@ const HospitalAmbulancesList = () => {
 
   return (
     <div>
-      {/* Header with Back Button and Add Ambulance Button */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
@@ -303,7 +252,6 @@ const HospitalAmbulancesList = () => {
         <p className="text-sm text-gray-500 mt-1">Total Ambulances: {totalItems}</p>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-md">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -317,7 +265,6 @@ const HospitalAmbulancesList = () => {
         </div>
       </div>
 
-      {/* Ambulance Grid */}
       {paginatedAmbulances.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -389,7 +336,6 @@ const HospitalAmbulancesList = () => {
         </div>
       )}
 
-      {/* Ambulance View Modal */}
       <ViewAmbulanceModal 
         isOpen={showViewModal}
         onClose={() => {
@@ -403,7 +349,6 @@ const HospitalAmbulancesList = () => {
         }}
       />
 
-      {/* Delete Confirmation Modal */}
       <Modal 
         isOpen={showDeleteModal} 
         onClose={() => {

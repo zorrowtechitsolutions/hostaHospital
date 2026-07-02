@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Ambulance as AmbulanceIcon,
   Plus,
   Download,
-  MoreVertical,
   Eye,
   Edit,
   LayoutGrid,
@@ -12,23 +10,16 @@ import {
   RefreshCcw,
   Upload,
   Trash2,
-  Search,
-  Phone,
   MapPin,
-  Truck,
-  AlertCircle
+  Truck
 } from 'lucide-react';
 import DeleteModal from '../patients/DeleteModel';
 import AddAmbulanceModal from './AddAmbulanceModal';
 import EditAmbulanceModal from './EditAmbulanceModal';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
 import { 
-  Button, 
   Badge, 
-  Loader, 
-  Pagination, 
-  SearchBar,
-  Card
+  Pagination
 } from '../ui';
 import { 
   useGetAmbulanceQuery,
@@ -36,7 +27,7 @@ import {
   useUpdateAmbulanceMutation,
   useDeleteAmbulanceMutation
 } from '../../../app/service/ambulance';
-import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ Import socket
 import { socket } from '../../socket/socket';
@@ -160,38 +151,35 @@ const Ambulance = () => {
     isFetching
   } = useGetAmbulanceQuery();
   
-  const [createAmbulance, { isLoading: isAdding }] = useCreateAmbulanceMutation();
-  const [updateAmbulance, { isLoading: isUpdating }] = useUpdateAmbulanceMutation();
-  const [deleteAmbulance, { isLoading: isDeleting }] = useDeleteAmbulanceMutation();
+  const [createAmbulance] = useCreateAmbulanceMutation();
+  const [updateAmbulance] = useUpdateAmbulanceMutation();
+  const [deleteAmbulance] = useDeleteAmbulanceMutation();
 
-  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  // ✅ Register socket event listeners - ALWAYS register regardless of connection
   useEffect(() => {
-    console.log("📡 Socket connected:", socket.connected);
-    
     // Register ambulance events
     registerAmbulanceEvents({
       onRegistered: async (data) => {
         showSuccessToast(`New ambulance registered!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
 
       onUpdated: async (data) => {
         showSuccessToast(`Ambulance updated!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
 
       onDeleted: async (data) => {
         showSuccessToast(`Ambulance deleted!`, 3000);
-        const result = await refetch();
+        await refetch();
       }
     });
 
     // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering ambulance events...");
       unregisterAmbulanceEvents();
     };
-  }, [refetch]); // ✅ Only refetch dependency
+  }, [refetch]);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
@@ -214,7 +202,7 @@ const Ambulance = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Ambulance events won't work!");
+      // Silent disconnect handling
     };
 
     socket.on("connect", handleConnect);
@@ -225,19 +213,6 @@ const Ambulance = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Transform API response - SEPARATE display ID from database ID
   const transformAmbulanceData = (ambulanceList) => {
@@ -284,13 +259,12 @@ const Ambulance = () => {
         address: newAmbulance.address
       };
       
-      const response = await createAmbulance(ambulanceToAdd).unwrap();
+      await createAmbulance(ambulanceToAdd).unwrap();
       
       showSuccessToast(`${newAmbulance.serviceName} has been added successfully!`, 3000);
       await refetch();
       setShowAddModal(false);
     } catch (error) {
-      console.error('Add error:', error);
       showErrorToast(error?.data?.message || 'Failed to add ambulance', 3000);
     }
   };
@@ -304,7 +278,7 @@ const Ambulance = () => {
         address: updatedAmbulance.address
       };
       
-      const response = await updateAmbulance({ 
+      await updateAmbulance({ 
         id: updatedAmbulance.id, 
         data: updateData 
       }).unwrap();
@@ -314,7 +288,6 @@ const Ambulance = () => {
       setShowEditModal(false);
       setSelectedAmbulance(null);
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update ambulance', 3000);
     }
   };
@@ -329,7 +302,6 @@ const Ambulance = () => {
         setShowDeleteModal(false);
         setSelectedAmbulance(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete ambulance', 3000);
       }
     }

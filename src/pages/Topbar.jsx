@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-// src/components/TopBar.jsx - Without theme toggle icons
-=======
-// src/components/TopBar.jsx - "Dreams EMR" removed
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -30,24 +25,17 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const hospitalId = getHospitalId();
   
-  const { data: notificationsData } =
-    useGetNotificationsByHospitalQuery(
-      { hospitalId },
-      {
-        skip: !hospitalId,
-        pollingInterval: 10000,
-      }
-    );
+  const { data: notificationsData } = useGetNotificationsByHospitalQuery(
+    { hospitalId },
+    {
+      skip: !hospitalId,
+      pollingInterval: 10000,
+    }
+  );
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  
-<<<<<<< HEAD
-=======
-  // "Dreams EMR" removed - use actual hospital name from auth context
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
   const hospitalName = user?.name || storedUser?.name || "Hospital";
   const hospitalEmail = user?.email || storedUser?.email || "";
-  const hospitalType = user?.type || storedUser?.type || "Administrator";
   
   const initials = hospitalName
     ?.split(" ")
@@ -123,6 +111,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 rounded-md hover:bg-slate-700 transition-colors"
+          aria-label="Toggle sidebar"
         >
           <Menu size={22} className="!text-white" stroke="white" />
         </button>
@@ -134,6 +123,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         <button 
           onClick={toggleFullscreen}
           className="p-2 rounded-full hover:bg-slate-700 transition-colors"
+          aria-label="Toggle fullscreen"
         >
           {isFullscreen ? (
             <Minimize2 size={20} className="!text-white" stroke="white" />
@@ -147,6 +137,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
+            aria-label="Toggle notifications"
           >
             <Bell size={20} className="!text-white" stroke="white" />
             {unreadCount > 0 && (
@@ -167,6 +158,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           <button 
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-lg transition-colors hover:bg-slate-700"
+            aria-label="Toggle profile menu"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
               <span className="text-white font-medium text-sm">

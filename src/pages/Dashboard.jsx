@@ -12,11 +12,9 @@ import { useGetDoctorsQuery } from "../../app/service/doctorApi";
 import { useGetBloodBankQuery } from "../../app/service/bloodbank";
 import { showSuccessToast, showErrorToast } from "../components/ui/Toast";
 import { getHospitalId, getUserRoleId } from "../utils/auth";
-
-// ✅ Import permission helper
 import { hasPermission } from "../utils/permission";
 
-// ✅ Permission IDs (matching Sidebar)
+// Permission IDs
 const PERMISSIONS = {
   PATIENTS: 14,
   DOCTORS: 2,
@@ -29,7 +27,6 @@ const PERMISSIONS = {
   SETTINGS: 52,
 };
 
-// Helper function to get department consistently
 const getDepartment = (booking) => {
   return booking.doctor_department ||
          booking.department ||
@@ -37,7 +34,6 @@ const getDepartment = (booking) => {
          "General";
 };
 
-// Helper function to format date
 const formatVisitDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
@@ -62,7 +58,6 @@ const formatVisitDate = (dateString) => {
   }
 };
 
-// DateDropdown component integrated directly
 const DateDropdown = () => {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("Today");
@@ -116,7 +111,6 @@ const DateDropdown = () => {
   );
 };
 
-// ✅ DashboardPanels Component - ALL users see same data
 const DashboardPanels = () => {
   const navigate = useNavigate();
   
@@ -173,18 +167,15 @@ const DashboardPanels = () => {
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length;
 
-  // ✅ Check if user has permission
-  const canViewAll = (permissionId) => {
-    return hasPermission(permissionId);
-  };
+  const canViewAll = (permissionId) => hasPermission(permissionId);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6 mt-6">
-      {/* Blood Bank Section - Same for all users */}
+      {/* Blood Bank Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <Droplet size={18} className="text-red-5 00" />
+            <Droplet size={18} className="text-red-500" />
             <h2 className="text-lg font-bold text-gray-800 dark:text-white">Blood Bank</h2>
           </div>
           <button 
@@ -230,7 +221,7 @@ const DashboardPanels = () => {
         </div>
       </div>
 
-      {/* Patient Visits - Same for all users */}
+      {/* Patient Visits */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
@@ -299,7 +290,7 @@ const DashboardPanels = () => {
         </div>
       </div>
 
-      {/* Doctors - Same for all users */}
+      {/* Doctors */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white">Doctors</h2>
@@ -336,7 +327,6 @@ const DashboardPanels = () => {
   );
 };
 
-// ✅ DepartmentAndPatientRecord - ALL users see same data
 const DepartmentAndPatientRecord = () => {
   const navigate = useNavigate();
   
@@ -368,7 +358,6 @@ const DepartmentAndPatientRecord = () => {
 
   const departmentColors = ['#2F80ED', '#111827', '#7C3AED', '#F97316', '#FBBF24', '#4338CA'];
 
-  // ✅ FIXED: Use patient id as key instead of name
   const records = patients.slice(0, 5).map((patient) => ({
     id: patient.id || patient._id || `patient-${Math.random().toString(36).substr(2, 9)}`,
     name: patient.name || "Unknown",
@@ -387,13 +376,11 @@ const DepartmentAndPatientRecord = () => {
     return date >= lastMonth && date <= lastMonthEnd;
   }).length;
 
-  const canViewAll = (permissionId) => {
-    return hasPermission(permissionId);
-  };
+  const canViewAll = (permissionId) => hasPermission(permissionId);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
-      {/* Top Departments - Same for all users */}
+      {/* Top Departments */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white">Top Departments</h2>
@@ -451,7 +438,7 @@ const DepartmentAndPatientRecord = () => {
         </div>
       </div>
 
-      {/* Patient Record - Same for all users */}
+      {/* Patient Record */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white">Patient Record</h2>
@@ -496,7 +483,6 @@ const DepartmentAndPatientRecord = () => {
   );
 };
 
-// ✅ LatestAppointments - ALL users see same data
 const LatestAppointments = () => {
   const navigate = useNavigate();
   
@@ -505,7 +491,6 @@ const LatestAppointments = () => {
   
   const acceptedAppointments = bookings.filter(b => b.status === 'accepted').slice(0, 5);
   
-  // ✅ FIXED: Use unique ID for each appointment
   const appointments = acceptedAppointments.map((booking) => ({
     id: booking.id || booking._id || `apt-${Math.random().toString(36).substr(2, 9)}`,
     patientId: `#PT${String(booking.userId || Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
@@ -517,9 +502,7 @@ const LatestAppointments = () => {
     status: "Inprogress"
   }));
 
-  const canViewAll = (permissionId) => {
-    return hasPermission(permissionId);
-  };
+  const canViewAll = (permissionId) => hasPermission(permissionId);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700 p-4">
@@ -588,7 +571,6 @@ export default function Dashboard() {
 
   const hospitalId = getHospitalId();
 
-  // ✅ Fetch data - same for all users
   const { data: patientsData } = useGetPatientsQuery(
     { hospitalId },
     { refetchOnMountOrArgChange: true }
@@ -674,12 +656,8 @@ export default function Dashboard() {
     };
   }, [patientsData]);
 
-  // ✅ Check if user has permission
-  const canViewAll = (permissionId) => {
-    return hasPermission(permissionId);
-  };
+  const canViewAll = (permissionId) => hasPermission(permissionId);
 
-  // ✅ Stats - Same for all users
   const stats = [
     {
       title: "Patients",
@@ -752,7 +730,6 @@ export default function Dashboard() {
     await refetchPending();
   };
 
-  // ✅ Show appointment requests only if user has permission
   const showRequests = hasPermission(PERMISSIONS.REQUESTS);
 
   return (
@@ -781,7 +758,7 @@ export default function Dashboard() {
         <DateDropdown />
       </div>
 
-      {/* ✅ Stats Cards - Same for all users, View All disabled without permission */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {stats.map((item, index) => (
           <div
@@ -811,9 +788,9 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Bottom Section - Two Column Layout */}
+      {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* ✅ Appointment Requests Table - Only shows if user has permission */}
+        {/* Appointment Requests Table */}
         {showRequests && (
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -883,9 +860,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Right Column - Patients Statistics & All Appointments */}
+        {/* Right Column */}
         <div className="space-y-5">
-          {/* ✅ Patients Statistics - Same for all users */}
+          {/* Patients Statistics */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
               <h3 className="font-semibold text-sm text-gray-800 dark:text-white">Patients Statistics</h3>
@@ -917,7 +894,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              {/* Bar Chart Visualization - From Real Data */}
               <div className="space-y-2">
                 {patientStats.chartData.map((data, idx) => (
                   <div key={`${data.month}-${idx}`}>
@@ -937,7 +913,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ✅ All Appointments Categories - Same for all users */}
+          {/* All Appointments Categories */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
               <h3 className="font-semibold text-sm text-gray-800 dark:text-white">All Appointments</h3>
@@ -972,13 +948,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Dashboard Panels Row */}
       <DashboardPanels />
-
-      {/* Department and Patient Record Row */}
       <DepartmentAndPatientRecord />
-
-      {/* Latest Appointments */}
       <LatestAppointments />
 
       {/* Modals */}

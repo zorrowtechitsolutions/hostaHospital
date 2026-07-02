@@ -35,7 +35,6 @@ const EditUser = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Determine user type from URL path instead of location.state
   const selectedRoleType = location.pathname.includes("doctor") ? "doctor" : "staff";
   
   const [isLoading, setIsLoading] = useState(false);
@@ -46,11 +45,9 @@ const EditUser = () => {
   const doctorDropdownRef = useRef(null);
   const staffDropdownRef = useRef(null);
   
-  // Selected doctors and staff
   const [selectedDoctors, setSelectedDoctors] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState([]);
   
-  // Form state - use roleId instead of role name
   const [formData, setFormData] = useState({
     roleId: ''
   });
@@ -59,7 +56,6 @@ const EditUser = () => {
 
   const hospitalId = getHospitalId();
   
-  // Fetch doctors and staff from API
   const { 
     data: doctorsData, 
     isLoading: doctorsLoading,
@@ -74,7 +70,6 @@ const EditUser = () => {
     refetch: refetchStaff
   } = useGetStaffQuery({ limit: 100 });
   
-  // Fetch roles from API
   const { 
     data: rolesData, 
     isLoading: rolesLoading,
@@ -83,7 +78,6 @@ const EditUser = () => {
   
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
 
-  // Transform API data
   const doctorsList = doctorsData?.data || doctorsData || [];
   const staffList = staffData?.data || staffData || [];
   
@@ -109,7 +103,6 @@ const EditUser = () => {
     }
   }, [staffList, selectedRoleType]);
 
-  // Extract roles from response - handle both 'admin' and 'data' arrays
   const rolesList = [
     ...(rolesData?.admin || []).filter(
       role => role.id === 2
@@ -119,13 +112,11 @@ const EditUser = () => {
     )
   ];
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
     const roleName = getRoleNameById(roleId);
     const roleNameLower = roleName?.toLowerCase();
@@ -135,7 +126,6 @@ const EditUser = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target)) {
@@ -149,7 +139,6 @@ const EditUser = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -164,7 +153,6 @@ const EditUser = () => {
     }
   };
 
-  // Handle doctor checkbox selection
   const handleDoctorCheckbox = (doctorId) => {
     setSelectedDoctors(prev => {
       if (prev.includes(doctorId)) {
@@ -175,7 +163,6 @@ const EditUser = () => {
     });
   };
 
-  // Handle select all doctors
   const handleSelectAllDoctors = () => {
     if (selectedDoctors.length === doctorsList.length) {
       setSelectedDoctors([]);
@@ -185,7 +172,6 @@ const EditUser = () => {
     }
   };
 
-  // Handle staff checkbox selection
   const handleStaffCheckbox = (staffId) => {
     setSelectedStaff(prev => {
       if (prev.includes(staffId)) {
@@ -196,7 +182,6 @@ const EditUser = () => {
     });
   };
 
-  // Handle select all staff
   const handleSelectAllStaff = () => {
     if (selectedStaff.length === staffList.length) {
       setSelectedStaff([]);
@@ -206,7 +191,6 @@ const EditUser = () => {
     }
   };
 
-  // Validate form
   const validateForm = () => {
     const newErrors = {};
     
@@ -226,7 +210,6 @@ const EditUser = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle form submission - Update permissions via API
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -246,12 +229,10 @@ const EditUser = () => {
         return;
       }
       
-      // Use the actual role ID from the database - NO HARDCODING
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
       
       if (selectedRoleType === 'doctor') {
-        // Map ALL doctors - checked ones get the new roleId, unchecked ones get 0
         const doctorIds = doctorsList.map(doctor => ({
           id: doctor.id,
           roleId: selectedDoctors.includes(String(doctor.id))
@@ -282,7 +263,6 @@ const EditUser = () => {
         );
         
       } else {
-        // Map ALL staff - checked ones get the new roleId, unchecked ones get 0
         const staffIds = staffList.map(staff => ({
           id: staff.id,
           roleId: selectedStaff.includes(String(staff.id))
@@ -297,7 +277,6 @@ const EditUser = () => {
           staffIds: staffIds
         }).unwrap();
         
-        // Refetch staff to get updated roleIds
         await refetchStaff();
         
         showSuccessToast(
@@ -320,7 +299,6 @@ const EditUser = () => {
       }, 2000);
       
     } catch (error) {
-      console.error('Error updating permissions:', error);
       const errorMessage = error?.data?.message || 'Failed to update permissions. Please try again.';
       showErrorToast(errorMessage, 4000);
       setIsLoading(false);
@@ -331,7 +309,6 @@ const EditUser = () => {
     navigate('/users');
   };
 
-  // Get selected names for display
   const getSelectedDoctorNames = () => {
     return selectedDoctors.map(id => {
       const doctor = doctorsList.find(d => String(d.id) === id);
@@ -348,7 +325,6 @@ const EditUser = () => {
 
   const isLoadingData = doctorsLoading || staffLoading || rolesLoading;
 
-  // Show loading state
   if (isLoadingData) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans flex items-center justify-center">
@@ -441,7 +417,7 @@ const EditUser = () => {
                 )}
               </div>
 
-              {/* Select Doctors / Staff with Checkbox Dropdown - Full width */}
+              {/* Select Doctors / Staff with Checkbox Dropdown */}
               <div>
                 {selectedRoleType === 'doctor' ? (
                   <div>

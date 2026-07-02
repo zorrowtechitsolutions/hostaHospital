@@ -211,8 +211,6 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
     
     setIsSubmitting(true);
     
-    // Pass the update data to parent component
-    // Note: hospitalId is NOT included here - API will handle it automatically
     onSave({
       id: formData.id,
       serviceName: formData.serviceName,

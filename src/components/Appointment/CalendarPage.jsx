@@ -33,9 +33,6 @@ const CalendarPage = () => {
   const rawPatientId = location.state?.patientId || new URLSearchParams(location.search).get('patientId');
   const patientId = extractNumericId(rawPatientId);
 
-  console.log("Calendar - Raw PATIENT ID:", rawPatientId);
-  console.log("Calendar - Numeric PATIENT ID:", patientId);
-
   const {
     data: prescriptionData,
     isLoading,
@@ -50,9 +47,6 @@ const CalendarPage = () => {
       skip: !patientId,
     }
   );
-
-  // Log the FULL API response to see the structure
-  console.log("Calendar - FULL PRESCRIPTION DATA:", JSON.stringify(prescriptionData, null, 2));
 
   // Doctor ID to Department mapping (temporary fix)
   const doctorDepartmentMap = {
@@ -74,7 +68,6 @@ const CalendarPage = () => {
     const records = {};
     
     if (!prescriptionData) {
-      console.log("No prescription data available");
       return records;
     }
 
@@ -93,18 +86,12 @@ const CalendarPage = () => {
       prescriptions = prescriptionData.patient.prescriptions;
     }
 
-    console.log("Prescriptions array:", prescriptions);
-    console.log("Number of prescriptions:", prescriptions.length);
-
     prescriptions.forEach((prescription, index) => {
-      console.log(`Prescription ${index}:`, prescription);
-      
       // Try to find the date field
       const dateField = prescription.createdAt || prescription.date || prescription.visitDate || prescription.prescriptionDate || prescription.updatedAt;
       
       if (dateField) {
         const dateKey = formatDateKey(dateField);
-        console.log(`Date key for prescription ${index}:`, dateKey);
         
         // Get department from various possible locations
         let department = "-";
@@ -154,12 +141,9 @@ const CalendarPage = () => {
           // Store the full prescription for debugging
           _raw: prescription
         };
-      } else {
-        console.log(`Prescription ${index} has no date field:`, prescription);
       }
     });
 
-    console.log("Created visit records:", records);
     return records;
   };
 
@@ -218,8 +202,6 @@ const CalendarPage = () => {
   const handleDateClick = (date) => {
     if (date && !isFutureDate(date)) {
       setSelectedDate(date);
-      console.log("Selected date:", date);
-      console.log("Selected date key:", formatDateKey(date));
     }
   };
 
@@ -247,9 +229,7 @@ const CalendarPage = () => {
   // Helper to format medications for display
   const getMedicationsDisplay = (medications) => {
     if (!medications || medications.length === 0) return ["No medications prescribed"];
-    return medications.map((med, index) => {
-      console.log(`Medication ${index}:`, med);
-      
+    return medications.map((med) => {
       const name = med.name || med.medicineName || med.drugName || med.medication || med.itemName || 
                    med.medicine_name || med.medication_name || "Unknown";
       const dosage = med.dosage || med.dose || med.strength || med.quantity || 
@@ -538,22 +518,6 @@ const CalendarPage = () => {
                             </p>
                           </div>
                         )}
-
-                        {/* Doctor and Department */}
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                          {/* <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-[10px] font-medium text-gray-500">Doctor</p>
-                            <p className="text-xs text-gray-700 font-medium mt-0.5">
-                              {selectedVisitDetails.doctor || "Not specified"}
-                            </p>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-[10px] font-medium text-gray-500">Department</p>
-                            <p className="text-xs text-gray-700 font-medium mt-0.5">
-                              {selectedVisitDetails.department || "Not specified"}
-                            </p>
-                          </div> */}
-                        </div>
                       </div>
                     </div>
                   ) : (

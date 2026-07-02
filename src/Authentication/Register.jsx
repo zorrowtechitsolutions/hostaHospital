@@ -239,11 +239,7 @@ const Register = () => {
 
   // Extract categories from response
   const categories = categoriesResponse?.data || [];
-  const categoryMap = categories.reduce((acc, cat) => {
-    acc[cat.name] = cat;
-    return acc;
-  }, {});
-
+  
   // State for selected category
   const [selectedCategory, setSelectedCategory] = useState(null);
   
@@ -296,32 +292,24 @@ const Register = () => {
 
   // ✅ Register socket event listeners for hospital events
   useEffect(() => {
-    console.log("🔄 Registering hospital event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerHospitalEvents({
       onHospitalRegistered: (data) => {
-        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
         showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
       },
       
       onHospitalUpdated: (data) => {
-        console.log("✏️ HOSPITAL UPDATED:", data);
         showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
       },
       
       onHospitalDeleted: (data) => {
-        console.log("🗑️ HOSPITAL DELETED:", data);
         showSuccessToast(`Hospital deleted!`, 3000);
       },
       
       onHospitalBlacklisted: (data) => {
-        console.log("🚫 HOSPITAL BLACKLISTED:", data);
         showSuccessToast(`Hospital blacklisted!`, 3000);
       },
       
       onHospitalRecovered: (data) => {
-        console.log("♻️ HOSPITAL RECOVERED:", data);
         showSuccessToast(`Hospital recovered successfully!`, 3000);
       }
     });
@@ -329,7 +317,6 @@ const Register = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering hospital events...");
       unregisterHospitalEvents();
       setEventsRegistered(false);
     };
@@ -338,27 +325,21 @@ const Register = () => {
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Hospital events will work!");
       if (!eventsRegistered) {
         registerHospitalEvents({
           onHospitalRegistered: (data) => {
-            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
             showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
           },
           onHospitalUpdated: (data) => {
-            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
             showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
           },
           onHospitalDeleted: (data) => {
-            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
             showSuccessToast(`Hospital deleted!`, 3000);
           },
           onHospitalBlacklisted: (data) => {
-            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
             showSuccessToast(`Hospital blacklisted!`, 3000);
           },
           onHospitalRecovered: (data) => {
-            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
             showSuccessToast(`Hospital recovered successfully!`, 3000);
           }
         });
@@ -367,7 +348,6 @@ const Register = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
       setEventsRegistered(false);
     };
 
@@ -380,19 +360,6 @@ const Register = () => {
     };
   }, [eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
   useEffect(() => {
     const checkGoogleMaps = setInterval(() => {
       if (window.google && window.google.maps && typeof window.google.maps.Geocoder === 'function') {
@@ -402,16 +369,6 @@ const Register = () => {
     }, 500);
     return () => clearInterval(checkGoogleMaps);
   }, []);
-
-  // Log categories when loaded
-  useEffect(() => {
-    if (categories.length > 0) {
-      console.log("✅ Categories loaded:", categories);
-    }
-    if (categoriesError) {
-      console.error("❌ Error loading categories:", categoriesError);
-    }
-  }, [categories, categoriesError]);
 
   const handleNormalHoursChange = (day, field, value) => {
     const dayKey = day.toLowerCase();
@@ -534,7 +491,6 @@ const Register = () => {
       const category = categories.find(cat => cat.name === categoryName);
       setSelectedCategory(category || null);
       setHospitalType(categoryName);
-      console.log("Selected category:", category);
     } else {
       setSelectedCategory(null);
       setHospitalType("");
@@ -620,11 +576,8 @@ const Register = () => {
         working_hours_clinic_nobreak
       };
 
-      console.log("🚀 Submitting hospital data:", hospitalData);
-
       try {
         const response = await register(hospitalData).unwrap();
-        console.log("Registration successful with tokens:", response);
         
         // ✅ Emit socket event for hospital registration
         socket.emit("hospital_event", {
@@ -659,11 +612,6 @@ const Register = () => {
           type: response.data.type,
         });
         
-        const accessToken = localStorage.getItem("accessToken");
-        const refreshToken = localStorage.getItem("refreshToken");
-        console.log("Access token stored:", !!accessToken);
-        console.log("Refresh token stored:", !!refreshToken);
-        
         showSuccessToast(`✅ Welcome ${hospitalName}! Your account has been created and you're logged in.`, 5000);
         
         setIsSubmitting(false);
@@ -673,7 +621,6 @@ const Register = () => {
         }, 2000);
         
       } catch (error) {
-        console.error("❌ Registration error:", error);
         let errorMessage = "Registration failed. Please try again.";
         if (error.data?.message) errorMessage = error.data.message;
         else if (error.status === 409) errorMessage = "Email already registered. Please use a different email.";

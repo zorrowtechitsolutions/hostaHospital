@@ -21,10 +21,7 @@ import {
   useUpdateSpecialityMutation,
   useDeleteSpecialityMutation,
 } from '../../../app/service/speciality';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerSpecialityEvents, unregisterSpecialityEvents } from '../../socket/specialityEvents';
 
 // Helper function to format date
@@ -90,7 +87,6 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
     isActive: true
   });
 
-  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setFormData({
@@ -304,17 +300,14 @@ const Specialties = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
-  // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedSpeciality, setSelectedSpeciality] = useState(null);
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks
   const {
     data: specialitiesResponse,
     isLoading: loading,
@@ -331,26 +324,18 @@ const Specialties = () => {
   const specialities = specialitiesResponse?.data || [];
   const totalItems = specialitiesResponse?.count || specialities.length;
 
-  // ✅ Register socket event listeners for speciality events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering speciality event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerSpecialityEvents({
       onSpecialityRegistered: (data) => {
-        console.log("🏥 NEW SPECIALITY REGISTERED:", data);
         showSuccessToast(`New speciality "${data.name || 'Speciality'}" created!`, 3000);
         refetch();
       },
-      
       onSpecialityUpdated: (data) => {
-        console.log("✏️ SPECIALITY UPDATED:", data);
         showSuccessToast(`Speciality "${data.name || 'Speciality'}" updated!`, 3000);
         refetch();
       },
-      
-      onSpecialityDeleted: (data) => {
-        console.log("🗑️ SPECIALITY DELETED:", data);
+      onSpecialityDeleted: () => {
         showSuccessToast(`Speciality deleted!`, 3000);
         refetch();
       }
@@ -359,30 +344,25 @@ const Specialties = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering speciality events...");
       unregisterSpecialityEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Speciality events will work!");
       if (!eventsRegistered) {
         registerSpecialityEvents({
           onSpecialityRegistered: (data) => {
-            console.log("🏥 NEW SPECIALITY REGISTERED (reconnect):", data);
             showSuccessToast(`New speciality "${data.name || 'Speciality'}" created!`, 3000);
             refetch();
           },
           onSpecialityUpdated: (data) => {
-            console.log("✏️ SPECIALITY UPDATED (reconnect):", data);
             showSuccessToast(`Speciality "${data.name || 'Speciality'}" updated!`, 3000);
             refetch();
           },
-          onSpecialityDeleted: (data) => {
-            console.log("🗑️ SPECIALITY DELETED (reconnect):", data);
+          onSpecialityDeleted: () => {
             showSuccessToast(`Speciality deleted!`, 3000);
             refetch();
           }
@@ -391,41 +371,18 @@ const Specialties = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Speciality events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - SPECIALITY: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Navigation handler
   const handleSpecialtyClick = (speciality) => {
-    console.log("Navigating to:", `/super-admin/specialities/${speciality.id}/hospitals`);
     navigate(`/super-admin/specialities/${speciality.id}/hospitals`, {
       state: {
         specialityId: speciality.id,
@@ -434,12 +391,10 @@ const Specialties = () => {
     });
   };
 
-  // CRUD Handlers
   const handleAddSpeciality = async (newSpeciality) => {
     try {
       const response = await registerSpeciality(newSpeciality).unwrap();
       
-      // ✅ Emit socket event for speciality registered
       socket.emit("speciality_event", {
         event: "SPECIALITY_REGISTERED",
         data: {
@@ -454,7 +409,6 @@ const Specialties = () => {
       refetch();
       setShowAddModal(false);
     } catch (error) {
-      console.error('Add error:', error);
       showErrorToast(error?.data?.message || 'Failed to create speciality', 3000);
     }
   };
@@ -466,7 +420,6 @@ const Specialties = () => {
         data: updatedSpeciality
       }).unwrap();
 
-      // ✅ Emit socket event for speciality updated
       socket.emit("speciality_event", {
         event: "SPECIALITY_UPDATED",
         data: {
@@ -482,7 +435,6 @@ const Specialties = () => {
       setShowEditModal(false);
       setSelectedSpeciality(null);
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update speciality', 3000);
     }
   };
@@ -495,7 +447,6 @@ const Specialties = () => {
         data: { isActive: newStatus }
       }).unwrap();
 
-      // ✅ Emit socket event for speciality updated (status change)
       socket.emit("speciality_event", {
         event: "SPECIALITY_UPDATED",
         data: {
@@ -510,7 +461,6 @@ const Specialties = () => {
       showSuccessToast(`Speciality ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
       refetch();
     } catch (error) {
-      console.error('Toggle error:', error);
       showErrorToast(error?.data?.message || 'Failed to update speciality status', 3000);
     }
   };
@@ -520,7 +470,6 @@ const Specialties = () => {
       try {
         await deleteSpeciality(selectedSpeciality.id).unwrap();
         
-        // ✅ Emit socket event for speciality deleted
         socket.emit("speciality_event", {
           event: "SPECIALITY_DELETED",
           data: {
@@ -535,7 +484,6 @@ const Specialties = () => {
         setShowDeleteModal(false);
         setSelectedSpeciality(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete speciality', 3000);
       }
     }
@@ -568,7 +516,6 @@ const Specialties = () => {
     showSuccessToast(`Exported ${exportData.length} speciality records`, 2000);
   };
 
-  // Pagination
   const paginatedSpecialities = specialities.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -635,7 +582,6 @@ const Specialties = () => {
                 onClick={() => handleSpecialtyClick(speciality)}
                 className="p-6 hover:shadow-lg transition-shadow relative cursor-pointer"
               >
-                {/* Action Menu - Prevent click propagation to card */}
                 <div onClick={(e) => e.stopPropagation()}>
                   <ActionMenu
                     speciality={speciality}
@@ -647,25 +593,21 @@ const Specialties = () => {
                 </div>
                 
                 <div className="flex flex-col items-center text-center">
-                  {/* Icon */}
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
                     <Stethoscope className="w-10 h-10 text-green-600" />
                   </div>
                   
-                  {/* Name and ID */}
                   <div className="mb-2">
                     <h3 className="font-semibold text-lg text-gray-900">{speciality.name}</h3>
                     <p className="text-xs text-gray-500 mt-1">ID: #{speciality.id}</p>
                   </div>
                   
-                  {/* Status Badge */}
                   <div className="mb-3">
                     <Badge variant={speciality.isActive ? 'success' : 'danger'}>
                       {speciality.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
                   
-                  {/* Created Date */}
                   {speciality.createdAt && (
                     <p className="text-xs text-gray-500 mt-2">
                       Created: {formatDate(speciality.createdAt)}
@@ -676,7 +618,6 @@ const Specialties = () => {
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="mt-6">
               <Pagination

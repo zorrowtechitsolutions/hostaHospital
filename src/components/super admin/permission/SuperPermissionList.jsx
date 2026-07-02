@@ -14,10 +14,7 @@ import {
   useDeletePermissionMutation
 } from "../../../../app/service/permission";
 import { Plus, Edit, Trash2, Eye, RefreshCw, Search, X } from 'lucide-react';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
 import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
 
@@ -25,19 +22,16 @@ const SuperPermissionList = () => {
   const { roleId } = useParams();
   const navigate = useNavigate();
   
-  // Main state
   const [mainModules, setMainModules] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Permission management modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedPermission, setSelectedPermission] = useState(null);
   
-  // Permission form state
   const [formData, setFormData] = useState({
     module: '',
     action: '',
@@ -45,54 +39,39 @@ const SuperPermissionList = () => {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks
   const [createRolePermission] = useCreateRolePermissionMutation();
   const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({ roleId });
   
-  // Permission CRUD hooks
   const [createPermission, { isLoading: isCreating }] = useCreatePermissionMutation();
   const [updatePermission, { isLoading: isUpdating }] = useUpdatePermissionMutation();
   const [deletePermission, { isLoading: isDeleting }] = useDeletePermissionMutation();
 
   const ACTIONS = ['create', 'edit', 'delete', 'view', 'manage'];
 
-  // ✅ Register socket event listeners for permission events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering permission event listeners for Super Permission...");
-    console.log("📡 Socket connected:", socket.connected);
-    
-    // Register permission events
     registerPermissionEvents({
-      onPermissionRegistered: (data) => {
-        console.log("🔑 NEW PERMISSION REGISTERED:", data);
-        showSuccessToast(`New permission "${data.module || 'Permission'}" created!`, 3000);
+      onPermissionRegistered: () => {
+        showSuccessToast(`New permission created!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionUpdated: (data) => {
-        console.log("✏️ PERMISSION UPDATED:", data);
-        showSuccessToast(`Permission "${data.module || 'Permission'}" updated!`, 3000);
+      onPermissionUpdated: () => {
+        showSuccessToast(`Permission updated!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionDeleted: (data) => {
-        console.log("🗑️ PERMISSION DELETED:", data);
+      onPermissionDeleted: () => {
         showSuccessToast(`Permission deleted!`, 3000);
         refetchPermissions();
       }
     });
 
-    // Register role permission events
     registerRolePermissionEvents({
-      onRolePermissionUpdated: (data) => {
-        console.log("🔐 ROLE PERMISSION UPDATED:", data);
+      onRolePermissionUpdated: () => {
         showSuccessToast(`Role permissions updated!`, 3000);
         refetchRolePermissions();
-        // Also refetch permissions to get latest data
         refetchPermissions();
       }
     });
@@ -100,38 +79,32 @@ const SuperPermissionList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering permission events for Super Permission...");
       unregisterPermissionEvents();
       unregisterRolePermissionEvents();
       setEventsRegistered(false);
     };
   }, [refetchPermissions, refetchRolePermissions]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Permission events will work!");
       if (!eventsRegistered) {
         registerPermissionEvents({
-          onPermissionRegistered: (data) => {
-            console.log("🔑 NEW PERMISSION REGISTERED (reconnect):", data);
+          onPermissionRegistered: () => {
             showSuccessToast(`New permission created!`, 3000);
             refetchPermissions();
           },
-          onPermissionUpdated: (data) => {
-            console.log("✏️ PERMISSION UPDATED (reconnect):", data);
+          onPermissionUpdated: () => {
             showSuccessToast(`Permission updated!`, 3000);
             refetchPermissions();
           },
-          onPermissionDeleted: (data) => {
-            console.log("🗑️ PERMISSION DELETED (reconnect):", data);
+          onPermissionDeleted: () => {
             showSuccessToast(`Permission deleted!`, 3000);
             refetchPermissions();
           }
         });
         registerRolePermissionEvents({
-          onRolePermissionUpdated: (data) => {
-            console.log("🔐 ROLE PERMISSION UPDATED (reconnect):", data);
+          onRolePermissionUpdated: () => {
             showSuccessToast(`Role permissions updated!`, 3000);
             refetchRolePermissions();
             refetchPermissions();
@@ -141,32 +114,12 @@ const SuperPermissionList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Permission events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetchPermissions, refetchRolePermissions, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PERMISSION/SUPER: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Build modules from permissions
   useEffect(() => {
@@ -223,19 +176,16 @@ const SuperPermissionList = () => {
     }
   }, [permissionData, mainModules.length]);
 
-  // Filter modules
   const filteredModules = mainModules.filter(module => 
     module.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Toggle permission
   const togglePermission = (moduleIndex, permissionType) => {
     setMainModules(prev => prev.map((mod, mi) => 
       mi === moduleIndex ? { ...mod, [permissionType]: !mod[permissionType] } : mod
     ));
   };
 
-  // Toggle allow all
   const toggleAllowAll = (moduleIndex) => {
     setMainModules(prev => prev.map((mod, mi) => {
       if (mi === moduleIndex) {
@@ -252,10 +202,8 @@ const SuperPermissionList = () => {
     }));
   };
 
-  // Check if all permissions are checked
   const isAllChecked = (module) => module.create && module.edit && module.delete && module.view;
 
-  // Save role permissions
   const handleSave = async () => {
     setIsSaving(true);
     const permissionIds = mainModules.flatMap(mod => {
@@ -270,7 +218,6 @@ const SuperPermissionList = () => {
     try {
       await createRolePermission({ roleId: Number(roleId), permissionIds }).unwrap();
       
-      // ✅ Emit socket event for role permission updated
       socket.emit("role_permission_event", {
         event: "ROLEPERMISSION_UPDATED",
         data: {
@@ -290,15 +237,11 @@ const SuperPermissionList = () => {
     }
   };
 
-  // ============ PERMISSION CRUD OPERATIONS ============
-
-  // Reset form
   const resetForm = () => {
     setFormData({ module: '', action: '', description: '' });
     setFormErrors({});
   };
 
-  // Handle form input change
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -307,7 +250,6 @@ const SuperPermissionList = () => {
     }
   };
 
-  // Validate form
   const validateForm = () => {
     const errors = {};
     if (!formData.module.trim()) errors.module = 'Module is required';
@@ -317,7 +259,6 @@ const SuperPermissionList = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // Create Permission
   const handleCreatePermission = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -325,7 +266,6 @@ const SuperPermissionList = () => {
     try {
       const result = await createPermission(formData).unwrap();
       
-      // ✅ Emit socket event for permission registered
       socket.emit("permission_event", {
         event: "PERMISSION_REGISTERED",
         data: {
@@ -342,12 +282,10 @@ const SuperPermissionList = () => {
       resetForm();
       refetchPermissions();
     } catch (error) {
-      console.error('Create error:', error);
       showErrorToast(error?.data?.message || 'Failed to create permission', 4000);
     }
   };
 
-  // Update Permission
   const handleUpdatePermission = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -358,7 +296,6 @@ const SuperPermissionList = () => {
         ...formData
       }).unwrap();
       
-      // ✅ Emit socket event for permission updated
       socket.emit("permission_event", {
         event: "PERMISSION_UPDATED",
         data: {
@@ -376,19 +313,16 @@ const SuperPermissionList = () => {
       resetForm();
       refetchPermissions();
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update permission', 4000);
     }
   };
 
-  // Delete Permission
   const handleDeletePermission = async () => {
     if (!selectedPermission) return;
 
     try {
       await deletePermission(selectedPermission.id).unwrap();
       
-      // ✅ Emit socket event for permission deleted
       socket.emit("permission_event", {
         event: "PERMISSION_DELETED",
         data: {
@@ -404,12 +338,10 @@ const SuperPermissionList = () => {
       setSelectedPermission(null);
       refetchPermissions();
     } catch (error) {
-      console.error('Delete error:', error);
       showErrorToast(error?.data?.message || 'Failed to delete permission', 4000);
     }
   };
 
-  // Open edit modal
   const openEditModal = (permission) => {
     setSelectedPermission(permission);
     setFormData({
@@ -420,19 +352,15 @@ const SuperPermissionList = () => {
     setShowEditModal(true);
   };
 
-  // Open delete modal
   const openDeleteModal = (permission) => {
     setSelectedPermission(permission);
     setShowDeleteModal(true);
   };
 
-  // Open view modal
   const openViewModal = (permission) => {
     setSelectedPermission(permission);
     setShowViewModal(true);
   };
-
-  // ============ MODALS ============
 
   // Create Permission Modal
   const CreateModal = () => (
@@ -675,7 +603,6 @@ const SuperPermissionList = () => {
     </Modal>
   );
 
-  // Loading state
   if (isLoadingPermissions) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -687,7 +614,6 @@ const SuperPermissionList = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-6">
           <button 
             onClick={() => navigate('/super-admin/super-permissions')} 
@@ -699,7 +625,6 @@ const SuperPermissionList = () => {
           <p className="text-sm text-gray-500 mt-1">Configure permissions for Role ID: {roleId}</p>
         </div>
 
-        {/* Search and Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="relative w-full md:w-80">
             <input
@@ -729,7 +654,6 @@ const SuperPermissionList = () => {
           </div>
         </div>
 
-        {/* Permissions Table with Checkboxes */}
         <Card>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -847,7 +771,6 @@ const SuperPermissionList = () => {
           </div>
         </Card>
 
-        {/* Footer */}
         <div className="mt-4 flex justify-between items-center">
           <span className="text-sm text-gray-500">
             Total Modules: <span className="font-semibold">{filteredModules.length}</span>
@@ -855,7 +778,6 @@ const SuperPermissionList = () => {
           </span>
         </div>
 
-        {/* Action Buttons */}
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="outline" onClick={() => navigate('/super-admin/super-permissions')}>Cancel</Button>
           <Button 
@@ -870,7 +792,6 @@ const SuperPermissionList = () => {
         </div>
       </div>
 
-      {/* Modals */}
       <CreateModal />
       <EditModal />
       <DeleteModal />

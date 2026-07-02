@@ -19,10 +19,7 @@ import {
 } from '../../../app/service/ads';
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { getS3ImageUrl, uploadToS3 } from '../../../app/service/S3';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerAdEvents, unregisterAdEvents } from '../../socket/adEvents';
 
 // Helper function to format date
@@ -87,7 +84,6 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       
       showSuccessToast('Image uploaded successfully!', 2000);
     } catch (error) {
-      console.error('Upload error:', error);
       showErrorToast('Failed to upload image', 3000);
       setPreviewImage(null);
     } finally {
@@ -344,7 +340,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       
       showSuccessToast('Image uploaded successfully!', 2000);
     } catch (error) {
-      console.error('Upload error:', error);
       showErrorToast('Failed to upload image', 3000);
     } finally {
       setIsUploading(false);
@@ -613,20 +608,15 @@ const Ads = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   
-  // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState(null);
   
-  // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
-
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks
   const { 
     data: adsResponse, 
     isLoading: loading, 
@@ -661,7 +651,6 @@ const Ads = () => {
   const [updateAd, { isLoading: isUpdating }] = useUpdateAdMutation();
   const [deleteAd, { isLoading: isDeleting }] = useDeleteAdMutation();
 
-  // Create a map of hospitalId to hospital name
   const hospitalMap = React.useMemo(() => {
     const map = new Map();
     if (Array.isArray(hospitals)) {
@@ -672,31 +661,22 @@ const Ads = () => {
     return map;
   }, [hospitals]);
 
-  // Get hospital name by ID
   const getHospitalName = (hospitalId) => {
     return hospitalMap.get(hospitalId) || `Hospital ID: ${hospitalId}`;
   };
 
-  // ✅ Register socket event listeners for ad events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering ad event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerAdEvents({
-      onAdCreated: (data) => {
-        console.log("📢 NEW AD CREATED:", data);
-        showSuccessToast(`New ad created for hospital ${data.hospitalName || 'Hospital'}!`, 3000);
+      onAdCreated: () => {
+        showSuccessToast(`New ad created!`, 3000);
         refetch();
       },
-      
-      onAdUpdated: (data) => {
-        console.log("✏️ AD UPDATED:", data);
+      onAdUpdated: () => {
         showSuccessToast(`Ad updated successfully!`, 3000);
         refetch();
       },
-      
-      onAdDeleted: (data) => {
-        console.log("🗑️ AD DELETED:", data);
+      onAdDeleted: () => {
         showSuccessToast(`Ad deleted!`, 3000);
         refetch();
       }
@@ -705,30 +685,25 @@ const Ads = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering ad events...");
       unregisterAdEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Ad events will work!");
       if (!eventsRegistered) {
         registerAdEvents({
-          onAdCreated: (data) => {
-            console.log("📢 NEW AD CREATED (reconnect):", data);
+          onAdCreated: () => {
             showSuccessToast(`New ad created!`, 3000);
             refetch();
           },
-          onAdUpdated: (data) => {
-            console.log("✏️ AD UPDATED (reconnect):", data);
+          onAdUpdated: () => {
             showSuccessToast(`Ad updated!`, 3000);
             refetch();
           },
-          onAdDeleted: (data) => {
-            console.log("🗑️ AD DELETED (reconnect):", data);
+          onAdDeleted: () => {
             showSuccessToast(`Ad deleted!`, 3000);
             refetch();
           }
@@ -737,39 +712,17 @@ const Ads = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Ad events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ADS: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -780,16 +733,13 @@ const Ads = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers
   const handleAddAd = async (newAd) => {
     try {
-      const response = await createAd(newAd).unwrap();
+      await createAd(newAd).unwrap();
       
-      // ✅ Emit socket event for ad created
       socket.emit("ad_event", {
         event: "AD_CREATED",
         data: {
-          adId: response.data?.id || response.id,
           hospitalId: newAd.hospitalId,
           hospitalName: getHospitalName(newAd.hospitalId),
           startDate: newAd.startDate,
@@ -803,7 +753,6 @@ const Ads = () => {
       refetch();
       setShowAddModal(false);
     } catch (error) {
-      console.error('Add error:', error);
       showErrorToast(error?.data?.message || 'Failed to create ad', 3000);
     }
   };
@@ -815,7 +764,6 @@ const Ads = () => {
         data: updatedAd 
       }).unwrap();
       
-      // ✅ Emit socket event for ad updated
       socket.emit("ad_event", {
         event: "AD_UPDATED",
         data: {
@@ -835,7 +783,6 @@ const Ads = () => {
       setShowEditModal(false);
       setSelectedAd(null);
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update ad', 3000);
     }
   };
@@ -848,7 +795,6 @@ const Ads = () => {
         data: { isActive: newStatus } 
       }).unwrap();
       
-      // ✅ Emit socket event for ad updated (status change)
       socket.emit("ad_event", {
         event: "AD_UPDATED",
         data: {
@@ -864,7 +810,6 @@ const Ads = () => {
       showSuccessToast(`Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
       refetch();
     } catch (error) {
-      console.error('Toggle error:', error);
       showErrorToast(error?.data?.message || 'Failed to update ad status', 3000);
     }
   };
@@ -874,7 +819,6 @@ const Ads = () => {
       try {
         await deleteAd(selectedAd.id).unwrap();
         
-        // ✅ Emit socket event for ad deleted
         socket.emit("ad_event", {
           event: "AD_DELETED",
           data: {
@@ -890,13 +834,11 @@ const Ads = () => {
         setShowDeleteModal(false);
         setSelectedAd(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete ad', 3000);
       }
     }
   };
 
-  // Menu handlers
   const toggleMenu = (id, e) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === id ? null : id);
