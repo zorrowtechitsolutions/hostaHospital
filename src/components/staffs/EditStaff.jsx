@@ -1,4 +1,4 @@
-// src/components/staffs/EditStaff.jsx - With Change Password Tab
+// src/components/staffs/EditStaff.jsx - With Debug Logs
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ChevronRight, Upload, X, Shield, ArrowLeft, Lock, Eye, EyeOff } from 'lucide-react';
@@ -20,7 +20,7 @@ import {
 } from '../ui/Toast';
 
 import {
-  useGetStaffByIdQuery,  // ✅ Use getStaffById instead of getStaff
+  useGetStaffByIdQuery,
   useUpdateStaffMutation,
   useDeleteStaffMutation,
   useChangeStaffPasswordMutation
@@ -147,7 +147,7 @@ const EditStaff = () => {
     isLoading: loading,
     refetch
   } = useGetStaffByIdQuery(
-    id, // Pass the id directly
+    id,
     { skip: !id }
   );
   
@@ -158,7 +158,7 @@ const EditStaff = () => {
   const [formData, setFormData] = useState({
     id: '',
     originalId: '',
-    staffId: '', // ✅ Added staffId for display
+    staffId: '',
     name: '',
     gender: 'Male',
     dob: '',
@@ -303,39 +303,40 @@ const EditStaff = () => {
     setIsChangingPassword(true);
 
     try {
-  console.log("formData.id:", formData.id);
+      console.log("formData.id:", formData.id);
 
-  console.log("Password Request:", {
-    staffId: Number(formData.id),
-    currentPassword: passwordData.currentPassword,
-    newPassword: passwordData.newPassword,
-    confirmPassword: passwordData.confirmPassword,
-  });
+      console.log("Password Request:", {
+        staffId: Number(formData.id),
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        confirmPassword: passwordData.confirmPassword,
+      });
 
-  await changeStaffPassword({
-    staffId: Number(formData.id),
-    currentPassword: passwordData.currentPassword,
-    newPassword: passwordData.newPassword,
-    confirmPassword: passwordData.confirmPassword,
-  }).unwrap();
+      await changeStaffPassword({
+        staffId: Number(formData.id),
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        confirmPassword: passwordData.confirmPassword,
+      }).unwrap();
 
-  showSuccessToast("Password changed successfully!", 3000);
+      showSuccessToast("Password changed successfully!", 3000);
 
-  setPasswordData({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
 
-  setPasswordErrors({});
-  setPasswordTouched({});
-  setIsChangingPassword(false);
+      setPasswordErrors({});
+      setPasswordTouched({});
+      setIsChangingPassword(false);
 
-} catch (error) {
-  console.error("Password change error:", error);
-  setIsChangingPassword(false);
-}
-  }
+    } catch (error) {
+      console.error("Password change error:", error);
+      setIsChangingPassword(false);
+    }
+  };
+
   // Populate form data from API response
   useEffect(() => {
     if (staffData?.data) {
@@ -361,7 +362,7 @@ const EditStaff = () => {
     setFormData({
       id: staff.id || staff._id || '',
       originalId: staff.id || staff._id || '',
-      staffId: formatStaffId(staff.id || staff._id || ''), // ✅ Added formatted staff ID
+      staffId: formatStaffId(staff.id || staff._id || ''),
       name: staff.name || '',
       gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : 'Male',
       dob: staff.dob ? staff.dob.split('T')[0] : '',
@@ -398,7 +399,7 @@ const EditStaff = () => {
     }
   };
 
-  // Image upload handler
+  // ✅ FIXED: Image upload handler with hospital ID and DEBUG LOGS
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
@@ -418,7 +419,25 @@ const EditStaff = () => {
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, formData.id || null);
+      
+      // ✅ DEBUG LOGS - Add these before the uploadToS3 call
+      console.log("🔍 === EDIT STAFF UPLOAD DEBUG ===");
+      console.log("🏥 Hospital ID:", hospitalId);
+      console.log("🖼️ Image Key:", formData.imageKey);
+      console.log("👤 Role:", "staff");
+      console.log("📁 Staff ID:", formData.id);
+      console.log("📄 File name:", file.name);
+      console.log("📦 File size:", (file.size / 1024).toFixed(2), "KB");
+      console.log("==================================");
+      
+      // ✅ FIX: Use hospitalId for S3 upload (NOT staff ID)
+      const uploaded = await uploadToS3(
+        file, 
+        formData.imageKey || null,
+        Number(formData.id),  // ✅ Use hospital ID
+        "staff"              // ✅ Role is "staff"
+      );
+      
       setUploadProgress(100);
       
       // Store the key in all three fields
@@ -740,8 +759,6 @@ const EditStaff = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {submitSuccess && <Alert type="success" message="Staff updated successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
-      {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
 
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -855,7 +872,7 @@ const EditStaff = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
-                {/* ✅ Staff ID field - Added back */}
+                {/* ✅ Staff ID field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
                   <input 

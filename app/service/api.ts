@@ -7,11 +7,12 @@ import {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
-import { getToken, clearAuth } from "../../src/utils/auth";
+import { getToken, clearAuth, getAuthUser } from "../../src/utils/auth";
 
 interface RefreshResponse {
   token?: string;
   accessToken?: string;
+  refreshToken?: string;
 }
 
 const baseQuery = fetchBaseQuery({
@@ -34,12 +35,21 @@ const baseQueryWithReauth: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  if (result.error && result.error.status === 401) {
-    console.log("🔑 Token expired. Refreshing...");
+  if (result.error?.status === 401) {
+    // Get user role to determine refresh endpoint
+    const auth = getAuthUser();
+    
+    let refreshUrl = "/hospital/refresh";
+    
+    if (auth?.role === "doctor") {
+      refreshUrl = "/doctor/refresh";
+    } else if (auth?.role === "staff") {
+      refreshUrl = "/staff/refresh";
+    }
 
     const refreshResult = await baseQuery(
       {
-        url: "/hospital/refresh",
+        url: refreshUrl,
         method: "POST",
       },
       api,
@@ -47,18 +57,33 @@ const baseQueryWithReauth: BaseQueryFn<
     );
 
     if (refreshResult.data) {
-      const refreshData = refreshResult.data as RefreshResponse;
-      const newToken = refreshData.token || refreshData.accessToken;
+      const data = refreshResult.data as RefreshResponse;
+      const newToken = data.token || data.accessToken;
 
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
+
+        if (data.refreshToken) {
+          localStorage.setItem("refreshToken", data.refreshToken);
+        }
+
+        // Retry original request with new token
         result = await baseQuery(args, api, extraOptions);
-      } else {
-        clearAuth();
+        return result;
       }
-    } else {
-      clearAuth();
     }
+
+    // Refresh failed - clear auth and return error
+    clearAuth();
+
+    return {
+      error: {
+        status: 401,
+        data: {
+          message: "Session expired. Please login again.",
+        },
+      },
+    };
   }
 
   return result;
@@ -85,13 +110,14 @@ export const api = createApi({
     "Vitals",
     "PrescriptionTemplate",
     "Permission",
-    "Notification",    
-    "Notifications",   
+    "Notification",
+    "Notifications",
     "Ads",
     "Document",
     "LabResult",
     "Reviews",
-    "Category"
+    "Category",
+    "emailEnquiry"
   ],
   endpoints: () => ({}),
 });

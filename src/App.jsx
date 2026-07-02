@@ -80,7 +80,7 @@ function App() {
   const [booking, setBooking] = useState(null);
   const navigate = useNavigate();
 
- // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
+  // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
   useEffect(() => {
     // ✅ Initialize socket connection when app loads
     const socketInstance = initSocket();
@@ -240,7 +240,12 @@ function App() {
       <div className="flex h-screen bg-gray-50 font-sans">
         <Sidebar sidebarOpen={sidebarOpen} />
         
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+        {/* ✅ FIX 1: Added min-w-0 to allow content to shrink properly */}
+        <div
+          className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
+            sidebarOpen ? "ml-64" : "ml-20"
+          }`}
+        >
           <TopBar
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
@@ -311,7 +316,8 @@ function App() {
             />
           )}
           
-          <div className="flex-1 overflow-y-auto">
+          {/* ✅ FIX 2: Added overflow-x-hidden and min-w-0 */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Public routes within authenticated area */}

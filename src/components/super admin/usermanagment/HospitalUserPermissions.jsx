@@ -1,115 +1,386 @@
-// src/components/superadmin/permission/HospitalPermissionList.jsx
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { ArrowLeft, Building2 } from "lucide-react";
-import { Button, Card, Checkbox, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SearchBar } from "../../ui";
-import { showSuccessToast, showWarningToast, showErrorToast } from "../../ui/Toast";
+// src/components/superadmin/usermanagement/HospitalUserPermissions.jsx
+import React, { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  useCreateRolePermissionMutation,
-  useGetRolePermissionsQuery,
-} from "../../../../app/service/rolePermission";
-import { useGetPermissionsQuery } from "../../../../app/service/permission";
+  Check,
+  X,
+  Calendar,
+  Stethoscope,
+  Filter,
+  RefreshCcw,
+  Download,
+  Upload,
+  Users as UsersIcon,
+  Phone,
+  Trash2,
+  MoreVertical,
+  Eye,
+  Edit,
+  Shield,
+  ArrowLeft,
+  Building2
+} from "lucide-react";
+import { 
+  Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
+  TableCell, Modal, Badge, SearchBar, Pagination 
+} from '../../ui';
+import { showSuccessToast, showWarningToast, showErrorToast, showAddToast, showDeleteToast } from '../../ui/Toast';
+import {
+  useGetRolesQuery,
+  useCreateRoleMutation,
+  useUpdateRoleMutation,
+  useDeleteRoleMutation,
+} from "../../../../app/service/role";
 
 // ✅ Import socket
 import { socket } from '../../../socket/socket';
 // ✅ Import socket event listeners
-import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
-import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
+import { registerRoleEvents, unregisterRoleEvents } from '../../../socket/roleEvents';
 
-const HospitalPermissionList = () => {
-  const { hospitalId, roleId } = useParams();
+// Constants
+const ADMIN_ROLE_ID = 2;
+const ITEMS_PER_PAGE = 5;
+const dropdownItemClass = "w-full px-4 py-2 text-left text-sm flex items-center gap-2";
+const iconButtonClass = "p-2 border border-gray-200 rounded-md bg-white hover:bg-gray-50";
+
+// Helper functions
+const getCreatedDate = (role) => role?.createdDate || role?.createdAt || '-';
+const isAdminRole = (role) => role?.id === ADMIN_ROLE_ID;
+
+// Helper to update role form fields
+const updateRoleField = (setter) => (field) => (value) => {
+  setter(prev => ({
+    ...prev,
+    [field]: value
+  }));
+};
+
+// Modal Footer Component
+const ModalFooter = ({ onCancel, onSubmit, isSubmitting, submitText = "Save", cancelText = "Cancel" }) => (
+  <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+    <Button type="button" variant="outline" onClick={onCancel}>
+      {cancelText}
+    </Button>
+    <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting || undefined}>
+      {isSubmitting ? 'Processing...' : submitText}
+    </Button>
+  </div>
+);
+
+// Role Form Modal
+const RoleFormModal = memo(({
+  isOpen,
+  onClose,
+  title,
+  roleData,
+  onFieldChange,
+  onSubmit,
+  isSubmitting
+}) => {
+  const handleFieldChange = (field) => (e) => {
+    onFieldChange(field)(e.target.value);
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="md">
+      <form onSubmit={onSubmit}>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Role Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={roleData.name}
+            onChange={handleFieldChange('name')}
+            placeholder="Enter role name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={roleData.description}
+            onChange={handleFieldChange('description')}
+            placeholder="Enter role description"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+          />
+        </div>
+
+        <ModalFooter
+          onCancel={onClose}
+          onSubmit={onSubmit}
+          isSubmitting={isSubmitting}
+          submitText={title === "Create New Role" ? "Create Role" : "Save Changes"}
+        />
+      </form>
+    </Modal>
+  );
+});
+
+// View Role Modal
+const ViewRoleModal = memo(({ isOpen, onClose, role }) => {
+  if (!role) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="View Role Details" size="md">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Role Name</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {role.name}
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {role.description || '-'}
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Created Date</label>
+          <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+            {getCreatedDate(role)}
+          </div>
+        </div>
+        <ModalFooter onCancel={onClose} onSubmit={() => {}} submitText="Close" />
+      </div>
+    </Modal>
+  );
+});
+
+// Delete Role Modal
+const DeleteRoleModal = memo(({ isOpen, onClose, role, onConfirm, isDeleting }) => {
+  if (!role) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Delete Role" size="sm" showCloseButton={false}>
+      <div className="text-center">
+        <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center rounded-full bg-red-100">
+          <Trash2 className="w-6 h-6 text-red-500" />
+        </div>
+        <p className="text-sm text-gray-500 mb-6">
+          Are you sure you want to delete <span className="font-medium">{role.name}</span>?
+        </p>
+        <div className="flex justify-center gap-3">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" onClick={onConfirm} disabled={isDeleting} loading={isDeleting || undefined}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+});
+
+// Role Dropdown Component
+const RoleDropdown = memo(({ role, onView, onEdit, onDelete, onPermissions }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  if (isAdminRole(role)) {
+    return null;
+  }
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <Button variant="ghost" size="sm" onClick={() => setIsOpen(!isOpen)} className={iconButtonClass}>
+        <MoreVertical size={18} />
+      </Button>
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+          <button onClick={() => { onView(role); setIsOpen(false); }} className={`${dropdownItemClass} text-gray-700 hover:bg-gray-50`}>
+            <Eye size={16} /> View
+          </button>
+          <button onClick={() => { onEdit(role); setIsOpen(false); }} className={`${dropdownItemClass} text-gray-700 hover:bg-gray-50`}>
+            <Edit size={16} /> Edit
+          </button>
+          <button onClick={() => { onDelete(role); setIsOpen(false); }} className={`${dropdownItemClass} text-red-600 hover:bg-red-50`}>
+            <Trash2 size={16} /> Delete
+          </button>
+          <div className="border-t border-gray-100 my-1"></div>
+          <button onClick={() => { onPermissions(role); setIsOpen(false); }} className={`${dropdownItemClass} text-gray-700 hover:bg-gray-50`}>
+            <Shield size={16} /> Permissions
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// Loading Skeleton Component
+const RoleSkeleton = () => (
+  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="p-1 w-9 h-9 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="h-7 w-48 bg-gray-200 rounded animate-pulse mt-2"></div>
+      <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mt-1"></div>
+    </div>
+    <Card className="min-h-[400px] flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0]"></div>
+        <p className="mt-3 text-gray-500">Loading roles...</p>
+      </div>
+    </Card>
+  </div>
+);
+
+// NewRoleModal Component
+const NewRoleModal = memo(({ showNewRoleModal, setShowNewRoleModal, newRole, setNewRole, handleNewRoleSubmit, isSubmitting }) => {
+  const updateNewRoleField = (field) => (value) => {
+    setNewRole(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <RoleFormModal
+      isOpen={showNewRoleModal}
+      onClose={() => setShowNewRoleModal(false)}
+      title="Create New Role"
+      roleData={newRole}
+      onFieldChange={updateNewRoleField}
+      onSubmit={handleNewRoleSubmit}
+      isSubmitting={isSubmitting}
+    />
+  );
+});
+
+// EditRoleModal Component
+const EditRoleModal = memo(({ showEditRoleModal, setShowEditRoleModal, editRole, setEditRole, handleEditRoleSubmit, isSubmitting }) => {
+  const updateEditRoleField = (field) => (value) => {
+    setEditRole(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <RoleFormModal
+      isOpen={showEditRoleModal}
+      onClose={() => setShowEditRoleModal(false)}
+      title="Edit Role"
+      roleData={editRole}
+      onFieldChange={updateEditRoleField}
+      onSubmit={handleEditRoleSubmit}
+      isSubmitting={isSubmitting}
+    />
+  );
+});
+
+const HospitalUserPermissions = () => {
   const navigate = useNavigate();
+  const { hospitalId } = useParams();
   const location = useLocation();
-  const { hospitalName, roleName } = location.state || {};
+  const hospitalName = location.state?.hospitalName || 'Hospital';
 
-  const [mainModules, setMainModules] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = ITEMS_PER_PAGE;
 
   // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const [createRolePermission] = useCreateRolePermissionMutation();
-
-  // Get all permissions data
-  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
+  // Fetch roles for this specific hospital
+  const {
+    data,
+    isLoading,
+    refetch,
+    error,
+  } = useGetRolesQuery({ hospitalId });
   
-  // Get role permissions - uses roleId from params
-  const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
-    roleId,
-  });
+  const rolesResponse = data ?? error?.data ?? {};
 
-  // ✅ Register socket event listeners for real-time updates
+  console.log("Hospital Roles Response:", rolesResponse);
+
+  const [createRole] = useCreateRoleMutation();
+  const [updateRole] = useUpdateRoleMutation();
+  const [deleteRole] = useDeleteRoleMutation();
+
+  // Modal states
+  const [showNewRoleModal, setShowNewRoleModal] = useState(false);
+  const [showEditRoleModal, setShowEditRoleModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [roleToDelete, setRoleToDelete] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dropdown state
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const dropdownRefs = useRef({});
+
+  // Form states
+  const [newRole, setNewRole] = useState({ name: '', description: '' });
+  const [editRole, setEditRole] = useState({ name: '', description: '' });
+
+  // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering permission event listeners for Hospital Permission...");
+    console.log("🔄 Registering role event listeners for Hospital...");
+    console.log("📡 Socket connected:", socket.connected);
     
-    registerPermissionEvents({
-      onPermissionRegistered: (data) => {
-        console.log("🔑 New permission registered:", data);
-        showSuccessToast(`New permission created!`, 3000);
-        refetchPermissions();
+    registerRoleEvents({
+      onRoleRegistered: async (data) => {
+        console.log("👤 NEW ROLE REGISTERED:", data);
+        showSuccessToast(`New role registered!`, 3000);
+        await refetch();
       },
-      
-      onPermissionUpdated: (data) => {
-        console.log("✏️ Permission updated:", data);
-        showSuccessToast(`Permission updated!`, 3000);
-        refetchPermissions();
+      onRoleUpdated: async (data) => {
+        console.log("✏️ ROLE UPDATED:", data);
+        showSuccessToast(`Role updated!`, 3000);
+        await refetch();
       },
-      
-      onPermissionDeleted: (data) => {
-        console.log("🗑️ Permission deleted:", data);
-        showSuccessToast(`Permission deleted!`, 3000);
-        refetchPermissions();
-      }
-    });
-
-    registerRolePermissionEvents({
-      onRolePermissionUpdated: (data) => {
-        console.log("🔐 Role permission updated:", data);
-        showSuccessToast(`Role permissions updated!`, 3000);
-        refetchRolePermissions();
-        refetchPermissions();
+      onRoleDeleted: async (data) => {
+        console.log("🗑️ ROLE DELETED:", data);
+        showSuccessToast(`Role deleted!`, 3000);
+        await refetch();
       }
     });
 
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering permission events for Hospital Permission...");
-      unregisterPermissionEvents();
-      unregisterRolePermissionEvents();
+      console.log("🧹 Unregistering role events...");
+      unregisterRoleEvents();
       setEventsRegistered(false);
     };
-  }, [refetchPermissions, refetchRolePermissions]);
+  }, [refetch]);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Permission events will work!");
+      console.log("✅ Socket CONNECTED - Role events will work!");
       if (!eventsRegistered) {
-        registerPermissionEvents({
-          onPermissionRegistered: (data) => {
-            console.log("🔑 New permission registered (reconnect):", data);
-            showSuccessToast(`New permission created!`, 3000);
-            refetchPermissions();
+        registerRoleEvents({
+          onRoleRegistered: async (data) => {
+            console.log("👤 NEW ROLE REGISTERED (reconnect):", data);
+            showSuccessToast(`New role registered!`, 3000);
+            await refetch();
           },
-          onPermissionUpdated: (data) => {
-            console.log("✏️ Permission updated (reconnect):", data);
-            showSuccessToast(`Permission updated!`, 3000);
-            refetchPermissions();
+          onRoleUpdated: async (data) => {
+            console.log("✏️ ROLE UPDATED (reconnect):", data);
+            showSuccessToast(`Role updated!`, 3000);
+            await refetch();
           },
-          onPermissionDeleted: (data) => {
-            console.log("🗑️ Permission deleted (reconnect):", data);
-            showSuccessToast(`Permission deleted!`, 3000);
-            refetchPermissions();
-          }
-        });
-        registerRolePermissionEvents({
-          onRolePermissionUpdated: (data) => {
-            console.log("🔐 Role permission updated (reconnect):", data);
-            showSuccessToast(`Role permissions updated!`, 3000);
-            refetchRolePermissions();
-            refetchPermissions();
+          onRoleDeleted: async (data) => {
+            console.log("🗑️ ROLE DELETED (reconnect):", data);
+            showSuccessToast(`Role deleted!`, 3000);
+            await refetch();
           }
         });
         setEventsRegistered(true);
@@ -117,7 +388,7 @@ const HospitalPermissionList = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Permission events won't work!");
+      console.log("❌ Socket DISCONNECTED - Role events won't work!");
       setEventsRegistered(false);
     };
 
@@ -128,12 +399,12 @@ const HospitalPermissionList = () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [refetchPermissions, refetchRolePermissions, eventsRegistered]);
+  }, [refetch, eventsRegistered]);
 
   // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PERMISSION/HOSPITAL: ${event}:`, args);
+      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL ROLE: ${event}:`, args);
     };
 
     socket.onAny(handleAnyEvent);
@@ -143,320 +414,414 @@ const HospitalPermissionList = () => {
     };
   }, []);
 
-  // Log the permissions data to see the structure
+  // Reset page when search changes
   useEffect(() => {
-    console.log("permissionsData", permissionsData);
-  }, [permissionsData]);
+    setCurrentPage(1);
+  }, [searchTerm]);
 
-  // Dynamically build modules from permissionsData using module and action fields
-  useEffect(() => {
-    if (!permissionsData?.data?.length) return;
+  // Close modal helpers
+  const closeEditModal = () => {
+    setShowEditRoleModal(false);
+    setSelectedRole(null);
+  };
 
-    const hiddenModules = [
-      "users",
-      "donors",
-      "ad",
-      "medicinremainder",
-      "report",
-      "test",
-      "speciality",
-      "role",
-      "permission",
-      "role-permission",
-    ];
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setSelectedRole(null);
+  };
 
-    const modulesMap = new Map();
+  const closeDeleteModal = () => {
+    setRoleToDelete(null);
+    setShowDeleteModal(false);
+  };
 
-    permissionsData.data.forEach((permission) => {
-      const moduleName = permission.module;
-      const action = permission.action;
+  // Update field helpers
+  const updateNewRoleField = updateRoleField(setNewRole);
+  const updateEditRoleField = updateRoleField(setEditRole);
 
-      if (hiddenModules.includes(moduleName?.toLowerCase())) {
-        return;
-      }
+  const handleNewRoleSubmit = useCallback(async (e) => {
+    e.preventDefault();
 
-      if (!moduleName || !action) return;
-
-      if (!modulesMap.has(moduleName)) {
-        modulesMap.set(moduleName, {
-          id: moduleName,
-          name: moduleName.charAt(0).toUpperCase() + moduleName.slice(1),
-          createId: null,
-          editId: null,
-          deleteId: null,
-          viewId: null,
-          create: false,
-          edit: false,
-          delete: false,
-          view: false,
-        });
-      }
-
-      const module = modulesMap.get(moduleName);
-
-      switch (action.toLowerCase()) {
-        case "create":
-          module.createId = permission.id;
-          break;
-        case "edit":
-          module.editId = permission.id;
-          break;
-        case "delete":
-          module.deleteId = permission.id;
-          break;
-        case "view":
-          module.viewId = permission.id;
-          break;
-        default:
-          console.warn("Unknown action:", action);
-      }
-    });
-
-    const modulesArray = Array.from(modulesMap.values());
-    console.log("Built modules (hidden modules excluded):", modulesArray);
-    setMainModules(modulesArray);
-  }, [permissionsData]);
-
-  // Apply assigned permissions to modules
-  useEffect(() => {
-    if (permissionData?.data && mainModules.length > 0) {
-      const assignedPermissions = permissionData.data.map(
-        (item) => Number(item.permissionId)
-      );
-
-      setMainModules((prev) =>
-        prev.map((module) => ({
-          ...module,
-          create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
-          edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
-          delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
-          view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
-        }))
-      );
+    if (!newRole.name.trim()) {
+      showWarningToast("Role name is required");
+      return;
     }
-  }, [permissionData]);
 
-  const togglePermission = (setter, moduleId, permissionType) => {
-    setter(prev => prev.map(module =>
-      module.id === moduleId ? { ...module, [permissionType]: !module[permissionType] } : module
-    ));
-  };
-
-  const toggleAllowAll = (setter, moduleId) => {
-    setter(prev => prev.map(module => {
-      if (module.id === moduleId) {
-        const newValue = !(module.create && module.edit && module.delete && module.view);
-        return { ...module, create: newValue, edit: newValue, delete: newValue, view: newValue };
-      }
-      return module;
-    }));
-  };
-
-  const isAllowAllChecked = (module) => module.create && module.edit && module.delete && module.view;
-
-  const filteredMainModules = mainModules.filter(module => 
-    module.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSave = async () => {
     try {
-      setIsSaving(true);
+      setIsSubmitting(true);
+      await createRole({
+        name: newRole.name,
+        description: newRole.description,
+        hospitalId: Number(hospitalId),
+      }).unwrap();
 
-      let permissionIds = [];
-
-      mainModules.forEach((module) => {
-        if (module.create && module.createId) permissionIds.push(module.createId);
-        if (module.edit && module.editId) permissionIds.push(module.editId);
-        if (module.delete && module.deleteId) permissionIds.push(module.deleteId);
-        if (module.view && module.viewId) permissionIds.push(module.viewId);
-      });
-
-      console.log("Saving permissions:", permissionIds);
-      console.log("Saving permissions details:", {
-        roleId: Number(roleId),
-        permissionIds: permissionIds,
-        count: permissionIds.length
-      });
-
-      const payload = {
-        roleId: Number(roleId),
-        permissionIds,
-      };
-
-      const result = await createRolePermission(payload).unwrap();
-      console.log("Save result:", result);
-
-      // ✅ Emit socket event for role permission updated
-      socket.emit("role_permission_event", {
-        event: "ROLEPERMISSION_UPDATED",
-        data: {
-          roleId: Number(roleId),
-          hospitalId: hospitalId,
-          permissionIds: permissionIds,
-          count: permissionIds.length,
-          timestamp: new Date().toISOString()
-        }
-      });
-
-      showSuccessToast("Permission saved successfully");
+      await refetch();
+      showAddToast(`New role "${newRole.name}" created successfully!`);
+      
+      setNewRole({ name: "", description: "" });
+      setShowNewRoleModal(false);
+      setCurrentPage(1);
     } catch (error) {
-      console.error("Save error:", error);
-      showErrorToast(error?.data?.message || "Failed to save permission");
+      showErrorToast(error?.data?.message || "Failed to create role");
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
-  };
+  }, [newRole, createRole, refetch, hospitalId]);
 
-  const handleCancel = () => {
-    if (window.confirm("Are you sure you want to discard your changes?")) {
-      showWarningToast("Changes discarded. Permissions restored to previous state.", 3000);
-      window.location.reload();
+  const handleEditRoleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+
+    if (isAdminRole(selectedRole)) {
+      showWarningToast("Admin role cannot be edited");
+      return;
     }
-  };
 
-  // ✅ Handle back navigation - go to Hospital User Permissions
+    try {
+      setIsSubmitting(true);
+      await updateRole({
+        id: selectedRole?.id,
+        data: {
+          name: editRole.name,
+          description: editRole.description,
+        },
+      }).unwrap();
+
+      await refetch();
+      showSuccessToast(`Role "${editRole.name}" updated successfully!`);
+      
+      closeEditModal();
+      setCurrentPage(1);
+    } catch (error) {
+      showErrorToast(error?.data?.message || "Failed to update role");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [editRole, selectedRole, updateRole, refetch]);
+
+  const handleDeleteRole = useCallback(async () => {
+    if (isAdminRole(roleToDelete)) {
+      showWarningToast("Admin role cannot be deleted");
+      closeDeleteModal();
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await deleteRole(roleToDelete?.id).unwrap();
+      await refetch();
+      
+      showDeleteToast(`Role "${roleToDelete?.name}" deleted successfully!`);
+      closeDeleteModal();
+      setCurrentPage(1);
+    } catch (error) {
+      showErrorToast(error?.data?.message || "Failed to delete role");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [roleToDelete, deleteRole, refetch]);
+
+  const handleOpenEditModal = useCallback((role) => {
+    setSelectedRole(role);
+    setEditRole({ 
+      name: role.name, 
+      description: role.description || ''
+    });
+    setShowEditRoleModal(true);
+  }, []);
+
+  const handleOpenViewModal = useCallback((role) => {
+    setSelectedRole(role);
+    setShowViewModal(true);
+  }, []);
+
+  const handleOpenDeleteModal = useCallback((role) => {
+    setRoleToDelete(role);
+    setShowDeleteModal(true);
+  }, []);
+
+  // ✅ FIXED: Navigation to HospitalPermissionList with correct path
+  const handleOpenPermissionsPage = useCallback((role) => {
+    navigate(
+      `/super-admin/hospital-users/${hospitalId}/permissions/${role.id}`,
+      {
+        state: {
+          hospitalName,
+          roleName: role.name,
+        },
+      }
+    );
+    setOpenDropdown(null);
+  }, [navigate, hospitalId, hospitalName]);
+
+  // ✅ FIXED: Back button navigation goes to HospitalUsers
   const handleBack = () => {
-    navigate(`/super-admin/hospital-users/${hospitalId}/permissions`, {
-      state: {
+    navigate('/super-admin/hospital-users', {
+      state: { 
         hospitalName: hospitalName,
-        from: "HospitalPermissionList"
+        from: "HospitalUserPermissions"
       }
     });
   };
 
-  const PermissionCheckbox = ({ checked, onToggle, disabled = false }) => (
-    <TableCell className="text-center">
-      <Checkbox checked={checked} onChange={onToggle} disabled={disabled} />
-    </TableCell>
-  );
+  const toggleDropdown = useCallback((roleId) => setOpenDropdown(openDropdown === roleId ? null : roleId), [openDropdown]);
 
-  const PermissionsTable = ({ title, modules, setter, filteredModules }) => (
-    <Card className="mb-8">
-      <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">{title}</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <TableHeader>Module</TableHeader>
-              <TableHeader className="text-center">Create</TableHeader>
-              <TableHeader className="text-center">Edit</TableHeader>
-              <TableHeader className="text-center">Delete</TableHeader>
-              <TableHeader className="text-center">View</TableHeader>
-              <TableHeader className="text-center">Allow All</TableHeader>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filteredModules.length > 0 ? (
-              filteredModules.map((module) => (
-                <tr key={module.id} className="hover:bg-gray-50 transition">
-                  <TableCell><span className="text-sm font-medium text-gray-800">{module.name}</span></TableCell>
-                  <PermissionCheckbox 
-                    checked={module.create} 
-                    onToggle={() => togglePermission(setter, module.id, "create")}
-                    disabled={!module.createId}
-                  />
-                  <PermissionCheckbox 
-                    checked={module.edit} 
-                    onToggle={() => togglePermission(setter, module.id, "edit")}
-                    disabled={!module.editId}
-                  />
-                  <PermissionCheckbox 
-                    checked={module.delete} 
-                    onToggle={() => togglePermission(setter, module.id, "delete")}
-                    disabled={!module.deleteId}
-                  />
-                  <PermissionCheckbox 
-                    checked={module.view} 
-                    onToggle={() => togglePermission(setter, module.id, "view")}
-                    disabled={!module.viewId}
-                  />
-                  <PermissionCheckbox 
-                    checked={isAllowAllChecked(module)} 
-                    onToggle={() => toggleAllowAll(setter, module.id)}
-                    disabled={!module.createId && !module.editId && !module.deleteId && !module.viewId}
-                  />
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">No modules found matching "{searchTerm}"</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-
-  if (isLoadingPermissions) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading permissions...</p>
-        </div>
-      </div>
+  // Filter roles based on search term
+  const filterRoles = (roles, searchTerm) => {
+    if (!searchTerm.trim()) return roles;
+    const term = searchTerm.toLowerCase();
+    return roles.filter(role => 
+      role.name?.toLowerCase().includes(term) ||
+      role.description?.toLowerCase().includes(term)
     );
+  };
+
+  // Filter Admin role by ID
+  const filteredAdminRoles = filterRoles(
+    (rolesResponse?.admin || []).filter(
+      role => role?.id === ADMIN_ROLE_ID && role?.name === "Admin"
+    ),
+    searchTerm
+  );
+
+  // Filter hospital roles
+  const filteredHospitalRoles = filterRoles(
+    rolesResponse?.data || [],
+    searchTerm
+  );
+
+  // Combine and paginate hospital roles
+  const totalHospitalRoles = filteredHospitalRoles.length;
+  const totalPages = Math.ceil(totalHospitalRoles / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedHospitalRoles = filteredHospitalRoles.slice(startIndex, startIndex + itemsPerPage);
+
+  const totalFilteredRoles = filteredAdminRoles.length + filteredHospitalRoles.length;
+
+  const handlePageChange = useCallback((page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  if (isLoading) {
+    return <RoleSkeleton />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleBack} 
-            className="mb-3 text-sm flex items-center gap-1"
+    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      {/* Header with Breadcrumb - Hospital context */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <button
+            onClick={handleBack} // ✅ FIXED: Goes to HospitalUsers
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
           >
-            <ArrowLeft size={16} />
-            Back to Roles
-          </Button>
-          
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Edit Permission</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                {hospitalName || `Hospital ID: ${hospitalId}`} • 
-                <span className="text-gray-800 font-medium ml-1">{roleName || `Role ID: ${roleId}`}</span>
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex gap-4 text-sm text-gray-500">
-            <span>Hospital ID: <span className="font-medium text-gray-700">{hospitalId}</span></span>
-            <span>|</span>
-            <span>Role ID: <span className="font-medium text-gray-700">{roleId}</span></span>
+            <ArrowLeft size={20} className="text-gray-600" />
+          </button>
+          <div className="text-xs text-gray-500">
+            <span className="text-gray-700">Hospital Users</span>
+            <span className="mx-1 text-gray-400">»</span>
+            <span>{hospitalName}</span>
+            <span className="mx-1 text-gray-400">»</span>
+            <span>User Permissions</span>
           </div>
         </div>
-
-        <div className="mb-4 text-right">
-          <span className="text-xs text-gray-400">Last updated: {new Date().toLocaleDateString()}</span>
-        </div>
-
-        <SearchBar placeholder="Search modules..." value={searchTerm} onChange={setSearchTerm} className="mb-5 w-80" />
-
-        {mainModules.length === 0 && !isLoadingPermissions ? (
-          <Card className="p-8 text-center">
-            <p className="text-gray-500">No permissions found. Please check the API response structure.</p>
-            <p className="text-xs text-gray-400 mt-2">Check console for permissionsData log</p>
-          </Card>
-        ) : (
-          <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} filteredModules={filteredMainModules} />
-        )}
-
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} disabled={isSaving} loading={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Permissions'}
-          </Button>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">User Permissions</h1>
+            <p className="text-sm text-gray-500 mt-1">Manage roles and permissions for {hospitalName}</p>
+          </div>
         </div>
       </div>
+
+      <Card>
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Total Roles: {totalFilteredRoles}</h2>
+              <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
+            </div>
+            <div className="flex gap-3">
+              {/* Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by role name or description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 px-4 py-2 pl-10 pr-4 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <svg 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <Button type="button" variant="primary" onClick={() => setShowNewRoleModal(true)} className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                New Role
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {totalFilteredRoles === 0 && searchTerm && (
+          <div className="p-8 text-center">
+            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p className="text-gray-500">No roles found matching "{searchTerm}"</p>
+            <button 
+              onClick={() => setSearchTerm('')} 
+              className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <TableHeader>Role</TableHeader>
+                <TableHeader>Description</TableHeader>
+                <TableHeader>Created Date</TableHeader>
+                <TableHeader>Actions</TableHeader>
+              </tr>
+            </thead>
+            {/* Admin Roles Section */}
+            {filteredAdminRoles.length > 0 && (
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredAdminRoles.map((admin) => (
+                  <tr key={admin?.id} className="hover:bg-gray-50 transition-colors">
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {admin?.name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {admin?.description || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {admin?.createdDate || admin?.createdAt || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <span className="text-xs text-gray-400">System role</span>
+                    </TableCell>
+                  </tr>
+                ))}
+              </tbody>
+            )}
+            
+            {/* Hospital Roles Section */}
+            {paginatedHospitalRoles.length > 0 && (
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginatedHospitalRoles.map((role) => (
+                  <tr key={role?.id} className="hover:bg-gray-50 transition-colors">
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {role?.name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {role?.description || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {role?.createdDate || role?.createdAt || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <RoleDropdown 
+                        role={role}
+                        onView={handleOpenViewModal}
+                        onEdit={handleOpenEditModal}
+                        onDelete={handleOpenDeleteModal}
+                        onPermissions={handleOpenPermissionsPage}
+                      />
+                    </TableCell>
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
+
+        {totalHospitalRoles > 0 && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              totalItems={totalHospitalRoles}
+              itemsPerPage={itemsPerPage}
+              itemLabel="hospital roles"
+            />
+          </div>
+        )}
+
+        {totalFilteredRoles === 0 && !searchTerm && (
+          <div className="p-8 text-center">
+            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <p className="text-gray-500">{rolesResponse?.message || "No roles found"}</p>
+          </div>
+        )}
+      </Card>
+
+      <NewRoleModal
+        showNewRoleModal={showNewRoleModal}
+        setShowNewRoleModal={setShowNewRoleModal}
+        newRole={newRole}
+        setNewRole={setNewRole}
+        handleNewRoleSubmit={handleNewRoleSubmit}
+        isSubmitting={isSubmitting}
+      />
+      <EditRoleModal
+        showEditRoleModal={showEditRoleModal}
+        setShowEditRoleModal={setShowEditRoleModal}
+        editRole={editRole}
+        setEditRole={setEditRole}
+        handleEditRoleSubmit={handleEditRoleSubmit}
+        isSubmitting={isSubmitting}
+      />
+
+      <ViewRoleModal
+        isOpen={showViewModal}
+        onClose={closeViewModal}
+        role={selectedRole}
+      />
+
+      <DeleteRoleModal
+        isOpen={roleToDelete !== null}
+        onClose={closeDeleteModal}
+        role={roleToDelete}
+        onConfirm={handleDeleteRole}
+        isDeleting={isSubmitting}
+      />
     </div>
   );
 };
 
-export default HospitalPermissionList;
+export default HospitalUserPermissions;

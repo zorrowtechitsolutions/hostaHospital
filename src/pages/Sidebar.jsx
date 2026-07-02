@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx - With proper parent/child active states, hospital name
+// src/components/Sidebar.jsx - With proper immutability and memoization
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -22,50 +22,47 @@ import {
   HelpCircle,
   ShieldCheck,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
+import { hasPermission } from "../utils/permission";
 
+// ✅ Menu with permission IDs - Dashboard has no permission (always visible)
 const menu = [
   {
     title: "MAIN",
     items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+      { 
+        label: "Dashboard", 
+        icon: LayoutDashboard, 
+        path: "/dashboard" 
+        // ✅ No permissionId - always visible for all roles
+      },
     ],
   },
   {
     title: "HEALTHCARE",
     items: [
-      { label: "Patients", icon: Users, path: "/patients" },
-      { label: "Doctors", icon: Stethoscope, path: "/doctors" },
-      // {label: "Specialities", icon: Pill, path: "/specialities"},
-      { label: "Requests", icon: ClipboardList, path: "/requests" },
+      { label: "Patients", icon: Users, path: "/patients", permissionId: 14 },
+      { label: "Doctors", icon: Stethoscope, path: "/doctors", permissionId: 2 },
+      { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 7 },
       {
         label: "Appointments",
         icon: CalendarDays,
+        permissionId: 6,
         hasDropdown: true,
         dropdownItems: [
-          { label: "Appointments List", icon: FileClock, path: "/appointments" },
-          { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation" },
+          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 6 },
+          { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation", permissionId: 6 },
         ],
       },
-      { label: "Visits", icon: Activity, path: "/visits" },
-      { label: "Ambulance", icon: Ambulance, path: "/ambulance" },
-      { label: "Blood Bank", icon: Droplet, path: "/blood" },
-      // {
-      //   label: "Laboratory",
-      //   icon: FlaskConical,
-      //   hasDropdown: true,
-      //   dropdownItems: [
-      //     { label: "Register Lab", icon: PlusCircle, path: "/laboratory" },
-      //     { label: "Lab Tests", icon: Microscope, path: "/lab/tests" },
-      //     { label: "Lab Results", icon: FileText, path: "/lab/results" },
-      //   ],
-      // },
+      { label: "Visits", icon: Activity, path: "/visits", permissionId: 9 },
+      { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 46 },
+      { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
     ],
   },
   {
     title: "MANAGE",
-    items: [{ label: "Staffs", icon: UserCog, path: "/staffs" }],
+    items: [{ label: "Staffs", icon: UserCog, path: "/staffs", permissionId: 10 }],
   },
   {
     title: "SYSTEM",
@@ -74,21 +71,25 @@ const menu = [
         label: "Settings",
         icon: Settings,
         path: "/settings",
+        permissionId: 52,
       },
       {
         label: "User Management",
         icon: UserCog,
+        permissionId: 50,
         hasDropdown: true,
         dropdownItems: [
           {
             label: "Users",
             icon: Users,
             path: "/users",
+            permissionId: 50,
           },
           {
             label: "Group Permission",
             icon: ShieldCheck,
             path: "/roles",
+            permissionId: 51,
           },
         ],
       },
@@ -96,14 +97,14 @@ const menu = [
   },
   {
     title: "HELP",
-    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }],
+    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help", permissionId: 53 }],
   },
 ];
 
 export default function Sidebar({ sidebarOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth(); // Get logged-in hospital data
+  const { user } = useAuth();
   const [openDropdowns, setOpenDropdowns] = useState({});
 
   const toggleDropdown = (label) => {
@@ -112,28 +113,75 @@ export default function Sidebar({ sidebarOpen }) {
     }));
   };
 
-  // FIXED: Exact match for highlighting active items
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  // FIXED: Keep dropdown open if any child path matches (including nested routes)
   const shouldKeepOpen = (dropdownItems) => {
     return dropdownItems?.some(
       (item) => location.pathname.startsWith(item.path)
     );
   };
 
-  // Check if any dropdown item is active for parent styling
   const isDropdownItemActive = (dropdownItems) => {
     return dropdownItems?.some(
       (item) => location.pathname === item.path
     );
   };
 
+  // ✅ Memoize filtered menu to prevent unnecessary recalculations
+  const filteredMenu = useMemo(() => {
+    return menu
+      .map((section) => {
+        // ✅ Create new items array without mutating original
+        const visibleItems = section.items
+          .map((item) => {
+            // ✅ Dashboard is always visible (no permissionId)
+            if (item.path === "/dashboard") return item;
+            
+            // For items with dropdown
+            if (item.hasDropdown) {
+              // ✅ Filter dropdown items without mutating original
+              const visibleDropdownItems = item.dropdownItems.filter(
+                (dropdownItem) => {
+                  if (!dropdownItem.permissionId) return true;
+                  return hasPermission(dropdownItem.permissionId);
+                }
+              );
+              
+              // If no dropdown items are visible, hide the parent
+              if (visibleDropdownItems.length === 0) return null;
+              
+              // ✅ Return new object instead of mutating
+              return {
+                ...item,
+                dropdownItems: visibleDropdownItems,
+              };
+            }
+            
+            // For regular items
+            if (!item.permissionId) return item;
+            if (!hasPermission(item.permissionId)) return null;
+            
+            return item;
+          })
+          .filter(Boolean); // Remove null items
+
+        // ✅ Only return section if it has visible items
+        if (visibleItems.length === 0) return null;
+
+        return {
+          ...section,
+          items: visibleItems,
+        };
+      })
+      .filter(Boolean); // Remove null sections
+  }, []); // ✅ Empty dependency array - menu is static
+
+  // ✅ Effect only depends on location.pathname
   useEffect(() => {
     const newOpenState = {};
-    menu.forEach((section) => {
+    filteredMenu.forEach((section) => {
       section.items.forEach((item) => {
         if (item.hasDropdown && shouldKeepOpen(item.dropdownItems)) {
           newOpenState[item.label] = true;
@@ -141,7 +189,10 @@ export default function Sidebar({ sidebarOpen }) {
       });
     });
     setOpenDropdowns((prev) => ({ ...prev, ...newOpenState }));
-  }, [location.pathname]);
+  }, [location.pathname, filteredMenu]);
+
+  // ✅ Check if we should show section titles
+  const shouldShowTitles = filteredMenu.length > 1;
 
   return (
     <div
@@ -149,30 +200,31 @@ export default function Sidebar({ sidebarOpen }) {
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-      {/* Updated Logo Section with dynamic hospital name */}
+      {/* Logo Section */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
           <h1 className="text-lg font-semibold truncate">
-            {user?.name || "Dreams EMR"}
+            {user?.name || "Hospital"}
           </h1>
         ) : (
           <h1 className="text-lg font-semibold text-center">
-            {(user?.name || "D").charAt(0).toUpperCase()}
+            {(user?.name || "H").charAt(0).toUpperCase()}
           </h1>
         )}
       </div>
 
-      {/* Menu with custom scrollbar */}
+      {/* Menu with custom scrollbar - Only render filtered sections */}
       <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-slate-700">
-        {menu.map((section) => (
+        {filteredMenu.map((section) => (
           <div key={section.title}>
-            {sidebarOpen && (
+            {/* ✅ Only show section title if there are multiple sections */}
+            {sidebarOpen && shouldShowTitles && (
               <p className="text-xs text-gray-400 mb-2">{section.title}</p>
             )}
 
             <div className="space-y-1">
               {section.items.map((item) => {
-                // For items with dropdown (Appointments, User Management)
+                // For items with dropdown
                 if (item.hasDropdown) {
                   const dropdownActive = isDropdownItemActive(item.dropdownItems);
                   const isOpen = openDropdowns[item.label] || shouldKeepOpen(item.dropdownItems);
@@ -194,7 +246,7 @@ export default function Sidebar({ sidebarOpen }) {
                           rounded-md text-sm transition
                           ${
                             dropdownActive
-                              ? "bg-slate-700 text-white"  // Softer active state when child is active
+                              ? "bg-slate-700 text-white"
                               : "text-gray-300 hover:bg-slate-700"
                           }
                         `}
@@ -229,7 +281,7 @@ export default function Sidebar({ sidebarOpen }) {
                                   rounded-md text-sm transition relative group
                                   ${
                                     dropdownItemActive
-                                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md" // Bright blue for exact match
+                                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
                                       : "text-gray-400 hover:bg-slate-700 hover:text-gray-200"
                                   }
                                 `}

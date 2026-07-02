@@ -116,11 +116,11 @@ export const staffApi = api.injectEndpoints({
     >({
       query: (params) => {
         const queryParams = new URLSearchParams();
-        const hospitalId = getHospitalId();
+        // const hospitalId = getHospitalId();
 
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
+        // if (hospitalId) {
+        //   queryParams.append("hospitalId", String(hospitalId));
+        // }
         
         if (params?.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
@@ -285,12 +285,23 @@ export const staffApi = api.injectEndpoints({
         method: "POST",
       }),
       transformResponse: (response: StaffResponse) => {
+        console.log("🔄 Staff token refresh initiated...");
+        
         const token = response.token;
         if (token) {
           localStorage.setItem("accessToken", token);
+          console.log("✅ Staff token refreshed successfully");
+        } else {
+          console.warn("⚠️ No token received from refresh endpoint");
         }
+        
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+        }
+        
         return response;
       },
+      invalidatesTags: ["Staff"],
     }),
 
     // ================= LOGOUT =================
@@ -306,6 +317,8 @@ export const staffApi = api.injectEndpoints({
         try {
           await queryFulfilled;
           localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+          console.log("🔴 Staff logged out");
         } catch (error) {
           console.error("Logout error:", error);
         }

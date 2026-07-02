@@ -151,6 +151,13 @@ const NotificationPanel = ({ isOpen, onClose }) => {
       
       console.log("✅ Mark as read response:", response);
       
+      // ✅ Emit socket event for real-time updates
+      socket.emit("notification_read", {
+        notificationId: notificationId,
+        hospitalId: hospitalId,
+        userId: userRole
+      });
+      
       // ✅ Check if refetch is available before calling
       if (refetch) {
         await refetch();
@@ -159,6 +166,14 @@ const NotificationPanel = ({ isOpen, onClose }) => {
     } catch (error) {
       console.error("❌ Mark as read error:", error);
       showErrorToast("Failed to mark as read", 2000);
+    }
+  };
+
+  // ✅ Handle notification click - marks as read if unread
+  const handleNotificationClick = (notification) => {
+    const isUnread = !notification.hospitalReadStatus?.[hospitalId];
+    if (isUnread) {
+      handleMarkAsRead(notification.id);
     }
   };
 
@@ -180,6 +195,13 @@ const NotificationPanel = ({ isOpen, onClose }) => {
         notificationIds,
       }).unwrap();
 
+      // ✅ Emit socket event for real-time updates
+      socket.emit("notifications_read_all", {
+        hospitalId: hospitalId,
+        userId: userRole,
+        count: notificationIds.length
+      });
+
       // ✅ Check if refetch is available before calling
       if (refetch) {
         await refetch();
@@ -193,7 +215,8 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   };
 
   // Delete notification
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = (id, e) => {
+    e.stopPropagation(); // ✅ Prevent notification click from firing
     setSelectedNotificationId(id);
     setShowDeleteConfirm(true);
   };
@@ -201,6 +224,13 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   const confirmDelete = async () => {
     try {
       await deleteNotification(selectedNotificationId).unwrap();
+      
+      // ✅ Emit socket event for real-time updates
+      socket.emit("notification_deleted", {
+        notificationId: selectedNotificationId,
+        hospitalId: hospitalId
+      });
+      
       // ✅ Check if refetch is available before calling
       if (refetch) {
         await refetch();
@@ -313,7 +343,8 @@ const NotificationPanel = ({ isOpen, onClose }) => {
               return (
                 <div 
                   key={notif.id} 
-                  className="group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 bg-purple-50 dark:bg-purple-900/20"
+                  onClick={() => handleNotificationClick(notif)}
+                  className="group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 bg-purple-50 dark:bg-purple-900/20 cursor-pointer"
                 >
                   <div className="flex items-start gap-3">
                     {/* Unread indicator */}
@@ -338,23 +369,13 @@ const NotificationPanel = ({ isOpen, onClose }) => {
                           </div>
                         </div>
                         
-                        {/* ✅ Mark as read button */}
-                        <button
-                          onClick={() => handleMarkAsRead(notif.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-800 transition-all flex-shrink-0"
-                          title="Mark as read"
-                        >
-                          <CheckCircle size={16} className="text-purple-500 hover:text-purple-600" />
-                        </button>
+                        {/* ❌ Removed Mark as read button - now clicking the notification marks it as read */}
                       </div>
                     </div>
                     
                     {/* Delete button */}
                     <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteClick(notif.id);
-                      }}
+                      onClick={(e) => handleDeleteClick(notif.id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex-shrink-0"
                     >
                       <Trash2 size={14} className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400" />

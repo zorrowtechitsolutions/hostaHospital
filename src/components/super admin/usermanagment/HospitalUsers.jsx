@@ -54,9 +54,13 @@ const HospitalUsers = () => {
   );
   const totalPages = Math.ceil(filteredHospitals.length / itemsPerPage);
 
+  // ✅ FIXED: Correct navigation path matching router
   const handleHospitalClick = (hospital) => {
-    navigate(`/super-admin/hospital-users/${hospital.id}/users`, {
-      state: { hospitalName: hospital.name, hospitalId: hospital.id }
+    navigate(`/super-admin/hospital-users/${hospital.id}/permissions`, {
+      state: { 
+        hospitalName: hospital.name,
+        hospitalId: hospital.id 
+      }
     });
   };
 

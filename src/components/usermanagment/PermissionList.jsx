@@ -159,22 +159,22 @@ const PermissionList = () => {
 
   // Apply assigned permissions to modules
   useEffect(() => {
-    if (permissionData?.data && mainModules.length > 0) {
-      const assignedPermissions = permissionData.data.map(
-        (item) => Number(item.permissionId)
-      );
+  if (!permissionData?.data || mainModules.length === 0) return;
 
-      setMainModules((prev) =>
-        prev.map((module) => ({
-          ...module,
-          create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
-          edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
-          delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
-          view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
-        }))
-      );
-    }
-  }, [permissionData]);
+  const assignedPermissions = permissionData.data.map(item =>
+    Number(item.permissionId)
+  );
+
+  setMainModules(prev =>
+    prev.map(module => ({
+      ...module,
+      create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
+      edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
+      delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
+      view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
+    }))
+  );
+}, [permissionData, mainModules.length]); 
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -199,6 +199,7 @@ const PermissionList = () => {
   );
 
   const handleSave = async () => {
+    
     try {
       setIsSaving(true);
 
@@ -210,7 +211,7 @@ const PermissionList = () => {
         if (module.delete && module.deleteId) permissionIds.push(module.deleteId);
         if (module.view && module.viewId) permissionIds.push(module.viewId);
       });
-
+     
       // Log what's being saved
       console.log("Saving permissions:", permissionIds);
       console.log("Saving permissions details:", {

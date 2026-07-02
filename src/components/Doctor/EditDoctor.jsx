@@ -757,6 +757,7 @@ const EditDoctor = () => {
     }));
   }, []);
 
+  // ✅ FIXED: handleImageUpload with explicit doctor ID and role
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -776,7 +777,15 @@ const EditDoctor = () => {
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null);
+      
+      // ✅ FIX: Pass the doctor ID and role explicitly
+      const uploaded = await uploadToS3(
+        file, 
+        formData.imageKey || null,
+        Number(doctorId),  // ✅ Pass doctor ID explicitly
+        "doctor"           // ✅ Pass role explicitly
+      );
+      
       setUploadProgress(100);
       
       setFormData(prev => ({

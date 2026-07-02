@@ -33,6 +33,9 @@ export interface GetSpecialityParams {
 // ================= API =================
 
 export const specialityApi = api.injectEndpoints({
+  // ✅ Add this to prevent the override error
+  overrideExisting: false,
+  
   endpoints: (builder) => ({
 
     // ================= GET SPECIALITIES =================
@@ -168,7 +171,7 @@ export const specialityApi = api.injectEndpoints({
         "speciality",
       ],
     }),
-  }),
+      }),
 });
 
 // ================= EXPORT HOOKS =================

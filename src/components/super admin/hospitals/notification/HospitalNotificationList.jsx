@@ -1,16 +1,13 @@
 // src/components/super-admin/hospital/HospitalNotificationList.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, CheckCircle, Eye, Building2 } from 'lucide-react';
+import { Bell, ArrowLeft, Calendar, UserPlus, XCircle, RefreshCcw, Eye, Building2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
-  useGetNotificationsByHospitalQuery,
-  useMarkAllNotificationsAsReadByHospitalMutation,
-  useDeleteNotificationMutation,
-  useUpdateNotificationMutation,
-  useDeleteNotificationsByHospitalMutation,
+  useGetUnreadNotificationsQuery,
+  useGetReadNotificationsQuery,
 } from '../../../../../app/service/notification';
-import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
+import { showSuccessToast } from '../../../ui/Toast';
 import { Pagination } from '../../../ui/Pagination';
 import { Button, Card, Badge } from '../../../ui';
 
@@ -22,97 +19,55 @@ import { registerNotificationEvents, unregisterNotificationEvents } from '../../
 const HospitalNotificationList = () => {
   const { id: hospitalId } = useParams();
   const navigate = useNavigate();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [selectedNotificationId, setSelectedNotificationId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [showFilters, setShowFilters] = useState(false);
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
   
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ Use the API with proper hospitalId
+  // ✅ Get unread notifications: /notification/unread/hospital/1
   const { 
-    data: notificationsData, 
-    isLoading, 
-    error,
-    refetch,
-    isFetching
-  } = useGetNotificationsByHospitalQuery({
-    hospitalId: Number(hospitalId),
-    page: currentPage,
-    limit: itemsPerPage,
+    data: unreadData, 
+    isLoading: unreadLoading,
+    refetch: refetchUnread,
+    isFetching: isFetchingUnread
+  } = useGetUnreadNotificationsQuery({
+    role: 'hospital',
+    id: Number(hospitalId),
   }, {
     skip: !hospitalId,
   });
 
-  const [markAllAsRead] = useMarkAllNotificationsAsReadByHospitalMutation();
-  const [deleteNotification] = useDeleteNotificationMutation();
-  const [deleteAllNotifications] = useDeleteNotificationsByHospitalMutation();
-  const [updateNotification] = useUpdateNotificationMutation();
-
-  // ✅ Get notifications from response - handle different response structures
-  let allNotifications = notificationsData?.data || notificationsData?.notifications || [];
-  
-  // If the API returns data in a different format, try to extract it
-  if (notificationsData?.data && Array.isArray(notificationsData.data)) {
-    allNotifications = notificationsData.data;
-  } else if (notificationsData?.notifications && Array.isArray(notificationsData.notifications)) {
-    allNotifications = notificationsData.notifications;
-  } else if (Array.isArray(notificationsData)) {
-    allNotifications = notificationsData;
-  }
-
-  // ✅ Filter notifications for this hospital (client-side fallback)
-  const hospitalNotifications = allNotifications.filter(notification => {
-    // Check if notification has hospitalIds array
-    if (notification.hospitalIds && Array.isArray(notification.hospitalIds)) {
-      return notification.hospitalIds.includes(Number(hospitalId));
-    }
-    // Check if notification has hospitalId field
-    if (notification.hospitalId) {
-      return String(notification.hospitalId) === String(hospitalId);
-    }
-    // If no hospitalId, include it (might be a system notification)
-    return true;
+  // ✅ Get read notifications: /notification/read/hospital/1
+  const { 
+    data: readData, 
+    isLoading: readLoading,
+    refetch: refetchRead,
+    isFetching: isFetchingRead
+  } = useGetReadNotificationsQuery({
+    role: 'hospital',
+    id: Number(hospitalId),
+  }, {
+    skip: !hospitalId,
   });
 
-  // Use server-side total if available, otherwise use client-side count
-  const totalNotifications = notificationsData?.total || notificationsData?.totalCount || hospitalNotifications.length;
-  const totalPages = notificationsData?.totalPages || Math.ceil(totalNotifications / itemsPerPage);
+  // ✅ Get notifications from responses
+  const unreadNotifications = unreadData?.data || [];
+  const readNotifications = readData?.data || [];
+  const allNotifications = [...unreadNotifications, ...readNotifications];
   
-  // Calculate unread count from filtered notifications
-  const unreadCount = hospitalNotifications.filter(
-    n => !n.hospitalReadStatus?.[hospitalId] && !n.isRead
-  ).length;
-  
-  // ✅ Apply filters on client side for better control
-  let filteredNotifications = [...hospitalNotifications];
-  
-  if (typeFilter !== 'all') {
-    filteredNotifications = filteredNotifications.filter(n => n.type === typeFilter);
-  }
-  
-  if (statusFilter !== 'all') {
-    const isReadStatus = statusFilter === 'read';
-    filteredNotifications = filteredNotifications.filter(n => {
-      const isUnread = !n.hospitalReadStatus?.[hospitalId] && !n.isRead;
-      return statusFilter === 'read' ? !isUnread : isUnread;
-    });
-  }
+  const unreadCount = unreadNotifications.length;
+  const totalNotifications = allNotifications.length;
 
-  // Client-side pagination if server-side pagination isn't working properly
-  const paginatedNotifications = filteredNotifications.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  console.log('📊 Unread Notifications:', unreadNotifications);
+  console.log('📊 Read Notifications:', readNotifications);
+  console.log('📊 All Notifications:', allNotifications);
+  console.log('📊 Hospital ID:', hospitalId);
 
-  // ✅ Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [typeFilter, statusFilter]);
+  // ✅ Combined refetch function
+  const refetchAll = () => {
+    refetchUnread();
+    refetchRead();
+  };
 
   // ✅ Register socket event listeners
   useEffect(() => {
@@ -122,12 +77,12 @@ const HospitalNotificationList = () => {
     registerNotificationEvents({
       onNotificationCreated: (data) => {
         console.log("🔔 NEW NOTIFICATION CREATED:", data);
-        refetch();
+        refetchAll();
         showSuccessToast("New notification received!", 2000);
       },
       onNotificationRead: (data) => {
         console.log("📖 NOTIFICATION READ:", data);
-        refetch();
+        refetchAll();
       }
     });
 
@@ -138,7 +93,7 @@ const HospitalNotificationList = () => {
       unregisterNotificationEvents();
       setEventsRegistered(false);
     };
-  }, [refetch]);
+  }, [refetchAll]);
 
   // ✅ Listen for socket connection
   useEffect(() => {
@@ -148,12 +103,12 @@ const HospitalNotificationList = () => {
         registerNotificationEvents({
           onNotificationCreated: (data) => {
             console.log("🔔 NEW NOTIFICATION CREATED (reconnect):", data);
-            refetch();
+            refetchAll();
             showSuccessToast("New notification received!", 2000);
           },
           onNotificationRead: (data) => {
             console.log("📖 NOTIFICATION READ (reconnect):", data);
-            refetch();
+            refetchAll();
           }
         });
         setEventsRegistered(true);
@@ -172,7 +127,7 @@ const HospitalNotificationList = () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [refetch, eventsRegistered]);
+  }, [refetchAll, eventsRegistered]);
 
   // ✅ Log all socket events for debugging
   useEffect(() => {
@@ -187,139 +142,9 @@ const HospitalNotificationList = () => {
     };
   }, []);
 
-  // ✅ Mark a single notification as read
-  const handleMarkAsRead = async (notificationId) => {
-    try {
-      console.log("📖 Marking notification as read:", notificationId);
-      
-      const response = await updateNotification({
-        id: notificationId,
-        body: {
-          hospitalReadStatus: {
-            [hospitalId]: true
-          },
-          isRead: true
-        }
-      }).unwrap();
-      
-      console.log("✅ Mark as read response:", response);
-      
-      // ✅ Emit socket event for real-time updates
-      socket.emit("notification_read", {
-        notificationId: notificationId,
-        hospitalId: hospitalId,
-        userId: 'super_admin'
-      });
-      
-      await refetch();
-      showSuccessToast("Notification marked as read", 2000);
-    } catch (error) {
-      console.error("❌ Mark as read error:", error);
-      showErrorToast("Failed to mark as read", 2000);
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      if (!hospitalId) return;
-
-      const notificationIds = hospitalNotifications
-        .filter(n => !n.hospitalReadStatus?.[hospitalId] && !n.isRead)
-        .map(n => n.id);
-
-      if (notificationIds.length === 0) {
-        showSuccessToast("All notifications are already read", 2000);
-        return;
-      }
-
-      await markAllAsRead({
-        hospitalId: Number(hospitalId),
-        notificationIds,
-      }).unwrap();
-
-      // ✅ Emit socket event for real-time updates
-      socket.emit("notifications_read_all", {
-        hospitalId: hospitalId,
-        userId: 'super_admin',
-        count: notificationIds.length
-      });
-
-      await refetch();
-      showSuccessToast("All notifications marked as read", 2000);
-    } catch (error) {
-      console.error("❌ Mark all as read error:", error);
-      showErrorToast("Failed to mark all as read", 2000);
-    }
-  };
-
-  const handleDeleteClick = (id) => {
-    setSelectedNotificationId(id);
-    setShowDeleteConfirm(true);
-  };
-
-  const handleDeleteAllClick = () => {
-    setSelectedNotificationId('all');
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      if (selectedNotificationId === 'all') {
-        await deleteAllNotifications(hospitalId).unwrap();
-        
-        // ✅ Emit socket event for real-time updates
-        socket.emit("notifications_deleted_all", {
-          hospitalId: hospitalId,
-          userId: 'super_admin'
-        });
-        
-        showSuccessToast('All notifications deleted successfully');
-        if (paginatedNotifications.length === 1 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-        }
-      } else {
-        await deleteNotification(selectedNotificationId).unwrap();
-        
-        // ✅ Emit socket event for real-time updates
-        socket.emit("notification_deleted", {
-          notificationId: selectedNotificationId,
-          hospitalId: hospitalId
-        });
-        
-        if (paginatedNotifications.length === 1 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-        }
-      }
-      await refetch();
-      setShowDeleteConfirm(false);
-      setSelectedNotificationId(null);
-    } catch (error) {
-      console.error("❌ Delete error:", error);
-      showErrorToast('Failed to delete notification');
-    }
-  };
-
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
-    setSelectedNotificationId(null);
-  };
-
   const handleRefresh = () => {
-    refetch();
+    refetchAll();
     showSuccessToast('Notifications refreshed', 2000);
-  };
-
-  const clearAllFilters = () => {
-    setTypeFilter('all');
-    setStatusFilter('all');
-    setCurrentPage(1);
-  };
-
-  const getActiveFilterCount = () => {
-    return [
-      typeFilter !== 'all',
-      statusFilter !== 'all'
-    ].filter(Boolean).length;
   };
 
   const getIcon = (type) => {
@@ -357,7 +182,8 @@ const HospitalNotificationList = () => {
     }
   };
 
-  const activeFilterCount = getActiveFilterCount();
+  // ✅ Combined loading state
+  const isLoading = unreadLoading || readLoading;
 
   if (isLoading) {
     return (
@@ -376,8 +202,6 @@ const HospitalNotificationList = () => {
           </div>
           <div className="flex gap-2">
             <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-32 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           </div>
         </div>
 
@@ -439,97 +263,20 @@ const HospitalNotificationList = () => {
           {/* Empty div for spacing */}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
-            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+          <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetchingUnread || isFetchingRead}>
+            <RefreshCcw size={16} className={(isFetchingUnread || isFetchingRead) ? "animate-spin" : ""} />
           </Button>
-          <button
-            onClick={() => setShowFilters(prev => !prev)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
-            title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-          {unreadCount > 0 && (
-            <Button onClick={handleMarkAllAsRead} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
-              <CheckCheck size={16} /> Mark all as read
-            </Button>
-          )}
-          {totalNotifications > 0 && (
-            <Button variant="danger" onClick={handleDeleteAllClick} className="flex items-center gap-2">
-              <Trash2 size={16} /> Delete All
-            </Button>
-          )}
+          {/* ❌ Removed Filter button */}
+          {/* ❌ Removed Mark all as read button */}
+          {/* ❌ Removed Delete All button */}
         </div>
       </div>
 
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
-              Clear All Filters
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Types</option>
-              <option value="info">Info</option>
-              <option value="success">Booking</option>
-              <option value="warning">Warning</option>
-              <option value="error">Cancellation</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Status</option>
-              <option value="unread">Unread</option>
-              <option value="read">Read</option>
-            </select>
-          </div>
-        </div>
-      )}
-
-      {paginatedNotifications.length === 0 ? (
+      {allNotifications.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications found</h3>
-          <p className="text-gray-500">
-            {typeFilter !== 'all' || statusFilter !== 'all' 
-              ? 'Try adjusting your filters' 
-              : "All caught up!"}
-          </p>
-          {(typeFilter !== 'all' || statusFilter !== 'all') && (
-            <button onClick={clearAllFilters} className="mt-4 text-sm text-[#1C62A0] hover:underline">
-              Clear all filters
-            </button>
-          )}
+          <p className="text-gray-500">All caught up!</p>
         </div>
       ) : (
         <Card className="flex flex-col bg-white rounded-xl shadow-sm">
@@ -542,14 +289,14 @@ const HospitalNotificationList = () => {
           
           <div className="flex flex-col min-h-[420px]">
             <div className="divide-y divide-gray-100">
-              {paginatedNotifications.map((notif) => {
+              {allNotifications.map((notif) => {
                 const typeInfo = getTypeInfo(notif.type);
                 const isUnread = !notif.hospitalReadStatus?.[hospitalId] && !notif.isRead;
                 
                 return (
                   <div
                     key={notif.id}
-                    className={`group p-6 hover:bg-gray-50 transition-all duration-200 ${
+                    className={`p-6 hover:bg-gray-50 transition-all duration-200 ${
                       isUnread ? 'bg-purple-50/30 border-l-4 border-l-purple-500' : ''
                     }`}
                   >
@@ -595,25 +342,8 @@ const HospitalNotificationList = () => {
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* ✅ Mark as read button - Only show for unread notifications */}
-                            {isUnread && (
-                              <button
-                                onClick={() => handleMarkAsRead(notif.id)}
-                                className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-purple-100 transition-all"
-                                title="Mark as read"
-                              >
-                                <CheckCircle size={16} className="text-purple-500 hover:text-purple-600" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteClick(notif.id)}
-                              className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"
-                              title="Delete"
-                            >
-                              <Trash2 size={16} className="text-gray-400 hover:text-red-500" />
-                            </button>
-                          </div>
+                          {/* ❌ Removed Mark as read button */}
+                          {/* ❌ Removed Delete button */}
                         </div>
                       </div>
                     </div>
@@ -625,7 +355,7 @@ const HospitalNotificationList = () => {
             <div className="mt-auto px-6 py-3 bg-white border-t border-gray-100">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={Math.ceil(totalNotifications / itemsPerPage)}
                 onPageChange={setCurrentPage}
                 totalItems={totalNotifications}
                 itemsPerPage={itemsPerPage}
@@ -634,44 +364,6 @@ const HospitalNotificationList = () => {
             </div>
           </div>
         </Card>
-      )}
-
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-96">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Confirm Deletion</h3>
-                <button 
-                  onClick={cancelDelete}
-                  className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <X size={20} className="text-gray-500" />
-                </button>
-              </div>
-              <p className="text-gray-600 mb-6">
-                {selectedNotificationId === 'all' 
-                  ? 'Are you sure you want to delete all notifications? This action cannot be undone.'
-                  : 'Are you sure you want to delete this notification? This action cannot be undone.'
-                }
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={cancelDelete}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Yes, Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
