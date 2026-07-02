@@ -373,13 +373,6 @@ const Login = () => {
         try {
           console.log("🔍 5. Attempting Super Admin login...");
           response = await loginSuperAdmin(loginPayload).unwrap();
-<<<<<<< HEAD
-          console.log("LOGIN RESPONSE:", response);
-          console.log("ROLE ID:", response.roleId);
-          console.log("DATA ROLE ID:", response.data?.roleId);
-=======
-          console.log("🔍 6. Super Admin login response received");
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
           
           // Extract roleId from response
           const roleId = response.roleId || response.data?.roleId;

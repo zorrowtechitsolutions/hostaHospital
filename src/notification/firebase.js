@@ -98,6 +98,7 @@ export const listenMessages = (callback) => {
     // }
 
     // 🔊 Play sound only
+    
     try {
       notificationSound.pause();
       notificationSound.currentTime = 0;

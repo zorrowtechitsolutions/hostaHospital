@@ -1,3 +1,5 @@
+// prescription.js - Complete file
+
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
 
@@ -10,15 +12,15 @@ export interface PrescriptionPayload {
   patientId?: number | string | null;
   userId?: number | string | null;
 
-<<<<<<< HEAD
+  // ✅ PATIENT DETAILS - Backend field names
+  patientName?: string;
+  age?: number | string;        // ✅ Backend field: age
+  contact?: string;              // ✅ Backend field: contact
+  gender?: string;               // ✅ Backend field: gender
+  
+  hospitalName?: string;
   prescribedBy?: string;
   doctorName?: string;
-  patientName?: string;         // ✅ ADDED
-  hospitalName?: string;        // ✅ ADDED
-=======
-  prescribedBy?: string;        // ✅ ADDED - Backend expects this field
-  doctorName?: string;          // Keep for frontend display
->>>>>>> ae8713fff8ee8dd8fe882d9e45e18a5592c59f70
   doctorSpecialization?: string;
   type?: string;
 
@@ -71,14 +73,18 @@ export const prescriptionApi = api.injectEndpoints({
           hospitalId,
           doctorId: data.doctorId,
 
-<<<<<<< HEAD
           // Doctor fields
           prescribedBy: data.doctorName || data.prescribedBy,
           doctorName: data.doctorName,
           doctorSpecialization: data.doctorSpecialization,
 
-          // ✅ ADDED: Patient and Hospital names
+          // ✅ PATIENT DETAILS - Using exact backend field names
           patientName: data.patientName,
+          age: data.age,              // ✅ Backend field: age
+          contact: data.contact,      // ✅ Backend field: contact
+          gender: data.gender,        // ✅ Backend field: gender
+
+          // Hospital name
           hospitalName: data.hospitalName,
 
           patientId: data.patientId,
@@ -110,42 +116,6 @@ export const prescriptionApi = api.injectEndpoints({
         console.log("🚀 Prescription Payload:");
         console.log(JSON.stringify(payload, null, 2));
 
-=======
-          // ✅ Send BOTH doctorName AND prescribedBy
-          prescribedBy: data.doctorName || data.prescribedBy,  // Backend expects this
-          doctorName: data.doctorName,                         // For frontend display
-          doctorSpecialization: data.doctorSpecialization,
-
-          patientId: data.patientId,
-          userId: data.userId,
-
-          complaint: data.complaint,
-          medications: data.medications,
-          investigations: data.investigations,
-          advice: data.advice,
-
-          templateType: data.templateType,
-          canvasBg: data.canvasBg,
-          design: data.design,
-
-          next_consultation: data.next_consultation,
-          empty_stomach: data.empty_stomach,
-
-          temperature: data?.temperature || 0,
-          pulse: data?.pulse || 0,
-          respiratoryRate: data?.respiratoryRate || 0,
-          spo2: data?.spo2 || 0,
-          height: data?.height || 0,
-          weight: data?.weight || 0,
-          bmi: data?.bmi || 0,
-          waist: data?.waist || 0,
-          bsa: data?.bsa || 0,
-        };
-
-        console.log("🚀 Prescription Payload:");
-        console.log(JSON.stringify(payload, null, 2));
-
->>>>>>> ae8713fff8ee8dd8fe882d9e45e18a5592c59f70
         return {
           url: "/prescription",
           method: "POST",

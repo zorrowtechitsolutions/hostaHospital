@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// src/components/TopBar.jsx - Without theme toggle icons
-=======
 // src/components/TopBar.jsx - "Dreams EMR" removed
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -41,10 +37,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
-<<<<<<< HEAD
-=======
   // "Dreams EMR" removed - use actual hospital name from auth context
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
   const hospitalName = user?.name || storedUser?.name || "Hospital";
   const hospitalEmail = user?.email || storedUser?.email || "";
   const hospitalType = user?.type || storedUser?.type || "Administrator";

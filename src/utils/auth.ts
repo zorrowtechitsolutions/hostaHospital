@@ -80,7 +80,6 @@ export const getAuthUser = (): JwtPayload | null => {
   if (authData) {
     try {
       const parsed = JSON.parse(authData);
-      console.log("📋 getAuthUser: Using authData:", parsed);
       return parsed;
     } catch (err) {
       console.error("❌ Invalid authData:", err);

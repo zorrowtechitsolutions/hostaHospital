@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// src/components/Sidebar.jsx - With proper immutability and memoization
-=======
 // src/components/Sidebar.jsx - With proper parent/child active states
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -46,15 +42,9 @@ const menu = [
   {
     title: "HEALTHCARE",
     items: [
-<<<<<<< HEAD
       { label: "Patients", icon: Users, path: "/patients", permissionId: 14 },
       { label: "Doctors", icon: Stethoscope, path: "/doctors", permissionId: 2 },
       { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 7 },
-=======
-      { label: "Patients", icon: Users, path: "/patients" },
-      { label: "Doctors", icon: Stethoscope, path: "/doctors" },
-      { label: "Requests", icon: ClipboardList, path: "/requests" },
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
       {
         label: "Appointments",
         icon: CalendarDays,
@@ -65,16 +55,10 @@ const menu = [
           { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation", permissionId: 6 },
         ],
       },
-<<<<<<< HEAD
       { label: "Visits", icon: Activity, path: "/visits", permissionId: 9 },
       { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 46 },
       { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
-=======
-      { label: "Visits", icon: Activity, path: "/visits" },
-      { label: "Ambulance", icon: Ambulance, path: "/ambulance" },
-      { label: "Blood Bank", icon: Droplet, path: "/blood" },
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
-    ],
+      { label: "Laboratory", icon: Microscope, path: "/laboratory", permissionId: 20 },],
   },
   {
     title: "MANAGE",
@@ -219,18 +203,7 @@ export default function Sidebar({ sidebarOpen }) {
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-<<<<<<< HEAD
-      {/* Logo Section */}
-      <div className="p-5 border-b border-slate-700">
-        {sidebarOpen ? (
-          <h1 className="text-lg font-semibold truncate">
-            {user?.name || "Hospital"}
-          </h1>
-        ) : (
-          <h1 className="text-lg font-semibold text-center">
-            {(user?.name || "H").charAt(0).toUpperCase()}
-=======
-      {/* Logo Section with dynamic hospital name - "Dreams EMR" removed */}
+      {/* Logo Section - SINGLE instance */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
           <h1 className="text-lg font-semibold truncate">
@@ -239,7 +212,6 @@ export default function Sidebar({ sidebarOpen }) {
         ) : (
           <h1 className="text-lg font-semibold text-center">
             {hospitalName.charAt(0).toUpperCase()}
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
           </h1>
         )}
       </div>
@@ -255,10 +227,7 @@ export default function Sidebar({ sidebarOpen }) {
 
             <div className="space-y-1">
               {section.items.map((item) => {
-<<<<<<< HEAD
                 // For items with dropdown
-=======
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
                 if (item.hasDropdown) {
                   const dropdownActive = isDropdownItemActive(item.dropdownItems);
                   const isOpen = openDropdowns[item.label] || shouldKeepOpen(item.dropdownItems);

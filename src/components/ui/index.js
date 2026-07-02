@@ -18,8 +18,4 @@ export { Breadcrumb } from './Breadcrumb';
 export { Switch } from './Switch';
 export { Avatar } from './avatar';
 export { Checkbox } from './CheckBox';
-<<<<<<< HEAD
 export { RadioGroup } from './RadioGroup';
-=======
-export { RadioGroup } from './RadioGroup';
->>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
