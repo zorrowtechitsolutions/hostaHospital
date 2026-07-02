@@ -40,6 +40,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
 
   // Extract hospital ID correctly from user object
   const hospitalId = user?.hospital?.id || user?.hospitalId || user?.id;
+  const hospitalName = user?.hospital?.name || user?.hospitalName || user?.name || '';
   const userId = user?.id || user?.userId;
 
   // Fetch doctors filtered by hospital and speciality
@@ -161,6 +162,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
       const appointmentData = {
         userId: Number(userId),
         hospitalId: Number(hospitalId),
+        hospitalName: hospitalName, // ✅ Added hospitalName
         patient_dob: formData.patient_dob,
         patient_name: formData.patient_name,
         patient_place: formData.patient_place,
@@ -172,6 +174,8 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
         displayName: formData.displayName,
       };
 
+      console.log("📤 Creating booking with payload:", appointmentData);
+
       const response = await createBooking(appointmentData).unwrap();
 
       // ✅ Emit socket event for new booking
@@ -181,6 +185,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
           patientName: formData.patient_name,
           doctorName: formData.displayName,
           hospitalId: hospitalId,
+          hospitalName: hospitalName,
           booking_date: formData.booking_date,
           consulting_time: formData.consulting_time,
         });
@@ -198,7 +203,8 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
           'Patient': formData.patient_name,
           'Date': new Date(formData.booking_date).toLocaleDateString(),
           'Doctor': formData.displayName,
-          'Department': formData.speciality
+          'Department': formData.speciality,
+          'Hospital': hospitalName
         }
       );
       

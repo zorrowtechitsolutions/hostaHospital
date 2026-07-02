@@ -1,7 +1,7 @@
 // app/service/request.ts - Booking/Request API service
 
 import { api } from "./api";
-import { getHospitalId } from "../../src/utils/auth";
+import { getHospitalId, getAuthUser } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -45,6 +45,7 @@ export interface BookingRequest {
   doctorSpecialty?: string;
   appointmentDate?: string;
   hospitalId?: string | number;
+  hospitalName?: string;
   token?: string | number;
   rejectionReason?: string;
   createdAt?: string;
@@ -94,15 +95,16 @@ export interface GetBookingsParams {
   search_query?: string;
   page?: number;
   limit?: number;
+  skipHospitalFilter?: boolean; // ✅ NEW: Allow skipping hospital filter
 }
 
 // ================= API =================
 
 export const bookingApi = api.injectEndpoints({
+  overrideExisting: false,
   endpoints: (builder) => ({
 
     // ================= GET BOOKINGS =================
-    // ENHANCED: Supports all filter parameters
     getBookings: builder.query<
       BookingResponse,
       GetBookingsParams
@@ -112,13 +114,19 @@ export const bookingApi = api.injectEndpoints({
       ) => {
         const queryParams = new URLSearchParams();
         
-        // Auto-inject hospitalId from auth
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
+        // ✅ FIX: Only auto-inject hospitalId if not skipped
+        // Check if we should skip hospital filter
+        const skipHospitalFilter = params.skipHospitalFilter === true;
+        
+        if (!skipHospitalFilter) {
+          // Auto-inject hospitalId from auth (for hospital users)
+          const hospitalId = getHospitalId();
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+          }
         }
 
-        // Override if params has hospitalId
+        // Override if params has hospitalId (takes precedence)
         if (params.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
         }
@@ -180,7 +188,11 @@ export const bookingApi = api.injectEndpoints({
           return `/booking/${params.id}?${queryParams.toString()}`;
         }
 
-        return `/booking?${queryParams.toString()}`;
+        const url = `/booking?${queryParams.toString()}`;
+        console.log('📡 GET BOOKINGS URL:', url);
+        console.log('📡 GET BOOKINGS PARAMS:', queryParams.toString());
+        
+        return url;
       },
 
       providesTags: (result, error, params) => {
@@ -188,6 +200,69 @@ export const bookingApi = api.injectEndpoints({
           return [{ type: "Booking", id: params.id }];
         }
         return ["Booking"];
+      },
+      
+      // ✅ Add transformResponse to handle different response structures
+      transformResponse: (response: any) => {
+        console.log('📊 Transform Response - Raw:', response);
+        
+        // If response already has the expected structure
+        if (response && response.data) {
+          return response;
+        }
+        
+        // If response is an array, wrap it
+        if (Array.isArray(response)) {
+          return {
+            success: true,
+            message: 'Bookings fetched successfully',
+            data: response,
+            pagination: {
+              totalItems: response.length,
+              totalPages: 1,
+              currentPage: 1,
+              limit: response.length,
+              hasNextPage: false,
+              hasPreviousPage: false
+            }
+          };
+        }
+        
+        // If response has bookings property
+        if (response && response.bookings && Array.isArray(response.bookings)) {
+          return {
+            success: true,
+            message: 'Bookings fetched successfully',
+            data: response.bookings,
+            pagination: response.pagination || {
+              totalItems: response.bookings.length,
+              totalPages: 1,
+              currentPage: 1,
+              limit: response.bookings.length,
+              hasNextPage: false,
+              hasPreviousPage: false
+            }
+          };
+        }
+        
+        // If response has rows property (sequelize format)
+        if (response && response.rows && Array.isArray(response.rows)) {
+          return {
+            success: true,
+            message: 'Bookings fetched successfully',
+            data: response.rows,
+            pagination: {
+              totalItems: response.count || response.rows.length,
+              totalPages: Math.ceil((response.count || response.rows.length) / 10),
+              currentPage: 1,
+              limit: 10,
+              hasNextPage: false,
+              hasPreviousPage: false
+            }
+          };
+        }
+        
+        return response;
       },
     }),
 
@@ -198,13 +273,20 @@ export const bookingApi = api.injectEndpoints({
     }),
 
     // ================= CREATE BOOKING =================
-    // Automatically adds hospitalId from authenticated user
     createBooking: builder.mutation<
       BookingResponse,
-      Partial<Omit<BookingRequest, 'hospitalId'>>
+      Partial<Omit<BookingRequest, 'hospitalId' | 'hospitalName'>>
     >({
       query: (data) => {
         const hospitalId = getHospitalId();
+        const authUser = getAuthUser();
+        const hospitalName = authUser?.name || authUser?.hospitalName || '';
+        
+        console.log("🏥 Creating booking with:", {
+          hospitalId,
+          hospitalName,
+          data
+        });
         
         return {
           url: "/booking",
@@ -226,7 +308,8 @@ export const bookingApi = api.injectEndpoints({
             status: data.status || "accepted",
             booking_status: data.booking_status,
             hospitalId: hospitalId,
-            patientId: data.patientId // Keeping for backward compatibility
+            hospitalName: hospitalName,
+            patientId: data.patientId
           },
         };
       },
@@ -332,7 +415,7 @@ export const bookingApi = api.injectEndpoints({
       BookingResponse,
       {
         id: string | number;
-        data: Partial<Omit<BookingRequest, 'hospitalId'>>;
+        data: Partial<Omit<BookingRequest, 'hospitalId' | 'hospitalName'>>;
       }
     >({
       query: ({ id, data }) => {
@@ -371,21 +454,23 @@ export const bookingApi = api.injectEndpoints({
     }),
 
     // ================= GET BOOKINGS BY STATUS =================
-    // Automatically adds hospitalId from authenticated user
     getBookingsByStatus: builder.query<
       BookingResponse,
       {
         doctorId?: string | number;
         status: BookingStatus;
+        skipHospitalFilter?: boolean;
       }
     >({
-      query: ({ doctorId, status }) => {
+      query: ({ doctorId, status, skipHospitalFilter }) => {
         const queryParams = new URLSearchParams();
         
-        // Auto-inject hospitalId from auth
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
+        // Only add hospitalId if not skipped
+        if (!skipHospitalFilter) {
+          const hospitalId = getHospitalId();
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+          }
         }
         
         if (doctorId) {

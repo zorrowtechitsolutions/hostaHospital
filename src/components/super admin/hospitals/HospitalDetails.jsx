@@ -17,11 +17,7 @@ import {
   Globe,
   Loader2,
   ChevronRight,
-  Bell,
-  Clock,
-  TrendingUp,
-  UserCheck,
-  Hospital
+  Bell
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { useGetHospitalByIdQuery } from '../../../../app/service/hospitalApi';
@@ -31,7 +27,11 @@ import { useGetStaffQuery } from '../../../../app/service/staffApi';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
-import { useGetNotificationsByHospitalQuery } from '../../../../app/service/notification';
+// ✅ Import the correct notification hooks (same as HospitalNotificationList)
+import { 
+  useGetUnreadNotificationsQuery,
+  useGetReadNotificationsQuery 
+} from '../../../../app/service/notification';
 
 const HospitalDetails = () => {
   const { id } = useParams();
@@ -74,30 +74,42 @@ const HospitalDetails = () => {
     hospitalId: id
   });
 
-  // ✅ Fetch notifications for this hospital
-  const { data: notificationsData, isLoading: notificationsLoading } = useGetNotificationsByHospitalQuery({
-    hospitalId: id,
-    page: 1,
-    limit: 1000
+  // ✅ Fetch unread notifications using the same endpoint as HospitalNotificationList
+  const { 
+    data: unreadData, 
+    isLoading: unreadLoading 
+  } = useGetUnreadNotificationsQuery({
+    role: 'hospital',
+    id: Number(id),
+  }, {
+    skip: !id,
   });
 
-  // ✅ DEBUG LOGS - Check what the API is actually returning
-  useEffect(() => {
-    if (doctorsData?.data) {
-      console.log("=== HOSPITAL DETAILS DEBUG ===");
-      console.log("Current Hospital ID from URL:", id);
-      console.log("Doctors Data:", doctorsData.data);
-      console.log("Doctors hospitalIds:", doctorsData.data.map(d => ({ id: d.id, hospitalId: d.hospitalId })));
-      console.log("Patients Data:", patientsData?.data);
-      console.log("Staff Data:", staffData?.data);
-      console.log("Bookings Data:", bookingsData?.data);
-      console.log("Ambulance Data:", ambulanceData?.data);
-      console.log("Blood Bank Data:", bloodBankData?.data);
-      console.log("Notifications Data:", notificationsData?.data);
-    }
-  }, [id, doctorsData, patientsData, staffData, bookingsData, ambulanceData, bloodBankData, notificationsData]);
+  // ✅ Fetch read notifications using the same endpoint as HospitalNotificationList
+  const { 
+    data: readData, 
+    isLoading: readLoading 
+  } = useGetReadNotificationsQuery({
+    role: 'hospital',
+    id: Number(id),
+  }, {
+    skip: !id,
+  });
 
-  // ✅ FIXED: Filter counts by hospitalId manually since API might not be filtering
+  // ✅ Get notifications from responses (same as HospitalNotificationList)
+  const unreadNotifications = unreadData?.data || [];
+  const readNotifications = readData?.data || [];
+  const allNotifications = [...unreadNotifications, ...readNotifications];
+  
+  // ✅ Count unread notifications directly from the unread endpoint (same as HospitalNotificationList)
+  const notificationCount = unreadNotifications.length;
+
+  console.log('📊 HospitalDetails - Unread Notifications:', unreadNotifications);
+  console.log('📊 HospitalDetails - Read Notifications:', readNotifications);
+  console.log('📊 HospitalDetails - Total Notifications:', allNotifications.length);
+  console.log('📊 HospitalDetails - Notification Count:', notificationCount);
+
+  // Filter counts by hospitalId manually
   const patientsCount = patientsData?.data?.filter(
     patient => String(patient.hospitalId) === String(id)
   ).length || 0;
@@ -127,12 +139,7 @@ const HospitalDetails = () => {
     booking => String(booking.hospitalId) === String(id) && booking.status === 'accepted'
   ).length || 0;
 
-  // ✅ Notifications count - unread notifications for this hospital
-  const notificationCount = notificationsData?.data?.filter(
-    notification => !notification.hospitalReadStatus?.[id]
-  ).length || 0;
-
-  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || notificationsLoading;
+  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || unreadLoading || readLoading;
 
   const getFullAddress = (address) => {
     if (!address) return 'N/A';
@@ -140,7 +147,7 @@ const HospitalDetails = () => {
     return parts.length > 0 ? parts.join(', ') : 'N/A';
   };
 
-  // Navigation handlers for each card
+  // Navigation handlers
   const navigateToPatients = () => {
     navigate(`/super-admin/hospitals/${id}/patients`);
   };
@@ -169,7 +176,6 @@ const HospitalDetails = () => {
     navigate(`/super-admin/hospitals/${id}/blood-banks`);
   };
 
-  // ✅ Navigation to notifications
   const navigateToNotifications = () => {
     navigate(`/super-admin/hospitals/${id}/notifications`);
   };
@@ -197,7 +203,6 @@ const HospitalDetails = () => {
     );
   }
 
-  // Stat cards configuration
   const statCards = [
     { 
       title: 'Total Patients', 
@@ -209,9 +214,7 @@ const HospitalDetails = () => {
       borderColor: 'border-blue-200',
       hoverBg: 'hover:bg-blue-50/50',
       onClick: navigateToPatients,
-      description: 'View all patients',
-      trend: '+12%',
-      trendColor: 'text-green-600'
+      description: 'View all patients'
     },
     { 
       title: 'Total Doctors', 
@@ -223,9 +226,7 @@ const HospitalDetails = () => {
       borderColor: 'border-green-200',
       hoverBg: 'hover:bg-green-50/50',
       onClick: navigateToDoctors,
-      description: 'View all doctors',
-      trend: '+5%',
-      trendColor: 'text-green-600'
+      description: 'View all doctors'
     },
     { 
       title: 'Total Staff', 
@@ -237,9 +238,7 @@ const HospitalDetails = () => {
       borderColor: 'border-purple-200',
       hoverBg: 'hover:bg-purple-50/50',
       onClick: navigateToStaff,
-      description: 'View all staff',
-      trend: '+8%',
-      trendColor: 'text-green-600'
+      description: 'View all staff'
     },
     { 
       title: 'Appointments', 
@@ -251,9 +250,7 @@ const HospitalDetails = () => {
       borderColor: 'border-orange-200',
       hoverBg: 'hover:bg-orange-50/50',
       onClick: navigateToAppointments,
-      description: 'View all appointments',
-      trend: '+15%',
-      trendColor: 'text-green-600'
+      description: 'View all appointments'
     },
     { 
       title: 'Total Visits', 
@@ -265,9 +262,7 @@ const HospitalDetails = () => {
       borderColor: 'border-indigo-200',
       hoverBg: 'hover:bg-indigo-50/50',
       onClick: navigateToVisits,
-      description: 'View all visits',
-      trend: '+10%',
-      trendColor: 'text-green-600'
+      description: 'View all visits'
     },
     { 
       title: 'Ambulances', 
@@ -279,9 +274,7 @@ const HospitalDetails = () => {
       borderColor: 'border-red-200',
       hoverBg: 'hover:bg-red-50/50',
       onClick: navigateToAmbulances,
-      description: 'View all ambulances',
-      trend: '0%',
-      trendColor: 'text-gray-500'
+      description: 'View all ambulances'
     },
     { 
       title: 'Blood Banks', 
@@ -293,11 +286,8 @@ const HospitalDetails = () => {
       borderColor: 'border-pink-200',
       hoverBg: 'hover:bg-pink-50/50',
       onClick: navigateToBloodBanks,
-      description: 'View blood bank inventory',
-      trend: '+3%',
-      trendColor: 'text-green-600'
+      description: 'View blood bank inventory'
     },
-    // ✅ Notification Card
     { 
       title: 'Notifications', 
       value: notificationCount, 
@@ -308,11 +298,8 @@ const HospitalDetails = () => {
       borderColor: 'border-yellow-200',
       hoverBg: 'hover:bg-yellow-50/50',
       onClick: navigateToNotifications,
-      description: `${notificationCount} unread notifications`,
-      trend: notificationCount > 0 ? `${notificationCount} new` : 'All read',
-      trendColor: notificationCount > 0 ? 'text-red-500' : 'text-green-600'
+      description: `${notificationCount} unread notification${notificationCount !== 1 ? 's' : ''}`
     }
-    
   ];
 
   return (
@@ -400,7 +387,7 @@ const HospitalDetails = () => {
         )}
       </Card>
 
-      {/* Statistics Cards Grid - Notification Style like Patients */}
+      {/* Statistics Cards Grid */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Overview Statistics</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -415,13 +402,8 @@ const HospitalDetails = () => {
                 <Card className={`p-5 border ${stat.borderColor} hover:shadow-lg transition-all duration-300 ${stat.hoverBg}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-500">
                         {stat.title}
-                        {stat.trend && (
-                          <span className={`text-xs font-medium ${stat.trendColor}`}>
-                            {stat.trend}
-                          </span>
-                        )}
                       </p>
                       <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
                       <p className="text-xs text-gray-400 mt-1 group-hover:text-gray-600 transition-colors">

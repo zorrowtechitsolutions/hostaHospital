@@ -44,13 +44,10 @@ export const bloodBankApi = api.injectEndpoints({
       query: (params: GetBloodBankParams = {}) => {
         const queryParams = new URLSearchParams();
         
-        // Get hospitalId from params OR from auth
-        // For Super Admin: use params.hospitalId
-        // For Hospital Admin: use getHospitalId()
-        const hospitalId = params?.hospitalId || getHospitalId();
-        
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
+        // ✅ FIX: Only add hospitalId if explicitly provided in params
+        // Don't auto-inject from auth - let the caller decide
+        if (params?.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
         // Filter by blood group
@@ -80,7 +77,7 @@ export const bloodBankApi = api.injectEndpoints({
           return `/blood-banks/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all blood bank records for the hospital
+        // Otherwise get all blood bank records
         return `/blood-banks${queryString ? `?${queryString}` : ""}`;
       },
 
@@ -95,6 +92,7 @@ export const bloodBankApi = api.injectEndpoints({
     }),
 
     // ================= CREATE BLOOD BANK =================
+    // Automatically adds hospitalId from authenticated user
     createBloodBank: builder.mutation<
       BloodBankResponse,
       Omit<BloodBank, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt' | 'lastUpdated'>

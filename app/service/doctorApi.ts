@@ -55,7 +55,7 @@ export interface GetDoctorsParams {
   search_query?: string;
   page?: number;
   limit?: number;
-  skipHospitalFilter?: boolean; // ADD THIS - Allows Super Admin to bypass hospital filter
+  skipHospitalFilter?: boolean; // Allows Super Admin to bypass hospital filter
 }
 
 export interface Department {
@@ -217,6 +217,33 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ==============================
+    // REFRESH DOCTOR TOKEN
+    // ==============================
+    refreshDoctor: builder.mutation<DoctorAuthResponse, void>({
+      query: () => ({
+        url: "/doctor/refresh",
+        method: "POST",
+      }),
+
+      transformResponse: (response: DoctorAuthResponse) => {
+        const token = response.token || response.accessToken;
+
+        if (token) {
+          localStorage.setItem("accessToken", token);
+          console.log("🔄 Doctor token refreshed successfully");
+        }
+
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+        }
+
+        return response;
+      },
+
+      invalidatesTags: ["Doctor"],
+    }),
+
+    // ==============================
     // ADD NEW DOCTOR
     // ==============================
     addNewDoctor: builder.mutation<DoctorAuthResponse, Omit<Doctor, 'hospitalId'>>({
@@ -266,7 +293,7 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ==============================
-    // RECOVER DOCTOR (NEW)
+    // RECOVER DOCTOR
     // ==============================
     recoverDoctor: builder.mutation<{ message: string }, string>({
       query: (doctorId) => ({
@@ -292,9 +319,10 @@ export const {
   useGetDoctorByIdQuery,
   useLoginDoctorMutation,
   useLogoutDoctorMutation,
+  useRefreshDoctorMutation, // 👈 Added
   useAddNewDoctorMutation,
   useUpdateDoctorMutation,
   useDeleteDoctorMutation,
-  useRecoverDoctorMutation, // 👈 Added
+  useRecoverDoctorMutation,
   useGetSpecialitiesQuery, 
 } = doctorApi;

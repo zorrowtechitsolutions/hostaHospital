@@ -31,7 +31,6 @@ import HospitalPermissionList from './permission/HospitalPermissionList';
 
 // User Management imports
 import HospitalUsers from './usermanagment/HospitalUsers';
-import HospitalUserList from './usermanagment/HospitalUserList';
 import HospitalUserPermissions from './usermanagment/HospitalUserPermissions';
 import HospitalUserDetails from './usermanagment/HospitalUserDetails';
 import HospitalAddUser from './usermanagment/HospitalAddUser';
@@ -126,7 +125,6 @@ const SuperAdminLayout = () => {
               <Route path="hospital-users" element={<HospitalUsers />} />
               
               {/* Hospital User List - Users of a specific hospital */}
-              <Route path="hospital-users/:hospitalId/users" element={<HospitalUserList />} />
               
               {/* Add/Edit/View User */}
               <Route path="hospital-users/:hospitalId/add" element={<HospitalAddUser />} />
@@ -145,7 +143,7 @@ const SuperAdminLayout = () => {
               {/* ============================================ */}
               {/* LEGACY USER MANAGEMENT ROUTES */}
               {/* ============================================ */}
-              <Route path="users" element={<SuperUsers />} />
+              {/* <Route path="users" element={<SuperUsers />} /> */}
               <Route path="users/add" element={<SuperAddNewUser />} />
               <Route path="users/edit/:userType" element={<SuperEditUser />} />
               <Route path="users/view-roles" element={<SuperViewAssignedRoles />} />

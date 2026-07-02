@@ -1,8 +1,13 @@
+<<<<<<< HEAD
+// src/components/TopBar.jsx - Without theme toggle icons
+=======
+// src/components/TopBar.jsx - "Dreams EMR" removed
+>>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, ChevronDown, Maximize2, Minimize2, Menu, 
-  UserCheck, Settings, LogOut, Sun, Moon 
+  UserCheck, Settings, LogOut
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +17,7 @@ import {
 } from "../../app/service/notification";
 import { getHospitalId } from "../utils/auth";
 
-const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
+const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -36,7 +41,11 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
-  const hospitalName = user?.name || storedUser?.name || "Dreams EMR";
+<<<<<<< HEAD
+=======
+  // "Dreams EMR" removed - use actual hospital name from auth context
+>>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
+  const hospitalName = user?.name || storedUser?.name || "Hospital";
   const hospitalEmail = user?.email || storedUser?.email || "";
   const hospitalType = user?.type || storedUser?.type || "Administrator";
   
@@ -45,7 +54,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     ?.map((word) => word[0])
     ?.join("")
     ?.slice(0, 2)
-    ?.toUpperCase() || "DE";
+    ?.toUpperCase() || "H";
   
   const notifications = notificationsData?.data || [];
   
@@ -60,16 +69,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
     } else {
       document.exitFullscreen();
       setIsFullscreen(false);
-    }
-  };
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
     }
   };
 
@@ -119,6 +118,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
 
   return (
     <header className="bg-[#0f172a] border-b border-slate-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+      {/* Left side - Menu button */}
       <div className="flex items-center gap-4 flex-1">
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -128,18 +128,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
         </button>
       </div>
 
+      {/* Right side - Fullscreen, Notifications, Profile */}
       <div className="flex items-center gap-2 md:gap-4">
-        <button 
-          onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-slate-700 transition-colors"
-        >
-          {theme === 'dark' ? (
-            <Sun size={20} className="!text-white" stroke="white" />
-          ) : (
-            <Moon size={20} className="!text-white" stroke="white" />
-          )}
-        </button>
-
+        {/* Fullscreen Toggle */}
         <button 
           onClick={toggleFullscreen}
           className="p-2 rounded-full hover:bg-slate-700 transition-colors"
@@ -151,6 +142,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           )}
         </button>
 
+        {/* Notifications */}
         <div className="relative" ref={notificationRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
@@ -170,6 +162,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen, theme, setTheme }) => {
           />
         </div>
 
+        {/* Profile Menu */}
         <div className="relative" ref={profileMenuRef}>
           <button 
             onClick={() => setShowProfileMenu(!showProfileMenu)}

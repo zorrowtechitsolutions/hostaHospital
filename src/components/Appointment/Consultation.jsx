@@ -616,6 +616,12 @@ const Consultation = () => {
                   .charAt(0)
                   .toUpperCase()}
               </div>
+              {/* Avatar with first letter fallback */}
+              <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
+                {(appointmentData.patientName || appointmentData.patient?.name || "P")
+                  .charAt(0)
+                  .toUpperCase()}
+              </div>
               <div>
                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
                 <p className="font-semibold text-gray-800 text-sm mt-1">{appointmentData.patientName || appointmentData.patient?.name || "Patient"}</p>

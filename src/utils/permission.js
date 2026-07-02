@@ -4,6 +4,6 @@ export const hasPermission = (permissionId) => {
   );
 
   return permissions.some(
-    (item) => item.permissionId === permissionId
+    (item) => Number(item.permissionId) === Number(permissionId)
   );
 };

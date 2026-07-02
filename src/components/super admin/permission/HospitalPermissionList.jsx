@@ -145,13 +145,18 @@ const HospitalPermissionList = () => {
 
   // Log the permissions data to see the structure
   useEffect(() => {
-    console.log("permissionsData", permissionsData);
-  }, [permissionsData]);
+    console.log("📊 permissionsData:", permissionsData);
+    console.log("📊 permissionData (role permissions):", permissionData);
+  }, [permissionsData, permissionData]);
 
   // Dynamically build modules from permissionsData using module and action fields
   useEffect(() => {
-    if (!permissionsData?.data?.length) return;
+    if (!permissionsData?.data?.length) {
+      console.log("⚠️ No permissionsData available");
+      return;
+    }
 
+    // ✅ REMOVED "doctor" from hidden modules to show doctor permissions
     const hiddenModules = [
       "users",
       "donors",
@@ -163,19 +168,36 @@ const HospitalPermissionList = () => {
       "role",
       "permission",
       "role-permission",
+      "Rolepermission",
+      "Category",
+      // "doctor" is NOT hidden anymore - this was the issue!
     ];
 
     const modulesMap = new Map();
+
+    // Log all unique module names to see what's available
+    const uniqueModules = new Set();
+    permissionsData.data.forEach((permission) => {
+      if (permission.module) {
+        uniqueModules.add(permission.module);
+      }
+    });
+    console.log("📋 All available modules:", Array.from(uniqueModules));
 
     permissionsData.data.forEach((permission) => {
       const moduleName = permission.module;
       const action = permission.action;
 
+      // Check if module should be hidden
       if (hiddenModules.includes(moduleName?.toLowerCase())) {
+        console.log(`🔒 Hiding module: ${moduleName}`);
         return;
       }
 
-      if (!moduleName || !action) return;
+      if (!moduleName || !action) {
+        console.log(`⚠️ Skipping permission with missing module or action:`, permission);
+        return;
+      }
 
       if (!modulesMap.has(moduleName)) {
         modulesMap.set(moduleName, {
@@ -213,28 +235,114 @@ const HospitalPermissionList = () => {
     });
 
     const modulesArray = Array.from(modulesMap.values());
-    console.log("Built modules (hidden modules excluded):", modulesArray);
+    console.log("✅ Built modules (hidden modules excluded):", modulesArray);
+    console.log(`✅ Total modules: ${modulesArray.length}`);
     setMainModules(modulesArray);
   }, [permissionsData]);
 
-  // Apply assigned permissions to modules
+  // ✅ FIXED: Apply assigned permissions to modules with CORRECT dependency array
   useEffect(() => {
-    if (permissionData?.data && mainModules.length > 0) {
-      const assignedPermissions = permissionData.data.map(
-        (item) => Number(item.permissionId)
-      );
+    console.log("🔍 Checking permissionData:", permissionData);
+    console.log("🔍 mainModules.length:", mainModules.length);
+    
+    if (!permissionData || mainModules.length === 0) {
+      console.log("⏳ Skipping assignment - permissionData or mainModules not ready");
+      return;
+    }
 
-      setMainModules((prev) =>
-        prev.map((module) => ({
+    // Handle different data structures
+    let permissionsArray = null;
+
+    // Check if permissionData has a 'data' property that is an array
+    if (permissionData.data && Array.isArray(permissionData.data)) {
+      permissionsArray = permissionData.data;
+      console.log("📦 Using permissionData.data:", permissionsArray);
+    } 
+    // Check if permissionData itself is an array
+    else if (Array.isArray(permissionData)) {
+      permissionsArray = permissionData;
+      console.log("📦 Using permissionData as array:", permissionsArray);
+    }
+    // Check if permissionData has a 'data' property that is an object with arrays
+    else if (permissionData.data && typeof permissionData.data === 'object') {
+      const possibleArrays = Object.values(permissionData.data).filter(Array.isArray);
+      if (possibleArrays.length > 0) {
+        permissionsArray = possibleArrays[0];
+        console.log("📦 Extracted array from object:", permissionsArray);
+      }
+    }
+
+    // If we couldn't find an array, try to check if permissionData has a 'permissions' property
+    if (!permissionsArray && permissionData.permissions && Array.isArray(permissionData.permissions)) {
+      permissionsArray = permissionData.permissions;
+      console.log("📦 Using permissionData.permissions:", permissionsArray);
+    }
+
+    // If we still don't have an array, try to use the whole permissionData if it's an array
+    if (!permissionsArray && Array.isArray(permissionData)) {
+      permissionsArray = permissionData;
+      console.log("📦 Using permissionData directly as array:", permissionsArray);
+    }
+
+    if (!permissionsArray || !Array.isArray(permissionsArray) || permissionsArray.length === 0) {
+      console.log("ℹ️ No permissions assigned yet or empty array");
+      // Reset all modules to unchecked
+      setMainModules(prev =>
+        prev.map(module => ({
           ...module,
-          create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
-          edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
-          delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
-          view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
+          create: false,
+          edit: false,
+          delete: false,
+          view: false,
         }))
       );
+      return;
     }
-  }, [permissionData]);
+
+    // ✅ Extract permission IDs from the array
+    const assignedPermissions = permissionsArray.map(item => {
+      // Handle different possible property names
+      const id = item.permissionId || item.permission_id || item.id || item.permission;
+      return Number(id);
+    }).filter(id => !isNaN(id));
+
+    console.log("✅ Assigned permission IDs:", assignedPermissions);
+    console.log(`✅ Total assigned permissions: ${assignedPermissions.length}`);
+
+    // ✅ Update modules with assigned permissions
+    setMainModules(prev =>
+      prev.map(module => {
+        const hasCreate = module.createId ? assignedPermissions.includes(Number(module.createId)) : false;
+        const hasEdit = module.editId ? assignedPermissions.includes(Number(module.editId)) : false;
+        const hasDelete = module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false;
+        const hasView = module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false;
+        
+        // Log for doctor module specifically
+        if (module.name.toLowerCase() === 'doctor') {
+          console.log(`🩺 Doctor module permissions:`, {
+            name: module.name,
+            createId: module.createId,
+            editId: module.editId,
+            deleteId: module.deleteId,
+            viewId: module.viewId,
+            hasCreate,
+            hasEdit,
+            hasDelete,
+            hasView,
+            assignedPermissions
+          });
+        }
+        
+        return {
+          ...module,
+          create: hasCreate,
+          edit: hasEdit,
+          delete: hasDelete,
+          view: hasView,
+        };
+      })
+    );
+  }, [permissionData, mainModules.length]); // ✅ Fixed dependency array
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -299,6 +407,11 @@ const HospitalPermissionList = () => {
       });
 
       showSuccessToast("Permission saved successfully");
+      
+      // ✅ Refetch data after save to ensure UI is in sync
+      await refetchPermissions();
+      await refetchRolePermissions();
+      
     } catch (error) {
       console.error("Save error:", error);
       showErrorToast(error?.data?.message || "Failed to save permission");
@@ -314,11 +427,12 @@ const HospitalPermissionList = () => {
     }
   };
 
-  // ✅ Handle back navigation - go to Hospital User Permissions
+  // ✅ FIXED: Back navigation goes to HospitalUserPermissions
   const handleBack = () => {
     navigate(`/super-admin/hospital-users/${hospitalId}/permissions`, {
       state: {
         hospitalName: hospitalName,
+        roleName: roleName,
         from: "HospitalPermissionList"
       }
     });

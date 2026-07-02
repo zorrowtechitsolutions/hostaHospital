@@ -164,6 +164,14 @@ const NotificationsPage = () => {
     }
   };
 
+  // ✅ Handle notification click - marks as read if unread
+  const handleNotificationClick = (notification) => {
+    const isUnread = !notification.hospitalReadStatus?.[hospitalId];
+    if (isUnread) {
+      handleMarkAsRead(notification.id);
+    }
+  };
+
   const handleMarkAllAsRead = async () => {
     try {
       if (!hospitalId) return;
@@ -196,7 +204,8 @@ const NotificationsPage = () => {
     }
   };
 
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = (id, e) => {
+    e.stopPropagation(); // ✅ Prevent notification click from firing
     setSelectedNotificationId(id);
     setShowDeleteConfirm(true);
   };
@@ -482,7 +491,8 @@ const NotificationsPage = () => {
                 return (
                   <div
                     key={notif.id}
-                    className={`group p-6 hover:bg-gray-50 transition-all duration-200 ${
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`group p-6 hover:bg-gray-50 transition-all duration-200 cursor-pointer ${
                       isUnread ? 'bg-purple-50/30 border-l-4 border-l-purple-500' : ''
                     }`}
                   >
@@ -529,18 +539,9 @@ const NotificationsPage = () => {
                           </div>
                           
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* ✅ Mark as read button - Only show for unread notifications */}
-                            {isUnread && (
-                              <button
-                                onClick={() => handleMarkAsRead(notif.id)}
-                                className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-purple-100 transition-all"
-                                title="Mark as read"
-                              >
-                                <CheckCircle size={16} className="text-purple-500 hover:text-purple-600" />
-                              </button>
-                            )}
+                            {/* ❌ Removed Mark as read button - now clicking the notification marks it as read */}
                             <button
-                              onClick={() => handleDeleteClick(notif.id)}
+                              onClick={(e) => handleDeleteClick(notif.id, e)}
                               className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"
                               title="Delete"
                             >

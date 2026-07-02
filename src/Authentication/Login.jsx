@@ -1,10 +1,10 @@
-// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION with Logo
+// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION with Logo & Fixed Loading Issue
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
-import { useLoginHospitalMutation, useLoginSuperAdminMutation } from '../../app/service/hospitalApi';
+import { useLoginHospitalMutation } from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
 import { generateToken } from "../notification/firebase";
@@ -14,7 +14,6 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [loginHospital, { isLoading: isHospitalLoading }] = useLoginHospitalMutation();
-  const [loginSuperAdmin, { isLoading: isSuperAdminLoading }] = useLoginSuperAdminMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -33,7 +32,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  const isLoading = isHospitalLoading || isSuperAdminLoading || isSubmitting;
+  const isLoading = isHospitalLoading || isSubmitting;
 
   const validateField = (name, value) => {
     switch (name) {
@@ -83,11 +82,17 @@ const Login = () => {
     setLoginError('');
     
     try {
+      // ✅ Get FCM token with timeout to prevent hanging
       let fcmToken = null;
       try {
-        fcmToken = await generateToken();
+        const tokenPromise = generateToken();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('FCM token generation timeout')), 5000)
+        );
+        fcmToken = await Promise.race([tokenPromise, timeoutPromise]);
       } catch (tokenError) {
-        // Silently handle token error
+        // Silently handle token error and continue
+        console.warn('FCM token not available, continuing without it');
       }
       
       const loginPayload = {
@@ -199,7 +204,7 @@ const Login = () => {
     // Store complete user data for profile page
     localStorage.setItem("userData", JSON.stringify(userData));
     
-    // Build authData based on role
+    // ✅ Build authData based on role with roleId added to ALL roles
     let authData = {};
     
     if (role === 'super_admin') {
@@ -210,6 +215,7 @@ const Login = () => {
         email: userData?.email || formData.email,
         phone: userData?.phone || '',
         role: 'super_admin',
+        roleId: roleId, // ✅ Added roleId
         isSuperAdmin: true,
         fcmToken: fcmToken
       };
@@ -230,6 +236,7 @@ const Login = () => {
       authData = {
         id: userData?.id,
         doctorId: userData?.id,
+        roleId: roleId, // ✅ Added roleId
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: doctorName,
@@ -254,10 +261,11 @@ const Login = () => {
       }
       
     } else if (role === 'staff') {
-      // Staff - use full staff profile from response.data
+      // ✅ Staff - with roleId added
       authData = {
         id: userData?.id,
         staffId: userData?.id,
+        roleId: roleId, // ✅ Added roleId
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: userData?.name || userData?.displayName || 'Staff',
@@ -275,9 +283,10 @@ const Login = () => {
       }
       
     } else {
-      // Hospital admin
+      // ✅ Hospital admin - with roleId added
       authData = {
         id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
+        roleId: roleId, // ✅ Added roleId
         hospitalId: userData?.id || userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
         name: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
@@ -327,13 +336,23 @@ const Login = () => {
       setIsSubmitting(true);
       setLoginError('');
       
+      // ✅ Add debug logs to identify where the code hangs
+      console.log("🔍 1. Submit clicked - Starting login process");
+      
       try {
-        // Generate FCM token for push notifications
+        // ✅ Get FCM token with timeout to prevent hanging
         let fcmToken = null;
         try {
-          fcmToken = await generateToken();
+          console.log("🔍 2. Before generateToken");
+          const tokenPromise = generateToken();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('FCM token generation timeout')), 5000)
+          );
+          fcmToken = await Promise.race([tokenPromise, timeoutPromise]);
+          console.log("🔍 3. After generateToken - Token:", fcmToken ? "Received" : "Null");
         } catch (tokenError) {
-          // Silently handle token error
+          console.warn('🔍 3. FCM token error:', tokenError.message);
+          // Silently handle token error and continue
         }
         
         const loginPayload = {
@@ -345,15 +364,26 @@ const Login = () => {
           loginPayload.fcmToken = fcmToken;
         }
         
+        console.log("🔍 4. Login payload prepared:", { email: loginPayload.email, hasFcmToken: !!fcmToken });
+        
         // FIRST: Try Super Admin login
         let response;
         let isSuperAdmin = false;
         
         try {
+          console.log("🔍 5. Attempting Super Admin login...");
           response = await loginSuperAdmin(loginPayload).unwrap();
+<<<<<<< HEAD
+          console.log("LOGIN RESPONSE:", response);
+          console.log("ROLE ID:", response.roleId);
+          console.log("DATA ROLE ID:", response.data?.roleId);
+=======
+          console.log("🔍 6. Super Admin login response received");
+>>>>>>> 67b76a70f7c195ace9018077654361edc4f774f9
           
           // Extract roleId from response
           const roleId = response.roleId || response.data?.roleId;
+          console.log("🔍 7. Super Admin roleId:", roleId);
           
           // Check if it's a Super Admin (roleId === 1)
           if (Number(roleId) === 1) {
@@ -363,21 +393,26 @@ const Login = () => {
             throw new Error("Not Super Admin");
           }
         } catch (superAdminError) {
+          console.log("🔍 6. Super Admin login failed, trying Hospital login...");
           // SECOND: Try hospital login
           response = await loginHospital(loginPayload).unwrap();
+          console.log("🔍 7. Hospital login response received");
         }
         
         // Extract roleId from response
         const roleId = response.roleId || response.data?.roleId;
+        console.log("🔍 8. Final roleId:", roleId);
         
         // SUPER ADMIN CHECK - If roleId is 1, it's Super Admin
         if (Number(roleId) === 1 || isSuperAdmin) {
+          console.log("🔍 9. Processing Super Admin login...");
           processSuccessfulLogin(response, fcmToken, null);
           return;
         }
         
         // Check if multiple hospitals require selection (based on hospitals array length > 1)
         if (response.hospitals && response.hospitals.length > 1) {
+          console.log("🔍 9. Multiple hospitals found, showing selection...");
           setHospitalOptions(response.hospitals || []);
           setDetectedRole(response.roleDetected || '');
           setShowHospitalSelect(true);
@@ -388,9 +423,11 @@ const Login = () => {
         // If only one hospital or direct login, process normally
         // Extract the single hospital if it exists
         const singleHospital = response.hospitals && response.hospitals.length === 1 ? response.hospitals[0] : null;
+        console.log("🔍 9. Processing login with single hospital...");
         processSuccessfulLogin(response, fcmToken, singleHospital);
         
       } catch (error) {
+        console.error("🔍 Login error:", error);
         let errorMessage = "Invalid email or password. Please try again.";
         
         if (error.data?.message) {

@@ -192,7 +192,7 @@ export const hospitalApi = api.injectEndpoints({
 
     loginHospital: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => ({
-        url: `/hospital/g-login`,
+        url: `/hospital/login`,
         method: "POST",
         body: loginData,
       }),
@@ -205,45 +205,6 @@ export const hospitalApi = api.injectEndpoints({
           localStorage.setItem("refreshToken", response.refreshToken);
         }
         return response;
-      },
-      invalidatesTags: ["Hospital"],
-    }),
-
-    // Super Admin Login Mutation
-    loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, LoginCredentials>({
-      query: (loginData) => ({
-        url: `/users/login`,
-        method: "POST",
-        body: loginData,
-      }),
-      transformResponse: (response: SuperAdminLoginResponse) => {
-        console.log("👑 Super Admin Login API response:", response);
-        
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-          console.log("✅ Super Admin token stored");
-        }
-        
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-          console.log("✅ Super Admin refresh token stored");
-        }
-        
-        // Store roleId for Super Admin detection
-        if (response.roleId) {
-          localStorage.setItem("roleId", response.roleId.toString());
-          console.log("✅ Super Admin roleId stored:", response.roleId);
-        }
-        
-        return response;
-      },
-      transformErrorResponse: (response: { status: number; data?: any }) => {
-        console.error("❌ Super Admin login error:", response);
-        return {
-          status: response.status,
-          message: response.data?.message || "Super Admin login failed",
-        };
       },
       invalidatesTags: ["Hospital"],
     }),
@@ -520,7 +481,6 @@ export const {
   // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
-  useLoginSuperAdminMutation,
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,

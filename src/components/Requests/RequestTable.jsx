@@ -1,3 +1,4 @@
+// src/components/Requests/RequestTable.jsx - Complete Updated Version
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Check,
@@ -114,7 +115,7 @@ const matchesDoctor = (item, doctorId, doctorName) => {
 
 // Skeleton Loader Component
 const SkeletonLoader = () => (
-  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+  <div className="flex-1 p-6 bg-[#F8F9FA] min-h-screen w-full overflow-x-hidden font-sans">
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-1">
         <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -204,20 +205,20 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // API Hooks
-const {
-  data: bookingsResponse,
-  isLoading: loading,
-  refetch,
-  isFetching
-} = useGetBookingsQuery({
-  page: currentPage,
-  limit: itemsPerPage,
-  status: statusFilter || "pending",
-  ...(searchTerm && { search_query: searchTerm }),
-  ...(departmentFilter && { department: departmentFilter }),
-  ...(dateFilter && { date: dateFilter }),
-  ...(statusFilter && { status: statusFilter }),
-});
+  const {
+    data: bookingsResponse,
+    isLoading: loading,
+    refetch,
+    isFetching
+  } = useGetBookingsQuery({
+    page: currentPage,
+    limit: itemsPerPage,
+    status: statusFilter || "pending",
+    ...(searchTerm && { search_query: searchTerm }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter }),
+    ...(statusFilter && { status: statusFilter }),
+  });
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
@@ -361,16 +362,14 @@ const {
   }, [safeData, doctorId, doctorName, showAllData]);
 
   // Filter requests based on all criteria
-const filteredRequests = useMemo(() => {
-  if (doctorId && !showAllData) {
-    return safeData.filter(item =>
-      matchesDoctor(item, doctorId, doctorName)
-    );
-  }
-
-  return safeData;
-}, [safeData, doctorId, doctorName, showAllData]);
-
+  const filteredRequests = useMemo(() => {
+    if (doctorId && !showAllData) {
+      return safeData.filter(item =>
+        matchesDoctor(item, doctorId, doctorName)
+      );
+    }
+    return safeData;
+  }, [safeData, doctorId, doctorName, showAllData]);
 
   const totalItems = filteredRequests.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -576,7 +575,8 @@ const filteredRequests = useMemo(() => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    // ✅ FIX: Proper wrapper with flex-1 and overflow-x-hidden
+    <div className="flex-1 p-6 bg-[#F8F9FA] min-h-screen w-full overflow-x-hidden font-sans">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-800">Requests</h1>
         <p className="text-sm text-gray-500">Home / Requests</p>
@@ -620,8 +620,8 @@ const filteredRequests = useMemo(() => {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex-1 max-w-md">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 w-full">      
+        <div className="flex-1 w-full lg:max-w-md">
           <SearchBar
             placeholder="Search by Patient ID, Name, or Contact..."
             value={searchTerm}
@@ -629,7 +629,7 @@ const filteredRequests = useMemo(() => {
             onClear={() => setSearchTerm('')}
           />
         </div>
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">  
           <button
             onClick={handleRefresh}
             className={ICON_BUTTON_CLASS}
@@ -726,7 +726,7 @@ const filteredRequests = useMemo(() => {
         </div>
       )}
 
-      {/* Request Table */}
+      {/* Request Table - ✅ Responsive with horizontal scroll */}
       {filteredRequests.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -739,111 +739,115 @@ const filteredRequests = useMemo(() => {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Total Pending Requests
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {totalItems}
-              </span>
-            </h2>
-          </div>
-
-          <div className="flex flex-col min-h-[500px]">
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Request ID</th>
-                    <th className="px-6 py-3">Patient Name</th>
-                    <th className="px-6 py-3">Age</th>
-                    <th className="px-6 py-3">Contact</th>
-                    <th className="px-6 py-3">Doctor Name</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Appointment Date</th>
-                    <th className="px-6 py-3 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {paginatedRequests.map((item, index) => (
-                    <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage 
-                              src={getS3ImageUrl(item.patientImageKey)} 
-                              alt={item.patientName}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
-                              {item.patientName?.charAt(0)?.toUpperCase() || "P"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium text-gray-800">{item.patientName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-gray-700">{item.age} yrs</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={CENTERED_FLEX_CLASS}>
-                          <Phone size={14} className="text-gray-400" />
-                          <span className="text-gray-700">{item.contact}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={CENTERED_FLEX_CLASS}>
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Stethoscope size={12} className="text-blue-600" />
-                          </div>
-                          <span className="text-gray-700">{item.doctorName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Calendar size={14} className="text-gray-400" />
-                          {item.appointmentDate} {item.consulting_time && item.consulting_time !== "N/A" && item.consulting_time !== "--:--" && (
-                            <>at {item.consulting_time}</>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-3">
-                          <button
-                            onClick={() => handleApproveClick(item)}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-green-200 text-green-500 hover:bg-green-50 hover:border-green-300 transition-all"
-                            title="Approve Request"
-                          >
-                            <Check size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleRejectClick(item)}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all"
-                            title="Reject Request"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        // ✅ RESPONSIVE WRAPPER: Only table scrolls, page stays full width
+        <div className="w-full overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Pending Requests
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {totalItems}
+                </span>
+              </h2>
             </div>
 
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="pending requests"
-              />
+            <div className="flex flex-col min-h-[500px]">
+              {/* ✅ Only this div scrolls horizontally if needed */}
+              <div className="overflow-x-auto flex-1">
+                <table className="min-w-[1200px] w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-6 py-3">Request ID</th>
+                      <th className="px-6 py-3">Patient Name</th>
+                      <th className="px-6 py-3">Age</th>
+                      <th className="px-6 py-3">Contact</th>
+                      <th className="px-6 py-3">Doctor Name</th>
+                      <th className="px-6 py-3">Department</th>
+                      <th className="px-6 py-3">Appointment Date</th>
+                      <th className="px-6 py-3 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {paginatedRequests.map((item, index) => (
+                      <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage 
+                                src={getS3ImageUrl(item.patientImageKey)} 
+                                alt={item.patientName}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
+                                {item.patientName?.charAt(0)?.toUpperCase() || "P"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium text-gray-800">{item.patientName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-gray-700">{item.age} yrs</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={CENTERED_FLEX_CLASS}>
+                            <Phone size={14} className="text-gray-400" />
+                            <span className="text-gray-700">{item.contact}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={CENTERED_FLEX_CLASS}>
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                              <Stethoscope size={12} className="text-blue-600" />
+                            </div>
+                            <span className="text-gray-700">{item.doctorName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1 text-gray-600">
+                            <Calendar size={14} className="text-gray-400" />
+                            {item.appointmentDate} {item.consulting_time && item.consulting_time !== "N/A" && item.consulting_time !== "--:--" && (
+                              <>at {item.consulting_time}</>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              onClick={() => handleApproveClick(item)}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg border border-green-200 text-green-500 hover:bg-green-50 hover:border-green-300 transition-all"
+                              title="Approve Request"
+                            >
+                              <Check size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleRejectClick(item)}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all"
+                              title="Reject Request"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={Math.max(1, totalPages)}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="pending requests"
+                />
+              </div>
             </div>
           </div>
         </div>

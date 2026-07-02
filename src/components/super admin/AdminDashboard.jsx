@@ -6,21 +6,20 @@ import {
   Tag,
   Stethoscope,
   Megaphone,
-  DollarSign,
-  TrendingUp,
   Users,
   Activity,
   Calendar,
-  ArrowUp,
-  ArrowDown,
-  CheckCircle,
-  XCircle,
   Clock,
   Ambulance,
   Droplet,
-  Calendar as CalendarIcon
+  User,
+  Calendar as CalendarIcon,
+  CheckCircle,
+  XCircle,
+  Clock as ClockIcon,
+  AlertCircle
 } from 'lucide-react';
-import { Card, Button, Badge } from '../ui';
+import { Card, Button } from '../ui';
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
 import { useGetBookingsQuery } from '../../../app/service/request';
@@ -28,6 +27,7 @@ import { useGetAdsQuery } from '../../../app/service/ads';
 import { useGetAmbulanceQuery } from '../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../app/service/bloodbank';
 import { useGetPatientsQuery } from '../../../app/service/patients';
+import { useGetStaffQuery } from '../../../app/service/staffApi';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -37,86 +37,297 @@ const AdminDashboard = () => {
     totalDoctors: 0,
     totalPatients: 0,
     totalAppointments: 0,
+    pendingAppointments: 0,
+    acceptedAppointments: 0,
+    completedAppointments: 0,
+    declinedAppointments: 0,
+    cancelledAppointments: 0,
     totalAmbulances: 0,
     totalBloodUnits: 0,
     totalAds: 0,
-    pendingApprovals: 0
+    totalStaff: 0
   });
 
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allAppointments, setAllAppointments] = useState([]);
 
-  // Fetch real data from APIs
-  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
+  // ✅ FIX: For Super Admin, we need to fetch ALL appointments across all hospitals
+  // We'll use a larger limit and skip hospital filter
+  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery({
+    limit: 1000,
+    page: 1
+  });
+  
   const { data: doctorsData, isLoading: loadingDoctors } = useGetDoctorsQuery({
     page: 1,
-    limit: 1000
+    limit: 1000,
+    skipHospitalFilter: true  // Super Admin sees all doctors
   });
+  
   const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery({
     page: 1,
     limit: 1000
   });
-  const { data: appointmentsData, isLoading: loadingAppointments } = useGetBookingsQuery({
-    page: 1,
-    limit: 1000
-  });
+  
+  // In AdminDashboard.jsx - update the useGetBookingsQuery call
+const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetchAppointments } = useGetBookingsQuery({
+  page: 1,
+  limit: 10000,
+  skipHospitalFilter: true, // ✅ IMPORTANT: Skip hospital filter for Super Admin
+});
+  
   const { data: adsData, isLoading: loadingAds } = useGetAdsQuery({
     page: 1,
     limit: 1000
   });
+  
+  const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery({
+    page: 1,
+    limit: 1000,
+  });
+
   const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery({});
   const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery({});
 
+  // ✅ NEW: Fetch appointments for each hospital if needed
+  // This is a fallback if the main query doesn't work
+  const fetchAllAppointments = async () => {
+    try {
+      // If appointmentsData is undefined, try to fetch from all hospitals
+      if (!appointmentsData) {
+        console.log('🔄 Appointments data is undefined, trying alternative method...');
+        
+        // Get all hospitals first
+        const hospitals = hospitalsData?.data || hospitalsData || [];
+        
+        // Fetch appointments for each hospital (if your API supports this)
+        // Note: This might not work if the API doesn't support hospitalId filtering
+        let allAppts = [];
+        for (const hospital of hospitals) {
+          try {
+            // You would need to implement a way to fetch appointments by hospitalId
+            // This is just a placeholder
+            console.log(`Fetching appointments for hospital: ${hospital.id}`);
+          } catch (error) {
+            console.error(`Error fetching appointments for hospital ${hospital.id}:`, error);
+          }
+        }
+        return allAppts;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      return [];
+    }
+  };
+
   // Calculate dashboard stats from real data
   useEffect(() => {
-    if (loadingHospitals || loadingDoctors || loadingPatients || loadingAppointments || loadingAds || loadingAmbulance || loadingBloodBank) {
-      return;
-    }
+    const loadData = async () => {
+      if (loadingHospitals || loadingDoctors || loadingPatients || loadingAppointments || 
+          loadingAds || loadingStaff || loadingAmbulance || loadingBloodBank) {
+        return;
+      }
 
-    // Extract data from responses
-    const hospitals = hospitalsData?.data || hospitalsData || [];
-    const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
-    const patients = patientsData?.data || [];
-    const appointments = appointmentsData?.data || [];
-    const ads = adsData?.data || adsData?.ads || [];
-    const ambulances = ambulanceData?.data || [];
-    
-    // Calculate total blood units
-    const bloodBanks = bloodBankData?.data || [];
-    const totalBloodUnits = bloodBanks.reduce((sum, item) => sum + (item.count || 0), 0);
+      // Extract data from responses
+      const hospitals = hospitalsData?.data || hospitalsData || [];
+      const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
+      const patients = patientsData?.data || [];
+      
+      // ✅ FIXED: Better extraction of appointments data
+      let appointments = [];
+      
+      console.log('📊 Raw Appointments Data:', appointmentsData);
+      
+      // Check different possible response structures
+      if (appointmentsData) {
+        // If data is an array, use it directly
+        if (Array.isArray(appointmentsData)) {
+          appointments = appointmentsData;
+        } 
+        // If data has data property
+        else if (appointmentsData.data) {
+          if (Array.isArray(appointmentsData.data)) {
+            appointments = appointmentsData.data;
+          } else if (appointmentsData.data.rows && Array.isArray(appointmentsData.data.rows)) {
+            appointments = appointmentsData.data.rows;
+          } else if (appointmentsData.data.bookings && Array.isArray(appointmentsData.data.bookings)) {
+            appointments = appointmentsData.data.bookings;
+          } else if (typeof appointmentsData.data === 'object' && !Array.isArray(appointmentsData.data)) {
+            // Try to find any array property
+            for (const key in appointmentsData.data) {
+              if (Array.isArray(appointmentsData.data[key]) && appointmentsData.data[key].length > 0) {
+                appointments = appointmentsData.data[key];
+                break;
+              }
+            }
+          }
+        } 
+        // If data has bookings property
+        else if (appointmentsData.bookings && Array.isArray(appointmentsData.bookings)) {
+          appointments = appointmentsData.bookings;
+        } 
+        // If data has rows property
+        else if (appointmentsData.rows && Array.isArray(appointmentsData.rows)) {
+          appointments = appointmentsData.rows;
+        } else {
+          // Try to find any array in the response
+          for (const key in appointmentsData) {
+            if (Array.isArray(appointmentsData[key]) && appointmentsData[key].length > 0) {
+              appointments = appointmentsData[key];
+              break;
+            }
+          }
+        }
+      }
+      
+      console.log('📊 Extracted Appointments:', appointments);
+      console.log('📊 Total Appointments Count:', appointments.length);
+      
+      // Store appointments for later use
+      setAllAppointments(appointments);
+      
+      // ✅ FIXED: Count appointments by status with case-insensitive comparison
+      const pending = appointments.filter(a => {
+        const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
+        return status === 'pending' || status === 'requested';
+      }).length;
+      
+      const accepted = appointments.filter(a => {
+        const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
+        return status === 'accepted' || status === 'confirmed' || status === 'approve' || status === 'approved';
+      }).length;
+      
+      const completed = appointments.filter(a => {
+        const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
+        return status === 'completed' || status === 'complete' || status === 'done';
+      }).length;
+      
+      const declined = appointments.filter(a => {
+        const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
+        return status === 'declined' || status === 'rejected' || status === 'decline' || status === 'denied';
+      }).length;
+      
+      const cancelled = appointments.filter(a => {
+        const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
+        return status === 'cancel' || status === 'cancelled' || status === 'canceled';
+      }).length;
+      
+      const total = appointments.length;
 
-    setStats({
-      totalHospitals: hospitals.length,
-      activeHospitals: hospitals.filter(h => h.status === 'active' || h.isActive === true).length,
-      totalDoctors: doctors.length,
-      totalPatients: patients.length,
-      totalAppointments: appointments.length,
-      totalAmbulances: ambulances.length,
-      totalBloodUnits: totalBloodUnits,
-      totalAds: ads.length,
-      pendingApprovals: hospitals.filter(h => h.status === 'pending' || h.isActive === false).length
-    });
+      console.log('📊 Status Counts:', {
+        pending,
+        accepted,
+        completed,
+        declined,
+        cancelled,
+        total
+      });
 
-    // Generate recent activity from latest hospitals
-    const activities = hospitals
-      .slice(0, 5)
-      .map((hospital) => ({
-        id: hospital.id,
-        type: 'hospital',
-        action: 'registered',
-        entity: hospital.name,
-        time: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'Recently',
-        status: 'success'
-      }));
+      const ads = adsData?.data || adsData?.ads || [];
+      const ambulances = ambulanceData?.data || [];
+      
+      // Extract staff data properly
+      let staff = [];
+      if (staffData?.data?.rows) {
+        staff = staffData.data.rows;
+      } else if (staffData?.data) {
+        staff = Array.isArray(staffData.data) ? staffData.data : [];
+      } else if (Array.isArray(staffData)) {
+        staff = staffData;
+      } else if (staffData?.staff) {
+        staff = Array.isArray(staffData.staff) ? staffData.staff : [];
+      }
+      
+      // Calculate total blood units
+      const bloodBanks = bloodBankData?.data || [];
+      const totalBloodUnits = bloodBanks.length;
 
-    setRecentActivity(activities);
-    setLoading(false);
+      setStats({
+        totalHospitals: hospitals.length,
+        activeHospitals: hospitals.filter(h => h.status === 'active' || h.isActive === true).length,
+        totalDoctors: doctors.length,
+        totalPatients: patients.length,
+        totalAppointments: total,
+        pendingAppointments: pending,
+        acceptedAppointments: accepted,
+        completedAppointments: completed,
+        declinedAppointments: declined,
+        cancelledAppointments: cancelled,
+        totalAmbulances: ambulances.length,
+        totalBloodUnits: totalBloodUnits,
+        totalAds: ads.length,
+        totalStaff: staff.length
+      });
+
+      // Generate recent activity from latest appointments and hospitals
+      const activities = [];
+      
+      // Add recent appointments
+      appointments
+        .slice(0, 3)
+        .forEach((appointment) => {
+          const patientName = appointment.patient_name || appointment.patientName || appointment.patientName || 'Patient';
+          const status = (appointment.status || appointment.booking_status || appointment.bookingStatus || 'pending').toLowerCase();
+          const doctorName = appointment.displayName || appointment.doctorName || appointment.doctor_name || 'Doctor';
+          
+          let action = status;
+          let statusType = 'info';
+          
+          if (status === 'pending' || status === 'requested') {
+            action = 'requested appointment';
+            statusType = 'warning';
+          } else if (status === 'accepted' || status === 'confirmed' || status === 'approved') {
+            action = 'confirmed appointment';
+            statusType = 'info';
+          } else if (status === 'completed' || status === 'complete') {
+            action = 'completed appointment';
+            statusType = 'success';
+          } else if (status === 'declined' || status === 'rejected') {
+            action = 'declined appointment';
+            statusType = 'error';
+          } else if (status === 'cancel' || status === 'cancelled') {
+            action = 'cancelled appointment';
+            statusType = 'error';
+          }
+          
+          activities.push({
+            id: appointment.id || appointment._id || Math.random().toString(),
+            type: 'appointment',
+            action: action,
+            entity: `${patientName} - ${doctorName}`,
+            time: appointment.createdAt ? new Date(appointment.createdAt).toLocaleDateString() : 'Recently',
+            status: statusType
+          });
+        });
+
+      // Add recent hospitals
+      hospitals
+        .slice(0, 2)
+        .forEach((hospital) => {
+          activities.push({
+            id: hospital.id || hospital._id || Math.random().toString(),
+            type: 'hospital',
+            action: 'registered',
+            entity: hospital.name || hospital.hospitalName || 'Unknown Hospital',
+            time: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'Recently',
+            status: 'success'
+          });
+        });
+
+      setRecentActivity(activities.slice(0, 5));
+      setLoading(false);
+    };
+
+    loadData();
   }, [
     hospitalsData,
     doctorsData,
     patientsData,
     appointmentsData,
     adsData,
+    staffData,
     ambulanceData,
     bloodBankData,
     loadingHospitals,
@@ -124,6 +335,7 @@ const AdminDashboard = () => {
     loadingPatients,
     loadingAppointments,
     loadingAds,
+    loadingStaff,
     loadingAmbulance,
     loadingBloodBank
   ]);
@@ -179,12 +391,12 @@ const AdminDashboard = () => {
       color: 'bg-orange-500',
       onClick: () => navigate('/super-admin/ads')
     },
-    { 
-      label: 'Pending Approvals', 
-      value: stats.pendingApprovals, 
-      icon: Clock, 
-      color: 'bg-yellow-500',
-      onClick: () => navigate('/super-admin/hospitals')
+    {
+      label: 'Total Staff',
+      value: stats.totalStaff,
+      icon: User,
+      color: 'bg-teal-500',
+      onClick: () => navigate('/super-admin/hospital-users')
     }
   ];
 
@@ -193,13 +405,15 @@ const AdminDashboard = () => {
       hospital: Building2,
       category: Tag,
       specialty: Stethoscope,
-      ad: Megaphone
+      ad: Megaphone,
+      appointment: CalendarIcon
     };
     const Icon = icons[type] || Activity;
     const colors = {
       success: 'text-green-500',
       warning: 'text-yellow-500',
-      info: 'text-blue-500'
+      info: 'text-blue-500',
+      error: 'text-red-500'
     };
     return <Icon size={16} className={colors[status] || 'text-gray-500'} />;
   };
@@ -238,7 +452,9 @@ const AdminDashboard = () => {
                   <Icon size={20} className={stat.color.replace('bg-', 'text-')} />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stat.value.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {(stat.value ?? 0).toLocaleString()}
+              </p>
               <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
             </Card>
           );
@@ -269,6 +485,45 @@ const AdminDashboard = () => {
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
+                <span>Appointment Status Distribution</span>
+                <span className="font-medium">{stats.totalAppointments} total</span>
+              </div>
+              <div className="flex h-2 rounded-full overflow-hidden">
+                {stats.totalAppointments > 0 ? (
+                  <>
+                    <div 
+                      className="bg-yellow-500 h-full" 
+                      style={{ width: `${(stats.pendingAppointments / stats.totalAppointments) * 100}%` }}
+                      title={`Pending: ${stats.pendingAppointments}`}
+                    />
+                    <div 
+                      className="bg-green-500 h-full" 
+                      style={{ width: `${(stats.acceptedAppointments / stats.totalAppointments) * 100}%` }}
+                      title={`Accepted: ${stats.acceptedAppointments}`}
+                    />
+                    <div 
+                      className="bg-purple-500 h-full" 
+                      style={{ width: `${(stats.completedAppointments / stats.totalAppointments) * 100}%` }}
+                      title={`Completed: ${stats.completedAppointments}`}
+                    />
+                    <div 
+                      className="bg-red-500 h-full" 
+                      style={{ width: `${(stats.declinedAppointments / stats.totalAppointments) * 100}%` }}
+                      title={`Declined: ${stats.declinedAppointments}`}
+                    />
+                    <div 
+                      className="bg-gray-400 h-full" 
+                      style={{ width: `${(stats.cancelledAppointments / stats.totalAppointments) * 100}%` }}
+                      title={`Cancelled: ${stats.cancelledAppointments}`}
+                    />
+                  </>
+                ) : (
+                  <div className="bg-gray-200 h-full w-full" />
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
                 <span>Doctor Coverage</span>
                 <span className="font-medium">
                   {stats.totalDoctors > 0 && stats.totalHospitals > 0 ? Math.round((stats.totalDoctors / stats.totalHospitals) * 10) : 0}%
@@ -278,16 +533,7 @@ const AdminDashboard = () => {
                 <div 
                   className="bg-green-500 h-2 rounded-full" 
                   style={{ width: stats.totalDoctors > 0 && stats.totalHospitals > 0 ? `${Math.min((stats.totalDoctors / stats.totalHospitals) * 10, 100)}%` : '0%' }}
-                ></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Appointment Fulfillment</span>
-                <span className="font-medium">-</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-purple-500 h-2 rounded-full" style={{ width: '0%' }}></div>
+                />
               </div>
             </div>
             <div>
@@ -301,7 +547,49 @@ const AdminDashboard = () => {
                 <div 
                   className="bg-orange-500 h-2 rounded-full" 
                   style={{ width: stats.totalHospitals > 100 ? '85%' : stats.totalHospitals > 50 ? '65%' : '45%' }}
-                ></div>
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Appointment Status Summary */}
+          <div className="mt-6 pt-6 border-t">
+            <h3 className="font-medium text-gray-900 mb-3">Appointment Status Breakdown</h3>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+              <div className="bg-yellow-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <ClockIcon size={14} className="text-yellow-600" />
+                  <p className="text-sm font-semibold text-yellow-600">{stats.pendingAppointments}</p>
+                </div>
+                <p className="text-xs text-gray-600">Pending</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <CheckCircle size={14} className="text-green-600" />
+                  <p className="text-sm font-semibold text-green-600">{stats.acceptedAppointments}</p>
+                </div>
+                <p className="text-xs text-gray-600">Accepted</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <Activity size={14} className="text-purple-600" />
+                  <p className="text-sm font-semibold text-purple-600">{stats.completedAppointments}</p>
+                </div>
+                <p className="text-xs text-gray-600">Completed</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <XCircle size={14} className="text-red-600" />
+                  <p className="text-sm font-semibold text-red-600">{stats.declinedAppointments}</p>
+                </div>
+                <p className="text-xs text-gray-600">Declined</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <AlertCircle size={14} className="text-gray-600" />
+                  <p className="text-sm font-semibold text-gray-600">{stats.cancelledAppointments}</p>
+                </div>
+                <p className="text-xs text-gray-600">Cancelled</p>
               </div>
             </div>
           </div>
@@ -309,7 +597,7 @@ const AdminDashboard = () => {
           {/* Quick Stats Summary */}
           <div className="mt-6 pt-6 border-t">
             <h3 className="font-medium text-gray-900 mb-3">Quick Summary</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-blue-50 rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-blue-600">{stats.totalHospitals}</p>
                 <p className="text-xs text-gray-600">Total Hospitals</p>
@@ -322,9 +610,9 @@ const AdminDashboard = () => {
                 <p className="text-2xl font-bold text-purple-600">{stats.totalPatients}</p>
                 <p className="text-xs text-gray-600">Total Patients</p>
               </div>
-              <div className="bg-orange-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-orange-600">{stats.totalAppointments}</p>
-                <p className="text-xs text-gray-600">Appointments</p>
+              <div className="bg-teal-50 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-teal-600">{stats.totalStaff}</p>
+                <p className="text-xs text-gray-600">Total Staff</p>
               </div>
             </div>
           </div>
@@ -342,7 +630,7 @@ const AdminDashboard = () => {
               View All
             </Button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
             {recentActivity.length > 0 ? (
               recentActivity.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-3 pb-3 border-b last:border-0">

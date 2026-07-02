@@ -61,13 +61,13 @@ export const ambulanceApi = api.injectEndpoints({
     >({
       // ✅ CHANGED: Added proper typing for params
       query: (params: GetAmbulanceParams = {}) => {
-        const auth = getAuthUser();
+        // const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
         // Auto-inject hospitalId from auth (matches backend)
-        if (auth?.id) {
-          queryParams.append("hospitalId", String(auth.id));
-        }
+        // if (auth?.id) {
+        //   queryParams.append("hospitalId", String(auth.id));
+        // }
 
         // Override hospitalId if provided in params
         if (params.hospitalId) {
