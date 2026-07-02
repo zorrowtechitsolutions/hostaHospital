@@ -1,3 +1,5 @@
+// Consultation.js - Complete updated file with patient data fetching
+
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ViewMedicalHistory from "./ViewMedicalHistory";
@@ -5,15 +7,44 @@ import { Button, Card, Badge } from "../ui";
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 import { useCreateVitalMutation } from "../../../app/service/vitals";
-import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth"; // ✅ Added getHospitalName
+import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth";
 import { useCompleteBookingMutation } from "../../../app/service/request";
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
+import { useGetPatientByIdQuery } from "../../../app/service/patients"; // ✅ Import patient query
 
 // ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerPrescriptionEvents, unregisterPrescriptionEvents } from '../../socket/prescriptionEvents';
+
+// Helper function to calculate age from DOB
+const calculateAge = (dob) => {
+  if (!dob) return null;
+  try {
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  } catch (error) {
+    console.error("Error calculating age:", error);
+    return null;
+  }
+};
+
+// Helper function to extract numeric ID from string
+const extractNumericId = (id) => {
+  if (!id) return null;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'string') {
+    const numericMatch = id.match(/\d+/);
+    return numericMatch ? parseInt(numericMatch[0]) : null;
+  }
+  return null;
+};
 
 // Vital Input Component
 const VitalInput = ({ label, type = "text", unit, value, onChange, isEditing, onBlur }) => {
@@ -152,6 +183,18 @@ const Consultation = () => {
   // Fetch prescription templates
   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
+  // ✅ Get patient ID for fetching patient data
+  const patientId = appointmentData.patientId || 
+                   appointmentData.patient?.id || 
+                   appointmentData.patient?.patientId || 
+                   null;
+  
+  // ✅ Fetch patient data if patientId exists
+  const { data: patientData, isLoading: isPatientLoading } = useGetPatientByIdQuery(
+    patientId ? { id: patientId } : null,
+    { skip: !patientId }
+  );
+
   const [medications, setMedications] = useState([
     { id: 1, name: "", dosage: "", duration: "", frequency: "", timing: "", instructions: "" }
   ]);
@@ -232,13 +275,12 @@ const Consultation = () => {
   useEffect(() => {
     console.log("=== CONSULTATION PAGE DEBUG ===");
     console.log("Appointment Data received:", appointmentData);
-    console.log("Doctor Name:", appointmentData.doctor?.name || appointmentData.doctorName);
-    console.log("Doctor Specialization:", appointmentData.doctor?.specialization || appointmentData.department);
-    console.log("Booking ID:", appointmentData.id);
-    console.log("Patient Name:", appointmentData.patientName || appointmentData.patient?.name);
-    console.log("Hospital Name:", appointmentData.hospitalName || appointmentData.hospital?.name);
+    console.log("Patient ID extracted:", patientId);
+    console.log("Patient Data fetched:", patientData);
+    console.log("Full appointmentData keys:", Object.keys(appointmentData));
+    console.log("Patient object:", appointmentData.patient);
     console.log("==============================");
-  }, [appointmentData]);
+  }, [appointmentData, patientData, patientId]);
 
   // Debug template data
   useEffect(() => {
@@ -307,7 +349,6 @@ const Consultation = () => {
       missingData.push("Hospital ID");
     }
 
-    // ✅ FIXED: Now getHospitalName is properly imported
     let hospitalName = null;
     try {
       hospitalName = getHospitalName() || appointmentData.hospitalName || appointmentData.hospital?.name;
@@ -385,19 +426,7 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-  // Helper function to extract numeric ID from string
-  const extractNumericId = (id) => {
-    if (!id) return null;
-    if (typeof id === 'number') return id;
-    if (typeof id === 'string') {
-      // Remove any non-numeric characters (like #PT0001 -> 1)
-      const numericMatch = id.match(/\d+/);
-      return numericMatch ? parseInt(numericMatch[0]) : null;
-    }
-    return null;
-  };
-
-  // ✅ handleEndConsultation with patientName and hospitalName
+  // ✅ handleEndConsultation with patient data from API
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -411,7 +440,7 @@ const Consultation = () => {
     try {
       const bookingId = appointmentData.id || appointmentData.bookingId;
       
-      // Extract numeric IDs from potentially string values
+      // Extract numeric IDs
       const extractedPatientId = extractNumericId(
         appointmentData.patientId || 
         appointmentData.patient?.id || 
@@ -437,16 +466,87 @@ const Consultation = () => {
         appointmentData.hospital?.id
       );
       
-      // ✅ EXTRACT PATIENT NAME
+      // ✅ EXTRACT PATIENT DETAILS - From appointment data AND patient data from API
       const extractedPatientName = 
         appointmentData.patientName || 
         appointmentData.patient?.name || 
+        patientData?.data?.name ||
         appointmentData.name || 
         null;
       
-      // ✅ EXTRACT HOSPITAL NAME - From appointment data
+      // ✅ Get age from patient data API first, then fallback to appointment data
+      let extractedAge = null;
+      
+      // Try to get age from patient data API
+      if (patientData?.data) {
+        const patient = patientData.data;
+        // Check if patient has age directly
+        if (patient.age) extractedAge = patient.age;
+        // If not, try to calculate from DOB
+        else if (patient.dob || patient.dateOfBirth) {
+          const dob = patient.dob || patient.dateOfBirth;
+          extractedAge = calculateAge(dob);
+        }
+      }
+      
+      // If still no age, try from appointment data
+      if (!extractedAge) {
+        if (appointmentData.age) extractedAge = appointmentData.age;
+        else if (appointmentData.patient?.age) extractedAge = appointmentData.patient.age;
+        else if (appointmentData.patientAge) extractedAge = appointmentData.patientAge;
+        else if (appointmentData.ageDisplay) extractedAge = appointmentData.ageDisplay;
+        else {
+          // Try to calculate from DOB in appointment data
+          const dob = appointmentData.dob || 
+                     appointmentData.patient?.dob || 
+                     appointmentData.dateOfBirth ||
+                     appointmentData.patient?.dateOfBirth;
+          if (dob) {
+            extractedAge = calculateAge(dob);
+          }
+        }
+      }
+      
+      // ✅ Get contact from patient data API first
+      let extractedContact = null;
+      
+      if (patientData?.data) {
+        const patient = patientData.data;
+        extractedContact = patient.contact || patient.phone || patient.mobile || patient.phoneNumber || null;
+      }
+      
+      // If still no contact, try from appointment data
+      if (!extractedContact) {
+        if (appointmentData.contact) extractedContact = appointmentData.contact;
+        else if (appointmentData.patient?.contact) extractedContact = appointmentData.patient.contact;
+        else if (appointmentData.phone) extractedContact = appointmentData.phone;
+        else if (appointmentData.patient?.phone) extractedContact = appointmentData.patient.phone;
+        else if (appointmentData.mobile) extractedContact = appointmentData.mobile;
+        else if (appointmentData.patient?.mobile) extractedContact = appointmentData.patient.mobile;
+        else if (appointmentData.phoneNumber) extractedContact = appointmentData.phoneNumber;
+        else if (appointmentData.contactNumber) extractedContact = appointmentData.contactNumber;
+      }
+      
+      // ✅ Get gender from patient data API first
+      let extractedGender = null;
+      
+      if (patientData?.data) {
+        const patient = patientData.data;
+        extractedGender = patient.gender || patient.sex || null;
+      }
+      
+      // If still no gender, try from appointment data
+      if (!extractedGender) {
+        if (appointmentData.gender) extractedGender = appointmentData.gender;
+        else if (appointmentData.patient?.gender) extractedGender = appointmentData.patient.gender;
+        else if (appointmentData.sex) extractedGender = appointmentData.sex;
+        else if (appointmentData.patient?.sex) extractedGender = appointmentData.patient.sex;
+        else if (appointmentData.genderDisplay) extractedGender = appointmentData.genderDisplay;
+      }
+      
+      // ✅ EXTRACT HOSPITAL NAME
       const authUser = getAuthUser();
-      const hospitalNameFromAuth = getHospitalName(); // ✅ Now this works!
+      const hospitalNameFromAuth = getHospitalName();
 
       const extractedHospitalName =
         hospitalNameFromAuth ||
@@ -469,7 +569,6 @@ const Consultation = () => {
         appointmentData.specialization || 
         null;
       
-      
       if (!bookingId) throw new Error("Missing Booking ID");
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
@@ -487,13 +586,24 @@ const Consultation = () => {
       
       const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
 
-      // Get the selected template (first one from the list or null)
+      // Get the selected template
       const selectedTemplate = existingTemplates?.data?.[0] || null;
       
-      console.log("AUTH USER:", authUser);
-      console.log("EXTRACTED HOSPITAL NAME:", extractedHospitalName);
+      console.log("=== EXTRACTED PATIENT DETAILS ===");
+      console.log("Patient Name:", extractedPatientName);
+      console.log("Age:", extractedAge);
+      console.log("Gender:", extractedGender);
+      console.log("Contact:", extractedContact);
+      console.log("Age type:", typeof extractedAge);
+      console.log("Patient Data from API:", patientData);
+      console.log("==================================");
+      
+      // ✅ CONVERT age to number if it's a string
+      const ageAsNumber = extractedAge ? Number(extractedAge) : null;
+      
+      console.log("Age as number:", ageAsNumber);
 
-      // ✅ Create prescription data with patientName and hospitalName
+      // ✅ Create prescription data with correct backend field names
       const prescriptionData = {
         bookingId: Number(bookingId),
         hospitalId: extractedHospitalId,
@@ -504,8 +614,13 @@ const Consultation = () => {
         doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
         
-        // ✅ Patient and Hospital names
+        // ✅ PATIENT DETAILS - Using exact backend field names
         patientName: extractedPatientName,
+        age: ageAsNumber,                    // ✅ Backend field: age (as number)
+        contact: extractedContact,           // ✅ Backend field: contact
+        gender: extractedGender,             // ✅ Backend field: gender
+        
+        // Hospital name
         hospitalName: extractedHospitalName,
         
         patientId: extractedPatientId || undefined,
@@ -518,7 +633,7 @@ const Consultation = () => {
         next_consultation: nextConsultationDate || null,
         empty_stomach: emptyStomach === "yes",
         
-        // Template fields - use fetched template or defaults
+        // Template fields
         templateType: selectedTemplate?.templateType || "demo",
         canvasBg: selectedTemplate?.canvasBg || "#ffffff",
         design: selectedTemplate?.design || [],
@@ -535,16 +650,13 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      console.log("=== PRESCRIPTION DATA ===");
-      console.log(prescriptionData);
-      console.log("nextConsultationDate:", nextConsultationDate);
-      console.log("========================");
-
-      
+      console.log("=== FINAL PRESCRIPTION PAYLOAD ===");
+      console.log(JSON.stringify(prescriptionData, null, 2));
+      console.log("===================================");
 
       const result = await createPrescription(prescriptionData).unwrap();
 
-      // ✅ Emit socket event for prescription created
+      // ✅ Emit socket event
       if (socket && socket.connected) {
         socket.emit('PRESCRIPTION_CREATED', {
           prescriptionId: result?.data?.id || result?.data?._id,
@@ -610,28 +722,41 @@ const Consultation = () => {
           </div>
           <div className="p-4 flex flex-wrap justify-between items-center gap-3">
             <div className="flex items-center gap-3">
-              {/* Avatar with first letter fallback */}
               <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
-                {(appointmentData.patientName || appointmentData.patient?.name || "P")
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-              {/* Avatar with first letter fallback */}
-              <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
-                {(appointmentData.patientName || appointmentData.patient?.name || "P")
+                {(appointmentData.patientName || appointmentData.patient?.name || patientData?.data?.name || "P")
                   .charAt(0)
                   .toUpperCase()}
               </div>
               <div>
                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
-                <p className="font-semibold text-gray-800 text-sm mt-1">{appointmentData.patientName || appointmentData.patient?.name || "Patient"}</p>
+                <p className="font-semibold text-gray-800 text-sm mt-1">
+                  {appointmentData.patientName || appointmentData.patient?.name || patientData?.data?.name || "Patient"}
+                </p>
                 <p className="text-xs text-gray-500">Consultation ID : #{appointmentData.id || appointmentData.bookingId || "N/A"}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-xs bg-gray-50 px-3 py-2 rounded-lg">
-              <div><p className="text-gray-500 text-[10px]">Age / Gender</p><p className="font-medium text-gray-800 text-xs">{appointmentData.age || "28"} Years / {appointmentData.gender || "Male"}</p></div>
-              <div><p className="text-gray-500 text-[10px]">Department</p><p className="font-medium text-gray-800 text-xs">{appointmentData.department || "Cardiology"}</p></div>
-              <div><p className="text-gray-500 text-[10px]">Date</p><p className="font-medium text-gray-800 text-xs">{appointmentData.appointmentDateDisplay || "25 Jan 2025, 07:00 PM"}</p></div>
+              <div>
+                <p className="text-gray-500 text-[10px]">Age / Gender</p>
+                <p className="font-medium text-gray-800 text-xs">
+                  {patientData?.data?.age || appointmentData.age || appointmentData.patient?.age || "N/A"} Years / 
+                  {patientData?.data?.gender || appointmentData.gender || appointmentData.patient?.gender || "N/A"}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-[10px]">Contact</p>
+                <p className="font-medium text-gray-800 text-xs">
+                  {patientData?.data?.contact || patientData?.data?.phone || appointmentData.contact || appointmentData.patient?.contact || "N/A"}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-[10px]">Department</p>
+                <p className="font-medium text-gray-800 text-xs">{appointmentData.department || "Cardiology"}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-[10px]">Date</p>
+                <p className="font-medium text-gray-800 text-xs">{appointmentData.appointmentDateDisplay || "25 Jan 2025, 07:00 PM"}</p>
+              </div>
             </div>
           </div>
         </Card>
@@ -750,8 +875,8 @@ const Consultation = () => {
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
               <Button variant="outline" size="sm" onClick={handleBackToAppointments}>Cancel</Button>
-              <Button variant="primary" size="sm" onClick={handleEndConsultation} disabled={isSubmitting || isCreateLoading || isVitalLoading || isTemplatesLoading} loading={isSubmitting || isCreateLoading || isVitalLoading}>
-                {isSubmitting || isCreateLoading || isVitalLoading ? "Processing..." : "End Consultation"}
+              <Button variant="primary" size="sm" onClick={handleEndConsultation} disabled={isSubmitting || isCreateLoading || isVitalLoading || isTemplatesLoading || isPatientLoading} loading={isSubmitting || isCreateLoading || isVitalLoading || isPatientLoading}>
+                {isSubmitting || isCreateLoading || isVitalLoading || isPatientLoading ? "Processing..." : "End Consultation"}
               </Button>
             </div>
           </div>
