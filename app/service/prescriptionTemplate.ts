@@ -52,7 +52,9 @@ createPrescriptionTemplate: builder.mutation<
       query: (params) => {
         const hospitalId = getHospitalId();
         
-let url = `/prescription-template`;        
+        // Build URL with hospitalId as a query parameter
+        let url = `/prescription-template?hospitalId=${hospitalId}`;
+        
         if (params?.specialty) {
           url += `&specialty=${params.specialty}`;
         }
@@ -90,8 +92,9 @@ let url = `/prescription-template`;
     // UPDATE/EDIT PRESCRIPTION TEMPLATE
 updatePrescriptionTemplate: builder.mutation({
   query: ({ id, data }) => {
+    const hospitalId = getHospitalId();
     return {
-      url: `/prescription-template/${id}`,
+      url: `/prescription-template/${id}?hospitalId=${hospitalId}`,
       method: "PUT",
       body: data,
     };

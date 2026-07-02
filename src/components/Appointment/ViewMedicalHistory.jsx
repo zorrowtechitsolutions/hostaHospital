@@ -48,7 +48,6 @@ const ViewMedicalHistory = ({
   );
 
   // Log the API response to see exact structure
-  console.log("ViewMedicalHistory - FULL PRESCRIPTION DATA:", JSON.stringify(prescriptionData, null, 2));
 
   // Extract prescriptions from response with proper handling
   let prescriptions = [];
@@ -72,7 +71,6 @@ const ViewMedicalHistory = ({
   const latestRecord = sortedPrescriptions[0] || {};
 
   console.log("LATEST RECORD:", latestRecord);
-  console.log("ALL FIELDS IN LATEST RECORD:", Object.keys(latestRecord));
 
   // Helper to get field value with fallbacks
   const getField = (record, fieldNames, defaultValue = "-") => {

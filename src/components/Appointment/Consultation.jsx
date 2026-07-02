@@ -5,7 +5,7 @@ import { Button, Card, Badge } from "../ui";
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 import { useCreateVitalMutation } from "../../../app/service/vitals";
-import { getHospitalId } from "../../utils/auth";
+import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth"; // ✅ Added getHospitalName
 import { useCompleteBookingMutation } from "../../../app/service/request";
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
@@ -235,6 +235,8 @@ const Consultation = () => {
     console.log("Doctor Name:", appointmentData.doctor?.name || appointmentData.doctorName);
     console.log("Doctor Specialization:", appointmentData.doctor?.specialization || appointmentData.department);
     console.log("Booking ID:", appointmentData.id);
+    console.log("Patient Name:", appointmentData.patientName || appointmentData.patient?.name);
+    console.log("Hospital Name:", appointmentData.hospitalName || appointmentData.hospital?.name);
     console.log("==============================");
   }, [appointmentData]);
 
@@ -303,6 +305,15 @@ const Consultation = () => {
     const hospitalId = getHospitalId() || appointmentData.hospitalId;
     if (!hospitalId) {
       missingData.push("Hospital ID");
+    }
+
+    // ✅ FIXED: Now getHospitalName is properly imported
+    let hospitalName = null;
+    try {
+      hospitalName = getHospitalName() || appointmentData.hospitalName || appointmentData.hospital?.name;
+    } catch (error) {
+      console.warn("Could not get hospital name:", error);
+      hospitalName = appointmentData.hospitalName || appointmentData.hospital?.name || null;
     }
     
     if (missingData.length > 0) {
@@ -386,7 +397,7 @@ const Consultation = () => {
     return null;
   };
 
-  // ✅ UPDATED: This is the fixed handleEndConsultation function
+  // ✅ handleEndConsultation with patientName and hospitalName
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -426,10 +437,38 @@ const Consultation = () => {
         appointmentData.hospital?.id
       );
       
-      const extractedDoctorName = appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName || appointmentData.doctor?.displayName || null;
-      const extractedDoctorSpecialization = appointmentData.doctor?.specialization || appointmentData.doctor?.department || appointmentData.department || appointmentData.specialization || null;
+      // ✅ EXTRACT PATIENT NAME
+      const extractedPatientName = 
+        appointmentData.patientName || 
+        appointmentData.patient?.name || 
+        appointmentData.name || 
+        null;
       
-      console.log("Doctor Name:", extractedDoctorName);
+      // ✅ EXTRACT HOSPITAL NAME - From appointment data
+      const authUser = getAuthUser();
+      const hospitalNameFromAuth = getHospitalName(); // ✅ Now this works!
+
+      const extractedHospitalName =
+        hospitalNameFromAuth ||
+        authUser?.name ||
+        appointmentData.hospitalName ||
+        appointmentData.hospital?.name ||
+        "";
+
+      const extractedDoctorName = 
+        appointmentData.doctor?.name || 
+        appointmentData.doctorName || 
+        appointmentData.displayName || 
+        appointmentData.doctor?.displayName || 
+        null;
+      
+      const extractedDoctorSpecialization = 
+        appointmentData.doctor?.specialization || 
+        appointmentData.doctor?.department || 
+        appointmentData.department || 
+        appointmentData.specialization || 
+        null;
+      
       
       if (!bookingId) throw new Error("Missing Booking ID");
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
@@ -451,21 +490,27 @@ const Consultation = () => {
       // Get the selected template (first one from the list or null)
       const selectedTemplate = existingTemplates?.data?.[0] || null;
       
-      console.log("Selected Template for prescription:", selectedTemplate);
+      console.log("AUTH USER:", authUser);
+      console.log("EXTRACTED HOSPITAL NAME:", extractedHospitalName);
 
-      // ✅ FIXED: Create prescription data with prescribedBy field
+      // ✅ Create prescription data with patientName and hospitalName
       const prescriptionData = {
         bookingId: Number(bookingId),
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
         
-        // ✅ IMPORTANT: Send prescribedBy instead of doctorName for backend
-        prescribedBy: extractedDoctorName,      // Backend expects this field
-        doctorName: extractedDoctorName,        // Keep for frontend display
+        // Doctor fields
+        prescribedBy: extractedDoctorName,
+        doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
+        
+        // ✅ Patient and Hospital names
+        patientName: extractedPatientName,
+        hospitalName: extractedHospitalName,
         
         patientId: extractedPatientId || undefined,
         userId: extractedUserId || undefined,
+        
         complaint: complaint.trim(),
         medications: validMedications,
         investigations: investigations.filter(i => i.trim() !== ""),
@@ -494,6 +539,8 @@ const Consultation = () => {
       console.log(prescriptionData);
       console.log("nextConsultationDate:", nextConsultationDate);
       console.log("========================");
+
+      
 
       const result = await createPrescription(prescriptionData).unwrap();
 

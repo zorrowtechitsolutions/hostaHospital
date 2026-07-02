@@ -50,6 +50,13 @@ export const getHospitalId = (): number | string | null => {
   return auth?.id || null;
 };
 
+// ================= HOSPITAL NAME HELPER =================
+
+export const getHospitalName = (): string | null => {
+  const auth = getAuthUser();
+  return auth?.hospitalName || null;
+};
+
 // ================= USER INFO HELPERS =================
 
 export const getUserName = (): string | null => {

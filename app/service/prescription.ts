@@ -10,8 +10,10 @@ export interface PrescriptionPayload {
   patientId?: number | string | null;
   userId?: number | string | null;
 
-  prescribedBy?: string;        // ✅ ADDED - Backend expects this field
-  doctorName?: string;          // Keep for frontend display
+  prescribedBy?: string;
+  doctorName?: string;
+  patientName?: string;         // ✅ ADDED
+  hospitalName?: string;        // ✅ ADDED
   doctorSpecialization?: string;
   type?: string;
 
@@ -64,10 +66,14 @@ export const prescriptionApi = api.injectEndpoints({
           hospitalId,
           doctorId: data.doctorId,
 
-          // ✅ Send BOTH doctorName AND prescribedBy
-          prescribedBy: data.doctorName || data.prescribedBy,  // Backend expects this
-          doctorName: data.doctorName,                         // For frontend display
+          // Doctor fields
+          prescribedBy: data.doctorName || data.prescribedBy,
+          doctorName: data.doctorName,
           doctorSpecialization: data.doctorSpecialization,
+
+          // ✅ ADDED: Patient and Hospital names
+          patientName: data.patientName,
+          hospitalName: data.hospitalName,
 
           patientId: data.patientId,
           userId: data.userId,

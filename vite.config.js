@@ -14,3 +14,7 @@ export default defineConfig({
     global: "window",    // 🔥 fixes some libs
   },
 });
+
+
+
+
