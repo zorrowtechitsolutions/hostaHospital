@@ -1,8 +1,7 @@
-// src/components/patients/Patients.jsx - With Deleted/Blacklisted Support and Recover Functionality
+// src/components/patients/Patients.jsx - With Server-Side Pagination and Filtering
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  User, 
   Calendar, 
   Activity,
   Plus,
@@ -29,9 +28,7 @@ import {
   Button, 
   Badge, 
   Loader, 
-  Pagination, 
-  SearchBar,
-  Card
+  Pagination
 } from '../ui';
 import { 
   useGetPatientsQuery, 
@@ -43,58 +40,46 @@ import { getHospitalId, isDoctor, isStaff, isHospitalAdmin } from '../../utils/a
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerPatientEvents, unregisterPatientEvents } from '../../socket/patientEvents';
 
 const Patients = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  
+  // State
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [appointmentPatient, setAppointmentPatient] = useState(null);
-  const [patientType, setPatientType] = useState('outpatient');
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Track if showing deleted patients
   const [showDeleted, setShowDeleted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   
-  // Delete Modal State
+  // Filter states
+  const [genderFilter, setGenderFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  
+  // Modal states
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentPatient, setAppointmentPatient] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
-  
-  // Approve Modal State
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [bookingData, setBookingData] = useState(null);
   
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
-  const [genderFilter, setGenderFilter] = useState('');
+  // Menu state
+  const [activeMenu, setActiveMenu] = useState(null);
+  const menuRef = useRef(null);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  // ✅ Track if events are registered
-  const [eventsRegistered, setEventsRegistered] = useState(false);
-
-  // ✅ Get hospitalId using the fixed helper
+  // Auth
   const hospitalId = getHospitalId();
   const isDoctorRole = isDoctor();
   const isStaffRole = isStaff();
   const isHospitalAdminRole = isHospitalAdmin();
-
-  // ✅ Check if user can modify patients (create, edit, delete)
   const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
 
-  // API hooks WITH QUERY PARAMETERS - using server-side pagination
+  // API
   const { 
     data: patientsResponse, 
     isLoading: isLoadingPatients,
@@ -106,191 +91,120 @@ const Patients = () => {
     page: currentPage,
     limit: itemsPerPage,
     ...(genderFilter && { gender: genderFilter }),
-    includeDeleted: showDeleted // ✅ Include deleted patients when showDeleted is true
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(activeTab === 'outpatient' && { patientType: 'Outpatient' }),
+    ...(activeTab === 'inpatient' && { patientType: 'Inpatient' }),
+    includeDeleted: showDeleted
   });
 
   const [deletePatient] = useDeletePatientMutation();
-  const [recoverPatient] = useRecoverPatientMutation(); // ✅ Add recover mutation
+  const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // ✅ Register socket event listeners
+  // Socket events
   useEffect(() => {
-    console.log("🔄 Registering patient event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerPatientEvents({
-      onPatientRegistered: async (data) => {
-        console.log("👤 NEW PATIENT REGISTERED:", data);
-        showSuccessToast(`New patient registered!`, 3000);
-        const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+      onPatientRegistered: async () => {
+        showSuccessToast('New patient registered!', 3000);
+        await refetchPatients();
       },
-
-      onPatientUpdated: async (data) => {
-        console.log("✏️ PATIENT UPDATED:", data);
-        showSuccessToast(`Patient updated!`, 3000);
-        const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
+      onPatientUpdated: async () => {
+        showSuccessToast('Patient updated!', 3000);
+        await refetchPatients();
       },
-
-      onPatientDeleted: async (data) => {
-        console.log("🗑️ PATIENT DELETED:", data);
-        showSuccessToast(`Patient deleted!`, 3000);
-        const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (DELETED):", result);
-        console.log("📊 NEW DATA:", result?.data);
+      onPatientDeleted: async () => {
+        showSuccessToast('Patient deleted!', 3000);
+        await refetchPatients();
       },
-
-      // ✅ Handle PATIENT_RECOVERED event
-      onPatientRecovered: async (data) => {
-        console.log("♻️ PATIENT RECOVERED:", data);
-        showSuccessToast(`Patient recovered successfully!`, 3000);
-        const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (RECOVERED):", result);
+      onPatientRecovered: async () => {
+        showSuccessToast('Patient recovered successfully!', 3000);
+        await refetchPatients();
       }
     });
 
-    setEventsRegistered(true);
-
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering patient events...");
       unregisterPatientEvents();
-      setEventsRegistered(false);
     };
-  }, []); // ✅ Run once on mount
+  }, [refetchPatients]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Socket connection handlers
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Patient events will work!");
-      // Re-register events on reconnect if not registered
-      if (!eventsRegistered) {
-        registerPatientEvents({
-          onPatientRegistered: async (data) => {
-            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
-            showSuccessToast(`New patient registered!`, 3000);
-            await refetchPatients();
-          },
-          onPatientUpdated: async (data) => {
-            console.log("✏️ PATIENT UPDATED (reconnect):", data);
-            showSuccessToast(`Patient updated!`, 3000);
-            await refetchPatients();
-          },
-          onPatientDeleted: async (data) => {
-            console.log("🗑️ PATIENT DELETED (reconnect):", data);
-            showSuccessToast(`Patient deleted!`, 3000);
-            await refetchPatients();
-          },
-          // ✅ Handle PATIENT_RECOVERED on reconnect
-          onPatientRecovered: async (data) => {
-            console.log("♻️ PATIENT RECOVERED (reconnect):", data);
-            showSuccessToast(`Patient recovered successfully!`, 3000);
-            await refetchPatients();
-          }
-        });
-        setEventsRegistered(true);
-      }
-    };
-
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Patient events won't work!");
-      setEventsRegistered(false);
+      registerPatientEvents({
+        onPatientRegistered: async () => {
+          showSuccessToast('New patient registered!', 3000);
+          await refetchPatients();
+        },
+        onPatientUpdated: async () => {
+          showSuccessToast('Patient updated!', 3000);
+          await refetchPatients();
+        },
+        onPatientDeleted: async () => {
+          showSuccessToast('Patient deleted!', 3000);
+          await refetchPatients();
+        },
+        onPatientRecovered: async () => {
+          showSuccessToast('Patient recovered successfully!', 3000);
+          await refetchPatients();
+        }
+      });
     };
 
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
-  }, [refetchPatients, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PATIENT: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Get patients array and pagination info from response
-  const allPatients = patientsResponse?.data || [];
-  const totalItems = patientsResponse?.pagination?.totalItems || 0;
-  const totalPages = patientsResponse?.pagination?.totalPages || 1;
-
-  // ✅ Transform patient data to include isDelete and isActive flags
-  const transformPatientData = (patients) => {
-    if (!patients || !Array.isArray(patients)) return [];
-    
-    return patients.map((patient) => {
-      // Determine status based on isDelete flag
-      let status = 'Active';
-      if (patient.isDelete) {
-        status = 'Blacklisted';
-      } else if (patient.isActive === false) {
-        status = 'Inactive';
-      }
-      
-      return {
-        ...patient,
-        // Ensure these flags exist
-        isDelete: patient.isDelete || false,
-        isActive: patient.isActive !== undefined ? patient.isActive : true,
-        displayStatus: status
-      };
-    });
-  };
-
-  const transformedPatients = transformPatientData(allPatients);
-
-  // Separate patients into outpatient and inpatient based on patientType
-  const outpatientPatients = transformedPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
-  const inpatientPatients = transformedPatients.filter(p => p.patientType === 'Inpatient');
-
-  // Get active patients based on tab (client-side filtering for tabs)
-  const getActivePatients = () => {
-    if (activeTab === 'outpatient') return outpatientPatients;
-    if (activeTab === 'inpatient') return inpatientPatients;
-    return transformedPatients;
-  };
-
-  const activePatients = getActivePatients();
-
-  // Apply local filters for gender and department (client-side filtering)
-  const filteredPatients = activePatients.filter(p => {
-    if (genderFilter && p.gender !== genderFilter) return false;
-    if (departmentFilter && p.department !== departmentFilter) return false;
-    return true;
-  });
-
-  // Use server-side totalPages for pagination
-  const totalFilteredItems = totalItems;
-  const totalFilteredPages = totalPages;
+  }, [refetchPatients]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, genderFilter, departmentFilter, activeTab, showDeleted]);
 
-  // Navigation handlers
-  const handleViewDetails = (patient) => {
-    // ✅ Don't allow viewing details of blacklisted patients
-    if (patient.isDelete) {
-      showErrorToast('Cannot view details of blacklisted patient', 3000);
-      return;
-    }
-    navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
+  // Handle click outside for menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Transform data
+  const transformPatientData = (patients) => {
+    if (!patients || !Array.isArray(patients)) return [];
+    return patients.map((patient) => ({
+      ...patient,
+      isDelete: patient.isDelete || false,
+      isActive: patient.isActive !== undefined ? patient.isActive : true,
+      displayStatus: patient.isDelete ? 'Blacklisted' : (patient.isActive ? 'Active' : 'Inactive')
+    }));
   };
 
+  const patients = transformPatientData(patientsResponse?.data || []);
+  const totalItems = patientsResponse?.pagination?.totalItems || 0;
+  const totalPages = patientsResponse?.pagination?.totalPages || 1;
+
+  // Helper functions
+  const formatDisplayDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  };
+
+  const formatPatientId = (id) => {
+    if (!id) return '#PT0000';
+    return `#PT00${String(id).slice(-6)}`;
+  };
+
+  // CRUD Handlers
   const handleAddPatient = () => {
-    // ✅ Only Hospital Admin and Super Admin can add patients
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to add patients', 3000);
       return;
@@ -298,8 +212,15 @@ const Patients = () => {
     navigate('/add-patient');
   };
 
+  const handleViewDetails = (patient) => {
+    if (patient.isDelete) {
+      showErrorToast('Cannot view details of blacklisted patient', 3000);
+      return;
+    }
+    navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
+  };
+
   const handleEditPatient = (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can edit patients
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to edit patients', 3000);
       return;
@@ -312,7 +233,6 @@ const Patients = () => {
   };
 
   const handleDeleteClick = (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can delete patients
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to delete patients', 3000);
       return;
@@ -322,23 +242,19 @@ const Patients = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (patientToDelete) {
-      try {
-        await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
-        await refetchPatients();
-        setShowDeleteModal(false);
-        setPatientToDelete(null);
-        showSuccessToast(`${patientToDelete.name} has been deleted successfully!`, 2000);
-      } catch (error) {
-        console.error('Error deleting patient:', error);
-        showErrorToast('Failed to delete patient. Please try again.', 3000);
-      }
+    if (!patientToDelete) return;
+    try {
+      await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
+      await refetchPatients();
+      setShowDeleteModal(false);
+      setPatientToDelete(null);
+      showSuccessToast(`${patientToDelete.name} has been deleted successfully!`, 2000);
+    } catch (error) {
+      showErrorToast('Failed to delete patient. Please try again.', 3000);
     }
   };
 
-  // ✅ Recover handler
   const handleRecoverPatient = async (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can recover patients
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to recover patients', 3000);
       return;
@@ -348,24 +264,76 @@ const Patients = () => {
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
       refetchPatients();
     } catch (error) {
-      console.error('Recover error:', error);
       showErrorToast(error?.data?.message || 'Failed to recover patient', 3000);
+    }
+  };
+
+  const handleAddAppointmentModal = (patient) => {
+    if (patient.isDelete) {
+      showErrorToast('Cannot create appointment for blacklisted patient', 3000);
+      return;
+    }
+    setAppointmentPatient(patient);
+    setShowAppointmentModal(true);
+  };
+
+  const handleProceedApprove = (data) => {
+    const patientId = appointmentPatient?.id || appointmentPatient?._id;
+    setBookingData({
+      ...data,
+      patientId: patientId ? `#PT00${String(patientId)}` : null,
+    });
+    setShowAppointmentModal(false);
+    setShowApproveModal(true);
+  };
+
+  const handleConfirmAppointment = async (approveData) => {
+    try {
+      const payload = {
+        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
+        userId: Number(bookingData?.userId),
+        patient_name: bookingData?.patient_name,
+        patient_dob: bookingData?.patient_dob,
+        patient_place: bookingData?.patient_place,
+        patient_phone: bookingData?.patient_phone,
+        patient_age: bookingData?.patient_age,
+        patient_gender: bookingData?.patient_gender || appointmentPatient?.gender,
+        hospitalId: Number(bookingData?.hospitalId),
+        doctorId: Number(bookingData?.doctorId),
+        booking_date: approveData?.booking_date,
+        department: bookingData?.department,
+        displayName: bookingData?.displayName,
+        consulting_time: approveData?.consulting_time,
+        token: approveData?.token ? parseInt(approveData.token) : null,
+        status: "accepted",
+        booking_status: "hospital booking"
+      };
+
+      await createBooking(payload).unwrap();
+
+      showSuccessToast("Appointment confirmed successfully!", 4000);
+      setShowApproveModal(false);
+      setBookingData(null);
+      setAppointmentPatient(null);
+      navigate("/appointments");
+    } catch (err) {
+      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
     }
   };
 
   const handleRefresh = () => {
     setSearchTerm("");
-    setStatusFilter("all");
-    setDepartmentFilter("");
-    setDateFilter("");
     setGenderFilter("");
+    setDepartmentFilter("");
+    setActiveTab('all');
+    setShowDeleted(false);
     setCurrentPage(1);
     refetchPatients();
     showSuccessToast("Refreshed patients", 2000);
   };
 
   const handleExport = () => {
-    const exportData = filteredPatients.map(patient => ({
+    const exportData = patients.map(patient => ({
       'ID': patient.id || patient._id,
       'Name': patient.name,
       'Gender': patient.gender,
@@ -379,12 +347,10 @@ const Patients = () => {
     }));
     
     const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `patients_export_${new Date().toISOString().split('T')[0]}.json`;
-    
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.setAttribute('download', `patients_export_${new Date().toISOString().split('T')[0]}.json`);
     linkElement.click();
     showSuccessToast(`Exported ${exportData.length} patients`, 2000);
   };
@@ -394,7 +360,7 @@ const Patients = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
         showSuccessToast(`Import functionality requires bulk create endpoint. Found ${importedData.length} records.`, 4000);
@@ -403,134 +369,28 @@ const Patients = () => {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
-    
     reader.readAsText(file);
     event.target.value = '';
   };
 
-  const handleAddAppointmentModal = (patient) => {
-    // ✅ Don't allow appointments for blacklisted patients
-    if (patient.isDelete) {
-      showErrorToast('Cannot create appointment for blacklisted patient', 3000);
-      return;
-    }
-    setAppointmentPatient(patient);
-    setShowAppointmentModal(true);
-  };
-
-  const handleProceedApprove = (data) => {
-    const patientId = appointmentPatient?.id || appointmentPatient?._id;
-    
-    const updatedData = {
-      ...data,
-      patientId: patientId ? `#PT00${String(patientId)}` : null,
-    };
-
-    setBookingData(updatedData);
-    setShowAppointmentModal(false);
-    setShowApproveModal(true);
-  };
-
-  const formatDate = (date) => {
-    if (!date) return "";
-    const d = new Date(date);
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${month}/${day}/${year}`;
-  };
-
-  const calculateAge = (dob) => {
-    if (!dob) return 0;
-    const birth = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    if (today.getMonth() < birth.getMonth() || 
-        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const handleConfirmAppointment = async (approveData) => {
-    try {
-      const payload = {
-        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
-        userId: Number(bookingData?.userId),
-        patient_name: bookingData?.patient_name,
-        patient_dob: formatDate(bookingData?.patient_dob),
-        patient_place: bookingData?.patient_place,
-        patient_phone: bookingData?.patient_phone,
-        patient_age: calculateAge(bookingData?.patient_dob),
-        patient_gender: bookingData?.patient_gender || appointmentPatient?.gender,
-        hospitalId: Number(bookingData?.hospitalId),
-        doctorId: Number(bookingData?.doctorId),
-        booking_date: formatDate(approveData?.booking_date),
-        department: bookingData?.department,
-        displayName: bookingData?.displayName,
-        consulting_time: approveData?.consulting_time,
-        token: approveData?.token ? parseInt(approveData.token) : null,
-        status: "accepted",
-        booking_status: "hospital booking"
-      };
-
-      const response = await createBooking(payload).unwrap();
-
-      showSuccessToast(
-        "Appointment confirmed successfully!",
-        4000,
-        {
-          Patient: payload.patient_name,
-          Doctor: bookingData?.displayName,
-          Date: approveData.booking_date,
-          Time: approveData.consulting_time,
-          Token: response?.data?.token || payload.token
-        }
-      );
-
-      setShowApproveModal(false);
-      setBookingData(null);
-      setAppointmentPatient(null);
-      navigate("/appointments");
-    } catch (err) {
-      console.log("BOOKING ERROR:", err);
-      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
-    }
-  };
-
   const clearAllFilters = () => {
-    setStatusFilter('all');
-    setDateFilter('');
-    setDepartmentFilter('');
     setGenderFilter('');
+    setDepartmentFilter('');
     setSearchTerm('');
     setActiveTab('all');
+    setShowDeleted(false);
     setCurrentPage(1);
     showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
     let count = 0;
-    if (statusFilter !== 'all') count++;
-    if (dateFilter) count++;
-    if (departmentFilter) count++;
     if (genderFilter) count++;
+    if (departmentFilter) count++;
     if (searchTerm) count++;
     if (activeTab !== 'all') count++;
     if (showDeleted) count++;
     return count;
-  };
-
-  // Get unique departments for filter dropdown
-  const getAllDepartments = () => {
-    const departments = [...new Set(transformedPatients.map(p => p.department).filter(Boolean))];
-    return departments.sort();
-  };
-
-  const formatDisplayDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   const handlePageChange = (page) => {
@@ -538,80 +398,64 @@ const Patients = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ✅ Updated RowActionMenu Component - Shows Recover for Blacklisted patients
-  const RowActionMenu = ({ patient }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
+  const toggleMenu = (id) => {
+    setActiveMenu(activeMenu === id ? null : id);
+  };
 
-    useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (menuRef.current && !menuRef.current.contains(e.target)) {
-          setShowMenu(false);
-        }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+  // Row Action Menu
+  const RowActionMenu = ({ patient }) => {
+    const isBlacklisted = patient.isDelete;
 
     return (
       <div className="relative inline-block" ref={menuRef}>
-        <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded hover:bg-gray-100 transition-colors">
+        <button 
+          onClick={() => toggleMenu(patient.id)} 
+          className="p-2 rounded hover:bg-gray-100 transition-colors"
+        >
           <MoreVertical size={18} />
         </button>
-        {showMenu && (
+        {activeMenu === patient.id && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {/* ✅ View Details - Only for Active/Inactive patients */}
-            {!patient.isDelete && (
-              <button 
-                onClick={() => { handleViewDetails(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-              >
-                <Eye size={16} /> View Details
-              </button>
-            )}
-            
-            {/* ✅ Edit - Only for Active/Inactive patients AND if user has permission */}
-            {!patient.isDelete && canModifyPatients && (
-              <button 
-                onClick={() => { handleEditPatient(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Edit size={16} /> Edit
-              </button>
-            )}
-            
-            {/* ✅ Appointment - Only for Active/Inactive patients */}
-            {!patient.isDelete && (
-              <button 
-                onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
-              >
-                <Calendar size={16} /> Appointment
-              </button>
-            )}
-            
-            {/* Show divider only if there are items above */}
-            {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
-            
-            {/* ✅ Show Delete or Recover based on isDelete status and permissions */}
-            {patient.isDelete ? (
-              canModifyPatients && (
+            {!isBlacklisted && (
+              <>
                 <button 
-                  onClick={() => { handleRecoverPatient(patient); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+                  onClick={() => { handleViewDetails(patient); setActiveMenu(null); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
                 >
-                  <RotateCcw size={16} /> Recover Patient
+                  <Eye size={16} /> View Details
                 </button>
-              )
-            ) : (
-              canModifyPatients && (
+                {canModifyPatients && (
+                  <button 
+                    onClick={() => { handleEditPatient(patient); setActiveMenu(null); }} 
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <Edit size={16} /> Edit
+                  </button>
+                )}
                 <button 
-                  onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+                  onClick={() => { handleAddAppointmentModal(patient); setActiveMenu(null); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
                 >
-                  <Trash2 size={16} /> Delete
+                  <Calendar size={16} /> Appointment
                 </button>
-              )
+                <div className="border-t border-gray-100 my-1"></div>
+                {canModifyPatients && (
+                  <button 
+                    onClick={() => { handleDeleteClick(patient); setActiveMenu(null); }} 
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+                  >
+                    <Trash2 size={16} /> Delete
+                  </button>
+                )}
+              </>
+            )}
+            {isBlacklisted && canModifyPatients && (
+              <button 
+                onClick={() => { handleRecoverPatient(patient); setActiveMenu(null); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+              >
+                <RotateCcw size={16} /> Recover Patient
+              </button>
             )}
           </div>
         )}
@@ -621,8 +465,8 @@ const Patients = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Centered loader
-  if (isLoadingPatients && !transformedPatients.length) {
+  // Loading state
+  if (isLoadingPatients && !patients.length) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
         <Loader />
@@ -632,7 +476,7 @@ const Patients = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb Navigation */}
+      {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
@@ -671,7 +515,7 @@ const Patients = () => {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          Outpatients ({outpatientPatients.length})
+          Outpatients
         </button>
         <button
           onClick={() => setActiveTab('inpatient')}
@@ -681,11 +525,11 @@ const Patients = () => {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          Inpatients ({inpatientPatients.length})
+          Inpatients
         </button>
       </div>
 
-      {/* Search and Action Buttons Row */}
+      {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="relative flex-1 max-w-sm">
@@ -693,18 +537,12 @@ const Patients = () => {
               type="text"
               placeholder="Search by name, mobile..."
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
             />
             {searchTerm && (
               <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
+                onClick={() => setSearchTerm('')}
                 className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
                 ✕
@@ -735,26 +573,20 @@ const Patients = () => {
           <button 
             onClick={handleRefresh} 
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
-            title="Refresh" 
             disabled={isFetching}
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import Patients">
+          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer">
             <Upload size={16} />
           </label>
 
-          <button 
-            onClick={handleExport} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
-            title="Export Patients"
-          >
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors">
             <Download size={16} />
           </button>
 
-          {/* Toggle to show deleted patients */}
           <Button 
             variant={showDeleted ? "primary" : "outline"} 
             size="sm" 
@@ -770,7 +602,6 @@ const Patients = () => {
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
               showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
             } hover:bg-gray-50`}
-            title="Toggle Filters"
           >
             <Filter size={16} />
             {activeFilterCount > 0 && !showFilters && (
@@ -780,7 +611,6 @@ const Patients = () => {
             )}
           </button>
 
-          {/* ✅ New Patient button - Only shown for users with permission */}
           {canModifyPatients && (
             <Button 
               onClick={handleAddPatient} 
@@ -792,7 +622,7 @@ const Patients = () => {
         </div>
       </div>
 
-      {/* FILTER SECTION */}
+      {/* Filters */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
           <div className="flex items-center justify-between mb-6">
@@ -817,10 +647,7 @@ const Patients = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <select
               value={genderFilter}
-              onChange={(e) => {
-                setGenderFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setGenderFilter(e.target.value)}
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="">All Genders</option>
@@ -831,23 +658,17 @@ const Patients = () => {
 
             <select
               value={departmentFilter}
-              onChange={(e) => {
-                setDepartmentFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
               className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
             >
               <option value="">All Departments</option>
-              {getAllDepartments().map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
             </select>
           </div>
         </div>
       )}
 
-      {/* Patients View */}
-      {filteredPatients.length === 0 ? (
+      {/* Empty State */}
+      {patients.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
@@ -859,7 +680,7 @@ const Patients = () => {
         /* GRID VIEW */
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredPatients.map((patient) => {
+            {patients.map((patient) => {
               const isBlacklisted = patient.isDelete;
               return (
                 <div 
@@ -883,7 +704,7 @@ const Patients = () => {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="default" className="text-xs font-mono">
-                              #PT00{patient.id || patient._id?.slice(-6)}
+                              {formatPatientId(patient.id || patient._id)}
                             </Badge>
                             {isBlacklisted ? (
                               <Badge variant="secondary" className="text-xs">
@@ -944,7 +765,6 @@ const Patients = () => {
                       </div>
                     </div>
                     
-                    {/* Action buttons - Show Recover for blacklisted, Appointment for active */}
                     <div className="flex gap-2 border-t border-gray-100 pt-4">
                       {isBlacklisted ? (
                         canModifyPatients && (
@@ -955,8 +775,7 @@ const Patients = () => {
                             }} 
                             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                           >
-                            <RotateCcw className="w-4 h-4" /> 
-                            Recover
+                            <RotateCcw className="w-4 h-4" /> Recover
                           </button>
                         )
                       ) : (
@@ -967,8 +786,7 @@ const Patients = () => {
                           }} 
                           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                         >
-                          <Calendar className="w-4 h-4" /> 
-                          Add Appointment
+                          <Calendar className="w-4 h-4" /> Add Appointment
                         </button>
                       )}
                     </div>
@@ -978,14 +796,13 @@ const Patients = () => {
             })}
           </div>
 
-          {/* Pagination for Grid View - Using server-side totalPages */}
-          {totalFilteredPages > 1 && (
+          {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalFilteredPages}
+                totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalFilteredItems}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
                 variant="centered"
@@ -994,22 +811,18 @@ const Patients = () => {
           )}
         </>
       ) : (
-        /* LIST VIEW - WITH STICKY PAGINATION using server-side totalPages */
+        /* LIST VIEW */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               {showDeleted ? "Deleted Patients" : "Total Patients"}
-              <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${
-                showDeleted ? 'bg-gray-500' : 'bg-red-500'
-              }`}>
-                {totalFilteredItems}
+              <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${showDeleted ? 'bg-gray-500' : 'bg-red-500'}`}>
+                {totalItems}
               </span>
             </h2>
           </div>
 
-          {/* Flex container that expands to fill available space */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -1025,7 +838,7 @@ const Patients = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPatients.map((patient) => {
+                  {patients.map((patient) => {
                     const isBlacklisted = patient.isDelete;
                     return (
                       <tr 
@@ -1033,7 +846,7 @@ const Patients = () => {
                         className={`hover:bg-gray-50 border-b border-gray-100 ${isBlacklisted ? 'bg-gray-50' : ''}`}
                       >
                         <td className={`px-6 py-4 font-medium ${isBlacklisted ? 'text-gray-500' : 'text-[#1C62A0]'}`}>
-                          #PT00{patient.id || patient._id?.slice(-6)}
+                          {formatPatientId(patient.id || patient._id)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -1105,13 +918,12 @@ const Patients = () => {
               </table>
             </div>
 
-            {/* Pagination - Sticks to bottom using mt-auto with server-side totalPages */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalFilteredPages}
+                totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalFilteredItems}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
               />
@@ -1120,19 +932,16 @@ const Patients = () => {
         </div>
       )}
 
-      {/* Add Appointment Modal */}
+      {/* Modals */}
       {showAppointmentModal && (
         <AddAppointmentModal
           isOpen={showAppointmentModal}
           patient={appointmentPatient}
-          onClose={() => {
-            setShowAppointmentModal(false);
-          }}
+          onClose={() => setShowAppointmentModal(false)}
           onProceedApprove={handleProceedApprove}
         />
       )}
 
-      {/* Approve Request Modal */}
       {showApproveModal && bookingData && (
         <ApproveRequestModal
           requestData={bookingData}
@@ -1146,7 +955,6 @@ const Patients = () => {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteModal
         isOpen={showDeleteModal}
         onClose={() => {

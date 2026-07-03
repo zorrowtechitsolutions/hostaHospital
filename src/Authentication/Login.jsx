@@ -4,7 +4,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
-import { useLoginHospitalMutation } from '../../app/service/hospitalApi';
+import { 
+  useLoginHospitalMutation,
+  useLoginSuperAdminMutation 
+} from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
 import { generateToken } from "../notification/firebase";
@@ -14,6 +17,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [loginHospital, { isLoading: isHospitalLoading }] = useLoginHospitalMutation();
+  const [loginSuperAdmin, { isLoading: isSuperAdminLoading }] = useLoginSuperAdminMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -32,7 +36,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  const isLoading = isHospitalLoading || isSubmitting;
+  const isLoading = isHospitalLoading || isSuperAdminLoading || isSubmitting;
 
   const validateField = (name, value) => {
     switch (name) {
@@ -213,7 +217,7 @@ const Login = () => {
         email: userData?.email || formData.email,
         phone: userData?.phone || '',
         role: 'super_admin',
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         isSuperAdmin: true,
         fcmToken: fcmToken
       };
@@ -234,7 +238,7 @@ const Login = () => {
       authData = {
         id: userData?.id,
         doctorId: userData?.id,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: doctorName,
@@ -263,7 +267,7 @@ const Login = () => {
       authData = {
         id: userData?.id,
         staffId: userData?.id,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: userData?.name || userData?.displayName || 'Staff',
@@ -284,7 +288,7 @@ const Login = () => {
       // ✅ Hospital admin - with roleId added
       authData = {
         id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.id || userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
         name: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',

@@ -1,4 +1,4 @@
-// app/service/ambulance.ts - Ambulance API service
+// app/service/ambulance.ts - Ambulance API service with server-side pagination
 
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
@@ -26,13 +26,22 @@ export interface Ambulance {
   updatedAt?: string;
 }
 
+// ✅ ADDED - Pagination to response
 export interface AmbulanceResponse {
   success: boolean;
   message: string;
   data?: Ambulance | Ambulance[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+    hasNextPage?: boolean;
+    hasPreviousPage?: boolean;
+  };
 }
 
-// ✅ UPDATED - GetAmbulanceParams with userId field
+// ✅ UPDATED - Added page and limit for pagination
 export interface GetAmbulanceParams {
   id?: string | number;
   userId?: string | number; 
@@ -45,6 +54,8 @@ export interface GetAmbulanceParams {
   pincode?: string | number;
   vehicleType?: string;
   search_query?: string;
+  page?: number;      // ✅ ADDED
+  limit?: number;     // ✅ ADDED
 }
 
 // ================= API =================
@@ -53,38 +64,35 @@ export const ambulanceApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ================= GET AMBULANCES =================
-    // Automatically adds hospitalId from authenticated user
-    // ✅ UPDATED with proper typing
     getAmbulance: builder.query<
       AmbulanceResponse,
       GetAmbulanceParams | void
     >({
-      // ✅ CHANGED: Added proper typing for params
       query: (params: GetAmbulanceParams = {}) => {
-        // const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
         // Auto-inject hospitalId from auth (matches backend)
-        // if (auth?.id) {
-        //   queryParams.append("hospitalId", String(auth.id));
-        // }
+        const auth = getAuthUser();
+        if (auth?.id) {
+          queryParams.append("hospitalId", String(auth.id));
+        }
 
         // Override hospitalId if provided in params
         if (params.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
         }
 
-        // ✅ ADDED - User ID filter (matches backend)
+        // User ID filter
         if (params.userId) {
           queryParams.append("userId", String(params.userId));
         }
 
-        // Name filter (matches backend)
+        // Name filter
         if (params.name) {
           queryParams.append("name", params.name);
         }
 
-        // Address filters (matches backend)
+        // Address filters
         if (params.country) {
           queryParams.append("country", params.country);
         }
@@ -105,14 +113,23 @@ export const ambulanceApi = api.injectEndpoints({
           queryParams.append("pincode", String(params.pincode));
         }
 
-        // Vehicle type filter (matches backend)
+        // Vehicle type filter
         if (params.vehicleType) {
           queryParams.append("vehicleType", params.vehicleType);
         }
 
-        // Search query (matches backend)
+        // Search query
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
+        }
+
+        // ✅ ADDED - Pagination parameters
+        if (params.page) {
+          queryParams.append("page", String(params.page));
+        }
+
+        if (params.limit) {
+          queryParams.append("limit", String(params.limit));
         }
 
         const queryString = queryParams.toString();
@@ -137,7 +154,6 @@ export const ambulanceApi = api.injectEndpoints({
     }),
 
     // ================= CREATE AMBULANCE =================
-    // Automatically adds hospitalId from authenticated user
     createAmbulance: builder.mutation<
       AmbulanceResponse,
       Omit<Ambulance, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
@@ -153,9 +169,9 @@ export const ambulanceApi = api.injectEndpoints({
             phone: data.phone,
             vehicleType: data.vehicleType,
             address: data.address,
-            hospitalId: auth?.id, // Automatically add from auth
-            userId: data.userId, // if provided
-            name: data.name, // if provided
+            hospitalId: auth?.id,
+            userId: data.userId,
+            name: data.name,
           },
         };
       },
