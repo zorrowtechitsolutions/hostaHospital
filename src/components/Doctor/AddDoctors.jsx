@@ -12,7 +12,6 @@ import {
   Textarea,
   Card,
 } from "../ui";
-
 import {
   showSuccessToast,
   showErrorToast,
@@ -25,7 +24,6 @@ import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3 } from '../../../app/service/S3';
 
-// Constants
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
 
@@ -87,18 +85,11 @@ const WEEK_DAYS = [
   { key: 'sunday', label: 'Sunday' }
 ];
 
-// Helper functions
-const requiredField = (value, message) => {
-  if (!value) return message;
-  return '';
-};
-
 const getLanguageLabel = (value) => {
   const lang = LANGUAGE_OPTIONS.find(l => l.value === value);
   return lang ? lang.label : value;
 };
 
-// Validate Password Strength
 const validatePasswordStrength = (password) => {
   if (!password) return 'Password is required';
   if (password.length < 8) return 'Password must be at least 8 characters long';
@@ -109,7 +100,6 @@ const validatePasswordStrength = (password) => {
   return '';
 };
 
-// SearchableDropdown Component
 const SearchableDropdown = ({ 
   label, 
   options, 
@@ -133,7 +123,7 @@ const SearchableDropdown = ({
     return label.includes(searchTerm.toLowerCase());
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -174,7 +164,7 @@ const SearchableDropdown = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={isLoading ? "Loading departments..." : placeholder}
+          placeholder={isLoading ? "Loading..." : placeholder}
           disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
@@ -205,7 +195,7 @@ const SearchableDropdown = ({
       
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          No departments found
+          No options found
         </div>
       )}
 
@@ -213,7 +203,7 @@ const SearchableDropdown = ({
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           <div className="flex items-center justify-center gap-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            <span>Loading departments...</span>
+            <span>Loading...</span>
           </div>
         </div>
       )}
@@ -221,12 +211,11 @@ const SearchableDropdown = ({
   );
 };
 
-// Gender Dropdown Component
 const GenderDropdown = ({ value, onChange, error, touched, required, onBlur }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -283,7 +272,6 @@ const GenderDropdown = ({ value, onChange, error, touched, required, onBlur }) =
   );
 };
 
-// Day Schedule Row Component
 const DayScheduleRow = ({ day, schedule, onUpdate }) => {
   const [isHoliday, setIsHoliday] = useState(schedule.isHoliday || false);
   const [hasBreak, setHasBreak] = useState(schedule.hasBreak || false);
@@ -428,43 +416,30 @@ const DayScheduleRow = ({ day, schedule, onUpdate }) => {
 const AddDoctor = () => {
   const navigate = useNavigate();
   const [addNewDoctor] = useAddNewDoctorMutation();
+  const [assignPermissions] = useAssignPermissionsMutation();
   
-  // Get hospital ID and hospital name from auth
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
   
-  console.log("🏥 Hospital ID from auth:", hospitalId);
-  console.log("🏥 Hospital Name from auth:", hospitalName);
-  
-  // Role assignment state
-  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // Fetch roles from API
-  const {
-    data: rolesData,
-    isLoading: rolesLoading,
-  } = useGetRolesQuery({
+  const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery({
     hospitalId,
     limit: 100
   });
   
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  // Fetch specialities from backend
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
 
-  // Transform specialities to department options (store the name, not ID)
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
       id: spec.id,
-      name: spec.name.toUpperCase(), // Convert to uppercase
-      value: spec.name.toUpperCase(), // Store uppercase name
+      name: spec.name.toUpperCase(),
+      value: spec.name.toUpperCase(),
       label: spec.name.toUpperCase()
     }));
   }, [specialitiesData]);
@@ -499,7 +474,7 @@ const AddDoctor = () => {
     joiningDate: '',
     experience: '',
     appointmentCount: '',
-    roleId: '', // Added roleId field
+    roleId: '',
     weeklySchedule: {
       monday: { ...DEFAULT_SCHEDULE, hasBreak: true, morningClose: '12:00' },
       tuesday: { ...DEFAULT_SCHEDULE },
@@ -571,10 +546,10 @@ const AddDoctor = () => {
     }));
   };
 
-  const handleDepartmentChange = (departmentValue, departmentLabel) => {
+  const handleDepartmentChange = (departmentValue) => {
     setFormData(prev => ({
       ...prev,
-      department: departmentValue // Store the uppercase department name
+      department: departmentValue
     }));
     
     if (touched.department) {
@@ -599,39 +574,31 @@ const AddDoctor = () => {
     }));
   };
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
-    const roleName = getRoleNameById(roleId);
-    const roleNameLower = roleName?.toLowerCase();
-    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
-    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
-    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    const roleName = getRoleNameById(roleId)?.toLowerCase();
+    if (roleName === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleName === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleName === 'staff') return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-700';
   };
 
   const validateField = (name, value) => {
     switch (name) {
       case 'firstName':
-        if (!value) return 'First name is required';
-        if (value.length < 2) return 'First name must be at least 2 characters';
-        return '';
       case 'lastName':
-        if (!value) return 'Last name is required';
-        if (value.length < 2) return 'Last name must be at least 2 characters';
+        if (!value) return `${name === 'firstName' ? 'First' : 'Last'} name is required`;
+        if (value.length < 2) return `${name === 'firstName' ? 'First' : 'Last'} name must be at least 2 characters`;
         return '';
       case 'department':
-        if (!value) return 'Department is required';
-        return '';
-      case 'specialist':
-        return '';
       case 'qualification':
-        if (!value) return 'Qualification is required';
+      case 'registrationNumber':
+      case 'joiningDate':
+        if (!value) return `${name.charAt(0).toUpperCase() + name.slice(1)} is required`;
         return '';
       case 'fees':
         if (!value) return 'Fees are required';
@@ -643,36 +610,22 @@ const AddDoctor = () => {
         return '';
       case 'email':
         if (!value) return 'Email address is required';
-        const emailRegex = /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/;
-        if (!emailRegex.test(value)) return 'Please enter a valid email address';
+        if (!/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value)) return 'Please enter a valid email address';
         return '';
       case 'dob':
-        if (!value) return 'Date of birth is required';
-        return '';
       case 'gender':
-        if (!value) return 'Gender is required';
-        return '';
-      case 'registrationNumber':
-        if (!value) return 'Registration number is required';
+      case 'countryName':
+      case 'stateName':
+      case 'district':
+      case 'roleId':
+        if (!value) return `${name.charAt(0).toUpperCase() + name.slice(1)} is required`;
         return '';
       case 'knownLanguages':
         if (!value || value.length === 0) return 'At least one language is required';
         return '';
-      case 'countryName':
-        if (!value) return 'Country is required';
-        return '';
-      case 'stateName':
-        if (!value) return 'State is required';
-        return '';
-      case 'district':
-        if (!value) return 'District is required';
-        return '';
       case 'displayName':
         if (!value) return 'Display name is required';
         if (value.length < 4) return 'Display name must be at least 4 characters';
-        return '';
-      case 'roleId':
-        if (!value) return 'Please select a role';
         return '';
       case 'password':
         return validatePasswordStrength(value);
@@ -680,9 +633,6 @@ const AddDoctor = () => {
         if (!formData.password && !value) return '';
         if (formData.password && !value) return 'Please confirm your password';
         if (formData.password && value !== formData.password) return 'Passwords do not match';
-        return '';
-      case 'joiningDate':
-        if (!value) return 'Joining date is required';
         return '';
       case 'experience':
         if (!value) return 'Experience is required';
@@ -695,12 +645,10 @@ const AddDoctor = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
     REQUIRED_FIELDS.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -712,10 +660,8 @@ const AddDoctor = () => {
       [name]: type === 'checkbox' ? checked : value 
     }));
     
-    // Check password strength in real-time
     if (name === 'password') {
-      const strength = validatePasswordStrength(value);
-      setPasswordStrength(strength);
+      setPasswordStrength(validatePasswordStrength(value));
     }
     
     if (touched[name]) {
@@ -735,19 +681,15 @@ const AddDoctor = () => {
     if (!file) return false;
     
     if (file.size > MAX_FILE_SIZE) {
-      setErrors(prev => ({ ...prev, profileImage: 'File size must be less than 5MB' }));
-      showWarningToast('File size must be less than 5MB', 3000);
+      showWarningToast('File size must be less than 5MB');
       return false;
     }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, profileImage: 'Only JPEG, PNG, GIF, and WEBP files are allowed' }));
-      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
+      showWarningToast('Only JPEG, PNG, GIF, and WEBP files are allowed');
       return false;
     }
-
-    setErrors(prev => ({ ...prev, profileImage: '' }));
 
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
@@ -760,12 +702,11 @@ const AddDoctor = () => {
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      showSuccessToast('Image uploaded successfully!', 3000);
+      showSuccessToast('Image uploaded successfully!');
       return true;
     } catch (error) {
       console.error('Upload error:', error);
-      setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
-      showErrorToast('Failed to upload image. Please try again.', 3000);
+      showErrorToast('Failed to upload image. Please try again.');
       setPreviewImage(null);
       return false;
     }
@@ -779,11 +720,9 @@ const AddDoctor = () => {
   const removeImage = () => {
     setPreviewImage(null);
     setFormData(prev => ({ ...prev, profileImage: null, imageKey: '' }));
-    setErrors(prev => ({ ...prev, profileImage: '' }));
-    showSuccessToast('Image removed', 3000);
+    showSuccessToast('Image removed');
   };
 
-  // prepareDoctorData function - matches the API payload structure
   const prepareDoctorData = () => {
     const consultingOneArray = [];
     const consultingTwoArray = [];
@@ -843,10 +782,9 @@ const AddDoctor = () => {
       experience: formData.experience,
       profileImage: formData.profileImage || undefined,
       imageKey: formData.imageKey || undefined,
-      roleId: Number(formData.roleId), // Add roleId to doctor data
-      hospitalName: hospitalName, // Add hospital name
+      roleId: Number(formData.roleId),
+      hospitalName: hospitalName,
     };
-    console.log(doctorData)
 
     if (formData.registrationNumber) {
       doctorData.regNo = formData.registrationNumber;
@@ -886,14 +824,9 @@ const AddDoctor = () => {
         const roleId = Number(formData.roleId);
         const selectedRoleName = getRoleNameById(roleId);
         
-        console.log("Sending doctor data:", JSON.stringify(doctorData, null, 2));
-        console.log("🏥 Hospital Name being sent:", hospitalName);
-        console.log("👤 Role ID being sent:", roleId);
-        
         const result = await addNewDoctor(doctorData).unwrap();
         const doctor = result.data || result;
         
-        // Assign role permission to the created doctor
         if (doctor?.id && roleId) {
           const payload = {
             hospitalId: Number(hospitalId),
@@ -906,8 +839,6 @@ const AddDoctor = () => {
               }
             ]
           };
-          
-          console.log("📤 ASSIGNING ROLE PERMISSION:", payload);
           await assignPermissions(payload).unwrap();
         }
         
@@ -915,18 +846,16 @@ const AddDoctor = () => {
           `Dr. ${formData.firstName} ${formData.lastName} has been added with role ${selectedRoleName}!`
         );
         
-        setTimeout(() => {
-          navigate('/doctors');
-        }, 2000);
+        setTimeout(() => navigate('/doctors'), 2000);
         
       } catch (error) {
         console.error("Error adding doctor:", error);
         if (error.status === 409) {
-          showErrorToast('❌ Email already exists! Please use a different email address.');
+          showErrorToast('Email already exists! Please use a different email address.');
         } else if (error.data?.message) {
           showErrorToast(`❌ ${error.data.message}`);
         } else {
-          showErrorToast('❌ Failed to add doctor. Please try again.');
+          showErrorToast('Failed to add doctor. Please try again.');
         }
       } finally {
         setIsSubmitting(false);
@@ -934,30 +863,19 @@ const AddDoctor = () => {
     } else {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
+        showWarningToast(`Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
       }
     }
   };
 
-  const handleGoBack = () => {
-    navigate('/doctors');
-  };
+  const handleGoBack = () => navigate('/doctors');
 
-  // Get password strength color
-  const getPasswordStrengthColor = () => {
-    if (!formData.password) return '';
-    if (passwordStrength === '') return 'text-green-600';
-    return 'text-red-600';
-  };
-
-  const isLoadingData = rolesLoading;
-
-  if (isLoadingData) {
+  if (rolesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading roles...</p>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -1027,7 +945,6 @@ const AddDoctor = () => {
                       </Button>
                       <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                     </div>
-                    {errors.profileImage && <p className="text-sm text-red-600 mt-2">{errors.profileImage}</p>}
                   </div>
                 </div>
 
@@ -1037,33 +954,17 @@ const AddDoctor = () => {
                 </div>
 
                 <div className={GRID_CLASS}>
-                  <Input 
-                    label="Joining Date" 
-                    name="joiningDate" 
-                    type="date" 
-                    icon={Calendar} 
-                    value={formData.joiningDate} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.joiningDate} 
-                    touched={touched.joiningDate} 
-                    required 
-                  />
+                  <Input label="Joining Date" name="joiningDate" type="date" icon={Calendar} value={formData.joiningDate} onChange={handleChange} onBlur={handleBlur} error={errors.joiningDate} touched={touched.joiningDate} required />
                   <Input label="Experience (years)" name="experience" icon={Briefcase} placeholder="e.g., 5" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
                 <div className={GRID_CLASS}>
-                  {/* Department Dropdown - Fetched from Backend - Uppercase */}
                   <SearchableDropdown
                     label="Department"
                     options={departmentOptions}
                     value={formData.department}
-                    onChange={(value, label) => handleDepartmentChange(value, label)}
-                    placeholder={
-                      isLoadingSpecialities
-                        ? "Loading departments..."
-                        : "Search for a department..."
-                    }
+                    onChange={handleDepartmentChange}
+                    placeholder={isLoadingSpecialities ? "Loading departments..." : "Search for a department..."}
                     icon={Briefcase}
                     required={true}
                     isLoading={isLoadingSpecialities}
@@ -1075,7 +976,6 @@ const AddDoctor = () => {
                     <p className="text-sm text-red-600 -mt-4">{errors.department}</p>
                   )}
                   
-                  {/* Specialist Field - Optional */}
                   <Input 
                     label="Specialist" 
                     name="specialist" 
@@ -1089,7 +989,6 @@ const AddDoctor = () => {
                   />
                 </div>
 
-                {/* Assign Role - Dynamic dropdown */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Assign Role <span className="text-red-500">*</span>
@@ -1146,7 +1045,6 @@ const AddDoctor = () => {
                   <Input label="Registration Number" name="registrationNumber" icon={IdCard} placeholder="Medical license number" value={formData.registrationNumber} onChange={handleChange} onBlur={handleBlur} error={errors.registrationNumber} touched={touched.registrationNumber} required />
                 </div>
 
-                {/* Languages Dropdown */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
                     Known Languages <span className="text-red-500">*</span>
@@ -1198,7 +1096,6 @@ const AddDoctor = () => {
 
                 <Textarea label="About" name="about" rows={3} placeholder="Write a brief description..." value={formData.about} onChange={handleChange} />
 
-                {/* Address Information */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
@@ -1246,7 +1143,6 @@ const AddDoctor = () => {
                   </div>
                 </div>
 
-                {/* Account Details */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className={GRID_CLASS}>
@@ -1294,7 +1190,6 @@ const AddDoctor = () => {
                   ))}
                 </div>
 
-                {/* Out Door Consulting Section */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-6">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                     <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
@@ -1347,9 +1242,6 @@ const AddDoctor = () => {
                           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        e.g., City Hospital, Room 204, Main Building
-                      </p>
                     </div>
 
                     <div className="pt-2">
@@ -1400,8 +1292,8 @@ const AddDoctor = () => {
 
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-              <Button type="submit" variant="primary" disabled={isSubmitting || isAssigning} loading={isSubmitting || isAssigning}>
-                {isSubmitting || isAssigning ? 'Saving...' : 'Save Doctor'}
+              <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Doctor'}
               </Button>
             </div>
           </Card>

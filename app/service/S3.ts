@@ -1,5 +1,4 @@
 // app/service/s3.ts
-
 import {
   getHospitalId,
   getUserRole,
@@ -122,7 +121,7 @@ const compressImage = (
 // GET USER ID BASED ON ROLE
 // ========================
 
-const getUserId = () => {
+const getUserId = (): string | number | undefined => {
   const auth = JSON.parse(
     localStorage.getItem("user") || "{}"
   );
@@ -133,14 +132,16 @@ const getUserId = () => {
   console.log("Auth object:", auth);
   console.log("Role:", role);
 
-  let userId = null;
+  let userId: string | number | undefined = undefined;
 
   switch (role) {
     case "doctor":
       userId = auth.doctorId || auth.id;
       break;
     case "staff":
-      userId = auth.staffId || auth.id;
+      // ✅ For staff, use hospitalId
+      userId = getHospitalId() || auth.hospitalId || auth.id;
+      console.log("Staff - Using hospitalId:", userId);
       break;
     case "hospital":
       userId = auth.hospitalId || auth.id;
@@ -170,22 +171,38 @@ export const uploadToS3 = async (
   file: File,
   key: string | null = null,
   customId?: number | string,
-  customRole?: string  // Allow custom role like "documents"
+  customRole?: string
 ): Promise<UploadResponse> => {
   try {
     const role = customRole || getUserRole()?.toLowerCase() || "hospital";
     const token = getToken();
 
-    // Get user ID based on role
-const hospitalId = getHospitalId();
-const userId = hospitalId;
     // Get ID - use provided id or get from storage
-    let id = customId || getUserId();
+    let id: string | number | undefined = customId;
+    
+    // If no customId provided, try to get from storage based on role
+    if (!id) {
+      if (role === 'staff') {
+        // For staff, always use hospitalId
+        const hospitalId = getHospitalId();
+        if (hospitalId) {
+          id = hospitalId;
+          console.log("Staff upload - Using hospitalId:", id);
+        } else {
+          throw new Error("Hospital ID not found. Please make sure you are logged in.");
+        }
+      } else {
+        id = getUserId();
+      }
+    }
     
     // For Super Admin, if id is still undefined, try to get hospitalId
     if (!id && (role === 'super_admin' || role === 'superadmin' || role === 'admin')) {
-      id = getHospitalId();
-      console.log("Super Admin fallback - Using hospitalId from getHospitalId():", id);
+      const hospitalId = getHospitalId();
+      if (hospitalId) {
+        id = hospitalId;
+        console.log("Super Admin fallback - Using hospitalId:", id);
+      }
     }
 
     // COMPRESS
@@ -209,7 +226,7 @@ const userId = hospitalId;
     const body = {
       filename: compressed.name,
       contentType: compressed.type,
-      role: role, // doctor / staff / hospital / super_admin / documents
+      role: role,
       id: id,
       ...(key
         ? { key }
@@ -282,11 +299,14 @@ const userId = hospitalId;
 export const deleteFromS3 = async (key: string, role?: string, id?: string | number) => {
   const token = getToken();
   const finalRole = role || getUserRole() || "hospital";
-  let finalId = id || getUserId();
+  let finalId: string | number | undefined = id || getUserId();
   
   if (!finalId && (finalRole === 'super_admin' || finalRole === 'superadmin' || finalRole === 'admin')) {
-    finalId = getHospitalId();
-    console.log("Super Admin delete - Using hospitalId:", finalId);
+    const hospitalId = getHospitalId();
+    if (hospitalId) {
+      finalId = hospitalId;
+      console.log("Super Admin delete - Using hospitalId:", finalId);
+    }
   }
 
   console.log("=== S3 DELETE DEBUG ===");

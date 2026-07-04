@@ -116,17 +116,19 @@ export const staffApi = api.injectEndpoints({
     >({
       query: (params) => {
         const queryParams = new URLSearchParams();
-        // const hospitalId = getHospitalId();
+        const hospitalId = getHospitalId(); // ✅ Get hospital ID from auth
 
-        // if (hospitalId) {
-        //   queryParams.append("hospitalId", String(hospitalId));
-        // }
+        // ✅ Always include hospitalId if available
+        if (hospitalId) {
+          queryParams.append("hospitalId", String(hospitalId));
+        }
         
+        // Allow override if explicitly passed in params
         if (params?.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
         }
 
-        // filters
+        // Filters
         if (params?.name) queryParams.append("name", params.name);
         if (params?.gender) queryParams.append("gender", params.gender);
         if (params?.phone) queryParams.append("phone", params.phone);
@@ -138,13 +140,19 @@ export const staffApi = api.injectEndpoints({
         if (params?.search_query) queryParams.append("search_query", params.search_query);
         if (params?.includeDeleted) queryParams.append("includeDeleted", String(params.includeDeleted));
 
-        // pagination
+        // Pagination
         if (params?.page) queryParams.append("page", String(params.page));
         if (params?.limit) queryParams.append("limit", String(params.limit));
 
-        return `/staff?${queryParams.toString()}`;
+        const url = `/staff?${queryParams.toString()}`;
+        console.log('📡 Fetching staff with URL:', url); // Debug log
+        return url;
       },
-      providesTags: ["Staff"]
+      providesTags: ["Staff"],
+      transformResponse: (response: StaffResponse) => {
+        console.log('✅ Staff API Response:', response);
+        return response;
+      },
     }),
 
     // ================= GET STAFF BY ID =================
@@ -163,6 +171,11 @@ export const staffApi = api.injectEndpoints({
     >({
       query: (data) => {
         const hospitalId = getHospitalId();
+        
+        // ✅ Ensure hospitalId is included
+        if (!hospitalId) {
+          console.warn('⚠️ No hospitalId found when creating staff');
+        }
         
         return {
           url: "/staff",

@@ -1,5 +1,4 @@
 // app/service/ambulance.ts - Ambulance API service
-
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
 
@@ -20,8 +19,8 @@ export interface Ambulance {
   vehicleType: string;
   address?: AmbulanceAddress;
   hospitalId?: number;
-  userId?: string | number; 
-  name?: string; 
+  userId?: string | number;
+  name?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -32,10 +31,9 @@ export interface AmbulanceResponse {
   data?: Ambulance | Ambulance[];
 }
 
-// ✅ UPDATED - GetAmbulanceParams with userId field
 export interface GetAmbulanceParams {
   id?: string | number;
-  userId?: string | number; 
+  userId?: string | number;
   hospitalId?: string | number;
   name?: string;
   country?: string;
@@ -52,39 +50,25 @@ export interface GetAmbulanceParams {
 export const ambulanceApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET AMBULANCES =================
-    // Automatically adds hospitalId from authenticated user
-    // ✅ UPDATED with proper typing
     getAmbulance: builder.query<
       AmbulanceResponse,
       GetAmbulanceParams | void
     >({
-      // ✅ CHANGED: Added proper typing for params
       query: (params: GetAmbulanceParams = {}) => {
-        // const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
-        // Auto-inject hospitalId from auth (matches backend)
-        // if (auth?.id) {
-        //   queryParams.append("hospitalId", String(auth.id));
-        // }
-
-        // Override hospitalId if provided in params
         if (params.hospitalId) {
-          queryParams.set("hospitalId", String(params.hospitalId));
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        // ✅ ADDED - User ID filter (matches backend)
         if (params.userId) {
           queryParams.append("userId", String(params.userId));
         }
 
-        // Name filter (matches backend)
         if (params.name) {
           queryParams.append("name", params.name);
         }
 
-        // Address filters (matches backend)
         if (params.country) {
           queryParams.append("country", params.country);
         }
@@ -105,39 +89,31 @@ export const ambulanceApi = api.injectEndpoints({
           queryParams.append("pincode", String(params.pincode));
         }
 
-        // Vehicle type filter (matches backend)
         if (params.vehicleType) {
           queryParams.append("vehicleType", params.vehicleType);
         }
 
-        // Search query (matches backend)
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
         const queryString = queryParams.toString();
 
-        // If ID is provided, get single ambulance
         if (params.id) {
           return `/ambulance/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all ambulances for the hospital
         return `/ambulance${queryString ? `?${queryString}` : ""}`;
       },
 
       providesTags: (result, error, params) => {
-        // If we have a single ambulance, provide a specific tag
         if (params?.id && result?.data && !Array.isArray(result.data)) {
           return [{ type: "Ambulance", id: params.id }];
         }
-        // Otherwise provide the general tag
         return ["Ambulance"];
       },
     }),
 
-    // ================= CREATE AMBULANCE =================
-    // Automatically adds hospitalId from authenticated user
     createAmbulance: builder.mutation<
       AmbulanceResponse,
       Omit<Ambulance, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
@@ -153,9 +129,9 @@ export const ambulanceApi = api.injectEndpoints({
             phone: data.phone,
             vehicleType: data.vehicleType,
             address: data.address,
-            hospitalId: auth?.id, // Automatically add from auth
-            userId: data.userId, // if provided
-            name: data.name, // if provided
+            hospitalId: auth?.id,
+            userId: data.userId,
+            name: data.name,
           },
         };
       },
@@ -163,7 +139,6 @@ export const ambulanceApi = api.injectEndpoints({
       invalidatesTags: ["Ambulance"],
     }),
 
-    // ================= UPDATE AMBULANCE =================
     updateAmbulance: builder.mutation<
       AmbulanceResponse,
       {
@@ -190,7 +165,6 @@ export const ambulanceApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE AMBULANCE =================
     deleteAmbulance: builder.mutation<
       { message: string },
       string | number
@@ -208,7 +182,6 @@ export const ambulanceApi = api.injectEndpoints({
   }),
 });
 
-// ================= EXPORT HOOKS =================
 export const {
   useGetAmbulanceQuery,
   useCreateAmbulanceMutation,

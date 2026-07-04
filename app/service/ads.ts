@@ -59,44 +59,26 @@ export const adsApi = api.injectEndpoints({
     // ================= GET ADS =================
     getAds: builder.query<AdResponse, GetAdParams | void>({
       query: (params: GetAdParams = {}) => {
-        console.log("🚀 ADS REQUEST");
-        console.log("🔑 TOKEN:", getToken());
-        console.log("📦 PARAMS:", params);
-        
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
         
-        console.log("👤 AUTH USER:", auth);
-        console.log("👤 AUTH ROLE:", auth?.role);
-        console.log("👤 AUTH ROLE ID:", auth?.roleId);
-        
-        // FIX: Only auto-inject hospitalId for Hospital Admins, not Super Admin
         const isHospitalAdminUser = isHospitalAdmin();
         const isSuperAdminUser = isSuperAdmin();
-        
-        console.log("🏥 Is Hospital Admin:", isHospitalAdminUser);
-        console.log("👑 Is Super Admin:", isSuperAdminUser);
         
         // Priority 1: Use explicit hospitalId from params
         if (params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log(`📌 Using explicit hospitalId: ${params.hospitalId}`);
         }
         // Priority 2: Only auto-inject for Hospital Admins (not Super Admin)
         else if (isHospitalAdminUser && auth?.id) {
           queryParams.append("hospitalId", String(auth.id));
-          console.log(`🏥 Auto-injected hospitalId for hospital admin: ${auth.id}`);
         }
         // Priority 3: Super Admin sees all ads (no hospital filter)
-        else if (isSuperAdminUser) {
-          console.log("👑 Super Admin - No hospital filter (seeing all ads)");
-        }
         // Priority 4: Fallback to getHospitalId() only if not Super Admin
         else {
           const fallbackHospitalId = getHospitalId();
           if (fallbackHospitalId && !isSuperAdminUser) {
             queryParams.append("hospitalId", String(fallbackHospitalId));
-            console.log(`🔄 Fallback hospitalId: ${fallbackHospitalId}`);
           }
         }
 
@@ -131,22 +113,15 @@ export const adsApi = api.injectEndpoints({
         const queryString = queryParams.toString();
         const url = queryString ? `/ads?${queryString}` : "/ads";
         
-        console.log("🌐 FINAL URL:", url);
-        
         // If ID is provided, get single ad
         if (params?.id) {
-          const singleUrl = `/ads/${params.id}${queryString ? `?${queryString}` : ""}`;
-          console.log("📍 SINGLE AD URL:", singleUrl);
-          return singleUrl;
+          return `/ads/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all ads
-        console.log("📋 ALL ADS URL:", url);
         return url;
       },
 
       providesTags: (result, error, params) => {
-        console.log("🏷️ PROVIDES TAGS - result:", result, "error:", error, "params:", params);
         if (params?.id && result?.data && !Array.isArray(result.data)) {
           return [{ type: "Ads", id: params.id }];
         }
@@ -164,42 +139,27 @@ export const adsApi = api.injectEndpoints({
         const isHospitalAdminUser = isHospitalAdmin();
         const isSuperAdminUser = isSuperAdmin();
         
-        console.log("📝 CREATE AD REQUEST");
-        console.log("👤 AUTH USER:", auth);
-        console.log("📦 DATA:", data);
-        
-        // Determine which hospitalId to use
         let hospitalId = data.hospitalId;
         
-        // If no hospitalId provided in data, use the authenticated user's hospitalId
         if (!hospitalId) {
           if (isHospitalAdminUser && auth?.id) {
             hospitalId = auth.id;
-            console.log(`🏥 Using authenticated hospital admin ID: ${hospitalId}`);
           } else if (isSuperAdminUser) {
-            console.log("⚠️ Super Admin creating ad - hospitalId is required!");
-            // Super Admin must provide hospitalId in the data
             throw new Error("Super Admin must select a hospital when creating an ad");
           }
         }
         
-        console.log("🏥 FINAL HOSPITAL ID:", hospitalId);
-        
-        const requestBody = {
-          imageUrl: data.imageUrl,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          kilometer: data.kilometer,
-          isActive: data.isActive,
-          hospitalId: hospitalId,
-        };
-        
-        console.log("📤 REQUEST BODY:", requestBody);
-        
         return {
           url: "/ads",
           method: "POST",
-          body: requestBody,
+          body: {
+            imageUrl: data.imageUrl,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            kilometer: data.kilometer,
+            isActive: data.isActive,
+            hospitalId: hospitalId,
+          },
         };
       },
 
@@ -215,23 +175,17 @@ export const adsApi = api.injectEndpoints({
       }
     >({
       query: ({ id, data }) => {
-        console.log("✏️ UPDATE AD REQUEST");
-        console.log("🆔 AD ID:", id);
-        console.log("📦 UPDATE DATA:", data);
-        
         const requestBody: any = {
-  imageUrl: data.imageUrl,
-  startDate: data.startDate,
-  endDate: data.endDate,
-  kilometer: data.kilometer,
-  isActive: data.isActive,
-};
+          imageUrl: data.imageUrl,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          kilometer: data.kilometer,
+          isActive: data.isActive,
+        };
 
-if (data.hospitalId) {
-  requestBody.hospitalId = data.hospitalId;
-}
-        
-        console.log("📤 REQUEST BODY:", requestBody);
+        if (data.hospitalId) {
+          requestBody.hospitalId = data.hospitalId;
+        }
         
         return {
           url: `/ads/${id}`,
@@ -252,9 +206,6 @@ if (data.hospitalId) {
       string | number
     >({
       query: (id) => {
-        console.log("🗑️ DELETE AD REQUEST");
-        console.log("🆔 AD ID:", id);
-        
         return {
           url: `/ads/${id}`,
           method: "DELETE",

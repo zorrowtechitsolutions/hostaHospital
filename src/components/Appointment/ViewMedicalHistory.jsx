@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui";
-import {
-  useGetPrescriptionsQuery,
-} from "../../../app/service/prescription";
+import { useGetPrescriptionsQuery } from "../../../app/service/prescription";
 
-// Helper function to extract numeric ID from string
 const extractNumericId = (id) => {
   if (!id) return null;
   if (typeof id === 'number') return id;
   if (typeof id === 'string') {
-    // Remove any non-numeric characters (like #PT0001 -> 1)
     const numericMatch = id.match(/\d+/);
     return numericMatch ? parseInt(numericMatch[0]) : null;
   }
@@ -26,11 +22,7 @@ const ViewMedicalHistory = ({
 }) => {
   const navigate = useNavigate();
 
-  // Extract numeric ID from patientId
   const numericPatientId = extractNumericId(patientId);
-
-  console.log("ViewMedicalHistory - Original PATIENT ID:", patientId);
-  console.log("ViewMedicalHistory - Numeric PATIENT ID:", numericPatientId);
 
   const {
     data: prescriptionData,
@@ -47,9 +39,6 @@ const ViewMedicalHistory = ({
     }
   );
 
-  // Log the API response to see exact structure
-
-  // Extract prescriptions from response with proper handling
   let prescriptions = [];
   if (Array.isArray(prescriptionData)) {
     prescriptions = prescriptionData;
@@ -61,7 +50,6 @@ const ViewMedicalHistory = ({
     prescriptions = prescriptionData.result;
   }
   
-  // Sort prescriptions by date (newest first)
   const sortedPrescriptions = [...prescriptions].sort((a, b) => {
     const dateA = new Date(a.createdAt || a.date || a.visitDate || a.updatedAt || 0);
     const dateB = new Date(b.createdAt || b.date || b.visitDate || b.updatedAt || 0);
@@ -70,9 +58,6 @@ const ViewMedicalHistory = ({
   
   const latestRecord = sortedPrescriptions[0] || {};
 
-  console.log("LATEST RECORD:", latestRecord);
-
-  // Helper to get field value with fallbacks
   const getField = (record, fieldNames, defaultValue = "-") => {
     for (const field of fieldNames) {
       const value = record[field];
@@ -94,7 +79,6 @@ const ViewMedicalHistory = ({
     });
   };
 
-  // Helper to format medications
   const formatMedications = (medications) => {
     if (!medications || !Array.isArray(medications)) return [];
     return medications.map(med => ({
@@ -157,7 +141,6 @@ const ViewMedicalHistory = ({
           </div>
 
           <div className="px-6 py-4 space-y-6">
-            {/* Department and Date */}
             <div className="flex justify-between items-center pb-3 border-b border-gray-100">
               <div>
                 <p className="text-xs text-gray-500">Department</p>
@@ -182,7 +165,6 @@ const ViewMedicalHistory = ({
               </div>
             </div>
 
-            {/* Calendar Button */}
             <div>
               <Button onClick={handleShowCalendar} variant="primary" fullWidth className="py-3 bg-gradient-to-r from-[#1C62A0] to-[#3a8bc4]">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,7 +174,6 @@ const ViewMedicalHistory = ({
               </Button>
             </div>
 
-            {/* Past Complaint */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#1C62A0] rounded-full"></span>
@@ -214,7 +195,6 @@ const ViewMedicalHistory = ({
               </div>
             </div>
 
-            {/* Advice */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#1C62A0] rounded-full"></span>
@@ -227,7 +207,6 @@ const ViewMedicalHistory = ({
               </div>
             </div>
 
-            {/* Previous Medications */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#1C62A0] rounded-full"></span>
@@ -262,7 +241,6 @@ const ViewMedicalHistory = ({
               </div>
             </div>
 
-            {/* Next Consultation */}
             {latestRecord?.next_consultation && (
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">

@@ -62,30 +62,25 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
   const [manualCount, setManualCount] = useState(21);
   const [updateDoctor, { isLoading }] = useUpdateDoctorMutation();
 
-  // Handle manual count input changes
   const handleManualCountChange = (value) => {
     if (value === '') {
       setManualCount('');
       return;
     }
-
     const parsedValue = parseInt(value);
     if (!isNaN(parsedValue)) {
       setManualCount(parsedValue < 1 ? 1 : parsedValue);
     }
   };
 
-  // Prevent modal close while saving
   const handleClose = () => {
     if (!isLoading) {
       onClose();
     }
   };
 
-  // Load existing settings when doctor changes
   useEffect(() => {
     if (doctor?.id) {
-      // First check if doctor has appointment settings from API
       if (doctor.autoDecline && doctor.autoDecline > 0) {
         setSelectionType('auto_decline');
         setAutoDeclineMinutes(doctor.autoDecline);
@@ -93,7 +88,6 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
         setSelectionType('manual_count');
         setManualCount(doctor.appointmentCount);
       } else {
-        // Fallback to localStorage for backward compatibility
         const savedSettings = getStorageData(STORAGE_KEY, {});
         const settings = savedSettings[doctor.id];
         if (settings) {
@@ -109,7 +103,6 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
 
   const handleSave = async () => {
     try {
-      // Validate doctor data
       if (!doctor?.id) {
         showErrorToast('Doctor information is missing. Please try again.', 4000);
         return;
@@ -117,16 +110,9 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
 
       const doctorName = getDoctorName(doctor);
 
-      // Prepare payload for API - hospitalId is auto-injected by API service
       const updateData = selectionType === "manual_count"
-        ? {
-            appointmentCount: Number(manualCount),
-            autoDecline: 0,
-          }
-        : {
-            autoDecline: Number(autoDeclineMinutes),
-            appointmentCount: 0,
-          };
+        ? { appointmentCount: Number(manualCount), autoDecline: 0 }
+        : { autoDecline: Number(autoDeclineMinutes), appointmentCount: 0 };
 
       const payload = {
         id: doctor.id,
@@ -134,11 +120,8 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
       };
 
       await updateDoctor(payload).unwrap();
-
-      // Refresh doctors list if callback provided
       await refetchDoctors?.();
 
-      // Create complete settings object for callback and localStorage backup
       const settingsToSave = {
         doctorId: doctor.id,
         doctorName,
@@ -148,12 +131,10 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
         timestamp: new Date().toISOString()
       };
 
-      // Save to localStorage as backup (optional, API is primary source)
       const savedSettings = getStorageData(STORAGE_KEY, {});
       savedSettings[doctor.id] = settingsToSave;
       setStorageData(STORAGE_KEY, savedSettings);
 
-      // Show toast notification
       const settingDescription = selectionType === 'manual_count'
         ? `Maximum ${manualCount} appointments per day`
         : `Auto-decline after ${autoDeclineMinutes} minutes`;
@@ -165,10 +146,7 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
         Status: 'Successfully applied'
       });
 
-      // Call the onSave callback with complete settings
       onSave?.(settingsToSave);
-
-      // Close the modal
       onClose();
 
     } catch (error) {
@@ -203,7 +181,6 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
 
         {/* Body */}
         <div className="p-5">
-          {/* Doctor Name */}
           {doctor && (
             <div className="mb-4 pb-3 border-b border-gray-100">
               <p className="text-sm text-gray-600">
@@ -214,10 +191,8 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
             </div>
           )}
 
-          {/* Section Title */}
           <p className="text-xs text-gray-500 mb-3">Choose how to manage appointment bookings</p>
 
-          {/* Radio Options */}
           <RadioOption
             value="auto_decline"
             selected={selectionType}
@@ -236,7 +211,6 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
             description="Set maximum number of bookings allowed per day"
           />
 
-          {/* Dynamic Configuration Section */}
           {selectionType === 'auto_decline' && (
             <div className={SECTION_CLASS}>
               <div className="flex items-center gap-2 mb-3">

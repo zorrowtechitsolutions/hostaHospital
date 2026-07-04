@@ -1,4 +1,4 @@
-// Consultation.js - Complete updated file with patient data fetching
+// Consultation.js - Complete fixed version with proper template selection
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -11,7 +11,7 @@ import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth";
 import { useCompleteBookingMutation } from "../../../app/service/request";
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
-import { useGetPatientByIdQuery } from "../../../app/service/patients"; // ✅ Import patient query
+import { useGetPatientByIdQuery } from "../../../app/service/patients";
 
 // ✅ Import socket
 import { socket } from '../../socket/socket';
@@ -188,12 +188,81 @@ const Consultation = () => {
                    appointmentData.patient?.id || 
                    appointmentData.patient?.patientId || 
                    null;
-  
-  // ✅ Fetch patient data if patientId exists
-  const { data: patientData, isLoading: isPatientLoading } = useGetPatientByIdQuery(
-    patientId ? { id: patientId } : null,
-    { skip: !patientId }
+
+  // ✅ Track current patient ID to detect changes
+  const [currentPatientId, setCurrentPatientId] = useState(patientId);
+
+  // ✅ Fetch patient data if patientId exists - with proper cache key
+  const { 
+    data: patientData, 
+    isLoading: isPatientLoading,
+    isFetching: isPatientFetching,
+    refetch: refetchPatient
+  } = useGetPatientByIdQuery(
+    patientId ? String(patientId) : "",
+    {
+      skip: !patientId,
+      refetchOnMountOrArgChange: true,
+    }
   );
+
+  // ✅ Extract patient from array response - with proper handling
+  const patient = React.useMemo(() => {
+    if (!patientData?.data) return null;
+    if (Array.isArray(patientData.data)) {
+      return patientData.data[0];
+    }
+    return patientData.data;
+  }, [patientData]);
+
+  // ✅ Force refetch when patientId changes
+  useEffect(() => {
+    if (patientId && patientId !== currentPatientId) {
+      console.log("🔄 Patient ID changed, refetching...");
+      setCurrentPatientId(patientId);
+      refetchPatient();
+    }
+  }, [patientId, currentPatientId, refetchPatient]);
+
+  // ✅ Get current hospital ID
+  const currentHospitalId = getHospitalId();
+
+  // ✅ FIXED: Get the correct template for this hospital
+  const getHospitalTemplate = () => {
+    const allTemplates = existingTemplates?.data || [];
+    
+    console.log("🏥 Current Hospital ID:", currentHospitalId);
+    console.log("📋 All Templates:", allTemplates.map(t => ({
+      id: t.id,
+      type: t.templateType,
+      hospitalId: t.hospitalId,
+      name: t.name
+    })));
+
+    // ✅ First try to find a custom template for this hospital
+    const customTemplate = allTemplates.find(
+      t => t.templateType === "custom" && Number(t.hospitalId) === Number(currentHospitalId)
+    );
+    
+    if (customTemplate) {
+      console.log("✅ Found CUSTOM template for hospital:", currentHospitalId);
+      return customTemplate;
+    }
+
+    // ✅ If no custom template, find the demo template
+    const demoTemplate = allTemplates.find(
+      t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
+    );
+    
+    if (demoTemplate) {
+      console.log("✅ Found DEMO template (no custom for hospital:", currentHospitalId, ")");
+      return demoTemplate;
+    }
+
+    // ✅ Fallback to any template or null
+    console.log("⚠️ No template found, using default");
+    return null;
+  };
 
   const [medications, setMedications] = useState([
     { id: 1, name: "", dosage: "", duration: "", frequency: "", timing: "", instructions: "" }
@@ -272,29 +341,29 @@ const Consultation = () => {
     };
   }, []);
 
+  // ✅ Enhanced debug logging with current patient data
   useEffect(() => {
     console.log("=== CONSULTATION PAGE DEBUG ===");
     console.log("Appointment Data received:", appointmentData);
     console.log("Patient ID extracted:", patientId);
+    console.log("Current Patient ID state:", currentPatientId);
     console.log("Patient Data fetched:", patientData);
-    console.log("Full appointmentData keys:", Object.keys(appointmentData));
-    console.log("Patient object:", appointmentData.patient);
+    console.log("Extracted patient:", patient);
+    console.log("Patient name:", patient?.name);
+    console.log("Patient gender:", patient?.gender);
+    console.log("Patient ID from API:", patient?.id);
     console.log("==============================");
-  }, [appointmentData, patientData, patientId]);
+  }, [appointmentData, patientData, patientId, currentPatientId, patient]);
 
   // Debug template data
   useEffect(() => {
     console.log("=== PRESCRIPTION TEMPLATE DEBUG ===");
     console.log("Existing Templates:", existingTemplates);
-    console.log("Templates Data:", existingTemplates?.data);
-    console.log("First Template:", existingTemplates?.data?.[0]);
-    if (existingTemplates?.data?.[0]) {
-      console.log("Template Type:", existingTemplates?.data?.[0]?.templateType);
-      console.log("Canvas BG:", existingTemplates?.data?.[0]?.canvasBg);
-      console.log("Design:", existingTemplates?.data?.[0]?.design);
-    }
+    console.log("Current Hospital:", currentHospitalId);
+    const selected = getHospitalTemplate();
+    console.log("Selected Template:", selected);
     console.log("================================");
-  }, [existingTemplates]);
+  }, [existingTemplates, currentHospitalId]);
 
   const validateMedication = (med) => {
     const errors = {};
@@ -426,7 +495,105 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-  // ✅ handleEndConsultation with patient data from API
+  // ✅ Get gender with HIGHEST PRIORITY from Patient API
+  const getPatientGender = () => {
+    const patientGender = patient?.gender || patient?.patient_gender || null;
+    
+    if (patientGender) {
+      const gender = String(patientGender);
+      const normalized = gender.toLowerCase();
+      if (normalized === 'male') return 'Male';
+      if (normalized === 'female') return 'Female';
+      if (normalized === 'other') return 'Other';
+      return gender;
+    }
+    
+    if (appointmentData.patient_gender) {
+      const gender = String(appointmentData.patient_gender);
+      const normalized = gender.toLowerCase();
+      if (normalized === 'male') return 'Male';
+      if (normalized === 'female') return 'Female';
+      if (normalized === 'other') return 'Other';
+      return gender;
+    }
+    
+    if (appointmentData.patient?.gender) {
+      const gender = String(appointmentData.patient.gender);
+      const normalized = gender.toLowerCase();
+      if (normalized === 'male') return 'Male';
+      if (normalized === 'female') return 'Female';
+      if (normalized === 'other') return 'Other';
+      return gender;
+    }
+    
+    if (appointmentData.gender) {
+      const gender = String(appointmentData.gender);
+      const normalized = gender.toLowerCase();
+      if (normalized === 'male') return 'Male';
+      if (normalized === 'female') return 'Female';
+      if (normalized === 'other') return 'Other';
+      return gender;
+    }
+    
+    return "N/A";
+  };
+
+  // ✅ Helper function to get patient name
+  const getPatientName = () => {
+    const name = patient?.name || 
+                 patient?.patientName ||
+                 appointmentData.patientName || 
+                 appointmentData.patient?.name || 
+                 appointmentData.name || 
+                 "Patient";
+    return name;
+  };
+
+  // ✅ Helper function to get patient age
+  const getPatientAge = () => {
+    const age = patient?.age || 
+                patient?.patientAge ||
+                appointmentData.age || 
+                appointmentData.patient?.age || 
+                "N/A";
+    return age;
+  };
+
+  // ✅ Helper function to get patient contact
+  const getPatientContact = () => {
+    const contact = patient?.mobileNumber || 
+                    patient?.contact || 
+                    patient?.phone || 
+                    patient?.patientPhone ||
+                    appointmentData.contact || 
+                    appointmentData.patient?.contact || 
+                    appointmentData.phone || 
+                    appointmentData.mobile || 
+                    "N/A";
+    return contact;
+  };
+
+  // ✅ Get all patient details
+  const displayPatientName = getPatientName();
+  const displayPatientAge = getPatientAge();
+  const displayPatientGender = getPatientGender();
+  const displayPatientContact = getPatientContact();
+
+  // ✅ Default template for fallback
+  const getDefaultTemplate = () => ({
+    design: [
+      { type: "patientGrid", x: 20, y: 20, width: 950, height: 150, style: { bgColor: "#f8fafc" } },
+      { type: "doctorDetails", x: 20, y: 180, width: 400, height: 80 },
+      { type: "chiefComplaint", x: 20, y: 270, width: 950, height: 80, style: { bgColor: "#fef3c7" } },
+      { type: "medicinesTable", x: 20, y: 360, width: 950, height: 250, style: { bgColor: "#ffffff" } },
+      { type: "advice", x: 20, y: 620, width: 950, height: 100, style: { bgColor: "#d1fae5" } },
+      { type: "signature", x: 20, y: 730, width: 400, height: 80 },
+      { type: "prescriptionInfo", x: 500, y: 730, width: 470, height: 80 }
+    ],
+    bgColor: "#ffffff"
+  });
+
+  // ✅ handleEndConsultation with fixed template selection
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -440,7 +607,6 @@ const Consultation = () => {
     try {
       const bookingId = appointmentData.id || appointmentData.bookingId;
       
-      // Extract numeric IDs
       const extractedPatientId = extractNumericId(
         appointmentData.patientId || 
         appointmentData.patient?.id || 
@@ -466,85 +632,32 @@ const Consultation = () => {
         appointmentData.hospital?.id
       );
       
-      // ✅ EXTRACT PATIENT DETAILS - From appointment data AND patient data from API
-      const extractedPatientName = 
-        appointmentData.patientName || 
-        appointmentData.patient?.name || 
-        patientData?.data?.name ||
-        appointmentData.name || 
-        null;
+      const extractedPatientName = getPatientName();
       
-      // ✅ Get age from patient data API first, then fallback to appointment data
       let extractedAge = null;
       
-      // Try to get age from patient data API
-      if (patientData?.data) {
-        const patient = patientData.data;
-        // Check if patient has age directly
-        if (patient.age) extractedAge = patient.age;
-        // If not, try to calculate from DOB
-        else if (patient.dob || patient.dateOfBirth) {
-          const dob = patient.dob || patient.dateOfBirth;
+      if (patient?.age) {
+        extractedAge = patient.age;
+      } else if (patient?.dob || patient?.dateOfBirth) {
+        const dob = patient.dob || patient.dateOfBirth;
+        extractedAge = calculateAge(dob);
+      } else if (appointmentData.age) {
+        extractedAge = appointmentData.age;
+      } else if (appointmentData.patient?.age) {
+        extractedAge = appointmentData.patient.age;
+      } else {
+        const dob = appointmentData.dob || 
+                   appointmentData.patient?.dob || 
+                   appointmentData.dateOfBirth ||
+                   appointmentData.patient?.dateOfBirth;
+        if (dob) {
           extractedAge = calculateAge(dob);
         }
       }
       
-      // If still no age, try from appointment data
-      if (!extractedAge) {
-        if (appointmentData.age) extractedAge = appointmentData.age;
-        else if (appointmentData.patient?.age) extractedAge = appointmentData.patient.age;
-        else if (appointmentData.patientAge) extractedAge = appointmentData.patientAge;
-        else if (appointmentData.ageDisplay) extractedAge = appointmentData.ageDisplay;
-        else {
-          // Try to calculate from DOB in appointment data
-          const dob = appointmentData.dob || 
-                     appointmentData.patient?.dob || 
-                     appointmentData.dateOfBirth ||
-                     appointmentData.patient?.dateOfBirth;
-          if (dob) {
-            extractedAge = calculateAge(dob);
-          }
-        }
-      }
-      
-      // ✅ Get contact from patient data API first
-      let extractedContact = null;
-      
-      if (patientData?.data) {
-        const patient = patientData.data;
-        extractedContact = patient.contact || patient.phone || patient.mobile || patient.phoneNumber || null;
-      }
-      
-      // If still no contact, try from appointment data
-      if (!extractedContact) {
-        if (appointmentData.contact) extractedContact = appointmentData.contact;
-        else if (appointmentData.patient?.contact) extractedContact = appointmentData.patient.contact;
-        else if (appointmentData.phone) extractedContact = appointmentData.phone;
-        else if (appointmentData.patient?.phone) extractedContact = appointmentData.patient.phone;
-        else if (appointmentData.mobile) extractedContact = appointmentData.mobile;
-        else if (appointmentData.patient?.mobile) extractedContact = appointmentData.patient.mobile;
-        else if (appointmentData.phoneNumber) extractedContact = appointmentData.phoneNumber;
-        else if (appointmentData.contactNumber) extractedContact = appointmentData.contactNumber;
-      }
-      
-      // ✅ Get gender from patient data API first
-      let extractedGender = null;
-      
-      if (patientData?.data) {
-        const patient = patientData.data;
-        extractedGender = patient.gender || patient.sex || null;
-      }
-      
-      // If still no gender, try from appointment data
-      if (!extractedGender) {
-        if (appointmentData.gender) extractedGender = appointmentData.gender;
-        else if (appointmentData.patient?.gender) extractedGender = appointmentData.patient.gender;
-        else if (appointmentData.sex) extractedGender = appointmentData.sex;
-        else if (appointmentData.patient?.sex) extractedGender = appointmentData.patient.sex;
-        else if (appointmentData.genderDisplay) extractedGender = appointmentData.genderDisplay;
-      }
-      
-      // ✅ EXTRACT HOSPITAL NAME
+      const extractedContact = getPatientContact();
+      const extractedGender = getPatientGender();
+
       const authUser = getAuthUser();
       const hospitalNameFromAuth = getHospitalName();
 
@@ -574,7 +687,6 @@ const Consultation = () => {
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
       
-      // Map medication fields to match API expectations
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
         dosage: med.dosage,
@@ -586,41 +698,39 @@ const Consultation = () => {
       
       const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
 
-      // Get the selected template
-      const selectedTemplate = existingTemplates?.data?.[0] || null;
+      // ✅ FIXED: Get the correct template for this hospital
+      const selectedTemplate = getHospitalTemplate();
       
-      console.log("=== EXTRACTED PATIENT DETAILS ===");
-      console.log("Patient Name:", extractedPatientName);
-      console.log("Age:", extractedAge);
-      console.log("Gender:", extractedGender);
-      console.log("Contact:", extractedContact);
-      console.log("Age type:", typeof extractedAge);
-      console.log("Patient Data from API:", patientData);
-      console.log("==================================");
-      
-      // ✅ CONVERT age to number if it's a string
-      const ageAsNumber = extractedAge ? Number(extractedAge) : null;
-      
-      console.log("Age as number:", ageAsNumber);
+      // ✅ Get template design with fallback
+      const defaultTemplate = getDefaultTemplate();
+      const templateDesign = selectedTemplate?.design || defaultTemplate.design;
+      const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
+      const templateType = selectedTemplate?.templateType || "demo";
 
-      // ✅ Create prescription data with correct backend field names
+      console.log("📋 Using template:", {
+        templateId: selectedTemplate?.id,
+        templateType: templateType,
+        designLength: templateDesign.length,
+        hospitalId: currentHospitalId,
+        isCustom: templateType === "custom"
+      });
+      
+      const ageAsNumber = extractedAge ? Number(extractedAge) : null;
+
       const prescriptionData = {
         bookingId: Number(bookingId),
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
         
-        // Doctor fields
         prescribedBy: extractedDoctorName,
         doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
         
-        // ✅ PATIENT DETAILS - Using exact backend field names
         patientName: extractedPatientName,
-        age: ageAsNumber,                    // ✅ Backend field: age (as number)
-        contact: extractedContact,           // ✅ Backend field: contact
-        gender: extractedGender,             // ✅ Backend field: gender
+        age: ageAsNumber,
+        contact: extractedContact,
+        gender: extractedGender,
         
-        // Hospital name
         hospitalName: extractedHospitalName,
         
         patientId: extractedPatientId || undefined,
@@ -633,12 +743,11 @@ const Consultation = () => {
         next_consultation: nextConsultationDate || null,
         empty_stomach: emptyStomach === "yes",
         
-        // Template fields
-        templateType: selectedTemplate?.templateType || "demo",
-        canvasBg: selectedTemplate?.canvasBg || "#ffffff",
-        design: selectedTemplate?.design || [],
+        // ✅ Using the correct template
+        templateType: templateType,
+        canvasBg: templateBg,
+        design: templateDesign,
         
-        // Vital signs
         temperature: Number(vitals.temperature) || 0,
         pulse: Number(vitals.pulse) || 0,
         respiratoryRate: Number(vitals.respiratoryRate) || 0,
@@ -656,7 +765,6 @@ const Consultation = () => {
 
       const result = await createPrescription(prescriptionData).unwrap();
 
-      // ✅ Emit socket event
       if (socket && socket.connected) {
         socket.emit('PRESCRIPTION_CREATED', {
           prescriptionId: result?.data?.id || result?.data?._id,
@@ -693,6 +801,37 @@ const Consultation = () => {
     }
   };
 
+  // Show loading state while patient data is being fetched
+  if (isPatientLoading || isPatientFetching) {
+    return (
+      <div className="p-4 bg-gray-50 min-h-screen font-sans">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                onClick={handleBackToAppointments}
+                className="flex items-center gap-1 text-gray-600 transition-colors group"
+              >
+                <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="text-sm font-medium">Back to Appointments</span>
+              </button>
+            </div>
+            <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
+            <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-8 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1C62A0] mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading patient data...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-sans">
       <div className="max-w-6xl mx-auto">
@@ -723,30 +862,30 @@ const Consultation = () => {
           <div className="p-4 flex flex-wrap justify-between items-center gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
-                {(appointmentData.patientName || appointmentData.patient?.name || patientData?.data?.name || "P")
-                  .charAt(0)
-                  .toUpperCase()}
+                {displayPatientName?.charAt(0)?.toUpperCase() || "P"}
               </div>
               <div>
                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
                 <p className="font-semibold text-gray-800 text-sm mt-1">
-                  {appointmentData.patientName || appointmentData.patient?.name || patientData?.data?.name || "Patient"}
+                  {displayPatientName}
                 </p>
                 <p className="text-xs text-gray-500">Consultation ID : #{appointmentData.id || appointmentData.bookingId || "N/A"}</p>
+                {patient?.id && (
+                  <p className="text-xs text-gray-400">Patient ID: #{patient.id}</p>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-xs bg-gray-50 px-3 py-2 rounded-lg">
               <div>
                 <p className="text-gray-500 text-[10px]">Age / Gender</p>
                 <p className="font-medium text-gray-800 text-xs">
-                  {patientData?.data?.age || appointmentData.age || appointmentData.patient?.age || "N/A"} Years / 
-                  {patientData?.data?.gender || appointmentData.gender || appointmentData.patient?.gender || "N/A"}
+                  {displayPatientAge} Years / {displayPatientGender}
                 </p>
               </div>
               <div>
                 <p className="text-gray-500 text-[10px]">Contact</p>
                 <p className="font-medium text-gray-800 text-xs">
-                  {patientData?.data?.contact || patientData?.data?.phone || appointmentData.contact || appointmentData.patient?.contact || "N/A"}
+                  {displayPatientContact}
                 </p>
               </div>
               <div>

@@ -3,10 +3,7 @@ import { useState, useEffect } from "react";
 import { Star, User, Calendar, ThumbsUp, MessageCircle } from "lucide-react";
 import { Badge, Loader } from "../ui";
 import { useGetReviewsQuery } from "../../../app/service/review";
-
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerRatingEvents, unregisterRatingEvents } from '../../socket/ratingEvents';
 import { registerReviewEvents, unregisterReviewEvents } from '../../socket/reviewEvents';
 
@@ -98,8 +95,6 @@ const ReviewTable = ({
 }) => {
   const [sortBy, setSortBy] = useState("recent");
   const [filterRating, setFilterRating] = useState("all");
-  
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const {
@@ -116,84 +111,46 @@ const ReviewTable = ({
     return String(review.doctorId) === String(doctorId);
   });
 
-  console.log("Doctor ID:", doctorId);
-  console.log("Reviews Response:", reviewsResponse);
-  console.log("Reviews Error:", error);
-
-  // ✅ Register socket event listeners for Rating and Review events
-  useEffect(() => {
-    console.log("🔄 Registering rating and review event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
-    // Register Rating Events
+  const registerEvents = (refetchFn) => {
     registerRatingEvents({
       onRatingRegistered: async (data) => {
-        console.log("⭐ NEW RATING REGISTERED:", data);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (RATING REGISTERED):", result);
+        await refetchFn();
       },
       onRatingUpdated: async (data) => {
-        console.log("✏️ RATING UPDATED:", data);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (RATING UPDATED):", result);
+        await refetchFn();
       }
     });
 
-    // Register Review Events
     registerReviewEvents({
       onReviewRegistered: async (data) => {
-        console.log("📝 NEW REVIEW REGISTERED:", data);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (REVIEW REGISTERED):", result);
+        await refetchFn();
       },
       onReviewUpdated: async (data) => {
-        console.log("✏️ REVIEW UPDATED:", data);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (REVIEW UPDATED):", result);
+        await refetchFn();
       }
     });
+  };
 
+  useEffect(() => {
+    registerEvents(refetch);
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering rating and review events...");
       unregisterRatingEvents();
       unregisterReviewEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Rating & Review events will work!");
       if (!eventsRegistered) {
-        registerRatingEvents({
-          onRatingRegistered: async (data) => {
-            console.log("⭐ NEW RATING REGISTERED (reconnect):", data);
-            await refetch();
-          },
-          onRatingUpdated: async (data) => {
-            console.log("✏️ RATING UPDATED (reconnect):", data);
-            await refetch();
-          }
-        });
-        registerReviewEvents({
-          onReviewRegistered: async (data) => {
-            console.log("📝 NEW REVIEW REGISTERED (reconnect):", data);
-            await refetch();
-          },
-          onReviewUpdated: async (data) => {
-            console.log("✏️ REVIEW UPDATED (reconnect):", data);
-            await refetch();
-          }
-        });
+        registerEvents(refetch);
         setEventsRegistered(true);
       }
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Rating & Review events won't work!");
       setEventsRegistered(false);
     };
 
@@ -205,19 +162,6 @@ const ReviewTable = ({
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - RATING/REVIEW: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   const totalReviews = reviews.length;
   const averageRating = totalReviews > 0 
@@ -280,7 +224,6 @@ const ReviewTable = ({
 
   return (
     <div className="space-y-6">
-      {/* Statistics Section */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center">
@@ -325,7 +268,6 @@ const ReviewTable = ({
         </div>
       </div>
 
-      {/* Filters */}
       {totalReviews > 0 && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -363,7 +305,6 @@ const ReviewTable = ({
         </div>
       )}
 
-      {/* Reviews List */}
       {totalReviews > 0 ? (
         <div className="space-y-4">
           {reviews.map((review, index) => (

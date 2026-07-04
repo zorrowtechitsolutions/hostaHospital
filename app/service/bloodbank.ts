@@ -1,5 +1,4 @@
 // app/service/blood.ts - Blood Bank API service
-
 import { api } from "./api";
 import { getHospitalId, getAuthUser } from "../../src/utils/auth";
 
@@ -24,8 +23,8 @@ export interface BloodBankResponse {
 
 export interface GetBloodBankParams {
   id?: string | number;
-  hospitalId?: string | number;  // Support for Super Admin to fetch specific hospital
-  bloodGroup?: string;  
+  hospitalId?: string | number;
+  bloodGroup?: string;
   search_query?: string;
   minCount?: number;
   maxCount?: number;
@@ -36,7 +35,6 @@ export interface GetBloodBankParams {
 export const bloodBankApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET BLOOD BANKS =================
     getBloodBank: builder.query<
       BloodBankResponse,
       GetBloodBankParams | void
@@ -44,55 +42,43 @@ export const bloodBankApi = api.injectEndpoints({
       query: (params: GetBloodBankParams = {}) => {
         const queryParams = new URLSearchParams();
         
-        // ✅ FIX: Only add hospitalId if explicitly provided in params
-        // Don't auto-inject from auth - let the caller decide
         if (params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        // Filter by blood group
         if (params?.bloodGroup) {
           queryParams.append("bloodGroup", params.bloodGroup);
         }
 
-        // Search query (searches bloodGroup)
         if (params?.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
-        // Filter by minimum count
         if (params?.minCount) {
           queryParams.append("minCount", String(params.minCount));
         }
 
-        // Filter by maximum count
         if (params?.maxCount) {
           queryParams.append("maxCount", String(params.maxCount));
         }
 
         const queryString = queryParams.toString();
 
-        // If ID is provided, get single blood bank record
         if (params?.id) {
           return `/blood-banks/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all blood bank records
         return `/blood-banks${queryString ? `?${queryString}` : ""}`;
       },
 
       providesTags: (result, error, params) => {
-        // If we have a single blood bank, provide a specific tag
         if (params?.id && result?.data && !Array.isArray(result.data)) {
           return [{ type: "BloodBank", id: params.id }];
         }
-        // Otherwise provide the general tag
         return ["BloodBank"];
       },
     }),
 
-    // ================= CREATE BLOOD BANK =================
-    // Automatically adds hospitalId from authenticated user
     createBloodBank: builder.mutation<
       BloodBankResponse,
       Omit<BloodBank, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt' | 'lastUpdated'>
@@ -114,7 +100,6 @@ export const bloodBankApi = api.injectEndpoints({
       invalidatesTags: ["BloodBank"],
     }),
 
-    // ================= UPDATE BLOOD BANK =================
     updateBloodBank: builder.mutation<
       BloodBankResponse,
       {
@@ -137,7 +122,6 @@ export const bloodBankApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE BLOOD BANK =================
     deleteBloodBank: builder.mutation<
       { message: string },
       string | number
@@ -154,8 +138,6 @@ export const bloodBankApi = api.injectEndpoints({
     }),
   }),
 });
-
-// ================= EXPORT HOOKS =================
 
 export const {
   useGetBloodBankQuery,

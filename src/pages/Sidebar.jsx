@@ -58,7 +58,8 @@ const menu = [
       { label: "Visits", icon: Activity, path: "/visits", permissionId: 9 },
       { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 46 },
       { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
-      { label: "Laboratory", icon: Microscope, path: "/laboratory", permissionId: 20 },],
+      // { label: "Laboratory", icon: Microscope, path: "/laboratory", permissionId: 20 },
+    ],
   },
   {
     title: "MANAGE",

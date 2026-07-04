@@ -2,10 +2,6 @@
 import { api } from "./api";
 import { getUserRole } from "../../src/utils/auth";
 
-// ==============================
-// TYPES
-// ==============================
-
 export interface LabResult {
   id?: string;
   _id?: string;
@@ -23,21 +19,15 @@ export interface LabResult {
   appointmentDate?: string | null;
   result?: string | null;
   notes?: string | null;
-  
-  // S3 File Metadata
   fileKey?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
   fileSize?: string | null;
   type?: string | null;
-  
-  // S3 Upload Metadata
   role?: string | null;
   uploadedById?: string | number | null;
   contentType?: string | null;
-  
-  // Additional Fields
   uploadDate?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -58,21 +48,15 @@ export interface CreateLabResultData {
   appointmentDate?: string | null;
   result?: string | null;
   notes?: string | null;
-  
-  // S3 File Metadata
   fileKey?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
   fileSize?: string | null;
   type?: string | null;
-  
-  // S3 Upload Metadata
   role?: string | null;
   uploadedById?: string | number | null;
   contentType?: string | null;
-  
-  // Additional Fields
   uploadDate?: string;
 }
 
@@ -91,16 +75,12 @@ export interface UpdateLabResultData {
   appointmentDate?: string | null;
   result?: string | null;
   notes?: string | null;
-  
-  // S3 File Metadata
   fileKey?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
   fileSize?: string | null;
   type?: string | null;
-  
-  // S3 Upload Metadata
   role?: string | null;
   uploadedById?: string | number | null;
   contentType?: string | null;
@@ -125,10 +105,6 @@ export interface GetLabResultsParams {
   search_query?: string;
 }
 
-// ==============================
-// HELPER FUNCTIONS
-// ==============================
-
 const getFileExtension = (filename: string): string => {
   return filename.split('.').pop()?.toUpperCase() || '';
 };
@@ -145,21 +121,12 @@ const getUserIdFromStorage = (): string | number | null => {
     const auth = JSON.parse(localStorage.getItem("user") || "{}");
     return auth.id || auth.userId || auth.staffId || auth.doctorId || auth.hospitalId || null;
   } catch (error) {
-    console.error("Error parsing user data:", error);
     return null;
   }
 };
 
-// ==============================
-// LAB RESULTS API
-// ==============================
-
 export const labResultsApi = api.injectEndpoints({
   endpoints: (builder) => ({
-
-    // ==============================
-    // GET ALL LAB RESULTS
-    // ==============================
 
     getLabResults: builder.query<LabResultResponse, GetLabResultsParams>({
       query: (params = {}) => {
@@ -208,18 +175,10 @@ export const labResultsApi = api.injectEndpoints({
       providesTags: ["LabResult"],
     }),
 
-    // ==============================
-    // GET SINGLE LAB RESULT
-    // ==============================
-
     getLabResultById: builder.query<LabResultResponse, string>({
       query: (id) => `/lab-results/${id}`,
       providesTags: (result, error, id) => [{ type: "LabResult", id }],
     }),
-
-    // ==============================
-    // CREATE NEW LAB RESULT
-    // ==============================
 
     createLabResult: builder.mutation<LabResultResponse, CreateLabResultData>({
       query: (newLabResult) => ({
@@ -230,10 +189,6 @@ export const labResultsApi = api.injectEndpoints({
       invalidatesTags: ["LabResult"],
     }),
 
-    // ==============================
-    // UPDATE LAB RESULT
-    // ==============================
-
     updateLabResult: builder.mutation<LabResultResponse, { id: string; updateData: UpdateLabResultData }>({
       query: ({ id, updateData }) => ({
         url: `/lab-results/${id}`,
@@ -243,10 +198,6 @@ export const labResultsApi = api.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: "LabResult", id }],
     }),
 
-    // ==============================
-    // DELETE LAB RESULT
-    // ==============================
-
     deleteLabResult: builder.mutation<{ message: string }, string>({
       query: (id) => ({
         url: `/lab-results/${id}`,
@@ -254,10 +205,6 @@ export const labResultsApi = api.injectEndpoints({
       }),
       invalidatesTags: ["LabResult"],
     }),
-
-    // ==============================
-    // UPLOAD LAB RESULT WITH FILE
-    // ==============================
 
     uploadLabResultWithFile: builder.mutation<
       LabResultResponse, 
@@ -280,12 +227,9 @@ export const labResultsApi = api.injectEndpoints({
     >({
       async queryFn({ file, patientId, testName, date, labId, hospitalId, doctorId, department, status, category, referredBy, appointmentDate, result, notes }, _queryApi, _extraOptions, baseQuery) {
         try {
-          // Get user role and ID for S3 upload
           const role = getUserRole()?.toLowerCase();
           const uploadedById = getUserIdFromStorage();
           const contentType = file.type;
-          
-          // Use userId for the folder structure
           const userId = uploadedById;
           
           if (!userId) {
@@ -296,11 +240,9 @@ export const labResultsApi = api.injectEndpoints({
           const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
           const fileKey = `lab-results/${userId}/${timestamp}_${safeFileName}`;
           
-          // Import S3 upload function dynamically
           const { uploadToS3 } = await import("./S3");
           const s3Result = await uploadToS3(file, fileKey);
           
-          // Prepare lab result data with all S3 metadata
           const labResultData: CreateLabResultData = {
             patientId: patientId,
             name: testName,
@@ -311,25 +253,17 @@ export const labResultsApi = api.injectEndpoints({
             department: department || null,
             testName: testName,
             status: status || 'pending',
-            
-            // S3 File Metadata
             fileKey: s3Result.key,
             fileUrl: s3Result.imageUrl,
             fileName: file.name,
             fileType: file.type,
             fileSize: formatFileSize(file.size),
             type: getFileExtension(file.name),
-            
-            // S3 Upload Metadata
             role: role || null,
             uploadedById: uploadedById,
             contentType: contentType,
-            
-            // Additional Fields
             uploadDate: new Date().toISOString(),
           };
-
-          console.log("📄 Lab Result Data being saved:", labResultData);
 
           const result = await baseQuery({
             url: "/lab-results",
@@ -339,7 +273,6 @@ export const labResultsApi = api.injectEndpoints({
 
           return { data: result.data as LabResultResponse };
         } catch (error: any) {
-          console.error("Error uploading lab result with file:", error);
           return { error: { status: 500, data: error.message } };
         }
       },
@@ -348,10 +281,6 @@ export const labResultsApi = api.injectEndpoints({
 
   }),
 });
-
-// ==============================
-// EXPORT HOOKS
-// ==============================
 
 export const {
   useGetLabResultsQuery,

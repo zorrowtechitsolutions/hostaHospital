@@ -1,4 +1,4 @@
-// src/components/Doctor/EditDoctor.jsx - With Role Assignment
+// src/components/Doctor/EditDoctor.jsx
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -21,18 +21,15 @@ import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// Lazy load heavy components
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
 
-// Helper function to get full image URL
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   if (imageKey.startsWith("http")) return imageKey;
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
-// Lazy Image Component with Intersection Observer
 const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,14 +74,8 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
           src={imageSrc}
           alt="Profile"
           className="w-full h-full object-cover rounded-full"
-          onLoad={() => {
-            setIsLoading(false);
-            onLoad?.();
-          }}
-          onError={(e) => {
-            setIsLoading(false);
-            onError?.(e);
-          }}
+          onLoad={() => { setIsLoading(false); onLoad?.(); }}
+          onError={(e) => { setIsLoading(false); onError?.(e); }}
         />
       )}
       {!imageSrc && !isLoading && (
@@ -98,7 +89,6 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
   );
 };
 
-// Form Section Skeleton Loader
 const FormSectionSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="h-8 w-40 bg-gray-200 rounded"></div>
@@ -113,7 +103,6 @@ const FormSectionSkeleton = () => (
   </div>
 );
 
-// Profile Section Skeleton
 const ProfileSectionSkeleton = () => (
   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg animate-pulse">
     <div className="w-24 h-24 bg-gray-200 rounded-full"></div>
@@ -125,7 +114,6 @@ const ProfileSectionSkeleton = () => (
   </div>
 );
 
-// SearchableDropdown Component with Lazy Loading
 const SearchableDropdownComponent = ({ 
   label, 
   options, 
@@ -192,7 +180,7 @@ const SearchableDropdownComponent = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={isLoading ? "Loading departments..." : placeholder}
+          placeholder={isLoading ? "Loading..." : placeholder}
           disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
@@ -223,7 +211,7 @@ const SearchableDropdownComponent = ({
       
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          No departments found
+          No options found
         </div>
       )}
 
@@ -231,7 +219,7 @@ const SearchableDropdownComponent = ({
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           <div className="flex items-center justify-center gap-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            <span>Loading departments...</span>
+            <span>Loading...</span>
           </div>
         </div>
       )}
@@ -239,7 +227,6 @@ const SearchableDropdownComponent = ({
   );
 };
 
-// Day Schedule Row Component
 const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
@@ -362,7 +349,6 @@ const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   );
 });
 
-// Centered Loader Component
 const CenteredLoader = ({ text = "Loading..." }) => (
   <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
     <div className="text-center">
@@ -372,91 +358,72 @@ const CenteredLoader = ({ text = "Loading..." }) => (
   </div>
 );
 
-// Status Toggle Component
-const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
-  const isActive = status;
-
-  return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-        <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-          <Power className="h-5 w-5 text-blue-600" /> 
-          Doctor Status
-        </h3>
-      </div>
-      <div className="p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-900">
-              {isActive ? 'Active' : 'Inactive'}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {isActive 
-                ? 'Doctor is currently active and can receive appointments' 
-                : 'Doctor is inactive and will not appear in search results'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onToggle}
-            disabled={disabled}
-            className={`
-              relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-              ${isActive ? 'bg-green-500' : 'bg-gray-300'}
-              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-            `}
-          >
-            <span
-              className={`
-                inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-md
-                ${isActive ? 'translate-x-6' : 'translate-x-1'}
-              `}
-            />
-          </button>
+const StatusToggle = React.memo(({ status, onToggle, disabled }) => (
+  <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+      <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+        <Power className="h-5 w-5 text-blue-600" /> 
+        Doctor Status
+      </h3>
+    </div>
+    <div className="p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {status ? 'Active' : 'Inactive'}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {status 
+              ? 'Doctor is currently active and can receive appointments' 
+              : 'Doctor is inactive and will not appear in search results'}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={disabled}
+          className={`
+            relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+            ${status ? 'bg-green-500' : 'bg-gray-300'}
+            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+          `}
+        >
+          <span
+            className={`
+              inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-md
+              ${status ? 'translate-x-6' : 'translate-x-1'}
+            `}
+          />
+        </button>
       </div>
     </div>
-  );
-});
+  </div>
+));
 
 const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
-  
-  // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  // Get hospital ID and hospital name from auth
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
   
-  console.log("🏥 Hospital ID from auth:", hospitalId);
-  console.log("🏥 Hospital Name from auth:", hospitalName);
+  const [assignPermissions] = useAssignPermissionsMutation();
   
-  // Role assignment state
-  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // Fetch roles from API
-  const {
-    data: rolesData,
-    isLoading: rolesLoading,
-  } = useGetRolesQuery({
+  const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery({
     hospitalId,
     limit: 100
   });
   
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  // Fetch specialities from backend for department dropdown
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
   
-  // Transform specialities to department options
-  const departmentOptions = React.useMemo(() => {
+  const departmentOptions = useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
       id: spec.id,
@@ -476,7 +443,6 @@ const EditDoctor = () => {
   const [formInitialized, setFormInitialized] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Form state
   const [formData, setFormData] = useState({
     profileImage: null,
     imageUrl: null,
@@ -508,7 +474,7 @@ const EditDoctor = () => {
     joiningDate: '',
     experience: '',
     appointmentCount: '',
-    roleId: '', // Added roleId field
+    roleId: '',
     weeklySchedule: {},
     outDoorConsultingOpen: '',
     outDoorConsultingClose: '',
@@ -519,14 +485,12 @@ const EditDoctor = () => {
 
   const [errors, setErrors] = useState({});
 
-  // Use getDoctorById query for single doctor
-  const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
+  const { data: doctorResponse, isLoading, error } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
   });
   
   const [updateDoctor] = useUpdateDoctorMutation();
 
-  // Extract doctor from response
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
 
   const countries = Country.getAllCountries();
@@ -562,45 +526,33 @@ const EditDoctor = () => {
     { id: 'professional', label: 'Professional Info' }
   ];
 
-  const getDefaultSchedule = () => {
-    return {
-      monday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      tuesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      wednesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      thursday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      friday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      saturday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '14:00', eveningOpen: '16:00', eveningClose: '20:00' },
-      sunday: { isHoliday: true, hasBreak: false, morningOpen: '10:00', morningClose: '13:00', eveningOpen: '16:00', eveningClose: '20:00' }
-    };
-  };
+  const getDefaultSchedule = () => ({
+    monday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    tuesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    wednesday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '18:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    thursday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    friday: { isHoliday: false, hasBreak: true, morningOpen: '09:00', morningClose: '12:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    saturday: { isHoliday: false, hasBreak: false, morningOpen: '09:00', morningClose: '14:00', eveningOpen: '16:00', eveningClose: '20:00' },
+    sunday: { isHoliday: true, hasBreak: false, morningOpen: '10:00', morningClose: '13:00', eveningOpen: '16:00', eveningClose: '20:00' }
+  });
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
-    const roleName = getRoleNameById(roleId);
-    const roleNameLower = roleName?.toLowerCase();
-    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
-    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
-    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    const roleName = getRoleNameById(roleId)?.toLowerCase();
+    if (roleName === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleName === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleName === 'staff') return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Initialize form with doctor data
   useEffect(() => {
     if (doctor && doctor.id && !formInitialized) {
-      // Get image key from doctor
-      const imageKey = 
-        doctor?.imageUrl ||
-        doctor?.profileImage ||
-        doctor?.image ||
-        null;
+      const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.image || null;
       
-      // Find country and state
       const country = countries.find(c => 
         c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
       );
@@ -610,10 +562,8 @@ const EditDoctor = () => {
         s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
       );
       
-      // Build schedule from consulting data
       const schedule = getDefaultSchedule();
       
-      // Update schedule with consultingOne data
       if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
         doctor.consultingOne.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -629,7 +579,6 @@ const EditDoctor = () => {
         });
       }
       
-      // Update schedule with consultingTwo data
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
         doctor.consultingTwo.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -647,7 +596,7 @@ const EditDoctor = () => {
         });
       }
       
-      const newFormData = {
+      setFormData({
         profileImage: imageKey,
         imageUrl: imageKey,
         imageKey: imageKey,
@@ -678,18 +627,15 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
-        roleId: doctor.roleId || "", // Added roleId from doctor data
+        roleId: doctor.roleId || "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
         outDoorConsultingPlace: doctor.outDoorConsulting?.place || "",
         bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
         isActive: doctor.isActive ?? true
-      };
+      });
       
-      setFormData(newFormData);
-      
-      // Update states and cities
       if (country?.isoCode) {
         setAvailableStates(State.getStatesOfCountry(country.isoCode));
         if (state?.isoCode) {
@@ -701,7 +647,6 @@ const EditDoctor = () => {
     }
   }, [doctor, formInitialized, countries]);
 
-  // Reset form initialization when doctor ID changes
   useEffect(() => {
     setFormInitialized(false);
     setFormData({
@@ -757,14 +702,21 @@ const EditDoctor = () => {
     }));
   }, []);
 
-  // ✅ FIXED: handleImageUpload with explicit doctor ID and role
+  const validateImage = (file) => {
+    if (!file) return '';
+    if (file.size > 5 * 1024 * 1024) return 'File size must be less than 5MB';
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
+    return '';
+  };
+
   const handleImageUpload = async (file) => {
     if (!file) return;
     
     const imageError = validateImage(file);
     if (imageError) {
       setErrors(prev => ({ ...prev, profileImage: imageError }));
-      showWarningToast(imageError, 3000);
+      showWarningToast(imageError);
       return;
     }
     
@@ -778,12 +730,11 @@ const EditDoctor = () => {
     try {
       setUploadProgress(30);
       
-      // ✅ FIX: Pass the doctor ID and role explicitly
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null,
-        Number(doctorId),  // ✅ Pass doctor ID explicitly
-        "doctor"           // ✅ Pass role explicitly
+        Number(doctorId),
+        "doctor"
       );
       
       setUploadProgress(100);
@@ -796,30 +747,18 @@ const EditDoctor = () => {
       }));
       
       setTimeout(() => setUploadProgress(0), 1000);
-      showSuccessToast('Image uploaded successfully!', 3000);
+      showSuccessToast('Image uploaded successfully!');
     } catch (error) {
-      console.error("Upload error details:", error);
+      console.error("Upload error:", error);
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
-      showErrorToast('Failed to upload image. Please try again.', 3000);
+      showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
         setPreviewImage(getFullImageUrl(formData.profileImage));
       } else {
         setPreviewImage(null);
       }
     }
-  };
-
-  const validateImage = (file) => {
-    if (!file) return '';
-    if (file.size > 5 * 1024 * 1024) {
-      return 'File size must be less than 5MB';
-    }
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
-    }
-    return '';
   };
 
   const handleFileSelect = (e) => {
@@ -833,7 +772,7 @@ const EditDoctor = () => {
     setUploadProgress(0);
     setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    showSuccessToast('Image removed', 2000);
+    showSuccessToast('Image removed');
   };
 
   const handleCountryChange = useCallback((code, name) => {
@@ -901,7 +840,7 @@ const EditDoctor = () => {
       ...prev,
       isActive: !prev.isActive
     }));
-    showSuccessToast(`Doctor status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
+    showSuccessToast(`Doctor status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`);
   }, [formData.isActive]);
 
   const toggleBookingStatus = useCallback(() => {
@@ -909,7 +848,7 @@ const EditDoctor = () => {
       ...prev,
       bookingOpen: !prev.bookingOpen
     }));
-    showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
+    showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`);
   }, [formData.bookingOpen]);
 
   const handleSubmit = async (e) => {
@@ -943,8 +882,8 @@ const EditDoctor = () => {
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
         isActive: formData.isActive,
-        roleId: roleId, // Add roleId to update data
-        hospitalName: hospitalName, // Add hospital name
+        roleId: roleId,
+        hospitalName: hospitalName,
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -997,16 +936,11 @@ const EditDoctor = () => {
         updatedDoctorData.password = formData.password;
       }
 
-      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updatedDoctorData, null, 2));
-      console.log("🏥 Hospital Name being sent:", hospitalName);
-      console.log("👤 Role ID being sent:", roleId);
-
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
 
-      // Update role permission if roleId exists
       if (roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
@@ -1019,16 +953,11 @@ const EditDoctor = () => {
             }
           ]
         };
-        
-        console.log("📤 UPDATING ROLE PERMISSION:", payload);
         await assignPermissions(payload).unwrap();
       }
 
       showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully with role ${selectedRoleName}!`);
-
-      setTimeout(() => {
-        navigate("/doctors");
-      }, 1500);
+      setTimeout(() => navigate("/doctors"), 1500);
 
     } catch (error) {
       console.error("Update Error:", error);
@@ -1038,11 +967,8 @@ const EditDoctor = () => {
     }
   };
 
-  const handleGoBack = () => {
-    navigate('/doctors');
-  };
+  const handleGoBack = () => navigate('/doctors');
 
-  // Loading states - Show skeleton while form is initializing
   if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading doctor data..." />;
   }
@@ -1144,7 +1070,6 @@ const EditDoctor = () => {
 
               {activeTab === 'basic' && (
                 <div className="p-6 space-y-6">
-                  {/* Profile Image Section with Lazy Loading */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                     <div className="flex-shrink-0">
                       <div className="relative">
@@ -1190,7 +1115,7 @@ const EditDoctor = () => {
                           <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
+                          <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress}%</p>
                         </div>
                       )}
                       {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
@@ -1248,17 +1173,12 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {/* Department Dropdown - Fetched from Backend with Lazy Loading */}
                     <SearchableDropdownComponent
                       label="Department"
                       options={departmentOptions}
                       value={formData.department}
                       onChange={(value, label) => handleFieldChange('department', value)}
-                      placeholder={
-                        isLoadingSpecialities
-                          ? "Loading departments..."
-                          : "Search for a department..."
-                      }
+                      placeholder={isLoadingSpecialities ? "Loading departments..." : "Search for a department..."}
                       icon={Briefcase}
                       required={true}
                       isLoading={isLoadingSpecialities}
@@ -1267,7 +1187,6 @@ const EditDoctor = () => {
                       optionKey={(option) => option.id}
                     />
                     
-                    {/* Specialist Field - Optional */}
                     <Input 
                       label="Specialist" 
                       name="specialist" 
@@ -1278,7 +1197,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Assign Role - Dynamic dropdown */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Assign Role <span className="text-red-500">*</span>
@@ -1384,7 +1302,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Languages Multi-select */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-700">
                       Known Languages <span className="text-red-500">*</span>
@@ -1445,7 +1362,6 @@ const EditDoctor = () => {
                     onChange={(e) => handleFieldChange('about', e.target.value)} 
                   />
 
-                  {/* Address Section */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                     <div className="space-y-5">
@@ -1502,7 +1418,6 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  {/* Account Details */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1547,7 +1462,6 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  {/* Status Toggle */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <StatusToggle 
                       status={formData.isActive} 
@@ -1640,8 +1554,8 @@ const EditDoctor = () => {
 
               <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
                 <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-                <Button type="submit" variant="primary" disabled={isSubmitting || isAssigning} loading={isSubmitting || isAssigning}>
-                  {isSubmitting || isAssigning ? 'Updating...' : 'Update Doctor'}
+                <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+                  {isSubmitting ? 'Updating...' : 'Update Doctor'}
                 </Button>
               </div>
             </Card>

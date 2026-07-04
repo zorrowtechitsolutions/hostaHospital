@@ -3,19 +3,16 @@ import React, { useState, useEffect } from "react";
 import { Button, Card } from "../ui";
 import { useGetPrescriptionsQuery } from "../../../app/service/prescription";
 
-// Helper function to extract numeric ID from string
 const extractNumericId = (id) => {
   if (!id) return null;
   if (typeof id === 'number') return id;
   if (typeof id === 'string') {
-    // Remove any non-numeric characters (like #PT0001 -> 1)
     const numericMatch = id.match(/\d+/);
     return numericMatch ? parseInt(numericMatch[0]) : null;
   }
   return null;
 };
 
-// Helper to format date consistently
 const formatDateKey = (date) => {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -35,11 +32,7 @@ const VisitCalendar = ({
   const [selectedDate, setSelectedDate] = useState(externalSelectedDate || null);
   const [visitRecords, setVisitRecords] = useState({});
 
-  // Extract numeric ID from patientId
   const numericPatientId = extractNumericId(patientId);
-
-  console.log("VisitCalendar - Patient ID:", patientId);
-  console.log("VisitCalendar - Numeric Patient ID:", numericPatientId);
 
   const {
     data: prescriptionData,
@@ -56,16 +49,11 @@ const VisitCalendar = ({
     }
   );
 
-  // Create visit records from prescription data
   const createVisitRecords = () => {
     const records = {};
     
-    if (!prescriptionData) {
-      console.log("No prescription data available");
-      return records;
-    }
+    if (!prescriptionData) return records;
 
-    // Extract prescriptions from various possible data structures
     let prescriptions = [];
     
     if (Array.isArray(prescriptionData)) {
@@ -79,19 +67,16 @@ const VisitCalendar = ({
     }
 
     prescriptions.forEach((prescription) => {
-      // Try to find the date field
       const dateField = prescription.createdAt || prescription.date || prescription.visitDate || prescription.prescriptionDate || prescription.updatedAt;
       
       if (dateField) {
         const dateKey = formatDateKey(dateField);
         
-        // Get medications
         let medications = prescription.medications || prescription.medicines || prescription.prescriptionItems || [];
         if (!Array.isArray(medications)) {
           medications = [];
         }
         
-        // Map medication fields for consistent display
         const mappedMedications = medications.map(med => ({
           name: med.medicineName || med.name || med.drugName || med.medication || med.itemName || 
                 med.medicine_name || med.medication_name || "Unknown",
@@ -118,7 +103,6 @@ const VisitCalendar = ({
     return records;
   };
 
-  // Update visit records when prescription data changes
   useEffect(() => {
     if (prescriptionData) {
       const records = createVisitRecords();
@@ -178,7 +162,6 @@ const VisitCalendar = ({
     }
   };
 
-  // Get visit details for the selected date
   const getVisitDetails = (date) => {
     if (!date) return null;
     const dateKey = formatDateKey(date);
@@ -187,7 +170,6 @@ const VisitCalendar = ({
 
   const selectedVisitDetails = selectedDate ? getVisitDetails(selectedDate) : null;
 
-  // If no patientId, show message
   if (!patientId) {
     return (
       <Card className="p-4">
@@ -246,7 +228,6 @@ const VisitCalendar = ({
           const isSelected = date && isSelectedDate(date);
           const today = date && isToday(date);
           
-          // Get visit count for the day
           let visitCount = 0;
           if (date) {
             const dateKey = formatDateKey(date);
@@ -284,7 +265,6 @@ const VisitCalendar = ({
         })}
       </div>
 
-      {/* Visit Details for Selected Date */}
       {selectedVisitDetails && (
         <div className="mt-4 pt-3 border-t border-gray-200">
           <h5 className="text-xs font-semibold text-gray-700 mb-2">Visit Details</h5>

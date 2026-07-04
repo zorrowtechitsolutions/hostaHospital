@@ -1,10 +1,6 @@
 // src/app/service/emailEnquiryApi.ts
 import { api } from "./api";
 
-// ==============================
-// TYPES
-// ==============================
-
 export interface CreateEnquiryRequest {
   name: string;
   email: string;
@@ -28,10 +24,6 @@ export interface EnquiryResponse {
 
 export const emailEnquiryApi = api.injectEndpoints({
   endpoints: (builder) => ({
-
-    // ==============================
-    // CREATE ENQUIRY (Public)
-    // ==============================
     createEnquiry: builder.mutation<EnquiryResponse, CreateEnquiryRequest>({
       query: (data) => ({
         url: "/email-enquiry",
@@ -39,14 +31,9 @@ export const emailEnquiryApi = api.injectEndpoints({
         body: data,
       }),
     }),
-
   }),
   overrideExisting: false,
 });
-
-// ==============================
-// EXPORT HOOKS
-// ==============================
 
 export const {
   useCreateEnquiryMutation,

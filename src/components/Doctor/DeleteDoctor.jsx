@@ -32,14 +32,7 @@ const Spinner = () => (
     fill="none"
     viewBox="0 0 24 24"
   >
-    <circle
-      className="opacity-25"
-      cx="12"
-      cy="12"
-      r="10"
-      stroke="currentColor"
-      strokeWidth="4"
-    />
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
     <path
       className="opacity-75"
       fill="currentColor"
@@ -52,7 +45,6 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
   const [deleteDoctor] = useDeleteDoctorMutation();
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add("overflow-hidden");
@@ -62,7 +54,6 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
     return () => document.body.classList.remove("overflow-hidden");
   }, [isOpen]);
 
-  // Safe close handler - prevents closing while deleting
   const handleClose = () => {
     if (!isDeleting) {
       onClose();
@@ -78,20 +69,16 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
     setIsDeleting(true);
     
     try {
-      // Call API to delete doctor - auth is automatic via API service
       await deleteDoctor(doctorId).unwrap();
       
-      // Also remove from localStorage for backup (optional)
       const existingDoctors = getStorageData('doctors', []);
       const updatedDoctors = existingDoctors.filter(doc => doc.id !== doctorId);
       setStorageData('doctors', updatedDoctors);
       
-      // Remove appointment settings for this doctor (optional)
       const appointmentSettings = getStorageData('appointmentSettings', {});
       delete appointmentSettings[doctorId];
       setStorageData('appointmentSettings', appointmentSettings);
       
-      // Show delete toast with doctor details
       showDeleteToast(
         `${doctorName || 'Doctor'} has been deleted successfully!`,
         4000,
@@ -102,10 +89,8 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
         }
       );
       
-      // Call onDelete callback to refresh the parent component
       onDelete?.(doctorId);
       
-      // Close modal after short delay
       setTimeout(() => {
         setIsDeleting(false);
         handleClose();
@@ -128,7 +113,6 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
       aria-modal="true"
     >
       <div className="bg-white w-full max-w-sm rounded-xl shadow-lg p-6 text-center" onClick={(e) => e.stopPropagation()}>
-        {/* Warning Icon */}
         <div className="flex justify-center mb-4">
           <div className="w-14 h-14 flex items-center justify-center rounded-full bg-red-100">
             <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,16 +121,13 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
           </div>
         </div>
         
-        {/* Title */}
         <h2 className="text-xl font-semibold text-gray-800">Delete Doctor</h2>
         
-        {/* Message */}
         <p className="text-sm text-gray-500 mt-2">
           Are you sure you want to delete <span className="font-semibold text-gray-700">{doctorName || 'this doctor'}</span>?
         </p>
         <p className="text-xs text-red-500 mt-1">⚠️ This action cannot be undone.</p>
         
-        {/* Doctor Info */}
         {doctorSpecialty && (
           <div className="mt-3 p-2 bg-gray-50 rounded-lg text-left">
             <p className="text-xs text-gray-500">
@@ -160,7 +141,6 @@ const DeleteDoctor = ({ isOpen, onClose, doctorId, doctorName, doctorSpecialty, 
           </div>
         )}
         
-        {/* Buttons */}
         <div className="flex justify-center gap-3 mt-6">
           <button
             onClick={handleClose}

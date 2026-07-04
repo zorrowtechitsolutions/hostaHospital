@@ -1,9 +1,6 @@
 // app/service/request.ts - Booking/Request API service
-
 import { api } from "./api";
 import { getHospitalId, getAuthUser } from "../../src/utils/auth";
-
-// ================= TYPES =================
 
 export type BookingStatus = 
   | "pending" 
@@ -17,19 +14,13 @@ export interface BookingRequest {
   id?: string | number;
   _id?: string;
   userId?: number | string;
-  
-  // Patient fields (snake_case for backend)
   patient_name?: string;
   patient_dob?: string;
   patient_place?: string;
   patient_phone?: string;
-  
-  // Doctor fields
   doctorId?: string | number;
   displayName?: string;
   department?: string;
-  
-  // Appointment fields
   booking_date?: string;
   consulting_time?: string;
   reason?: string;
@@ -37,7 +28,6 @@ export interface BookingRequest {
   patient_age?: number;
   patient_gender?: string;
   booking_status?: string;
-  // Keep old fields for backward compatibility (optional)
   patientId?: string;
   patientName?: string;
   contact?: string;
@@ -77,7 +67,6 @@ export interface BookingResponse {
   };
 }
 
-// ENHANCED GetBookingsParams with all filter options
 export interface GetBookingsParams {
   id?: string | number;
   userId?: string | number;
@@ -95,16 +84,13 @@ export interface GetBookingsParams {
   search_query?: string;
   page?: number;
   limit?: number;
-  skipHospitalFilter?: boolean; // ✅ NEW: Allow skipping hospital filter
+  skipHospitalFilter?: boolean;
 }
-
-// ================= API =================
 
 export const bookingApi = api.injectEndpoints({
   overrideExisting: false,
   endpoints: (builder) => ({
 
-    // ================= GET BOOKINGS =================
     getBookings: builder.query<
       BookingResponse,
       GetBookingsParams
@@ -114,19 +100,15 @@ export const bookingApi = api.injectEndpoints({
       ) => {
         const queryParams = new URLSearchParams();
         
-        // ✅ FIX: Only auto-inject hospitalId if not skipped
-        // Check if we should skip hospital filter
         const skipHospitalFilter = params.skipHospitalFilter === true;
         
         if (!skipHospitalFilter) {
-          // Auto-inject hospitalId from auth (for hospital users)
           const hospitalId = getHospitalId();
           if (hospitalId) {
             queryParams.append("hospitalId", String(hospitalId));
           }
         }
 
-        // Override if params has hospitalId (takes precedence)
         if (params.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
         }
@@ -179,20 +161,14 @@ export const bookingApi = api.injectEndpoints({
           queryParams.append("search_query", params.search_query);
         }
 
-        // Pagination
         queryParams.append("page", String(params.page || 1));
         queryParams.append("limit", String(params.limit || 10));
 
-        // If fetching single booking by ID
         if (params.id) {
           return `/booking/${params.id}?${queryParams.toString()}`;
         }
 
-        const url = `/booking?${queryParams.toString()}`;
-        console.log('📡 GET BOOKINGS URL:', url);
-        console.log('📡 GET BOOKINGS PARAMS:', queryParams.toString());
-        
-        return url;
+        return `/booking?${queryParams.toString()}`;
       },
 
       providesTags: (result, error, params) => {
@@ -202,16 +178,11 @@ export const bookingApi = api.injectEndpoints({
         return ["Booking"];
       },
       
-      // ✅ Add transformResponse to handle different response structures
       transformResponse: (response: any) => {
-        console.log('📊 Transform Response - Raw:', response);
-        
-        // If response already has the expected structure
         if (response && response.data) {
           return response;
         }
         
-        // If response is an array, wrap it
         if (Array.isArray(response)) {
           return {
             success: true,
@@ -228,7 +199,6 @@ export const bookingApi = api.injectEndpoints({
           };
         }
         
-        // If response has bookings property
         if (response && response.bookings && Array.isArray(response.bookings)) {
           return {
             success: true,
@@ -245,7 +215,6 @@ export const bookingApi = api.injectEndpoints({
           };
         }
         
-        // If response has rows property (sequelize format)
         if (response && response.rows && Array.isArray(response.rows)) {
           return {
             success: true,
@@ -266,13 +235,11 @@ export const bookingApi = api.injectEndpoints({
       },
     }),
 
-    // ================= GET BOOKING BY ID =================
     getBookingById: builder.query<BookingResponse, string | number>({
       query: (id) => `/booking/${id}`,
       providesTags: (result, error, id) => [{ type: "Booking", id }],
     }),
 
-    // ================= CREATE BOOKING =================
     createBooking: builder.mutation<
       BookingResponse,
       Partial<Omit<BookingRequest, 'hospitalId' | 'hospitalName'>>
@@ -281,12 +248,6 @@ export const bookingApi = api.injectEndpoints({
         const hospitalId = getHospitalId();
         const authUser = getAuthUser();
         const hospitalName = authUser?.name || authUser?.hospitalName || '';
-        
-        console.log("🏥 Creating booking with:", {
-          hospitalId,
-          hospitalName,
-          data
-        });
         
         return {
           url: "/booking",
@@ -316,7 +277,6 @@ export const bookingApi = api.injectEndpoints({
       invalidatesTags: ["Booking"],
     }),
 
-    // ================= APPROVE BOOKING =================
     approveBooking: builder.mutation<
       BookingResponse,
       {
@@ -324,27 +284,23 @@ export const bookingApi = api.injectEndpoints({
         data: ApproveBookingData;
       }
     >({
-      query: ({ id, data }) => {
-        console.log("Approving booking with data:", data);
-        return {
-          url: `/booking/${id}`,
-          method: "PUT",
-          body: {
-            date: data.date,
-            consulting_time: data.consulting_time,
-            token: data.token,
-            notes: data.notes,
-            status: "accepted",
-          },
-        };
-      },
+      query: ({ id, data }) => ({
+        url: `/booking/${id}`,
+        method: "PUT",
+        body: {
+          date: data.date,
+          consulting_time: data.consulting_time,
+          token: data.token,
+          notes: data.notes,
+          status: "accepted",
+        },
+      }),
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
         "Booking",
       ],
     }),
 
-    // ================= REJECT BOOKING =================
     rejectBooking: builder.mutation<
       BookingResponse,
       {
@@ -366,7 +322,6 @@ export const bookingApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= CANCEL BOOKING =================
     cancelBooking: builder.mutation<
       BookingResponse,
       {
@@ -388,7 +343,6 @@ export const bookingApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= COMPLETE BOOKING =================
     completeBooking: builder.mutation<
       BookingResponse,
       {
@@ -410,7 +364,6 @@ export const bookingApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= UPDATE BOOKING =================
     updateBooking: builder.mutation<
       BookingResponse,
       {
@@ -418,30 +371,26 @@ export const bookingApi = api.injectEndpoints({
         data: Partial<Omit<BookingRequest, 'hospitalId' | 'hospitalName'>>;
       }
     >({
-      query: ({ id, data }) => {
-        console.log(data, "Updating booking with data:");
-        return {
-          url: `/booking/${id}`,
-          method: "PUT",
-          body: {
-            patient_name: data.patient_name,
-            patient_phone: data.patient_phone,
-            doctorId: data.doctorId,
-            booking_date: data.booking_date,
-            consulting_time: data.consulting_time,
-            reason: data.reason,
-            status: data.status,
-            token: data.token,
-          },
-        };
-      },
+      query: ({ id, data }) => ({
+        url: `/booking/${id}`,
+        method: "PUT",
+        body: {
+          patient_name: data.patient_name,
+          patient_phone: data.patient_phone,
+          doctorId: data.doctorId,
+          booking_date: data.booking_date,
+          consulting_time: data.consulting_time,
+          reason: data.reason,
+          status: data.status,
+          token: data.token,
+        },
+      }),
       invalidatesTags: (result, error, { id }) => [
         { type: "Booking", id },
         "Booking",
       ],
     }),
 
-    // ================= DELETE BOOKING =================
     deleteBooking: builder.mutation<
       { message: string },
       string | number
@@ -453,7 +402,6 @@ export const bookingApi = api.injectEndpoints({
       invalidatesTags: ["Booking"],
     }),
 
-    // ================= GET BOOKINGS BY STATUS =================
     getBookingsByStatus: builder.query<
       BookingResponse,
       {
@@ -465,7 +413,6 @@ export const bookingApi = api.injectEndpoints({
       query: ({ doctorId, status, skipHospitalFilter }) => {
         const queryParams = new URLSearchParams();
         
-        // Only add hospitalId if not skipped
         if (!skipHospitalFilter) {
           const hospitalId = getHospitalId();
           if (hospitalId) {
@@ -485,8 +432,6 @@ export const bookingApi = api.injectEndpoints({
     }),
   }),
 });
-
-// ================= EXPORT HOOKS =================
 
 export const {
   useGetBookingsQuery,
