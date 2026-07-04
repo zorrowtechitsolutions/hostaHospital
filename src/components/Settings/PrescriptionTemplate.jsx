@@ -651,7 +651,6 @@ const PrescriptionTemplate = () => {
       
       alert(customTemplate ? "Custom template updated successfully!" : "Custom template created successfully!");
     } catch (error) {
-      console.error("Save failed:", error);
       alert(`Save failed: ${error?.data?.message || error?.message}`);
     } finally {
       setIsSaving(false);
@@ -704,7 +703,6 @@ const PrescriptionTemplate = () => {
         alert("Prescription created successfully!");
       }
     } catch (error) {
-      console.error("Failed to create prescription:", error);
       alert("Failed to create prescription: " + (error?.data?.message || error?.message));
     }
   };
@@ -789,8 +787,7 @@ const PrescriptionTemplate = () => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       pdf.save("prescription.pdf");
-    } catch (error) {
-      console.error("PDF failed:", error);
+    } catch {
       alert("PDF export failed");
     }
   };

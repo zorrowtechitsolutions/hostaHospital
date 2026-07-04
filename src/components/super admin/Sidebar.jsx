@@ -15,7 +15,11 @@ import {
   ChevronDown,
   ChevronRight as ChevronRightIcon,
   Hospital,
-  X
+  X,
+  Users,
+  UserPlus,
+  UserCheck,
+  Key
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -32,6 +36,12 @@ const Sidebar = ({ isOpen, onToggle }) => {
     { id: 'categories', label: 'Categories', icon: Tag, path: '/super-admin/categories' },
     { id: 'specialties', label: 'Specialties', icon: Stethoscope, path: '/super-admin/specialties' },
     { id: 'ads', label: 'Advertisements', icon: Megaphone, path: '/super-admin/ads' },
+        { 
+          label: 'All Users', 
+          icon: Users, 
+          path: '/super-admin/users',
+          description: 'View and manage all users'
+        },
     { 
       id: 'permission-management', 
       label: 'Permission Management', 
@@ -86,7 +96,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className={`flex items-center gap-2 ${!isOpen && 'justify-center w-full'}`}>
             <Shield className="h-8 w-8 text-[#6366F1]" />
-            {isOpen && <span className="font-bold text-sm">Super Admin</span>}
+            {isOpen && <span className="font-bold text-sm">Hosta Super Admin</span>}
           </div>
           <button onClick={onToggle} className="p-1 rounded-lg hover:bg-gray-800 hidden md:block">
             {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}

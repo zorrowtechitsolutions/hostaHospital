@@ -9,7 +9,7 @@ const RejectRequestModal = ({
   onConfirm, 
   reason, 
   setReason,
-  isLoading = false  // Loading prop from parent
+  isLoading = false
 }) => {
   const handleConfirm = () => {
     if (!reason.trim()) {

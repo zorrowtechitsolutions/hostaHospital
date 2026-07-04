@@ -1,4 +1,4 @@
-// src/components/Doctor/EditDoctor.jsx - With Role Assignment
+// src/components/Doctor/EditDoctor.jsx - Fixed with cache-busting
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -21,19 +21,25 @@ import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
+// FIX: Enhanced helper function to get full image URL with cache-busting
+const getFullImageUrl = (imageKey) => {
+  if (!imageKey) return null;
+  
+  // If it's already a full URL, add cache-busting
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return `${imageKey}?t=${Date.now()}`;
+  }
+  
+  // Otherwise, construct the S3 URL with cache-busting
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+};
+
 // Lazy load heavy components
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
 
-// Helper function to get full image URL
-const getFullImageUrl = (imageKey) => {
-  if (!imageKey) return null;
-  if (imageKey.startsWith("http")) return imageKey;
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
-
-// Lazy Image Component with Intersection Observer
-const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
+// Lazy Image Component with Intersection Observer - FIXED with cache-busting
+const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const imgRef = useRef(null);
@@ -48,6 +54,7 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
       (entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
+            // FIX: Use getFullImageUrl with cache-busting
             setImageSrc(getFullImageUrl(imageKey));
             observer.disconnect();
           }
@@ -61,7 +68,7 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
     }
 
     return () => observer.disconnect();
-  }, [imageKey]);
+  }, [imageKey, refreshKey]); // FIX: Add refreshKey to dependency array
 
   return (
     <div ref={imgRef} className="w-full h-full">
@@ -74,6 +81,7 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError }) => {
       )}
       {imageSrc && (
         <img
+          key={refreshKey} // FIX: Add key to force re-render
           src={imageSrc}
           alt="Profile"
           className="w-full h-full object-cover rounded-full"
@@ -476,6 +484,9 @@ const EditDoctor = () => {
   const [formInitialized, setFormInitialized] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   
+  // FIX: Add state to force image refresh
+  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+  
   // Form state
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -689,6 +700,12 @@ const EditDoctor = () => {
       
       setFormData(newFormData);
       
+      // FIX: Set preview image with cache-busting
+      if (imageKey) {
+        setPreviewImage(getFullImageUrl(imageKey));
+        setImageRefreshKey(Date.now());
+      }
+      
       // Update states and cities
       if (country?.isoCode) {
         setAvailableStates(State.getStatesOfCountry(country.isoCode));
@@ -745,6 +762,7 @@ const EditDoctor = () => {
     });
     setPreviewImage(null);
     setImageLoaded(false);
+    setImageRefreshKey(Date.now());
   }, [doctorId]);
 
   const updateScheduleForDay = useCallback((day, newSchedule) => {
@@ -795,6 +813,9 @@ const EditDoctor = () => {
         imageKey: uploaded.key
       }));
       
+      // FIX: Force image refresh after upload
+      setImageRefreshKey(Date.now());
+      
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 3000);
     } catch (error) {
@@ -833,6 +854,8 @@ const EditDoctor = () => {
     setUploadProgress(0);
     setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
     setErrors(prev => ({ ...prev, profileImage: '' }));
+    // FIX: Force image refresh after removal
+    setImageRefreshKey(Date.now());
     showSuccessToast('Image removed', 2000);
   };
 
@@ -1024,6 +1047,10 @@ const EditDoctor = () => {
         await assignPermissions(payload).unwrap();
       }
 
+      // FIX: Force image refresh after update
+      setImageRefreshKey(Date.now());
+      await refetch();
+
       showUpdateToast(`Dr. ${formData.firstName} ${formData.lastName} updated successfully with role ${selectedRoleName}!`);
 
       setTimeout(() => {
@@ -1144,22 +1171,26 @@ const EditDoctor = () => {
 
               {activeTab === 'basic' && (
                 <div className="p-6 space-y-6">
-                  {/* Profile Image Section with Lazy Loading */}
+                  {/* Profile Image Section with Lazy Loading - FIXED */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                     <div className="flex-shrink-0">
                       <div className="relative">
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                           {previewImage ? (
                             <img 
+                              key={imageRefreshKey} // FIX: Add key to force re-render
                               src={previewImage} 
                               alt="Profile" 
                               className="w-full h-full object-cover rounded-full"
                               onLoad={() => setImageLoaded(true)}
+                              onError={() => setImageLoaded(false)}
                             />
                           ) : (
                             <LazyProfileImage 
+                              key={imageRefreshKey} // FIX: Add key to force re-render
                               imageKey={formData.profileImage}
                               firstName={formData.firstName}
+                              refreshKey={imageRefreshKey} // FIX: Pass refreshKey
                               onLoad={() => setImageLoaded(true)}
                               onError={() => setImageLoaded(false)}
                             />

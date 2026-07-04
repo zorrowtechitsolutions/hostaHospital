@@ -8,23 +8,13 @@ const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
   if (!isOpen) return null;
 
-  // Use imageUrl from backend (since backend only stores imageUrl)
   const imageUrl = labResult?.imageUrl || labResult?.fileKey || labResult?.fileUrl || "";
-  
-  // Build S3 URL directly (bypass encodeURIComponent issues)
-  const fileUrl = imageUrl 
-    ? `${S3_BASE_URL}/${imageUrl}` 
-    : null;
+  const fileUrl = imageUrl ? `${S3_BASE_URL}/${imageUrl}` : null;
 
-  // Check if it's an image by file extension
   const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(imageUrl);
-  
-  // Check if it's a PDF by file extension
   const isPDF = /\.pdf$/i.test(imageUrl);
-  
   const hasFile = !!imageUrl;
 
-  // ✅ Download - Direct download without opening new tab
   const handleDownload = async () => {
     if (!fileUrl) return;
 
@@ -43,26 +33,15 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
       
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      console.error('Download failed:', error);
-      // Fallback: open in new tab if fetch fails
       window.open(fileUrl, '_blank');
     }
   };
 
-  // View in new tab
   const handleViewInNewTab = () => {
     if (fileUrl) {
       window.open(fileUrl, '_blank');
     }
   };
-
-  // Debug logs
-  console.log("🔍 Lab Result in Modal:", labResult);
-  console.log("🔍 imageUrl:", imageUrl);
-  console.log("🔍 fileUrl:", fileUrl);
-  console.log("🔍 isImage:", isImage);
-  console.log("🔍 isPDF:", isPDF);
-  console.log("🔍 hasFile:", hasFile);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -189,7 +168,7 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
               <p className="text-gray-500">Department</p>
               <p className="font-medium text-gray-800">{labResult?.department || 'N/A'}</p>
             </div>
-            </div>
+          </div>
 
           {/* Patient Info */}
           <div className="border-t pt-4">

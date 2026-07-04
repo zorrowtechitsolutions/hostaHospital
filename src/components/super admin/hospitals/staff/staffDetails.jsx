@@ -26,7 +26,7 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
         month: 'long',
         day: 'numeric'
       });
-    } catch (error) {
+    } catch {
       return 'N/A';
     }
   };
@@ -76,16 +76,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
     }
     return 'N/A';
   };
-
-  // Debug log to see what fields are objects
-  React.useEffect(() => {
-    if (staff) {
-      console.log('Staff Details Modal - Staff Data:', staff);
-      console.log('Address type:', typeof staff.address, staff.address);
-      console.log('Department type:', typeof staff.department, staff.department);
-      console.log('Qualifications type:', typeof staff.qualifications, staff.qualifications);
-    }
-  }, [staff]);
 
   return (
     <Modal

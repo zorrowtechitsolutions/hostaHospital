@@ -47,7 +47,6 @@ const Patients = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   
-  // State
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -56,11 +55,9 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Filter states
   const [genderFilter, setGenderFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   
-  // Modal states
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -68,18 +65,15 @@ const Patients = () => {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [bookingData, setBookingData] = useState(null);
   
-  // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
   const menuRef = useRef(null);
 
-  // Auth
   const hospitalId = getHospitalId();
   const isDoctorRole = isDoctor();
   const isStaffRole = isStaff();
   const isHospitalAdminRole = isHospitalAdmin();
   const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
 
-  // API
   const { 
     data: patientsResponse, 
     isLoading: isLoadingPatients,
@@ -101,7 +95,6 @@ const Patients = () => {
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // Socket events
   useEffect(() => {
     registerPatientEvents({
       onPatientRegistered: async () => {
@@ -127,7 +120,6 @@ const Patients = () => {
     };
   }, [refetchPatients]);
 
-  // Socket connection handlers
   useEffect(() => {
     const handleConnect = () => {
       registerPatientEvents({
@@ -157,12 +149,10 @@ const Patients = () => {
     };
   }, [refetchPatients]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, genderFilter, departmentFilter, activeTab, showDeleted]);
 
-  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -173,7 +163,6 @@ const Patients = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Transform data
   const transformPatientData = (patients) => {
     if (!patients || !Array.isArray(patients)) return [];
     return patients.map((patient) => ({
@@ -188,7 +177,6 @@ const Patients = () => {
   const totalItems = patientsResponse?.pagination?.totalItems || 0;
   const totalPages = patientsResponse?.pagination?.totalPages || 1;
 
-  // Helper functions
   const formatDisplayDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { 
@@ -203,7 +191,11 @@ const Patients = () => {
     return `#PT00${String(id).slice(-6)}`;
   };
 
-  // CRUD Handlers
+  // Helper to check if patient is active (not deleted and not inactive)
+  const isPatientActive = (patient) => {
+    return !patient.isDelete && patient.isActive !== false;
+  };
+
   const handleAddPatient = () => {
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to add patients', 3000);
@@ -217,6 +209,10 @@ const Patients = () => {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
     }
+    if (!patient.isActive) {
+      showErrorToast('Cannot view details of inactive patient', 3000);
+      return;
+    }
     navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
   };
 
@@ -227,6 +223,10 @@ const Patients = () => {
     }
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast('Cannot edit inactive patient', 3000);
       return;
     }
     navigate(`/edit-patient/${patient.id || patient._id}`, { state: { patient } });
@@ -271,6 +271,10 @@ const Patients = () => {
   const handleAddAppointmentModal = (patient) => {
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for blacklisted patient', 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast('Cannot create appointment for inactive patient', 3000);
       return;
     }
     setAppointmentPatient(patient);
@@ -402,19 +406,20 @@ const Patients = () => {
     setActiveMenu(activeMenu === id ? null : id);
   };
 
-  // Row Action Menu
   const RowActionMenu = ({ patient }) => {
     const isBlacklisted = patient.isDelete;
+    const isInactive = !patient.isActive && !isBlacklisted;
 
     return (
       <div className="relative inline-block" ref={menuRef}>
         <button 
           onClick={() => toggleMenu(patient.id)} 
-          className="p-2 rounded hover:bg-gray-100 transition-colors"
+          className={`p-2 rounded transition-colors ${isInactive ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+          disabled={isInactive}
         >
           <MoreVertical size={18} />
         </button>
-        {activeMenu === patient.id && (
+        {activeMenu === patient.id && !isInactive && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
             {!isBlacklisted && (
               <>
@@ -465,7 +470,6 @@ const Patients = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Loading state
   if (isLoadingPatients && !patients.length) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
@@ -677,27 +681,38 @@ const Patients = () => {
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        /* GRID VIEW */
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {patients.map((patient) => {
               const isBlacklisted = patient.isDelete;
+              const isInactive = !patient.isActive && !isBlacklisted;
+              const isDisabled = isBlacklisted || isInactive;
+              const isClickable = !isDisabled;
+
               return (
                 <div 
                   key={patient.id || patient._id} 
-                  className={`bg-white rounded-xl border ${isBlacklisted ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} shadow-sm hover:shadow-md transition-shadow overflow-hidden ${!isBlacklisted ? 'cursor-pointer' : ''}`}
-                  onClick={() => !isBlacklisted && handleViewDetails(patient)}
+                  className={`bg-white rounded-xl border shadow-sm transition-shadow overflow-hidden ${
+                    isClickable ? 'hover:shadow-md cursor-pointer' : 'cursor-not-allowed'
+                  } ${
+                    isBlacklisted 
+                      ? 'border-gray-300 bg-gray-50 opacity-60' 
+                      : isInactive 
+                        ? 'border-gray-300 bg-gray-50 opacity-50' 
+                        : 'border-gray-200'
+                  }`}
+                  onClick={() => isClickable && handleViewDetails(patient)}
                 >
                   <div className="p-5">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <Avatar className={`w-12 h-12 ${isBlacklisted ? 'opacity-60' : ''}`}>
+                        <Avatar className={`w-12 h-12 ${isDisabled ? 'opacity-60' : ''}`}>
                           <AvatarImage 
                             src={getS3ImageUrl(patient.imageKey)} 
                             alt={patient.name}
                             className="object-cover"
                           />
-                          <AvatarFallback className={`${isBlacklisted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
+                          <AvatarFallback className={`${isDisabled ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
                             {patient.name?.charAt(0)?.toUpperCase() || "P"}
                           </AvatarFallback>
                         </Avatar>
@@ -710,16 +725,20 @@ const Patients = () => {
                               <Badge variant="secondary" className="text-xs">
                                 Blacklisted
                               </Badge>
+                            ) : isInactive ? (
+                              <Badge variant="secondary" className="text-xs bg-gray-300 text-gray-600">
+                                Inactive
+                              </Badge>
                             ) : (
                               <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
                                 {patient.patientType || 'Outpatient'}
                               </Badge>
                             )}
                           </div>
-                          <h3 className={`font-semibold text-lg mt-1 ${isBlacklisted ? 'text-gray-500' : 'text-gray-900'}`}>
+                          <h3 className={`font-semibold text-lg mt-1 ${isDisabled ? 'text-gray-500' : 'text-gray-900'}`}>
                             {patient.name}
                           </h3>
-                          <p className={`text-xs ${isBlacklisted ? 'text-gray-400' : 'text-gray-500'}`}>
+                          <p className={`text-xs ${isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>
                             {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
                           </p>
                         </div>
@@ -732,7 +751,7 @@ const Patients = () => {
                           <Phone className="w-4 h-4" />
                           <span>Mobile</span>
                         </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
+                        <span className={`font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
                           {patient.mobileNumber}
                         </span>
                       </div>
@@ -741,7 +760,7 @@ const Patients = () => {
                           <Mail className="w-4 h-4" />
                           <span>Email</span>
                         </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
+                        <span className={`font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
                           {patient.email || 'N/A'}
                         </span>
                       </div>
@@ -750,7 +769,7 @@ const Patients = () => {
                           <Activity className="w-4 h-4" />
                           <span>Blood Group</span>
                         </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
+                        <span className={`font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
                           {patient.bloodGroup || 'N/A'}
                         </span>
                       </div>
@@ -759,7 +778,7 @@ const Patients = () => {
                           <Calendar className="w-4 h-4" />
                           <span>Created</span>
                         </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
+                        <span className={`font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
                           {formatDisplayDate(patient.createdAt)}
                         </span>
                       </div>
@@ -778,6 +797,10 @@ const Patients = () => {
                             <RotateCcw className="w-4 h-4" /> Recover
                           </button>
                         )
+                      ) : isInactive ? (
+                        <div className="flex-1 flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium">
+                          Inactive Patient
+                        </div>
                       ) : (
                         <button 
                           onClick={(e) => {
@@ -811,7 +834,6 @@ const Patients = () => {
           )}
         </>
       ) : (
-        /* LIST VIEW */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
@@ -840,47 +862,54 @@ const Patients = () => {
                 <tbody>
                   {patients.map((patient) => {
                     const isBlacklisted = patient.isDelete;
+                    const isInactive = !patient.isActive && !isBlacklisted;
+                    const isDisabled = isBlacklisted || isInactive;
+
                     return (
                       <tr 
                         key={patient.id || patient._id} 
-                        className={`hover:bg-gray-50 border-b border-gray-100 ${isBlacklisted ? 'bg-gray-50' : ''}`}
+                        className={`border-b border-gray-100 ${isDisabled ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}
                       >
-                        <td className={`px-6 py-4 font-medium ${isBlacklisted ? 'text-gray-500' : 'text-[#1C62A0]'}`}>
+                        <td className={`px-6 py-4 font-medium ${isDisabled ? 'text-gray-400' : 'text-[#1C62A0]'}`}>
                           {formatPatientId(patient.id || patient._id)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <Avatar className={`w-8 h-8 ${isBlacklisted ? 'opacity-60' : ''}`}>
+                            <Avatar className={`w-8 h-8 ${isDisabled ? 'opacity-60' : ''}`}>
                               <AvatarImage 
                                 src={getS3ImageUrl(patient.imageKey)} 
                                 alt={patient.name}
                                 className="object-cover"
                               />
-                              <AvatarFallback className={`${isBlacklisted ? 'bg-gray-200 text-gray-500' : 'bg-gray-200 text-gray-600'} text-xs font-medium`}>
+                              <AvatarFallback className={`${isDisabled ? 'bg-gray-200 text-gray-400' : 'bg-gray-200 text-gray-600'} text-xs font-medium`}>
                                 {patient.name?.charAt(0)?.toUpperCase() || "P"}
                               </AvatarFallback>
                             </Avatar>
                             <span 
-                              onClick={() => !isBlacklisted && handleViewDetails(patient)} 
-                              className={`font-medium ${isBlacklisted ? 'text-gray-500 cursor-default' : 'text-gray-800 cursor-pointer hover:text-[#1C62A0]'}`}
+                              onClick={() => !isDisabled && handleViewDetails(patient)} 
+                              className={`font-medium ${isDisabled ? 'text-gray-400 cursor-default' : 'text-gray-800 cursor-pointer hover:text-[#1C62A0]'}`}
                             >
                               {patient.name}
                             </span>
                           </div>
                         </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <td className={`px-6 py-4 ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
                           {patient.gender || 'N/A'}
                         </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <td className={`px-6 py-4 ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
                           {patient.mobileNumber}
                         </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <td className={`px-6 py-4 ${isDisabled ? 'text-gray-400' : 'text-gray-600'}`}>
                           {patient.bloodGroup || 'N/A'}
                         </td>
                         <td className="px-6 py-4">
                           {isBlacklisted ? (
                             <Badge variant="secondary" className="text-xs">
                               Blacklisted
+                            </Badge>
+                          ) : isInactive ? (
+                            <Badge variant="secondary" className="text-xs bg-gray-300 text-gray-600">
+                              Inactive
                             </Badge>
                           ) : (
                             <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
@@ -893,14 +922,18 @@ const Patients = () => {
                             variant={
                               isBlacklisted
                                 ? 'secondary'
+                                : isInactive
+                                ? 'secondary'
                                 : patient.isActive
                                 ? 'success'
                                 : 'danger'
                             }
-                            className="text-xs"
+                            className={`text-xs ${isInactive ? 'bg-gray-300 text-gray-600' : ''}`}
                           >
                             {isBlacklisted
                               ? 'Blacklisted'
+                              : isInactive
+                              ? 'Inactive'
                               : patient.isActive
                               ? 'Active'
                               : 'Inactive'}

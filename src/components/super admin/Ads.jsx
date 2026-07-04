@@ -1,13 +1,13 @@
 // src/components/super-admin/Ads.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Image, Plus, Filter, Download, MoreVertical, Eye, 
-  Edit, RefreshCcw, Upload, Trash2, Search, Calendar,
-  MapPin, Navigation, Clock, X, Loader2, Building
+  Image, Plus, Download, MoreVertical, Eye, 
+  Edit, RefreshCcw, Upload, Trash2, Calendar,
+  MapPin, X, Building
 } from 'lucide-react';
 import { 
-  Button, Badge, Loader, Card, Modal, Input
+  Button, Badge, Card, Modal, Input
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
@@ -46,7 +46,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+  const [uploadedImageKey, setUploadedImageKey] = useState(null);
 
   const handleImageUpload = async (file) => {
     if (!file) return;
@@ -64,6 +66,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
     setIsUploading(true);
     setUploadProgress(10);
+    setUploadError(null);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -73,18 +76,40 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file);
+      
+      // ✅ IMPORTANT: Use the selected hospital ID from formData
+      const selectedHospitalId = formData.hospitalId;
+      
+      if (!selectedHospitalId) {
+        throw new Error("Please select a hospital first before uploading an image.");
+      }
+      
+      console.log("🏥 Uploading ad image for hospital ID:", selectedHospitalId);
+      
+      // ✅ Add role parameter - backend requires it
+      const uploaded = await uploadToS3(
+        file,
+        formData.imageKey || null,
+        Number(selectedHospitalId),
+        "hospital" // ✅ Add role as "hospital"
+      );
+      
       setUploadProgress(100);
+      
+      // Store the uploaded key temporarily
+      setUploadedImageKey(uploaded.key);
       
       setFormData(prev => ({
         ...prev,
-        imageUrl: uploaded.imageUrl,
+        imageUrl: uploaded.key,
         imageKey: uploaded.key
       }));
       
       showSuccessToast('Image uploaded successfully!', 2000);
     } catch (error) {
-      showErrorToast('Failed to upload image', 3000);
+      console.error('Image upload error:', error);
+      setUploadError(error.message || 'Failed to upload image');
+      showErrorToast(error.message || 'Failed to upload image. Please try again.', 3000);
       setPreviewImage(null);
     } finally {
       setIsUploading(false);
@@ -99,11 +124,13 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
   const removeImage = () => {
     setPreviewImage(null);
+    setUploadedImageKey(null);
     setFormData(prev => ({
       ...prev,
       imageUrl: '',
       imageKey: ''
     }));
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -122,14 +149,18 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       showErrorToast('End date is required', 3000);
       return;
     }
+    
+    // Pass the image key if uploaded, otherwise null
     onSave({
-      imageUrl: formData.imageUrl || null,
+      imageUrl: uploadedImageKey || formData.imageUrl || null,
+      imageKey: uploadedImageKey || formData.imageKey || null,
       hospitalId: Number(formData.hospitalId),
       startDate: formData.startDate,
       endDate: formData.endDate,
       kilometer: formData.kilometer,
       isActive: formData.isActive
     });
+    
     setFormData({
       imageUrl: '',
       imageKey: '',
@@ -140,6 +171,29 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       isActive: true
     });
     setPreviewImage(null);
+    setUploadedImageKey(null);
+    setUploadError(null);
+  };
+
+  // Update the hospital ID in formData when hospital selection changes
+  const handleHospitalChange = (e) => {
+    const hospitalId = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      hospitalId: hospitalId
+    }));
+    
+    // If there was an uploaded image, clear it since hospital changed
+    if (uploadedImageKey) {
+      setUploadedImageKey(null);
+      setPreviewImage(null);
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: '',
+        imageKey: ''
+      }));
+      showWarningToast('Image cleared - please re-upload for the selected hospital', 2000);
+    }
   };
 
   return (
@@ -160,7 +214,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
           </label>
-          <div className="flex flex-col items-center gap-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+          <div className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
+            uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+          }`}>
             {previewImage ? (
               <div className="relative">
                 <img 
@@ -171,7 +227,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -195,10 +251,13 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
               type="button"
               variant="outline"
               onClick={() => document.getElementById('image-upload').click()}
-              disabled={isUploading}
+              disabled={isUploading || !formData.hospitalId}
             >
               {isUploading ? 'Uploading...' : previewImage ? 'Change Image' : 'Choose Image'}
             </Button>
+            {!formData.hospitalId && !isUploading && (
+              <p className="text-xs text-yellow-500">Please select a hospital first before uploading</p>
+            )}
             {isUploading && (
               <div className="w-full">
                 <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
@@ -210,17 +269,20 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
                 <p className="text-xs text-gray-500 text-center mt-1">Uploading... {uploadProgress}%</p>
               </div>
             )}
+            {uploadError && (
+              <p className="text-xs text-red-500 text-center mt-1">{uploadError}</p>
+            )}
           </div>
         </div>
 
         {/* Hospital Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Hospital *
+            Hospital * <span className="text-red-500">Select first before uploading image</span>
           </label>
           <select
             value={formData.hospitalId}
-            onChange={(e) => setFormData({ ...formData, hospitalId: e.target.value })}
+            onChange={handleHospitalChange}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
           >
             <option value="">Select Hospital</option>
@@ -287,7 +349,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+  const [uploadedImageKey, setUploadedImageKey] = useState(null);
 
   useEffect(() => {
     if (ad) {
@@ -301,6 +365,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
         isActive: ad.isActive !== undefined ? ad.isActive : true
       });
       setPreviewImage(ad.imageUrl ? getS3ImageUrl(ad.imageUrl) : null);
+      setUploadedImageKey(ad.imageKey || null);
     }
   }, [ad]);
 
@@ -320,6 +385,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 
     setIsUploading(true);
     setUploadProgress(10);
+    setUploadError(null);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -329,18 +395,39 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null);
+      
+      // ✅ For edit, use the hospital ID from the ad (or form data)
+      const hospitalIdToUse = formData.hospitalId || ad?.hospitalId;
+      
+      if (!hospitalIdToUse) {
+        throw new Error("Hospital ID not found. Please select a hospital.");
+      }
+      
+      console.log("🏥 Uploading ad image for hospital ID:", hospitalIdToUse);
+      
+      // ✅ Add role parameter - backend requires it
+      const uploaded = await uploadToS3(
+        file,
+        formData.imageKey || null,
+        Number(hospitalIdToUse),
+        "hospital" 
+      );
+      
       setUploadProgress(100);
+      
+      setUploadedImageKey(uploaded.key);
       
       setFormData(prev => ({
         ...prev,
-        imageUrl: uploaded.imageUrl,
+        imageUrl: uploaded.key,
         imageKey: uploaded.key
       }));
       
       showSuccessToast('Image uploaded successfully!', 2000);
     } catch (error) {
-      showErrorToast('Failed to upload image', 3000);
+      console.error('Image upload error:', error);
+      setUploadError(error.message || 'Failed to upload image');
+      showErrorToast(error.message || 'Failed to upload image. Please try again.', 3000);
     } finally {
       setIsUploading(false);
       setTimeout(() => setUploadProgress(0), 1000);
@@ -354,11 +441,13 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 
   const removeImage = () => {
     setPreviewImage(null);
+    setUploadedImageKey(null);
     setFormData(prev => ({
       ...prev,
       imageUrl: '',
       imageKey: ''
     }));
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -377,7 +466,36 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       showErrorToast('End date is required', 3000);
       return;
     }
-    onSave({ ...ad, ...formData });
+    
+    // Use the uploaded image key if available, otherwise keep existing
+    const finalImageKey = uploadedImageKey || formData.imageKey || null;
+    
+    onSave({ 
+      ...ad, 
+      ...formData,
+      imageKey: finalImageKey,
+      imageUrl: finalImageKey
+    });
+  };
+
+  const handleHospitalChange = (e) => {
+    const hospitalId = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      hospitalId: hospitalId
+    }));
+    
+    // If there was an uploaded image, clear it since hospital changed
+    if (uploadedImageKey) {
+      setUploadedImageKey(null);
+      setPreviewImage(null);
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: '',
+        imageKey: ''
+      }));
+      showWarningToast('Image cleared - please re-upload for the selected hospital', 2000);
+    }
   };
 
   return (
@@ -398,7 +516,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
           </label>
-          <div className="flex flex-col items-center gap-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+          <div className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
+            uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+          }`}>
             {previewImage ? (
               <div className="relative">
                 <img 
@@ -409,7 +529,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -448,6 +568,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
                 <p className="text-xs text-gray-500 text-center mt-1">Uploading... {uploadProgress}%</p>
               </div>
             )}
+            {uploadError && (
+              <p className="text-xs text-red-500 text-center mt-1">{uploadError}</p>
+            )}
           </div>
         </div>
 
@@ -458,7 +581,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           </label>
           <select
             value={formData.hospitalId}
-            onChange={(e) => setFormData({ ...formData, hospitalId: e.target.value })}
+            onChange={handleHospitalChange}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
           >
             <option value="">Select Hospital</option>
@@ -651,7 +774,7 @@ const Ads = () => {
   const [updateAd, { isLoading: isUpdating }] = useUpdateAdMutation();
   const [deleteAd, { isLoading: isDeleting }] = useDeleteAdMutation();
 
-  const hospitalMap = React.useMemo(() => {
+  const hospitalMap = useMemo(() => {
     const map = new Map();
     if (Array.isArray(hospitals)) {
       hospitals.forEach(hospital => {
@@ -700,7 +823,7 @@ const Ads = () => {
             refetch();
           },
           onAdUpdated: () => {
-            showSuccessToast(`Ad updated!`, 3000);
+            showSuccessToast(`Ad updated successfully!`, 3000);
             refetch();
           },
           onAdDeleted: () => {
@@ -735,11 +858,32 @@ const Ads = () => {
 
   const handleAddAd = async (newAd) => {
     try {
-      await createAd(newAd).unwrap();
+      // ✅ Create the ad first - this will return the ad with an ID
+      const result = await createAd(newAd).unwrap();
+      const createdAd = result.data || result;
+      
+      console.log("📄 Ad created with ID:", createdAd.id);
+      
+      // ✅ If there's an image, update the ad with the image URL
+      if (newAd.imageKey && createdAd.id) {
+        console.log("📤 Updating ad with image:", newAd.imageKey);
+        
+        // ✅ Update the ad with the image URL using the ad ID
+        await updateAd({
+          id: createdAd.id,
+          data: {
+            imageUrl: newAd.imageKey,
+            imageKey: newAd.imageKey
+          }
+        }).unwrap();
+        
+        console.log("✅ Ad image updated successfully");
+      }
       
       socket.emit("ad_event", {
         event: "AD_CREATED",
         data: {
+          adId: createdAd.id,
           hospitalId: newAd.hospitalId,
           hospitalName: getHospitalName(newAd.hospitalId),
           startDate: newAd.startDate,
@@ -753,12 +897,14 @@ const Ads = () => {
       refetch();
       setShowAddModal(false);
     } catch (error) {
+      console.error("Create ad error:", error);
       showErrorToast(error?.data?.message || 'Failed to create ad', 3000);
     }
   };
 
   const handleEditAd = async (updatedAd) => {
     try {
+      // ✅ For edit, just update the ad with all data including image
       await updateAd({ 
         id: updatedAd.id, 
         data: updatedAd 
@@ -783,6 +929,7 @@ const Ads = () => {
       setShowEditModal(false);
       setSelectedAd(null);
     } catch (error) {
+      console.error("Edit ad error:", error);
       showErrorToast(error?.data?.message || 'Failed to update ad', 3000);
     }
   };

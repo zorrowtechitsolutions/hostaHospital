@@ -1,21 +1,21 @@
-// src/components/patients/EditPatient.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+// src/components/patients/AddPatient.jsx
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
-  ArrowLeft, Users, 
+  ArrowLeft, Heart, Users, 
   Briefcase, Clock, AlertTriangle,
   ChevronDown, Activity
 } from 'lucide-react';
 import { 
-  Button, Input, Select, Card, Loader 
-} from '../ui';
+  Button, Input, Select, Card, Alert
+} from '../../../ui';
 import { 
-  showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast 
-} from '../ui/Toast';
-import { useGetPatientByIdQuery, useUpdatePatientMutation } from '../../../app/service/patients';
+  showSuccessToast, showErrorToast, showWarningToast, showInfoToast 
+} from '../../../ui/Toast';
+import { useCreatePatientMutation } from '../../../../../app/service/patients';
 import { Country, State, City } from 'country-state-city';
-import { getAuthUser } from '../../utils/auth';
+import { getAuthUser } from '../../../../utils/auth';
 
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
@@ -119,25 +119,16 @@ const SearchableDropdown = ({
   );
 };
 
-const EditPatient = () => {
+const AddPatient = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
   
-  const numericId = id ? Number(id) : null;
+  // Get user data from auth utility
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id;
   
-  const { 
-    data: patientResponse, 
-    isLoading: isLoadingPatient, 
-    refetch
-  } = useGetPatientByIdQuery(numericId, {
-    skip: !numericId
-  });
+  // Only get hospitalId from JWT payload
+  const hospitalId = authUser?.id;        // hospitals.id
   
-  const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
-  
-  const patient = patientResponse?.data || patientResponse || null;
+  const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -151,7 +142,7 @@ const EditPatient = () => {
     emergencyNumber: '',
     guardianName: '',
     guardianRelation: '',
-    addressLine: '',
+    addressLine1: '',
     countryCode: '',
     countryName: '',
     stateCode: '',
@@ -166,7 +157,6 @@ const EditPatient = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [originalPatientId, setOriginalPatientId] = useState(null);
 
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(formData.countryCode);
@@ -176,38 +166,6 @@ const EditPatient = () => {
   const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed'];
   const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
   const patientTypeOptions = ['Outpatient', 'Inpatient'];
-
-  useEffect(() => {
-    if (patient) {
-      const country = countries.find(c => c.name === patient.location?.country);
-      
-      setFormData({
-        fullName: patient.name || '',
-        bloodGroup: patient.bloodGroup || '',
-        age: patient.age?.toString() || '',
-        dob: patient.dob?.split('T')[0] || '',
-        gender: patient.gender || '',
-        patientType: patient.patientType || 'Outpatient',
-        maritalStatus: patient.maritalStatus || '',
-        mobileNumber: patient.mobileNumber || '',
-        emergencyNumber: patient.emergencyNumber || '',
-        guardianName: patient.guardianName || '',
-        guardianRelation: patient.guardianRelation || '',
-        addressLine: patient.addressLine || '',
-        countryCode: country?.isoCode || '',
-        countryName: patient.location?.country || '',
-        stateCode: '',
-        stateName: patient.location?.state || '',
-        district: patient.location?.district || '',
-        place: patient.location?.place || '',
-        pincode: patient.location?.pincode?.toString() || '',
-        occupation: patient.occupation || '',
-        email: patient.email || '',
-      });
-      
-      setOriginalPatientId(patient.id || patient._id);
-    }
-  }, [patient, countries]);
 
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
@@ -263,7 +221,9 @@ const EditPatient = () => {
       case 'patientType':
         if (!value) return 'Patient type is required';
         return '';
-      case 'addressLine':
+      case 'bloodGroup':
+        return '';
+      case 'addressLine1':
         if (!value) return 'Address is required';
         if (value.length < 5) return 'Please enter a complete address';
         return '';
@@ -287,7 +247,7 @@ const EditPatient = () => {
     const newErrors = {};
     const fieldsToValidate = [
       'fullName', 'mobileNumber', 'gender', 'patientType',
-      'addressLine', 'countryName', 'stateName', 'district'
+      'addressLine1', 'countryName', 'stateName', 'district'
     ];
     
     if (formData.age) {
@@ -331,47 +291,49 @@ const EditPatient = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
-  const prepareUpdateData = () => {
-    const updateData = {
+  const preparePatientData = () => {
+    const patientData = {
       name: formData.fullName,
       gender: formData.gender,
       mobileNumber: formData.mobileNumber,
       patientType: formData.patientType,
-      addressLine: formData.addressLine,
+      addressLine: formData.addressLine1,
       location: {
         country: formData.countryName,
         state: formData.stateName,
         district: formData.district,
         place: formData.place || "",
-        pincode: formData.pincode ? Number(formData.pincode) : 0
+        pincode: Number(formData.pincode || 0)
       },
       hospitalId: hospitalId,
     };
 
-    if (formData.bloodGroup) updateData.bloodGroup = formData.bloodGroup;
-    if (formData.age) updateData.age = Number(formData.age);
-    if (formData.dob) updateData.dob = formData.dob;
-    if (formData.maritalStatus) updateData.maritalStatus = formData.maritalStatus;
-    if (formData.emergencyNumber) updateData.emergencyNumber = formData.emergencyNumber;
-    if (formData.guardianName) updateData.guardianName = formData.guardianName;
-    if (formData.guardianRelation) updateData.guardianRelation = formData.guardianRelation;
-    if (formData.occupation) updateData.occupation = formData.occupation;
-    if (formData.email) updateData.email = formData.email;
+    // Add optional fields only if they have values
+    if (formData.bloodGroup) patientData.bloodGroup = formData.bloodGroup;
+    if (formData.age) patientData.age = Number(formData.age);
+    if (formData.dob) patientData.dob = formData.dob;
+    if (formData.maritalStatus) patientData.maritalStatus = formData.maritalStatus;
+    if (formData.emergencyNumber) patientData.emergencyNumber = formData.emergencyNumber;
+    if (formData.guardianName) patientData.guardianName = formData.guardianName;
+    if (formData.guardianRelation) patientData.guardianRelation = formData.guardianRelation;
+    if (formData.occupation) patientData.occupation = formData.occupation;
+    if (formData.email) patientData.email = formData.email;
 
-    return updateData;
+    return patientData;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!originalPatientId) {
-      showErrorToast('❌ Patient ID not found. Please try again.');
+    // Check if hospitalId is available
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
     }
     
     const allFields = [
       'fullName', 'mobileNumber', 'gender', 'patientType',
-      'addressLine', 'countryName', 'stateName', 'district'
+      'addressLine1', 'countryName', 'stateName', 'district'
     ];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
@@ -379,42 +341,36 @@ const EditPatient = () => {
     
     if (validateForm()) {
       setIsSubmitting(true);
-      showInfoToast('Updating patient profile...', 2000);
+      showInfoToast('Creating patient profile...', 2000);
       
       try {
-        const updateData = prepareUpdateData();
+        const patientData = preparePatientData();
         
-        await updatePatient({ 
-          id: originalPatientId, 
-          updatePatient: updateData 
-        }).unwrap();
+        const result = await createPatient(patientData).unwrap();
         
-        showUpdateToast(
-          `${formData.fullName} has been updated successfully!`,
-          4000,
-          {
-            'Patient': formData.fullName,
-            'ID': originalPatientId,
-            'Type': formData.patientType,
-            'Age': formData.age ? `${formData.age} years` : 'N/A',
-            'Blood Group': formData.bloodGroup || 'N/A'
-          }
+        showSuccessToast(
+          `${formData.fullName} has been added successfully as ${formData.patientType}`
         );
         
         setIsSubmitting(false);
-        refetch();
         
         setTimeout(() => {
           navigate('/patients');
-        }, 1500);
+        }, 2000);
         
       } catch (error) {
+        console.error('Error creating patient:', error);
+        
         if (error.status === 409) {
           showErrorToast('❌ Mobile number or email already exists!');
+        } else if (error.data?.message?.includes('Mobile number already exists')) {
+          showErrorToast('❌ Mobile number already exists! Please use a different number.', 4000);
+        } else if (error.data?.message?.includes('Email already exists')) {
+          showErrorToast('❌ Email already exists! Please use a different email.', 4000);
         } else if (error.data?.message) {
           showErrorToast(`❌ ${error.data.message}`);
         } else {
-          showErrorToast('❌ Failed to update patient. Please try again.');
+          showErrorToast('❌ Failed to add patient. Please try again.');
         }
         
         setIsSubmitting(false);
@@ -424,43 +380,12 @@ const EditPatient = () => {
       if (firstErrorField) {
         showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
       }
-      const firstError = document.querySelector('.error-message');
-      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
-  const handleGoBack = () => navigate('/patients');
-
-  if (isLoadingPatient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader centered text="Loading patient data..." />
-      </div>
-    );
-  }
-
-  if (!patient && !isLoadingPatient) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-white rounded-xl shadow-sm p-8">
-            <div className="w-20 h-20 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-10 h-10 text-red-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Patient not found</h2>
-            <p className="text-gray-500 mb-6">
-              The patient you're trying to edit doesn't exist or has been removed.
-              <br />
-              <span className="text-xs text-gray-400">Patient ID: {id}</span>
-            </p>
-            <Button onClick={handleGoBack} variant="primary">
-              Back to Patients
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleGoBack = () => {
+    navigate('/patients');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -471,8 +396,8 @@ const EditPatient = () => {
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Edit Patient</h1>
-              <p className="text-sm text-gray-500 mt-1">Update patient profile information</p>
+              <h1 className="text-2xl font-bold text-gray-900">Add New Patient</h1>
+              <p className="text-sm text-gray-500 mt-1">Create a new patient profile in the system</p>
             </div>
           </div>
         </div>
@@ -668,14 +593,14 @@ const EditPatient = () => {
                 
                 <Input 
                   label="Address Line" 
-                  name="addressLine" 
+                  name="addressLine1" 
                   icon={MapPin} 
                   placeholder="Street address" 
-                  value={formData.addressLine} 
+                  value={formData.addressLine1} 
                   onChange={handleChange} 
                   onBlur={handleBlur} 
-                  error={errors.addressLine} 
-                  touched={touched.addressLine} 
+                  error={errors.addressLine1} 
+                  touched={touched.addressLine1} 
                   required 
                 />
 
@@ -738,6 +663,7 @@ const EditPatient = () => {
               </div>
             </div>
 
+            {/* Action Buttons */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>
                 Cancel
@@ -745,10 +671,10 @@ const EditPatient = () => {
               <Button 
                 type="submit" 
                 variant="primary" 
-                disabled={isSubmitting || isUpdating} 
-                loading={isSubmitting || isUpdating}
+                disabled={isSubmitting || isCreateLoading} 
+                loading={isSubmitting || isCreateLoading}
               >
-                {isSubmitting || isUpdating ? 'Saving...' : 'Save Changes'}
+                {isSubmitting || isCreateLoading ? 'Saving...' : 'Save Patient'}
               </Button>
             </div>
           </Card>
@@ -758,4 +684,4 @@ const EditPatient = () => {
   );
 };
 
-export default EditPatient;
+export default AddPatient;

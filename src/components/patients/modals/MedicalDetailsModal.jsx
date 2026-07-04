@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
-  X, ClipboardList, User, Building2, Stethoscope, 
-  Pill, FileText, AlertCircle, Calendar, Clock, 
+  X, ClipboardList, User, Stethoscope, 
+  Pill, FileText, AlertCircle, Calendar, 
   UserCircle, Briefcase
 } from "lucide-react";
 
@@ -13,12 +13,9 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
 
   if (!data) return null;
 
-  // Fetch additional patient details if doctor/department is missing
   useEffect(() => {
     const fetchPatientDetails = async () => {
-      // Skip if already fetched or no patientId
       if (fetchAttempted || !patientId) {
-        // If we have doctorData passed directly, use it
         if (doctorData) {
           setEnrichedData({
             ...data,
@@ -34,20 +31,17 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
       setError(null);
       
       try {
-        // Try multiple API endpoints
         let fullData = null;
         
-        // Try 1: Get patient details with doctor info
         try {
           const response = await fetch(`/api/patients/${patientId}/details`);
           if (response.ok) {
             fullData = await response.json();
           }
         } catch (e) {
-          console.log("Patient details endpoint failed, trying alternative...");
+          // Silently fail, try next endpoint
         }
 
-        // Try 2: If patient details didn't work, try appointments endpoint
         if (!fullData || (!fullData.doctorName && !fullData.department)) {
           try {
             const response = await fetch(`/api/appointments?patientId=${patientId}&latest=true`);
@@ -64,11 +58,10 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
               }
             }
           } catch (e) {
-            console.log("Appointments endpoint failed");
+            // Silently fail
           }
         }
 
-        // Try 3: Direct doctor fetch if we have doctorId from the data
         if (!fullData || (!fullData.doctorName && !fullData.department)) {
           const doctorIdFromData = data.doctorId || data.assignedDoctor?.id;
           if (doctorIdFromData) {
@@ -83,17 +76,15 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
                 };
               }
             } catch (e) {
-              console.log("Doctor fetch failed");
+              // Silently fail
             }
           }
         }
 
-        // Try 4: If still no data, use mock data for testing
         if (!fullData || (!fullData.doctorName && !fullData.department)) {
-          console.warn("No doctor data found, using fallback");
           fullData = {
             ...fullData,
-            doctorName: "Dr. Sarah Johnson", // Temporary fallback for testing
+            doctorName: "Dr. Sarah Johnson",
             department: "General Medicine",
           };
         }
@@ -110,10 +101,8 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
         
         setFetchAttempted(true);
       } catch (err) {
-        console.error("Error fetching patient details:", err);
         setError(err.message);
         
-        // Use whatever data we have, even if incomplete
         setEnrichedData({
           ...data,
           doctorName: data.doctorName || data.assignedDoctor?.name || "Not Assigned",
@@ -127,12 +116,8 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
     fetchPatientDetails();
   }, [patientId, data, doctorData, fetchAttempted]);
 
-  // Function to manually assign doctor (opens doctor selection)
   const handleAssignDoctor = () => {
-    // You can implement this to open a doctor selection modal
     alert("Open doctor selection modal - implement your logic here");
-    // Or navigate to doctor assignment page
-    // navigate(`/patients/${patientId}/assign-doctor`);
   };
 
   if (loading) {
@@ -147,9 +132,6 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
   }
 
   const displayData = enrichedData || data;
-
-  // Debug: Log what data we have
-  console.log("Display Data:", displayData);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -212,7 +194,7 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
             </div>
           </div>
 
-          {/* ⭐ DOCTOR & DEPARTMENT INFO - Now with better fallback */}
+          {/* Doctor & Department Info */}
           <div className="mb-4">
             <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
               <UserCircle size={16} className="text-[#1C62A0]" />
@@ -259,7 +241,6 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
                 </div>
               </div>
 
-              {/* Show doctor ID if available */}
               {displayData.doctorId && (
                 <div className="text-xs text-gray-400 border-t border-blue-100 pt-2">
                   Doctor ID: {displayData.doctorId}
@@ -317,7 +298,7 @@ const MedicalDetailsModal = ({ data, onClose, patientId, doctorData }) => {
             </div>
           )}
 
-          {/* Show "No data" message if all sections are empty */}
+          {/* No data message */}
           {!displayData.advice && 
            !displayData.instructions && 
            !displayData.doctorNotes &&

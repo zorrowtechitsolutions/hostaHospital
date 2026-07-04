@@ -86,11 +86,8 @@ const transformBookingsData = (bookingList) => {
       department: booking.doctor_department || booking.department || "N/A",
       appointmentDate: rawDate === "N/A" ? "N/A" : rawDate.split("T")[0],
       consulting_time: rawTime,
-      reason: booking.reason || "",
       status: booking.status || "pending",
       patientImageKey: patientImageKey,
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
     };
   });
 };
@@ -195,7 +192,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks - Server-side pagination
+  // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
     isLoading: loading,
@@ -204,7 +201,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   } = useGetBookingsQuery({
     page: currentPage,
     limit: itemsPerPage,
-    ...(statusFilter && { status: statusFilter }),
+    status: "pending", // ✅ Always show pending requests
     ...(searchTerm && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
@@ -294,11 +291,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return transformBookingsData(bookingsResponse?.data || []);
   }, [bookingsResponse]);
 
-  // Use server-side pagination data
+  // ✅ Use server-side pagination data
   const totalItems = bookingsResponse?.pagination?.totalItems || safeData.length;
   const totalPages = bookingsResponse?.pagination?.totalPages || 1;
 
-  // Get all unique departments
+  // Get all unique departments from the data
   const departments = useMemo(() => {
     let sourceData;
     if (doctorId && !showAllData) {
@@ -319,12 +316,12 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return safeData;
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  const activeFilterCount = [departmentFilter, dateFilter, searchTerm, statusFilter].filter(Boolean).length;
+  const activeFilterCount = [departmentFilter, dateFilter, searchTerm].filter(Boolean).length;
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter, statusFilter, showAllData]);
+  }, [searchTerm, departmentFilter, dateFilter, showAllData]);
 
   // Handlers
   const handleRefresh = () => {
@@ -701,7 +698,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
-                Total Requests
+                Total Pending Requests
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {totalItems}
                 </span>
@@ -802,7 +799,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                   onPageChange={setCurrentPage}
                   totalItems={totalItems}
                   itemsPerPage={itemsPerPage}
-                  itemLabel="requests"
+                  itemLabel="pending requests"
                 />
               </div>
             </div>

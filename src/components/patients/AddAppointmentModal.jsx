@@ -1,5 +1,5 @@
 // src/components/patients/AddAppointmentModal.jsx - Updated with gender from patient data
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Calendar, FileText } from "lucide-react";
 import { Modal, Textarea, Button, Avatar, Badge, Loader } from "../ui";
 import { showWarningToast } from "../ui/Toast";
@@ -17,15 +17,13 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Fetch doctors using RTK Query
   const { 
     data: doctorsResponse, 
     isLoading: isLoadingDoctors,
     isFetching: isFetchingDoctors
   } = useGetDoctorsQuery({}, { skip: !isOpen });
 
-  // Transform doctors data
-  const doctorsList = React.useMemo(() => {
+  const doctorsList = useMemo(() => {
     if (!doctorsResponse?.data) return [];
     
     return doctorsResponse.data.map(doc => ({
@@ -57,16 +55,14 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => 
     
     setIsSubmitting(true);
     
-    // Call the callback prop with booking data - gender comes from patient data
     if (onProceedApprove) {
       onProceedApprove({
-  userId:
-    patient?.userId,
-            patient_dob: patient?.dob,
+        userId: patient?.userId,
+        patient_dob: patient?.dob,
         patient_name: patient?.name,
         patient_place: patient?.location?.place || patient?.address,
         patient_phone: patient?.mobileNumber,
-        patient_gender: patient?.gender, // Gender directly from patient data
+        patient_gender: patient?.gender,
         hospitalId: patient?.hospitalId,
         doctorId: formData.doctorId,
         booking_date: formData.date,

@@ -43,6 +43,14 @@ import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
 import HospitalRoles from './permission/HospitalRoles';
 import HospitalNotificationList from './hospitals/notification/HospitalNotificationList';
 
+// Patient imports
+import AddPatient from './hospitals/patients/AddPatients';
+import EditPatient from './hospitals/patients/EditPatients';
+import PatientDetails from './hospitals/patients/PatientsDetails';
+
+// User Management (RTK Query)
+import UsersList from './users/userslist';
+
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -81,6 +89,11 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/blood-banks" element={<HospitalBloodBanksList />} />
               <Route path="hospitals/:id/notifications" element={<HospitalNotificationList />} />
               
+              {/* Patient Routes */}
+              <Route path="patients/add" element={<AddPatient/>} />
+              <Route path="patients/edit/:id" element={<EditPatient />} />
+              <Route path="patients/:id" element={<PatientDetails />} />
+              
               {/* Category & Specialty Routes */}
               <Route path="categories" element={<Categories />} />
               <Route path="specialties" element={<Specialties />} />
@@ -113,7 +126,11 @@ const SuperAdminLayout = () => {
               <Route path="hospital-users/:hospitalId/permissions" element={<HospitalUserPermissions />} />
               <Route path="hospital-users/:hospitalId/permissions/:roleId" element={<HospitalPermissionList />} />
 
-              {/* User Management Routes */}
+              {/* ===== SUPER ADMIN USER MANAGEMENT (RTK QUERY) ===== */}
+              {/* Main Users List - Super Admin sees ALL users */}
+              <Route path="users" element={<UsersList />} />
+              
+              {/* Legacy User Management Routes (keep for backward compatibility) */}
               <Route path="users/add" element={<SuperAddNewUser />} />
               <Route path="users/edit/:userType" element={<SuperEditUser />} />
               <Route path="users/view-roles" element={<SuperViewAssignedRoles />} />

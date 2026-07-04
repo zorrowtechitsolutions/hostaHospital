@@ -13,13 +13,34 @@ import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/docto
 // S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 
+// FIX 1: Updated getS3ImageUrl with cache-busting using Date.now()
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
+  
+  // If it's already a full URL, add cache-busting
   if (imageKey.startsWith("http")) {
-    return imageKey;
+    return `${imageKey}?t=${Date.now()}`;
   }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  
+  // Otherwise construct the S3 URL with cache-busting
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
+
+// FIX 2: Alternative - Use updatedAt for cache-busting (recommended)
+// Uncomment this version if your API returns updatedAt field
+/*
+const getS3ImageUrl = (imageKey, updatedAt) => {
+  if (!imageKey) return "";
+  
+  const cacheBuster = updatedAt ? `v=${updatedAt}` : `t=${Date.now()}`;
+  
+  if (imageKey.startsWith("http")) {
+    return `${imageKey}?${cacheBuster}`;
+  }
+  
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?${cacheBuster}`;
+};
+*/
 
 // Helper functions
 const getDoctorName = (doctor) =>

@@ -15,10 +15,10 @@ import {
   useUpdateBloodBankMutation,
   useDeleteBloodBankMutation
 } from '../../../app/service/bloodbank';
+import { getHospitalId } from '../../utils/auth';
 
-// ✅ Import socket
+// Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../socket/bloodBankEvents';
 
 // Blood groups list
@@ -311,87 +311,74 @@ const BloodBank = () => {
   // Filter states
   const [bloodGroupFilter, setBloodGroupFilter] = useState('all');
 
+  // Get hospital ID from auth
+  const hospitalId = getHospitalId();
+
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('bloodBankViewMode', viewMode);
   }, [viewMode]);
 
-  // ✅ API Hooks - MUST BE CALLED BEFORE useEffect THAT USES refetch
+  // ✅ API Hooks - WITH hospitalId from auth
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
     refetch,
     isFetching
   } = useGetBloodBankQuery({
-    page: currentPage,
-    limit: itemsPerPage,
+    hospitalId: hospitalId,
     bloodGroup: bloodGroupFilter !== "all" ? bloodGroupFilter : undefined,
-    search_query: searchTerm?.trim() ? searchTerm : undefined
+    search_query: searchTerm?.trim() ? searchTerm : undefined,
+  }, {
+    skip: !hospitalId, // Skip if no hospital ID
   });
 
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
 
-  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering blood bank event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
-    // Register blood bank events
     registerBloodBankEvents({
-      onStockCreated: async (data) => {
-        console.log("🩸 NEW BLOOD STOCK CREATED:", data);
+      onStockCreated: async () => {
         showSuccessToast(`New blood stock created!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
-
-      onStockUpdated: async (data) => {
-        console.log("✏️ BLOOD STOCK UPDATED:", data);
+      onStockUpdated: async () => {
         showSuccessToast(`Blood stock updated!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
-
-      onStockDeleted: async (data) => {
-        console.log("🗑️ BLOOD STOCK DELETED:", data);
+      onStockDeleted: async () => {
         showSuccessToast(`Blood stock deleted!`, 3000);
-        const result = await refetch();
+        await refetch();
       }
     });
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering blood bank events...");
       unregisterBloodBankEvents();
     };
-  }, [refetch]); // ✅ Only refetch dependency
+  }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      // Re-register events on reconnect
       registerBloodBankEvents({
-        onStockCreated: async (data) => {
-          console.log("🩸 NEW BLOOD STOCK CREATED (reconnect):", data);
+        onStockCreated: async () => {
           showSuccessToast(`New blood stock created!`, 3000);
           await refetch();
         },
-        onStockUpdated: async (data) => {
-          console.log("✏️ BLOOD STOCK UPDATED (reconnect):", data);
+        onStockUpdated: async () => {
           showSuccessToast(`Blood stock updated!`, 3000);
           await refetch();
         },
-        onStockDeleted: async (data) => {
-          console.log("🗑️ BLOOD STOCK DELETED (reconnect):", data);
+        onStockDeleted: async () => {
           showSuccessToast(`Blood stock deleted!`, 3000);
           await refetch();
         }
       });
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Blood bank events won't work!");
-    };
+    const handleDisconnect = () => {};
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -401,21 +388,6 @@ const BloodBank = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  
 
   // Transform data from API response
   const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
@@ -438,65 +410,52 @@ const BloodBank = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers with API - hospitalId is auto-injected
+  // CRUD Handlers
   const handleAddBloodStock = async (newBloodStock) => {
     try {
-      const stockToAdd = {
+      await createBloodBank({
         bloodGroup: newBloodStock.bloodGroup,
         count: newBloodStock.count
-      };
-      
-      
-      const response = await createBloodBank(stockToAdd).unwrap();
+      }).unwrap();
       
       showSuccessToast(`${newBloodStock.bloodGroup} blood stock added successfully!`, 3000);
       await refetch();
       setShowAddModal(false);
     } catch (error) {
-      console.error('Add error:', error);
       showErrorToast(error?.data?.message || 'Failed to add blood stock', 3000);
     }
   };
 
   const handleEditBloodStock = async (updatedStock) => {
     try {
-      const updateData = {
-        bloodGroup: updatedStock.bloodGroup,
-        count: updatedStock.count
-      };
-      
-      
-      const response = await updateBloodBank({ 
+      await updateBloodBank({ 
         id: updatedStock.id, 
-        data: updateData 
+        data: {
+          bloodGroup: updatedStock.bloodGroup,
+          count: updatedStock.count
+        }
       }).unwrap();
-      
       
       showSuccessToast(`${updatedStock.bloodGroup} blood stock updated successfully!`, 3000);
       await refetch();
       setShowEditModal(false);
       setSelectedBloodStock(null);
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update blood stock', 3000);
     }
   };
 
-  // ✅ Handle Delete with debug logs
   const handleDeleteBloodStock = async () => {
     if (selectedBloodStock) {
       try {
-        
-        const response = await deleteBloodBank(selectedBloodStock.id).unwrap();
+        await deleteBloodBank(selectedBloodStock.id).unwrap();
         
         showSuccessToast(`${selectedBloodStock.bloodGroup} blood stock deleted successfully!`, 3000);
-        
-        const result = await refetch();
+        await refetch();
         
         setShowDeleteModal(false);
         setSelectedBloodStock(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete blood stock', 3000);
       }
     }
@@ -553,27 +512,20 @@ const BloodBank = () => {
               count: stock['Count (Units)'] || stock.count || 0
             }).unwrap();
             successCount++;
-          } catch (error) {
+          } catch {
             errorCount++;
           }
         }
         
         showSuccessToast(`Successfully imported ${successCount} blood stock records! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
         refetch();
-      } catch (error) {
+      } catch {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     
     reader.readAsText(file);
     event.target.value = '';
-  };
-
-  const clearAllFilters = () => {
-    setBloodGroupFilter('all');
-    setSearchTerm('');
-    setCurrentPage(1);
-    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {

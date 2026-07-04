@@ -28,6 +28,7 @@ import { useGetAmbulanceQuery } from '../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../app/service/bloodbank';
 import { useGetPatientsQuery } from '../../../app/service/patients';
 import { useGetStaffQuery } from '../../../app/service/staffApi';
+import { useGetUsersQuery } from '../../../app/service/users';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -45,35 +46,35 @@ const AdminDashboard = () => {
     totalAmbulances: 0,
     totalBloodUnits: 0,
     totalAds: 0,
-    totalStaff: 0
+    totalStaff: 0,
+    totalUsers: 0
   });
 
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
-  
   const { data: doctorsData, isLoading: loadingDoctors } = useGetDoctorsQuery({
     skipHospitalFilter: true
   });
-  
   const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery();
-  
   const { data: appointmentsData, isLoading: loadingAppointments } = useGetBookingsQuery({
     skipHospitalFilter: true,
   });
-  
   const { data: adsData, isLoading: loadingAds } = useGetAdsQuery();
-  
   const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery();
-
-  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery();
+  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery({
+    skipHospitalFilter: true,
+  });
   const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery();
+  const { data: usersData, isLoading: loadingUsers } = useGetUsersQuery({
+    limit: 1000
+  });
 
   useEffect(() => {
     const loadData = async () => {
       if (loadingHospitals || loadingDoctors || loadingPatients || loadingAppointments || 
-          loadingAds || loadingStaff || loadingAmbulance || loadingBloodBank) {
+          loadingAds || loadingStaff || loadingAmbulance || loadingBloodBank || loadingUsers) {
         return;
       }
 
@@ -162,6 +163,9 @@ const AdminDashboard = () => {
       const bloodBanks = bloodBankData?.data || [];
       const totalBloodUnits = bloodBanks.length;
 
+      const users = usersData?.data || usersData?.users || [];
+      const totalUsers = users.length;
+
       setStats({
         totalHospitals: hospitals.length,
         activeHospitals: hospitals.filter(h => h.status === 'active' || h.isActive === true).length,
@@ -176,7 +180,8 @@ const AdminDashboard = () => {
         totalAmbulances: ambulances.length,
         totalBloodUnits: totalBloodUnits,
         totalAds: ads.length,
-        totalStaff: staff.length
+        totalStaff: staff.length,
+        totalUsers: totalUsers
       });
 
       const activities = [];
@@ -245,6 +250,7 @@ const AdminDashboard = () => {
     staffData,
     ambulanceData,
     bloodBankData,
+    usersData,
     loadingHospitals,
     loadingDoctors,
     loadingPatients,
@@ -252,7 +258,8 @@ const AdminDashboard = () => {
     loadingAds,
     loadingStaff,
     loadingAmbulance,
-    loadingBloodBank
+    loadingBloodBank,
+    loadingUsers
   ]);
 
   const statCards = [
@@ -311,6 +318,13 @@ const AdminDashboard = () => {
       icon: User,
       color: 'bg-teal-500',
       onClick: () => navigate('/super-admin/hospital-users')
+    },
+    {
+      label: 'Total Users',
+      value: stats.totalUsers,
+      icon: Users,
+      color: 'bg-cyan-500',
+      onClick: () => navigate('/super-admin/users')
     }
   ];
 
@@ -462,48 +476,6 @@ const AdminDashboard = () => {
                   className="bg-orange-500 h-2 rounded-full" 
                   style={{ width: stats.totalHospitals > 100 ? '85%' : stats.totalHospitals > 50 ? '65%' : '45%' }}
                 />
-              </div>
-            </div>
-          </div>
-
-          {/* Appointment Status Summary */}
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-medium text-gray-900 mb-3">Appointment Status Breakdown</h3>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-              <div className="bg-yellow-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <ClockIcon size={14} className="text-yellow-600" />
-                  <p className="text-sm font-semibold text-yellow-600">{stats.pendingAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Pending</p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <CheckCircle size={14} className="text-green-600" />
-                  <p className="text-sm font-semibold text-green-600">{stats.acceptedAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Accepted</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <Activity size={14} className="text-purple-600" />
-                  <p className="text-sm font-semibold text-purple-600">{stats.completedAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Completed</p>
-              </div>
-              <div className="bg-red-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <XCircle size={14} className="text-red-600" />
-                  <p className="text-sm font-semibold text-red-600">{stats.declinedAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Declined</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <AlertCircle size={14} className="text-gray-600" />
-                  <p className="text-sm font-semibold text-gray-600">{stats.cancelledAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Cancelled</p>
               </div>
             </div>
           </div>

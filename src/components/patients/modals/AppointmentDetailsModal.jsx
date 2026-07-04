@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { 
   X, Calendar, User, Stethoscope, FileText, 
   MessageSquare, UserCircle, Briefcase, Mail,
-  AlertCircle, ChevronRight
+  AlertCircle
 } from "lucide-react";
 
 const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
@@ -13,10 +13,8 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
 
   if (!data) return null;
 
-  // Fetch additional patient details if needed
   useEffect(() => {
     const fetchAppointmentDetails = async () => {
-      // If we have doctorData passed directly, use it
       if (doctorData) {
         setEnrichedData({
           ...data,
@@ -29,7 +27,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
         return;
       }
 
-      // If we have patientId, fetch details
       if (patientId && !data.doctorName) {
         setLoading(true);
         try {
@@ -48,7 +45,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
             });
           }
         } catch (err) {
-          console.error("Error fetching appointment details:", err);
           setError("Could not load complete details");
         } finally {
           setLoading(false);
@@ -59,7 +55,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
     fetchAppointmentDetails();
   }, [data, patientId, doctorData]);
 
-  // Format date helper - only date, no time
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
@@ -75,7 +70,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
     }
   };
 
-  // Get status badge color
   const getStatusBadge = (status) => {
     const statusMap = {
       'completed': 'bg-green-100 text-green-800 border-green-200',
@@ -89,11 +83,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
   };
 
   const displayData = enrichedData || data;
-
-  // Debug log to see what data we have
-  console.log("Appointment Data:", displayData);
-  console.log("Department:", displayData.department);
-  console.log("Doctor Name:", displayData.doctorName);
 
   if (loading) {
     return (
@@ -240,8 +229,6 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
               </div>
             </div>
           </div>
-
-
         </div>
 
         {/* Footer Actions */}

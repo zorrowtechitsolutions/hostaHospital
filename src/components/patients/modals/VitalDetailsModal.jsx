@@ -6,20 +6,16 @@ import {
   Activity, 
   Thermometer, 
   Wind, 
-  Weight, 
   Ruler, 
   Circle, 
   User, 
-  Scale,
-  ArrowUpDown,
-  X 
+  Scale
 } from "lucide-react";
-import { Modal, Button, Card } from "../../ui";
+import { Modal, Button } from "../../ui";
 
 const VitalDetailsModal = ({ data, onClose }) => {
   if (!data) return null;
 
-  // Define all vitals with their icons and formatting
   const vitals = [
     { 
       icon: Thermometer, 
@@ -70,7 +66,6 @@ const VitalDetailsModal = ({ data, onClose }) => {
     },
   ];
 
-  // Filter out vitals with N/A value (optional)
   const availableVitals = vitals.filter(vital => vital.value !== "N/A");
 
   return (
@@ -92,7 +87,7 @@ const VitalDetailsModal = ({ data, onClose }) => {
             )}
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            Recorded: {new Date(data.createdAt).toLocaleString()}
+            Recorded: {data.createdAt ? new Date(data.createdAt).toLocaleString() : 'N/A'}
           </p>
         </div>
       )}
@@ -119,7 +114,6 @@ const VitalDetailsModal = ({ data, onClose }) => {
           <p className="text-sm text-gray-600">{data.notes}</p>
         </div>
       )}
-
 
       {/* Close Button */}
       <div className="flex justify-end mt-6 pt-4 border-t">

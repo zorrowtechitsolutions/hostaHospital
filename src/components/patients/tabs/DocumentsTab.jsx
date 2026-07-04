@@ -1,6 +1,6 @@
 // src/components/patients/tabs/DocumentsTab.jsx - With View, Download, and Edit
-import React, { useState, Fragment, useEffect } from "react";
-import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import { 
   showSuccessToast,
@@ -14,10 +14,6 @@ import {
   useCreateDocumentMutation
 } from "../../../../app/service/documentApi";
 import { getS3ImageUrl } from "../../../../app/service/S3";
-
-// Optional: Uncomment for react-pdf approach
-// import { Document, Page, pdfjs } from "react-pdf";
-// pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 const DocumentsTab = ({ patient }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,11 +29,8 @@ const DocumentsTab = ({ patient }) => {
   const [editDocumentName, setEditDocumentName] = useState("");
   const [editDocumentDate, setEditDocumentDate] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [pdfPageNumber, setPdfPageNumber] = useState(1);
-  const [pdfNumPages, setPdfNumPages] = useState(null);
   const itemsPerPage = 5;
 
-  // RTK Query hooks
   const { 
     data: documentsData, 
     isLoading: isLoadingDocuments,
@@ -51,29 +44,15 @@ const DocumentsTab = ({ patient }) => {
   const [deleteDocument] = useDeleteDocumentMutation();
   const [updateDocument] = useUpdateDocumentMutation();
 
-  // Get documents list from response
   const documentsList = documentsData?.data || patient?.documentsList || [];
   const totalItems = documentsList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedDocuments = documentsList.slice(startIndex, startIndex + itemsPerPage);
 
-  // Debug - check if documents are loading
-  useEffect(() => {
-    console.log("🔍 ===== DOCUMENTS DEBUG ===== 🔍");
-    console.log("👤 Patient ID:", patient?.id);
-    console.log("👤 Patient Name:", patient?.name);
-    console.log("📄 documentsData:", documentsData);
-    console.log("📄 documentsList:", documentsList);
-    console.log("📄 Total Items:", totalItems);
-    console.log("🔍 ============================= 🔍");
-  }, [documentsData, documentsList, totalItems, patient]);
-
-  // Reset PDF page when viewing a new document
   useEffect(() => {
     if (viewingDocument) {
-      setPdfPageNumber(1);
-      setPdfNumPages(null);
+      setCurrentPage(1);
     }
   }, [viewingDocument]);
 
@@ -137,7 +116,6 @@ const DocumentsTab = ({ patient }) => {
     setEditFile(file);
   };
 
-  // CREATE - No file upload, only name and date
   const handleUpload = async () => {
     if (!documentName.trim()) {
       showWarningToast("Please enter a document name");
@@ -152,8 +130,6 @@ const DocumentsTab = ({ patient }) => {
     setUploading(true);
 
     try {
-      console.log("📝 Creating document for patient:", patient?.id);
-      
       await createDocument({
         patientId: patient.id,
         name: documentName.trim(),
@@ -165,20 +141,16 @@ const DocumentsTab = ({ patient }) => {
       setDocumentName("");
       setDocumentDate("");
       setShowUploadModal(false);
-
       refetchDocuments();
       
     } catch (error) {
-      console.error("❌ Create failed:", error);
       showErrorToast(`❌ Failed to create document: ${error.message || error.data?.message || "Unknown error"}`);
     } finally {
       setUploading(false);
     }
   };
 
-  // EDIT - With file upload support using Document ID
   const handleEditDocument = (document) => {
-    console.log("✏️ Editing document:", document);
     setEditingDocument(document);
     setEditDocumentName(document.documentName || document.name || "");
     setEditDocumentDate(document.date || "");
@@ -207,33 +179,18 @@ const DocumentsTab = ({ patient }) => {
         date: editDocumentDate,
       };
 
-      // If a new file is selected, upload to S3 using Document ID
       if (editFile) {
-        console.log("📤 Uploading file to S3...");
-        
         const progressInterval = setInterval(() => {
           setUploadProgress(prev => Math.min(prev + 10, 90));
         }, 200);
 
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        
         const documentId = editingDocument.id || editingDocument._id;
         const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
         
-        console.log("📁 Document ID:", documentId);
-        console.log("📁 File Key:", fileKey);
-        
         const { uploadToS3 } = await import("../../../../app/service/S3");
-        
-        const s3Result = await uploadToS3(
-          editFile,
-          fileKey,
-          documentId,
-          "documents"
-        );
-        
-        console.log("✅ S3 Upload Result:", s3Result);
+        const s3Result = await uploadToS3(editFile, fileKey, documentId, "documents");
         
         updateData = {
           ...updateData,
@@ -249,9 +206,6 @@ const DocumentsTab = ({ patient }) => {
         setUploadProgress(100);
       }
 
-      console.log("📝 Updating document:", editingDocument.id);
-      console.log("📝 Update Data:", updateData);
-
       await updateDocument({
         id: editingDocument.id || editingDocument._id,
         updateData: updateData
@@ -265,11 +219,9 @@ const DocumentsTab = ({ patient }) => {
       setEditDocumentDate("");
       setEditFile(null);
       setUploadProgress(0);
-
       refetchDocuments();
       
     } catch (error) {
-      console.error("❌ Update failed:", error);
       showErrorToast(`❌ Failed to update document: ${error.message || error.data?.message || "Unknown error"}`);
     } finally {
       setUploading(false);
@@ -277,23 +229,17 @@ const DocumentsTab = ({ patient }) => {
   };
 
   const handleDeleteDocument = async (id, name) => {
-    console.log("🗑️ Deleting document:", id, name);
-    
     try {
       await deleteDocument(id).unwrap();
       showSuccessToast(`✅ Document "${name}" deleted successfully!`);
       refetchDocuments();
     } catch (error) {
-      console.error("❌ Delete failed:", error);
       showErrorToast(`❌ Failed to delete document: ${error.message || error.data?.message || "Unknown error"}`);
     }
   };
 
   const handleViewDocument = (document) => {
-    console.log("👁️ Viewing document:", document);
     setViewingDocument(document);
-    setPdfPageNumber(1);
-    setPdfNumPages(null);
     setShowViewModal(true);
   };
 
@@ -305,7 +251,6 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
-    console.log("📥 Downloading document:", item.documentName || item.name);
     window.open(url, '_blank');
   };
 
@@ -327,8 +272,6 @@ const DocumentsTab = ({ patient }) => {
   const resetViewForm = () => {
     setShowViewModal(false);
     setViewingDocument(null);
-    setPdfPageNumber(1);
-    setPdfNumPages(null);
   };
 
   const getFileIcon = (item) => {
@@ -340,15 +283,6 @@ const DocumentsTab = ({ patient }) => {
     } else {
       return <File size={16} className="text-blue-500 flex-shrink-0" />;
     }
-  };
-
-  // PDF navigation functions for react-pdf approach
-  const goToPrevPage = () => {
-    setPdfPageNumber(prev => Math.max(prev - 1, 1));
-  };
-
-  const goToNextPage = () => {
-    setPdfPageNumber(prev => Math.min(prev + 1, pdfNumPages || prev));
   };
 
   if (isLoadingDocuments) {
@@ -381,7 +315,7 @@ const DocumentsTab = ({ patient }) => {
         </button>
       </div>
 
-      {/* Upload Modal - NO FILE UPLOAD, only Name and Date */}
+      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -458,7 +392,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* View Modal - View Document with S3 URL */}
+      {/* View Modal */}
       {showViewModal && viewingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden">
@@ -477,7 +411,6 @@ const DocumentsTab = ({ patient }) => {
             <div className="p-6 overflow-y-auto max-h-[75vh]">
               <div className="flex flex-col items-center">
                 {(() => {
-                  // Get the full S3 URL using the helper
                   const fileUrl = getS3ImageUrl(viewingDocument.fileKey || viewingDocument.imageUrl);
                   
                   if (!fileUrl) {
@@ -489,7 +422,6 @@ const DocumentsTab = ({ patient }) => {
                     );
                   }
 
-                  // Check if it's a PDF by URL or file type
                   const isPdf = fileUrl.toLowerCase().endsWith('.pdf') || 
                                viewingDocument.fileType === 'application/pdf' ||
                                viewingDocument.type === 'PDF';
@@ -497,7 +429,6 @@ const DocumentsTab = ({ patient }) => {
                   if (isPdf) {
                     return (
                       <div className="w-full">
-                        {/* Quick Fix: Use URL parameters to hide sidebar */}
                         <iframe
                           src={`${fileUrl}#navpanes=0&scrollbar=1&toolbar=1`}
                           className="w-full h-[600px] border-0 rounded-lg"
@@ -525,7 +456,6 @@ const DocumentsTab = ({ patient }) => {
                     );
                   }
 
-                  // Check if it's an image
                   const isImg = fileUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
                                viewingDocument.fileType?.startsWith('image/');
 
@@ -574,7 +504,6 @@ const DocumentsTab = ({ patient }) => {
                     );
                   }
 
-                  // Fallback for other file types
                   return (
                     <div className="flex flex-col items-center justify-center p-12 bg-gray-50 rounded-lg w-full">
                       <File size={64} className="text-blue-500 mb-4" />
@@ -604,7 +533,6 @@ const DocumentsTab = ({ patient }) => {
                   );
                 })()}
 
-                {/* Document Details */}
                 <div className="w-full mt-6 grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-lg">
                   <div>
                     <span className="font-semibold text-gray-600">Name:</span>
@@ -639,7 +567,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Edit Modal - WITH FILE UPLOAD using Document ID */}
+      {/* Edit Modal */}
       {showEditModal && editingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -711,7 +639,6 @@ const DocumentsTab = ({ patient }) => {
                 </div>
               )}
 
-              {/* File upload field - Optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Replace File <span className="text-gray-400 text-xs">(Optional)</span>
@@ -806,7 +733,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Table - Document Name, Date, Actions with disabled states */}
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -826,7 +753,6 @@ const DocumentsTab = ({ patient }) => {
                     key={item.id || item._id || index}
                     className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
                   >
-                    {/* Document Name */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {getFileIcon(item)}
@@ -836,17 +762,14 @@ const DocumentsTab = ({ patient }) => {
                       </div>
                     </td>
 
-                    {/* Date */}
                     <td className="px-4 py-3 text-gray-600 text-xs">
                       {item.date
                         ? new Date(item.date).toLocaleDateString()
                         : "N/A"}
                     </td>
 
-                    {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
-                        {/* View Button */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -861,7 +784,6 @@ const DocumentsTab = ({ patient }) => {
                           />
                         </Button>
 
-                        {/* Download Button */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -876,7 +798,6 @@ const DocumentsTab = ({ patient }) => {
                           />
                         </Button>
 
-                        {/* Edit Button */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -890,7 +811,6 @@ const DocumentsTab = ({ patient }) => {
                           />
                         </Button>
 
-                        {/* Delete Button */}
                         <Button
                           variant="ghost"
                           size="sm"

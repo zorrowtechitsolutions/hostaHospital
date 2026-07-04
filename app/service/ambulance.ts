@@ -26,7 +26,6 @@ export interface Ambulance {
   updatedAt?: string;
 }
 
-// ✅ ADDED - Pagination to response
 export interface AmbulanceResponse {
   success: boolean;
   message: string;
@@ -41,7 +40,6 @@ export interface AmbulanceResponse {
   };
 }
 
-// ✅ UPDATED - Added page and limit for pagination
 export interface GetAmbulanceParams {
   id?: string | number;
   userId?: string | number; 
@@ -54,8 +52,9 @@ export interface GetAmbulanceParams {
   pincode?: string | number;
   vehicleType?: string;
   search_query?: string;
-  page?: number;      // ✅ ADDED
-  limit?: number;     // ✅ ADDED
+  page?: number;
+  limit?: number;
+  skipHospitalFilter?: boolean; // ✅ ADDED: Allow skipping hospital filter for Super Admin
 }
 
 // ================= API =================
@@ -71,13 +70,17 @@ export const ambulanceApi = api.injectEndpoints({
       query: (params: GetAmbulanceParams = {}) => {
         const queryParams = new URLSearchParams();
 
-        // Auto-inject hospitalId from auth (matches backend)
-        const auth = getAuthUser();
-        if (auth?.id) {
-          queryParams.append("hospitalId", String(auth.id));
+        // ✅ Only auto-inject hospitalId if skipHospitalFilter is false
+        const skipHospitalFilter = params.skipHospitalFilter === true;
+        
+        if (!skipHospitalFilter) {
+          const auth = getAuthUser();
+          if (auth?.id) {
+            queryParams.append("hospitalId", String(auth.id));
+          }
         }
 
-        // Override hospitalId if provided in params
+        // Override hospitalId if provided in params (takes precedence)
         if (params.hospitalId) {
           queryParams.set("hospitalId", String(params.hospitalId));
         }
@@ -123,7 +126,7 @@ export const ambulanceApi = api.injectEndpoints({
           queryParams.append("search_query", params.search_query);
         }
 
-        // ✅ ADDED - Pagination parameters
+        // Pagination parameters
         if (params.page) {
           queryParams.append("page", String(params.page));
         }
@@ -144,11 +147,9 @@ export const ambulanceApi = api.injectEndpoints({
       },
 
       providesTags: (result, error, params) => {
-        // If we have a single ambulance, provide a specific tag
         if (params?.id && result?.data && !Array.isArray(result.data)) {
           return [{ type: "Ambulance", id: params.id }];
         }
-        // Otherwise provide the general tag
         return ["Ambulance"];
       },
     }),

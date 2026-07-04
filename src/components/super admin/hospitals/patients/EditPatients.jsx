@@ -1,21 +1,21 @@
 // src/components/patients/EditPatient.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
-  ArrowLeft, Users, 
+  ArrowLeft, Heart, Users, 
   Briefcase, Clock, AlertTriangle,
   ChevronDown, Activity
 } from 'lucide-react';
 import { 
-  Button, Input, Select, Card, Loader 
-} from '../ui';
+  Button, Input, Select, Card, Alert, Loader 
+} from '../../../ui';
 import { 
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast 
-} from '../ui/Toast';
-import { useGetPatientByIdQuery, useUpdatePatientMutation } from '../../../app/service/patients';
+} from '../../../ui/Toast';
+import { useGetPatientByIdQuery, useUpdatePatientMutation } from '../../../../../app/service/patients';
 import { Country, State, City } from 'country-state-city';
-import { getAuthUser } from '../../utils/auth';
+import { getAuthUser } from '../../../../utils/auth';
 
 // SearchableDropdown Component
 const SearchableDropdown = ({ 
@@ -33,14 +33,14 @@ const SearchableDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const dropdownRef = useRef(null);
+  const dropdownRef = React.useRef(null);
 
   const filteredOptions = options.filter(option => {
     const label = getOptionLabel(option).toLowerCase();
     return label.includes(searchTerm.toLowerCase());
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -123,20 +123,26 @@ const EditPatient = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   
+  // Convert id to number for API call
   const numericId = id ? Number(id) : null;
+  
+  // Get user data from auth utility
   const authUser = getAuthUser();
   const hospitalId = authUser?.id;
   
+  // Fetch patient data
   const { 
     data: patientResponse, 
     isLoading: isLoadingPatient, 
-    refetch
+    refetch,
+    error: fetchError
   } = useGetPatientByIdQuery(numericId, {
     skip: !numericId
   });
   
   const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
   
+  // Handle both response formats
   const patient = patientResponse?.data || patientResponse || null;
   
   const [formData, setFormData] = useState({
@@ -177,8 +183,10 @@ const EditPatient = () => {
   const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
   const patientTypeOptions = ['Outpatient', 'Inpatient'];
 
+  // Load patient data into form
   useEffect(() => {
     if (patient) {
+      // Find country code from country name
       const country = countries.find(c => c.name === patient.location?.country);
       
       setFormData({
@@ -348,6 +356,7 @@ const EditPatient = () => {
       hospitalId: hospitalId,
     };
 
+    // Add optional fields only if they have values
     if (formData.bloodGroup) updateData.bloodGroup = formData.bloodGroup;
     if (formData.age) updateData.age = Number(formData.age);
     if (formData.dob) updateData.dob = formData.dob;
@@ -384,7 +393,7 @@ const EditPatient = () => {
       try {
         const updateData = prepareUpdateData();
         
-        await updatePatient({ 
+        const result = await updatePatient({ 
           id: originalPatientId, 
           updatePatient: updateData 
         }).unwrap();
@@ -402,6 +411,8 @@ const EditPatient = () => {
         );
         
         setIsSubmitting(false);
+        
+        // Refetch to get latest data
         refetch();
         
         setTimeout(() => {
@@ -431,6 +442,7 @@ const EditPatient = () => {
 
   const handleGoBack = () => navigate('/patients');
 
+  // Loading state
   if (isLoadingPatient) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -439,6 +451,7 @@ const EditPatient = () => {
     );
   }
 
+  // Patient not found state - show proper message
   if (!patient && !isLoadingPatient) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -738,6 +751,7 @@ const EditPatient = () => {
               </div>
             </div>
 
+            {/* Action Buttons */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>
                 Cancel

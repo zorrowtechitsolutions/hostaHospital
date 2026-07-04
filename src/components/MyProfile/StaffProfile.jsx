@@ -88,7 +88,7 @@ const StaffProfile = () => {
   const { data: staffData, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
     skip: !staffId,
   });
-  const [updateStaff, { isLoading: isUpdating }] = useUpdateStaffMutation();
+  const [updateStaff] = useUpdateStaffMutation();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -104,7 +104,7 @@ const StaffProfile = () => {
     department: '',
     bio: '',
     joiningDate: '',
-    staffId: '' // Changed from employeeId to staffId
+    staffId: ''
   });
   
   const [editForm, setEditForm] = useState({});
@@ -141,7 +141,7 @@ const StaffProfile = () => {
         department: staff?.department || '',
         bio: staff?.bio || '',
         joiningDate: staff?.joiningDate || '',
-        staffId: staff?.staffId || staff?.id || staffId // Changed from employeeId to staffId
+        staffId: staff?.staffId || staff?.id || staffId
       });
       
       setEditForm({
@@ -158,7 +158,7 @@ const StaffProfile = () => {
         department: staff?.department || '',
         bio: staff?.bio || '',
         joiningDate: staff?.joiningDate || '',
-        staffId: staff?.staffId || staff?.id || staffId // Changed from employeeId to staffId
+        staffId: staff?.staffId || staff?.id || staffId
       });
       
       if (imageKey) setPreviewImage(getFullImageUrl(imageKey));
@@ -191,8 +191,7 @@ const StaffProfile = () => {
       setUploadProgress(100);
       setEditForm(prev => ({ ...prev, imageUrl: uploaded.key, profileImage: uploaded.key, imageKey: uploaded.key }));
       setTimeout(() => setUploadProgress(0), 1000);
-    } catch (error) {
-      console.error("Upload error:", error);
+    } catch {
       setUploadProgress(0);
       if (formData.profileImage) setPreviewImage(getFullImageUrl(formData.profileImage));
       else setPreviewImage(null);
@@ -230,11 +229,9 @@ const StaffProfile = () => {
         department: editForm.department,
         bio: editForm.bio,
         joiningDate: editForm.joiningDate,
-        staffId: editForm.staffId, // Changed from employeeId to staffId
+        staffId: editForm.staffId,
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
-      
-      console.log("Updating staff with data:", updateData);
       
       const response = await updateStaff({ 
         id: staffId, 
@@ -263,8 +260,8 @@ const StaffProfile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
       refetch();
-    } catch (error) {
-      console.error('Save error:', error);
+    } catch {
+      // Silently handle save error
     } finally {
       setIsSaving(false);
     }
@@ -480,17 +477,17 @@ const StaffProfile = () => {
                   icon={Building}
                 />
                 <ProfileField
-  label="Joining Date"
-  value={
-    isEditing
-      ? editForm.joiningDate
-      : formatDate(formData.joiningDate)
-  }
-  isEditing={isEditing}
-  onChange={(e) => updateEditForm("joiningDate", e.target.value)}
-  type="date"
-  icon={Calendar}
-/>
+                  label="Joining Date"
+                  value={
+                    isEditing
+                      ? editForm.joiningDate
+                      : formatDate(formData.joiningDate)
+                  }
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm("joiningDate", e.target.value)}
+                  type="date"
+                  icon={Calendar}
+                />
               </div>
             </div>
 

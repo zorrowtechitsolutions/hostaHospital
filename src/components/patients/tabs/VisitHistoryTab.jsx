@@ -1,9 +1,9 @@
-// src/components/patients/tabs/VisitHistoryTab.jsx - With span, pagination, and proper action menu
+// src/components/patients/tabs/VisitHistoryTab.jsx - With pagination and proper action menu
 import React, { useState } from "react";
-import { MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
-import { Button, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Pagination } from "../../ui";
+import { MoreVertical, Trash2 } from "lucide-react";
+import { Button, TableHead, TableHeader, TableCell, Pagination } from "../../ui";
 
-const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
+const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -45,16 +45,16 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
           </thead>
           <tbody>
             {paginatedVisitHistory.length > 0 ? (
-              paginatedVisitHistory.map((item, index) => (
-                <TableRow key={item.id} hover>
-                  <TableCell 
-                    className="text-[#1C62A0] font-medium cursor-pointer"
+              paginatedVisitHistory.map((item) => (
+                <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td 
+                    className="px-4 py-3 text-[#1C62A0] font-medium cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     {item.visitId || item.id}
-                  </TableCell>
-                  <TableCell 
-                    className="cursor-pointer"
+                  </td>
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     <div className="flex items-center gap-2">
@@ -65,26 +65,26 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                       </div>
                       <span className="font-medium text-gray-800">{item.doctorName}</span>
                     </div>
-                  </TableCell>
-                  <TableCell 
-                    className="text-gray-600 cursor-pointer"
+                  </td>
+                  <td 
+                    className="px-4 py-3 text-gray-600 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     {item.department}
-                  </TableCell>
-                  <TableCell 
-                    className="text-gray-600 cursor-pointer"
+                  </td>
+                  <td 
+                    className="px-4 py-3 text-gray-600 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     {item.visitDate}
-                  </TableCell>
-                  <TableCell 
-                    className="cursor-pointer"
+                  </td>
+                  <td 
+                    className="px-4 py-3 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     <span className={getStatusBadge(item.status)}>{item.status}</span>
-                  </TableCell>
-                  <TableCell className="text-right">
+                  </td>
+                  <td className="px-4 py-3 text-right">
                     <div className="flex justify-end">
                       <div className="relative">
                         <Button
@@ -100,33 +100,13 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                         </Button>
                         {openMenu === `visit-${item.id}` && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                            {/* <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleViewVisitDetails(item);
-                                setOpenMenu(null);
-                              }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
-                            >
-                              <Eye size={15} /> View Details
-                            </button> */}
-                            {/* <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleEditVisitClick(item);
-                                setOpenMenu(null);
-                              }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Edit size={15} /> Edit
-                            </button> */}
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                handleDeleteClick('visit', item.id, startIndex + index, `Visit on ${item.visitDate}`);
+                                handleDeleteClick('visit', item.id, `Visit on ${item.visitDate}`);
                                 setOpenMenu(null);
                               }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-b-lg"
+                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"
                             >
                               <Trash2 size={15} /> Delete
                             </button>
@@ -134,21 +114,20 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleEditVisitClick
                         )}
                       </div>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-500 py-12">
+              <tr>
+                <td colSpan={6} className="text-center text-gray-500 py-12">
                   No visit history found
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* REPLACED INLINE PAGINATION WITH REUSABLE COMPONENT */}
       {totalItems > 0 && totalPages > 1 && (
         <div className="px-6 py-3 border-t bg-gray-50">
           <Pagination

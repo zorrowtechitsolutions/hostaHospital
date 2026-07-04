@@ -117,7 +117,8 @@ export const api = createApi({
     "LabResult",
     "Reviews",
     "Category",
-    "emailEnquiry"
+    "emailEnquiry",
+    "Users"
   ],
   endpoints: () => ({}),
 });

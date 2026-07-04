@@ -1,32 +1,221 @@
 // src/components/super-admin/HospitalPatientsList.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2, Calendar, Droplet } from 'lucide-react';
-import { Card, Button, Pagination } from '../../ui';
-import { useGetPatientsQuery } from '../../../../app/service/patients';
+import { 
+  ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2, 
+  Calendar, Droplet, MoreVertical, Eye, Edit, Trash2, 
+  Plus, RotateCcw
+} from 'lucide-react';
+import { Card, Button, Pagination, Badge } from '../../ui';
+import { 
+  useGetPatientsQuery, 
+  useDeletePatientMutation,
+  useRecoverPatientMutation
+} from '../../../../app/service/patients';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
 import { registerPatientEvents, unregisterPatientEvents } from '../../../socket/patientEvents';
+import DeleteModal from '../../patients/DeleteModel';
+import AddAppointmentModal from '../../patients/AddAppointmentModal';
+import ApproveRequestModal from '../../Requests/ApproveRequestModel';
+import { useCreateBookingMutation } from '../../../../app/service/request';
+import { getHospitalId, isDoctor, isStaff, isHospitalAdmin } from '../../../utils/auth';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getS3ImageUrl } from '../../../../app/service/S3';
 
 const HospitalPatientsList = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const menuRef = useRef(null);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
   const [eventsRegistered, setEventsRegistered] = useState(false);
+  
+  // Modal states
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentPatient, setAppointmentPatient] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [patientToDelete, setPatientToDelete] = useState(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [bookingData, setBookingData] = useState(null);
+  
+  // Menu state
+  const [activeMenu, setActiveMenu] = useState(null);
 
-  const { data: patientsData, isLoading, refetch } = useGetPatientsQuery({
+  // Auth
+  const authHospitalId = getHospitalId();
+  const isDoctorRole = isDoctor();
+  const isStaffRole = isStaff();
+  const isHospitalAdminRole = isHospitalAdmin();
+  const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
+
+  const { data: patientsData, isLoading, refetch, isFetching } = useGetPatientsQuery({
     hospitalId: id,
     page: currentPage,
     limit: itemsPerPage,
     search_query: searchTerm || undefined
   });
 
+  const [deletePatient] = useDeletePatientMutation();
+  const [recoverPatient] = useRecoverPatientMutation();
+  const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
+
   const patients = patientsData?.data || [];
   const totalItems = patientsData?.pagination?.totalItems || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // Transform data
+  const transformPatientData = (patients) => {
+    if (!patients || !Array.isArray(patients)) return [];
+    return patients.map((patient) => ({
+      ...patient,
+      isDelete: patient.isDelete || false,
+      isActive: patient.isActive !== undefined ? patient.isActive : true
+    }));
+  };
+
+  const transformedPatients = transformPatientData(patients);
+
+  // Helper functions
+  const formatPatientId = (id) => {
+    if (!id) return '#PT0000';
+    return `#PT00${String(id).slice(-6)}`;
+  };
+
+  // Navigation helpers
+  const getBasePath = () => {
+    if (window.location.pathname.includes('/super-admin')) {
+      return '/super-admin';
+    }
+    return '';
+  };
+
+  const navigateTo = (path) => {
+    const basePath = getBasePath();
+    navigate(`${basePath}${path}`);
+  };
+
+  // CRUD Handlers
+  const handleAddPatient = () => {
+    if (!canModifyPatients) {
+      showErrorToast('You do not have permission to add patients', 3000);
+      return;
+    }
+    navigateTo(`/hospitals/${id}/patients/add`);
+  };
+
+  const handleViewDetails = (patient) => {
+  if (patient.isDelete) {
+    showErrorToast("Cannot view details of deleted patient", 3000);
+    return;
+  }
+
+  const patientId = patient.id || patient._id;
+  const basePath = getBasePath();
+
+  navigate(`${basePath}/patients/${patientId}`, {
+    state: {
+      patient,
+      hospitalId: id,
+      returnPath: `${basePath}/hospitals/${id}/patients`,
+    },
+  });
+};
+
+
+  const handleDeleteClick = (patient) => {
+    if (!canModifyPatients) {
+      showErrorToast('You do not have permission to delete patients', 3000);
+      return;
+    }
+    setPatientToDelete(patient);
+    setShowDeleteModal(true);
+    setActiveMenu(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!patientToDelete) return;
+    try {
+      await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
+      await refetch();
+      setShowDeleteModal(false);
+      setPatientToDelete(null);
+      showSuccessToast(`${patientToDelete.name} has been deleted successfully!`, 2000);
+    } catch (error) {
+      showErrorToast('Failed to delete patient. Please try again.', 3000);
+    }
+  };
+
+  const handleRecoverPatient = async (patient) => {
+    if (!canModifyPatients) {
+      showErrorToast('You do not have permission to recover patients', 3000);
+      return;
+    }
+    try {
+      await recoverPatient(patient.id || patient._id).unwrap();
+      showSuccessToast(`${patient.name} recovered successfully!`, 2000);
+      refetch();
+      setActiveMenu(null);
+    } catch (error) {
+      showErrorToast(error?.data?.message || 'Failed to recover patient', 3000);
+    }
+  };
+
+  const handleAddAppointmentModal = (patient) => {
+    if (patient.isDelete) {
+      showErrorToast('Cannot create appointment for deleted patient', 3000);
+      return;
+    }
+    setAppointmentPatient(patient);
+    setShowAppointmentModal(true);
+    setActiveMenu(null);
+  };
+
+  const handleProceedApprove = (data) => {
+    const patientId = appointmentPatient?.id || appointmentPatient?._id;
+    setBookingData({
+      ...data,
+      patientId: patientId ? `#PT00${String(patientId)}` : null,
+    });
+    setShowAppointmentModal(false);
+    setShowApproveModal(true);
+  };
+
+  const handleConfirmAppointment = async (approveData) => {
+    try {
+      const payload = {
+        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
+        userId: Number(bookingData?.userId),
+        patient_name: bookingData?.patient_name,
+        patient_dob: bookingData?.patient_dob,
+        patient_place: bookingData?.patient_place,
+        patient_phone: bookingData?.patient_phone,
+        patient_age: bookingData?.patient_age,
+        patient_gender: bookingData?.patient_gender || appointmentPatient?.gender,
+        hospitalId: Number(bookingData?.hospitalId),
+        doctorId: Number(bookingData?.doctorId),
+        booking_date: approveData?.booking_date,
+        department: bookingData?.department,
+        displayName: bookingData?.displayName,
+        consulting_time: approveData?.consulting_time,
+        token: approveData?.token ? parseInt(approveData.token) : null,
+        status: "accepted",
+        booking_status: "hospital booking"
+      };
+
+      await createBooking(payload).unwrap();
+
+      showSuccessToast("Appointment confirmed successfully!", 4000);
+      setShowApproveModal(false);
+      setBookingData(null);
+      setAppointmentPatient(null);
+      navigateTo('/appointments');
+    } catch (err) {
+      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
+    }
+  };
 
   // Register socket event listeners
   useEffect(() => {
@@ -90,9 +279,93 @@ const HospitalPatientsList = () => {
     };
   }, [refetch, eventsRegistered]);
 
+  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Handle click outside for menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleMenu = (patientId) => {
+    setActiveMenu(activeMenu === patientId ? null : patientId);
+  };
+
+  // Row Action Menu with 3 dots
+  const RowActionMenu = ({ patient }) => {
+    const isDeleted = patient.isDelete;
+    const patientId = patient.id || patient._id;
+
+    return (
+      <div className="relative inline-block">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMenu(patientId);
+          }} 
+          className="p-2 rounded hover:bg-gray-100 transition-colors"
+        >
+          <MoreVertical size={18} className="text-gray-600" />
+        </button>
+        {activeMenu === patientId && (
+          <div 
+            ref={menuRef}
+            className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+          >
+            {!isDeleted && (
+              <>
+                <button 
+                  onClick={() => { handleViewDetails(patient); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Eye size={16} /> View Details
+                </button>
+                {canModifyPatients && (
+                  <button 
+                    onClick={() => { handleEditPatient(patient); }} 
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <Edit size={16} /> Edit
+                  </button>
+                )}
+                <button 
+                  onClick={() => { handleAddAppointmentModal(patient); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
+                >
+                  <Calendar size={16} /> Add Appointment
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                {canModifyPatients && (
+                  <button 
+                    onClick={() => { handleDeleteClick(patient); }} 
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                  >
+                    <Trash2 size={16} /> Delete
+                  </button>
+                )}
+              </>
+            )}
+            {isDeleted && canModifyPatients && (
+              <button 
+                onClick={() => { handleRecoverPatient(patient); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
+              >
+                <RotateCcw size={16} /> Recover Patient
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -104,16 +377,26 @@ const HospitalPatientsList = () => {
 
   return (
     <div>
+      {/* Header with Add Patient Button */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
           </Button>
+          {canModifyPatients && (
+            <Button 
+              onClick={handleAddPatient} 
+              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <Plus size={16} /> Add Patient
+            </Button>
+          )}
         </div>
         <h1 className="text-2xl font-bold text-gray-800">Patients List</h1>
         <p className="text-sm text-gray-500 mt-1">Total Patients: {totalItems}</p>
       </div>
 
+      {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -127,53 +410,103 @@ const HospitalPatientsList = () => {
         </div>
       </div>
 
+      {/* Patients Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {patients.map((patient) => (
-          <Card key={patient.id || patient._id} className="p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User size={20} className="text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{patient.name}</h3>
-                <p className="text-xs text-gray-500">ID: {patient.id || patient._id}</p>
-                <div className="space-y-1 mt-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Phone size={14} className="text-gray-400" />
-                    <span>{patient.mobileNumber}</span>
+        {transformedPatients.map((patient) => {
+          const isDeleted = patient.isDelete;
+          
+          return (
+            <Card key={patient.id || patient._id} className={`p-4 hover:shadow-md transition-shadow ${isDeleted ? 'bg-gray-50 border-gray-300' : ''}`}>
+              <div className="flex items-start gap-3">
+                <Avatar className={`w-12 h-12 ${isDeleted ? 'opacity-60' : ''}`}>
+                  <AvatarImage 
+                    src={getS3ImageUrl(patient.imageKey)} 
+                    alt={patient.name}
+                    className="object-cover"
+                  />
+                  <AvatarFallback className={`${isDeleted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
+                    {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className={`font-semibold ${isDeleted ? 'text-gray-500' : 'text-gray-900'}`}>
+                        {patient.name}
+                      </h3>
+                      <p className="text-xs text-gray-500">ID: {formatPatientId(patient.id || patient._id)}</p>
+                      {isDeleted && (
+                        <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 mt-1">
+                          Deleted
+                        </Badge>
+                      )}
+                    </div>
+                    <RowActionMenu patient={patient} />
                   </div>
-                  {patient.email && (
+                  <div className="space-y-1 mt-2">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Mail size={14} className="text-gray-400" />
-                      <span>{patient.email}</span>
+                      <Phone size={14} className="text-gray-400" />
+                      <span>{patient.mobileNumber}</span>
+                    </div>
+                    {patient.email && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Mail size={14} className="text-gray-400" />
+                        <span>{patient.email}</span>
+                      </div>
+                    )}
+                    {patient.gender && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <User size={14} className="text-gray-400" />
+                        <span>{patient.gender}, {patient.age || 'N/A'} years</span>
+                      </div>
+                    )}
+                    {patient.bloodGroup && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Droplet size={14} className="text-gray-400" />
+                        <span>Blood Group: {patient.bloodGroup}</span>
+                      </div>
+                    )}
+                    {patient.patientType && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Calendar size={14} className="text-gray-400" />
+                        <span>Type: {patient.patientType}</span>
+                      </div>
+                    )}
+                    {patient.addressLine && (
+                      <div className="flex items-start gap-2 text-sm text-gray-600">
+                        <MapPin size={14} className="text-gray-400 mt-0.5" />
+                        <span>{patient.addressLine}</span>
+                      </div>
+                    )}
+                  </div>
+                  {!isDeleted && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <button 
+                        onClick={() => handleAddAppointmentModal(patient)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                      >
+                        <Calendar size={14} /> Add Appointment
+                      </button>
                     </div>
                   )}
-                  {patient.gender && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <User size={14} className="text-gray-400" />
-                      <span>{patient.gender}, {patient.age} years</span>
-                    </div>
-                  )}
-                  {patient.bloodGroup && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Droplet size={14} className="text-gray-400" />
-                      <span>Blood Group: {patient.bloodGroup}</span>
-                    </div>
-                  )}
-                  {patient.address?.place && (
-                    <div className="flex items-start gap-2 text-sm text-gray-600">
-                      <MapPin size={14} className="text-gray-400 mt-0.5" />
-                      <span>{patient.address.place}, {patient.address.district}</span>
+                  {isDeleted && canModifyPatients && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <button 
+                        onClick={() => handleRecoverPatient(patient)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                      >
+                        <RotateCcw size={14} /> Recover Patient
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
 
-      {patients.length === 0 && (
+      {transformedPatients.length === 0 && (
         <div className="text-center py-12">
           <User size={48} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">No patients found</p>
@@ -192,6 +525,41 @@ const HospitalPatientsList = () => {
           />
         </div>
       )}
+
+      {/* Modals */}
+      {showAppointmentModal && (
+        <AddAppointmentModal
+          isOpen={showAppointmentModal}
+          patient={appointmentPatient}
+          onClose={() => setShowAppointmentModal(false)}
+          onProceedApprove={handleProceedApprove}
+        />
+      )}
+
+      {showApproveModal && bookingData && (
+        <ApproveRequestModal
+          requestData={bookingData}
+          initialDate={bookingData?.booking_date}
+          onClose={() => {
+            setShowApproveModal(false);
+            setBookingData(null);
+          }}
+          onConfirm={handleConfirmAppointment}
+          isLoading={isCreatingBooking}
+        />
+      )}
+
+      <DeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setPatientToDelete(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Delete Patient"
+        message="Are you sure you want to delete this patient? This action cannot be undone."
+        itemName={patientToDelete?.name}
+      />
     </div>
   );
 };
