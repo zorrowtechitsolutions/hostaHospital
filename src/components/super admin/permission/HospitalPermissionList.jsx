@@ -9,10 +9,7 @@ import {
   useGetRolePermissionsQuery,
 } from "../../../../app/service/rolePermission";
 import { useGetPermissionsQuery } from "../../../../app/service/permission";
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
 import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
 
@@ -26,46 +23,34 @@ const HospitalPermissionList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const [createRolePermission] = useCreateRolePermissionMutation();
 
-  // Get all permissions data
   const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
-  
-  // Get role permissions - uses roleId from params
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
     roleId,
   });
 
-  // ✅ Register socket event listeners for real-time updates
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering permission event listeners for Hospital Permission...");
-    
     registerPermissionEvents({
-      onPermissionRegistered: (data) => {
-        console.log("🔑 New permission registered:", data);
+      onPermissionRegistered: () => {
         showSuccessToast(`New permission created!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionUpdated: (data) => {
-        console.log("✏️ Permission updated:", data);
+      onPermissionUpdated: () => {
         showSuccessToast(`Permission updated!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionDeleted: (data) => {
-        console.log("🗑️ Permission deleted:", data);
+      onPermissionDeleted: () => {
         showSuccessToast(`Permission deleted!`, 3000);
         refetchPermissions();
       }
     });
 
     registerRolePermissionEvents({
-      onRolePermissionUpdated: (data) => {
-        console.log("🔐 Role permission updated:", data);
+      onRolePermissionUpdated: () => {
         showSuccessToast(`Role permissions updated!`, 3000);
         refetchRolePermissions();
         refetchPermissions();
@@ -75,38 +60,32 @@ const HospitalPermissionList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering permission events for Hospital Permission...");
       unregisterPermissionEvents();
       unregisterRolePermissionEvents();
       setEventsRegistered(false);
     };
   }, [refetchPermissions, refetchRolePermissions]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Permission events will work!");
       if (!eventsRegistered) {
         registerPermissionEvents({
-          onPermissionRegistered: (data) => {
-            console.log("🔑 New permission registered (reconnect):", data);
+          onPermissionRegistered: () => {
             showSuccessToast(`New permission created!`, 3000);
             refetchPermissions();
           },
-          onPermissionUpdated: (data) => {
-            console.log("✏️ Permission updated (reconnect):", data);
+          onPermissionUpdated: () => {
             showSuccessToast(`Permission updated!`, 3000);
             refetchPermissions();
           },
-          onPermissionDeleted: (data) => {
-            console.log("🗑️ Permission deleted (reconnect):", data);
+          onPermissionDeleted: () => {
             showSuccessToast(`Permission deleted!`, 3000);
             refetchPermissions();
           }
         });
         registerRolePermissionEvents({
-          onRolePermissionUpdated: (data) => {
-            console.log("🔐 Role permission updated (reconnect):", data);
+          onRolePermissionUpdated: () => {
             showSuccessToast(`Role permissions updated!`, 3000);
             refetchRolePermissions();
             refetchPermissions();
@@ -116,47 +95,17 @@ const HospitalPermissionList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Permission events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetchPermissions, refetchRolePermissions, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
+  // Dynamically build modules from permissionsData
   useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PERMISSION/HOSPITAL: ${event}:`, args);
-    };
+    if (!permissionsData?.data?.length) return;
 
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Log the permissions data to see the structure
-  useEffect(() => {
-    console.log("📊 permissionsData:", permissionsData);
-    console.log("📊 permissionData (role permissions):", permissionData);
-  }, [permissionsData, permissionData]);
-
-  // Dynamically build modules from permissionsData using module and action fields
-  useEffect(() => {
-    if (!permissionsData?.data?.length) {
-      console.log("⚠️ No permissionsData available");
-      return;
-    }
-
-    // ✅ REMOVED "doctor" from hidden modules to show doctor permissions
     const hiddenModules = [
       "users",
       "donors",
@@ -170,34 +119,16 @@ const HospitalPermissionList = () => {
       "role-permission",
       "Rolepermission",
       "Category",
-      // "doctor" is NOT hidden anymore - this was the issue!
     ];
 
     const modulesMap = new Map();
-
-    // Log all unique module names to see what's available
-    const uniqueModules = new Set();
-    permissionsData.data.forEach((permission) => {
-      if (permission.module) {
-        uniqueModules.add(permission.module);
-      }
-    });
-    console.log("📋 All available modules:", Array.from(uniqueModules));
 
     permissionsData.data.forEach((permission) => {
       const moduleName = permission.module;
       const action = permission.action;
 
-      // Check if module should be hidden
-      if (hiddenModules.includes(moduleName?.toLowerCase())) {
-        console.log(`🔒 Hiding module: ${moduleName}`);
-        return;
-      }
-
-      if (!moduleName || !action) {
-        console.log(`⚠️ Skipping permission with missing module or action:`, permission);
-        return;
-      }
+      if (hiddenModules.includes(moduleName?.toLowerCase())) return;
+      if (!moduleName || !action) return;
 
       if (!modulesMap.has(moduleName)) {
         modulesMap.set(moduleName, {
@@ -230,63 +161,39 @@ const HospitalPermissionList = () => {
           module.viewId = permission.id;
           break;
         default:
-          console.warn("Unknown action:", action);
+          break;
       }
     });
 
-    const modulesArray = Array.from(modulesMap.values());
-    console.log("✅ Built modules (hidden modules excluded):", modulesArray);
-    console.log(`✅ Total modules: ${modulesArray.length}`);
-    setMainModules(modulesArray);
+    setMainModules(Array.from(modulesMap.values()));
   }, [permissionsData]);
 
-  // ✅ FIXED: Apply assigned permissions to modules with CORRECT dependency array
+  // Apply assigned permissions to modules
   useEffect(() => {
-    console.log("🔍 Checking permissionData:", permissionData);
-    console.log("🔍 mainModules.length:", mainModules.length);
-    
-    if (!permissionData || mainModules.length === 0) {
-      console.log("⏳ Skipping assignment - permissionData or mainModules not ready");
-      return;
-    }
+    if (!permissionData || mainModules.length === 0) return;
 
-    // Handle different data structures
     let permissionsArray = null;
 
-    // Check if permissionData has a 'data' property that is an array
     if (permissionData.data && Array.isArray(permissionData.data)) {
       permissionsArray = permissionData.data;
-      console.log("📦 Using permissionData.data:", permissionsArray);
-    } 
-    // Check if permissionData itself is an array
-    else if (Array.isArray(permissionData)) {
+    } else if (Array.isArray(permissionData)) {
       permissionsArray = permissionData;
-      console.log("📦 Using permissionData as array:", permissionsArray);
-    }
-    // Check if permissionData has a 'data' property that is an object with arrays
-    else if (permissionData.data && typeof permissionData.data === 'object') {
+    } else if (permissionData.data && typeof permissionData.data === 'object') {
       const possibleArrays = Object.values(permissionData.data).filter(Array.isArray);
       if (possibleArrays.length > 0) {
         permissionsArray = possibleArrays[0];
-        console.log("📦 Extracted array from object:", permissionsArray);
       }
     }
 
-    // If we couldn't find an array, try to check if permissionData has a 'permissions' property
     if (!permissionsArray && permissionData.permissions && Array.isArray(permissionData.permissions)) {
       permissionsArray = permissionData.permissions;
-      console.log("📦 Using permissionData.permissions:", permissionsArray);
     }
 
-    // If we still don't have an array, try to use the whole permissionData if it's an array
     if (!permissionsArray && Array.isArray(permissionData)) {
       permissionsArray = permissionData;
-      console.log("📦 Using permissionData directly as array:", permissionsArray);
     }
 
     if (!permissionsArray || !Array.isArray(permissionsArray) || permissionsArray.length === 0) {
-      console.log("ℹ️ No permissions assigned yet or empty array");
-      // Reset all modules to unchecked
       setMainModules(prev =>
         prev.map(module => ({
           ...module,
@@ -299,50 +206,21 @@ const HospitalPermissionList = () => {
       return;
     }
 
-    // ✅ Extract permission IDs from the array
     const assignedPermissions = permissionsArray.map(item => {
-      // Handle different possible property names
       const id = item.permissionId || item.permission_id || item.id || item.permission;
       return Number(id);
     }).filter(id => !isNaN(id));
 
-    console.log("✅ Assigned permission IDs:", assignedPermissions);
-    console.log(`✅ Total assigned permissions: ${assignedPermissions.length}`);
-
-    // ✅ Update modules with assigned permissions
     setMainModules(prev =>
-      prev.map(module => {
-        const hasCreate = module.createId ? assignedPermissions.includes(Number(module.createId)) : false;
-        const hasEdit = module.editId ? assignedPermissions.includes(Number(module.editId)) : false;
-        const hasDelete = module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false;
-        const hasView = module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false;
-        
-        // Log for doctor module specifically
-        if (module.name.toLowerCase() === 'doctor') {
-          console.log(`🩺 Doctor module permissions:`, {
-            name: module.name,
-            createId: module.createId,
-            editId: module.editId,
-            deleteId: module.deleteId,
-            viewId: module.viewId,
-            hasCreate,
-            hasEdit,
-            hasDelete,
-            hasView,
-            assignedPermissions
-          });
-        }
-        
-        return {
-          ...module,
-          create: hasCreate,
-          edit: hasEdit,
-          delete: hasDelete,
-          view: hasView,
-        };
-      })
+      prev.map(module => ({
+        ...module,
+        create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
+        edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
+        delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
+        view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
+      }))
     );
-  }, [permissionData, mainModules.length]); // ✅ Fixed dependency array
+  }, [permissionData, mainModules.length]);
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -379,22 +257,13 @@ const HospitalPermissionList = () => {
         if (module.view && module.viewId) permissionIds.push(module.viewId);
       });
 
-      console.log("Saving permissions:", permissionIds);
-      console.log("Saving permissions details:", {
-        roleId: Number(roleId),
-        permissionIds: permissionIds,
-        count: permissionIds.length
-      });
-
       const payload = {
         roleId: Number(roleId),
         permissionIds,
       };
 
-      const result = await createRolePermission(payload).unwrap();
-      console.log("Save result:", result);
+      await createRolePermission(payload).unwrap();
 
-      // ✅ Emit socket event for role permission updated
       socket.emit("role_permission_event", {
         event: "ROLEPERMISSION_UPDATED",
         data: {
@@ -408,12 +277,10 @@ const HospitalPermissionList = () => {
 
       showSuccessToast("Permission saved successfully");
       
-      // ✅ Refetch data after save to ensure UI is in sync
       await refetchPermissions();
       await refetchRolePermissions();
       
     } catch (error) {
-      console.error("Save error:", error);
       showErrorToast(error?.data?.message || "Failed to save permission");
     } finally {
       setIsSaving(false);
@@ -427,7 +294,6 @@ const HospitalPermissionList = () => {
     }
   };
 
-  // ✅ FIXED: Back navigation goes to HospitalUserPermissions
   const handleBack = () => {
     navigate(`/super-admin/hospital-users/${hospitalId}/permissions`, {
       state: {
@@ -556,7 +422,6 @@ const HospitalPermissionList = () => {
         {mainModules.length === 0 && !isLoadingPermissions ? (
           <Card className="p-8 text-center">
             <p className="text-gray-500">No permissions found. Please check the API response structure.</p>
-            <p className="text-xs text-gray-400 mt-2">Check console for permissionsData log</p>
           </Card>
         ) : (
           <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} filteredModules={filteredMainModules} />

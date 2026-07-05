@@ -1,4 +1,5 @@
-// app/service/ambulance.ts - Ambulance API service
+// app/service/ambulance.ts - Ambulance API service with server-side pagination
+
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
 
@@ -29,6 +30,14 @@ export interface AmbulanceResponse {
   success: boolean;
   message: string;
   data?: Ambulance | Ambulance[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+    hasNextPage?: boolean;
+    hasPreviousPage?: boolean;
+  };
 }
 
 export interface GetAmbulanceParams {
@@ -43,6 +52,9 @@ export interface GetAmbulanceParams {
   pincode?: string | number;
   vehicleType?: string;
   search_query?: string;
+  page?: number;
+  limit?: number;
+  skipHospitalFilter?: boolean; // ✅ ADDED: Allow skipping hospital filter for Super Admin
 }
 
 // ================= API =================
@@ -50,6 +62,7 @@ export interface GetAmbulanceParams {
 export const ambulanceApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
+    // ================= GET AMBULANCES =================
     getAmbulance: builder.query<
       AmbulanceResponse,
       GetAmbulanceParams | void
@@ -57,18 +70,32 @@ export const ambulanceApi = api.injectEndpoints({
       query: (params: GetAmbulanceParams = {}) => {
         const queryParams = new URLSearchParams();
 
+        // ✅ Only auto-inject hospitalId if skipHospitalFilter is false
+        const skipHospitalFilter = params.skipHospitalFilter === true;
+        
+        if (!skipHospitalFilter) {
+          const auth = getAuthUser();
+          if (auth?.id) {
+            queryParams.append("hospitalId", String(auth.id));
+          }
+        }
+
+        // Override hospitalId if provided in params (takes precedence)
         if (params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
+        // User ID filter
         if (params.userId) {
           queryParams.append("userId", String(params.userId));
         }
 
+        // Name filter
         if (params.name) {
           queryParams.append("name", params.name);
         }
 
+        // Address filters
         if (params.country) {
           queryParams.append("country", params.country);
         }
@@ -89,12 +116,23 @@ export const ambulanceApi = api.injectEndpoints({
           queryParams.append("pincode", String(params.pincode));
         }
 
+        // Vehicle type filter
         if (params.vehicleType) {
           queryParams.append("vehicleType", params.vehicleType);
         }
 
+        // Search query
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
+        }
+
+        // Pagination parameters
+        if (params.page) {
+          queryParams.append("page", String(params.page));
+        }
+
+        if (params.limit) {
+          queryParams.append("limit", String(params.limit));
         }
 
         const queryString = queryParams.toString();
@@ -114,6 +152,7 @@ export const ambulanceApi = api.injectEndpoints({
       },
     }),
 
+    // ================= CREATE AMBULANCE =================
     createAmbulance: builder.mutation<
       AmbulanceResponse,
       Omit<Ambulance, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>

@@ -103,7 +103,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const handleCountryChange = (code, name) => {
-    console.log("Country selected in modal:", { code, name });
     setCountryCode(code);
     setFormData(prev => ({
       ...prev,
@@ -116,7 +115,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const handleStateChange = (code, name) => {
-    console.log("State selected in modal:", { code, name });
     setStateCode(code);
     setFormData(prev => ({
       ...prev,
@@ -127,7 +125,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const handleCityChange = (name) => {
-    console.log("City/District selected in modal:", name);
     setFormData(prev => ({
       ...prev,
       address: { ...prev.address, district: name, place: '', pincode: '' }
@@ -172,11 +169,8 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
   };
 
   const handleSubmit = () => {
-    
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
-      console.log("Validation failed. First error field:", firstErrorField);
-      console.log("All errors:", errors);
       
       const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
       if (errorElement) {
@@ -200,8 +194,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
         pincode: Number(formData.address.pincode)
       }
     };
-
- 
     
     onSave(payload);
     
@@ -217,7 +209,6 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
     setTouched({});
     setIsSubmitting(false);
     onClose();
-    
   };
 
   return (

@@ -1,4 +1,4 @@
-// src/components/users/AddNewUser.jsx - With dynamic roles from API (FIXED)
+// src/components/users/AddNewUser.jsx - With dynamic roles from API
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -41,11 +41,9 @@ const AddNewUser = () => {
   const doctorDropdownRef = useRef(null);
   const staffDropdownRef = useRef(null);
   
-  // Selected doctors and staff
   const [selectedDoctors, setSelectedDoctors] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState([]);
   
-  // Form state - use roleId instead of role name
   const [formData, setFormData] = useState({
     roleType: 'doctor',
     roleId: ''
@@ -53,12 +51,8 @@ const AddNewUser = () => {
   
   const [errors, setErrors] = useState({});
 
-  // Get hospital ID for debugging
-  const hospitalIdFromAuth = getHospitalId();
-  console.log("=== ADD NEW USER DEBUG ===");
-  console.log("Hospital ID from getHospitalId():", hospitalIdFromAuth);
+  const hospitalId = getHospitalId();
 
-  // Fetch doctors and staff from API
   const { 
     data: doctorsData, 
     isLoading: doctorsLoading,
@@ -71,41 +65,28 @@ const AddNewUser = () => {
     refetch: refetchStaff 
   } = useGetStaffQuery({ limit: 100 });
   
-  // Fetch roles from API - same pattern as UserPermissions
-  const hospitalId = getHospitalId();
-
-const {
-  data: rolesData,
-  isLoading: rolesLoading,
-} = useGetRolesQuery({
-  hospitalId,
-  limit: 100
-});
-  
-  console.log("Roles API Response:", rolesData);
+  const {
+    data: rolesData,
+    isLoading: rolesLoading,
+  } = useGetRolesQuery({
+    hospitalId,
+    limit: 100
+  });
   
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
 
-  // Transform API data
   const doctorsList = doctorsData?.data || doctorsData || [];
   const staffList = staffData?.data || staffData || [];
   
-  // Extract roles from response - handle both 'admin' and 'data' arrays (like UserPermissions)
+  const rolesList = [
+    ...(rolesData?.admin || []).filter(
+      role => role.id === 2
+    ),
+    ...(rolesData?.data || []).filter(
+      role => (role.hospitalId) === hospitalId
+    )
+  ];
 
-const rolesList = [
-  ...(rolesData?.admin || []).filter(
-    role => role.id === 2
-  ),
-
-  ...(rolesData?.data || []).filter(
-    role => (role.hospitalId) === hospitalId
-  )
-];
-  
-  console.log("Roles List extracted:", rolesList);
-  console.log("Number of roles:", rolesList.length);
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target)) {
@@ -119,7 +100,6 @@ const rolesList = [
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -134,7 +114,6 @@ const rolesList = [
     }
   };
 
-  // Handle role type change
   const handleRoleTypeChange = (e) => {
     const type = e.target.value;
     setSelectedRoleType(type);
@@ -147,7 +126,6 @@ const rolesList = [
     setSelectedStaff([]);
   };
 
-  // Handle doctor checkbox selection
   const handleDoctorCheckbox = (doctorId) => {
     setSelectedDoctors(prev => {
       if (prev.includes(doctorId)) {
@@ -158,7 +136,6 @@ const rolesList = [
     });
   };
 
-  // Handle select all doctors
   const handleSelectAllDoctors = () => {
     if (selectedDoctors.length === doctorsList.length) {
       setSelectedDoctors([]);
@@ -168,7 +145,6 @@ const rolesList = [
     }
   };
 
-  // Handle staff checkbox selection
   const handleStaffCheckbox = (staffId) => {
     setSelectedStaff(prev => {
       if (prev.includes(staffId)) {
@@ -179,7 +155,6 @@ const rolesList = [
     });
   };
 
-  // Handle select all staff
   const handleSelectAllStaff = () => {
     if (selectedStaff.length === staffList.length) {
       setSelectedStaff([]);
@@ -189,7 +164,6 @@ const rolesList = [
     }
   };
 
-  // Validate form
   const validateForm = () => {
     const newErrors = {};
     
@@ -209,13 +183,11 @@ const rolesList = [
     return Object.keys(newErrors).length === 0;
   };
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
     const roleName = getRoleNameById(roleId);
     const roleNameLower = roleName?.toLowerCase();
@@ -225,7 +197,6 @@ const rolesList = [
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Handle form submission - Assign permissions via API
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -239,24 +210,14 @@ const rolesList = [
     try {
       const hospitalId = getHospitalId();
       
-      console.log("=== PERMISSION ASSIGNMENT DEBUG ===");
-      console.log("Hospital ID from getHospitalId():", hospitalId);
-      
       if (!hospitalId) {
         showErrorToast('Hospital ID not found. Please log in again.', 3000);
         setIsLoading(false);
         return;
       }
       
-      // Use the actual role ID from the database - NO HARDCODING
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
-      
-      console.log("Selected Role ID (from API):", roleId);
-      console.log("Selected Role Name:", selectedRoleName);
-      console.log("Hospital ID (parsed):", parseInt(hospitalId));
-      console.log("User Type:", selectedRoleType);
-      console.log("Selected Doctors/Staff:", selectedRoleType === 'doctor' ? selectedDoctors : selectedStaff);
       
       if (selectedRoleType === 'doctor') {
         const doctorIds = selectedDoctors.map(id => ({
@@ -318,7 +279,6 @@ const rolesList = [
       }, 2000);
       
     } catch (error) {
-      console.error('Error assigning permissions:', error);
       const errorMessage = error?.data?.message || 'Failed to assign permissions. Please try again.';
       showErrorToast(errorMessage, 4000);
       setIsLoading(false);
@@ -329,7 +289,6 @@ const rolesList = [
     navigate('/users');
   };
 
-  // Get selected names for display
   const getSelectedDoctorNames = () => {
     return selectedDoctors.map(id => {
       const doctor = doctorsList.find(d => String(d.id) === id);
@@ -413,7 +372,7 @@ const rolesList = [
                 </div>
               </div>
 
-              {/* Assign Role - Dynamic dropdown from API */}
+              {/* Assign Role */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Assign Role <span className="text-red-500">*</span>
@@ -444,10 +403,9 @@ const rolesList = [
                 )}
               </div>
 
-              {/* Select Doctors / Staff - Rest of the code remains the same */}
+              {/* Select Doctors / Staff */}
               <div>
                 {selectedRoleType === 'doctor' ? (
-                  // Doctor selection dropdown (same as before)
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Select Doctors <span className="text-red-500">*</span>
@@ -527,7 +485,6 @@ const rolesList = [
                     )}
                   </div>
                 ) : (
-                  // Staff selection dropdown (same as before)
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Select Staff Members <span className="text-red-500">*</span>

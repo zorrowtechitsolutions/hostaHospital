@@ -135,7 +135,6 @@ const Users = () => {
 
   // Transform API data to aggregated user format by type
   const transformToUsers = () => {
-    // Return aggregated user types without roles
     const aggregatedUsers = [];
     
     if (doctorsData?.data?.length > 0 || doctorsData?.length > 0) {
@@ -274,10 +273,6 @@ const Users = () => {
     showSuccessToast(`Exported ${exportData.length} user records as CSV`, 2000);
   };
 
-  const handleExportExcel = () => {
-    handleExportCSV();
-  };
-
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -296,7 +291,6 @@ const Users = () => {
   };
 
   const handleEditUser = (user) => {
-    // Navigate to edit page for the user type
     navigate(`/edit-user/${user.userType.toLowerCase()}`);
   };
 
@@ -308,7 +302,6 @@ const Users = () => {
   const handleConfirmDelete = async () => {
     if (userToDelete) {
       try {
-        // Find and delete the role permission for this user type
         const permissions = rolePermissions?.data || [];
         let permissionId = null;
         
@@ -332,7 +325,6 @@ const Users = () => {
           showWarningToast(`No permission found for ${userToDelete.userType}.`, 3000);
         }
         
-        // Refresh all data
         await Promise.all([
           refetchDoctors(),
           refetchStaff(),
@@ -343,7 +335,6 @@ const Users = () => {
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (error) {
-        console.error('Error deleting user permission:', error);
         const errorMessage = error?.data?.message || 'Failed to remove user permission. Please try again.';
         showErrorToast(errorMessage, 4000);
       }
@@ -358,7 +349,6 @@ const Users = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Show loading state
   if (isLoading) {
     return <SkeletonLoader />;
   }
@@ -411,7 +401,7 @@ const Users = () => {
               </Button>
             </label>
             
-            <Button variant="outline" size="sm" onClick={handleExportExcel} title="Export Excel">
+            <Button variant="outline" size="sm" onClick={handleExportCSV} title="Export CSV">
               <Download size={16} />
             </Button>
             

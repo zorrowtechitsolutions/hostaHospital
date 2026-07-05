@@ -11,93 +11,67 @@ const VitalsTab = ({
   handleViewVitalDetails, 
   handleDeleteClick, 
   openMenu, 
-  setOpenMenu, 
-  getStatusBadge 
+  setOpenMenu
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // Fetch doctors data for mapping
-  const { data: doctorsData, error: doctorsError, isLoading: doctorsLoading } = useGetDoctorsQuery();
-  
-  // Fetch bookings to get doctor info from appointments
-  const { data: bookingResponse, error: bookingError, isLoading: bookingLoading } = useGetBookingsQuery({});
-  
-  // Fetch prescriptions to get doctor info
+  const { data: doctorsData, isLoading: doctorsLoading } = useGetDoctorsQuery();
+  const { data: bookingResponse, isLoading: bookingLoading } = useGetBookingsQuery({});
   const { data: prescriptionsResponse, isLoading: prescriptionsLoading } = useGetPrescriptionsQuery({});
 
   const vitalsList = patient?.vitalsList || [];
   
-  // Debug logs for API responses
-  console.log("Original Vitals List:", vitalsList);
-
-  // Log first vital item structure
-  if (vitalsList.length > 0) {
-    console.log("First Vital Item Keys:", Object.keys(vitalsList[0]));
-    console.log("First Vital Item Full Data:", vitalsList[0]);
-  }
-  
-  // Get bookings list with proper structure handling
   const bookingsList = useMemo(() => {
     if (!bookingResponse) return [];
     
-    // Handle different response structures
-    let bookings = [];
     if (Array.isArray(bookingResponse)) {
-      bookings = bookingResponse;
+      return bookingResponse;
     } else if (bookingResponse.data && Array.isArray(bookingResponse.data)) {
-      bookings = bookingResponse.data;
+      return bookingResponse.data;
     } else if (bookingResponse.bookings && Array.isArray(bookingResponse.bookings)) {
-      bookings = bookingResponse.bookings;
+      return bookingResponse.bookings;
     } else if (bookingResponse.result && Array.isArray(bookingResponse.result)) {
-      bookings = bookingResponse.result;
+      return bookingResponse.result;
     } else if (bookingResponse.data?.result && Array.isArray(bookingResponse.data?.result)) {
-      bookings = bookingResponse.data.result;
+      return bookingResponse.data.result;
     }
     
-    console.log("Processed Bookings List:", bookings);
-    return bookings;
+    return [];
   }, [bookingResponse]);
   
-  // Get doctors list
   const doctorsList = useMemo(() => {
     if (!doctorsData) return [];
     
-    let doctors = [];
     if (Array.isArray(doctorsData)) {
-      doctors = doctorsData;
+      return doctorsData;
     } else if (doctorsData.data && Array.isArray(doctorsData.data)) {
-      doctors = doctorsData.data;
+      return doctorsData.data;
     } else if (doctorsData.doctors && Array.isArray(doctorsData.doctors)) {
-      doctors = doctorsData.doctors;
+      return doctorsData.doctors;
     } else if (doctorsData.result && Array.isArray(doctorsData.result)) {
-      doctors = doctorsData.result;
+      return doctorsData.result;
     }
     
-    console.log("Processed Doctors List:", doctors);
-    return doctors;
+    return [];
   }, [doctorsData]);
 
-  // Get prescriptions list
   const prescriptionsList = useMemo(() => {
     if (!prescriptionsResponse) return [];
     
-    let prescriptions = [];
     if (Array.isArray(prescriptionsResponse)) {
-      prescriptions = prescriptionsResponse;
+      return prescriptionsResponse;
     } else if (prescriptionsResponse.data && Array.isArray(prescriptionsResponse.data)) {
-      prescriptions = prescriptionsResponse.data;
+      return prescriptionsResponse.data;
     } else if (prescriptionsResponse.prescriptions && Array.isArray(prescriptionsResponse.prescriptions)) {
-      prescriptions = prescriptionsResponse.prescriptions;
+      return prescriptionsResponse.prescriptions;
     } else if (prescriptionsResponse.result && Array.isArray(prescriptionsResponse.result)) {
-      prescriptions = prescriptionsResponse.result;
+      return prescriptionsResponse.result;
     }
     
-    console.log("Processed Prescriptions List:", prescriptions);
-    return prescriptions;
+    return [];
   }, [prescriptionsResponse]);
 
-  // Helper function to safely get nested property
   const getNestedValue = (obj, path, defaultValue = null) => {
     if (!obj) return defaultValue;
     
@@ -114,28 +88,14 @@ const VitalsTab = ({
     return current !== undefined && current !== null ? current : defaultValue;
   };
 
-  // Map vitals with correct doctor information
   const mappedVitalsList = useMemo(() => {
     if (!vitalsList || vitalsList.length === 0) return [];
 
-    console.log("=== VitalsTab Debug Logs ===");
-    console.log("Doctors Data:", doctorsData);
-    console.log("Doctors Error:", doctorsError);
-    console.log("Booking Response:", bookingResponse);
-    console.log("Booking Error:", bookingError);
-    console.log("Prescriptions Response:", prescriptionsResponse);
-    
-    return vitalsList.map((item, index) => {
+    return vitalsList.map((item) => {
       let doctor = null;
       let doctorName = null;
       let doctorSpecialization = null;
       
-      console.log(`\n--- Processing Vital Item ${index} ---`);
-      console.log("Item ID:", item.id || item._id || 'unknown');
-      console.log("Full Item:", item);
-      console.log(JSON.stringify(item, null, 2));
-      
-      // Get all possible doctor ID sources
       const possibleDoctorIds = [
         item.doctorId,
         item.doctor_id,
@@ -151,14 +111,10 @@ const VitalsTab = ({
         getNestedValue(item, 'appointment.doctor_id'),
       ];
       
-      // Filter out null/undefined/empty values
       const validDoctorIds = possibleDoctorIds.filter(id => 
         id !== null && id !== undefined && id !== "" && id !== "null" && id !== "undefined"
       );
       
-      console.log("Valid Doctor IDs found:", validDoctorIds);
-      
-      // Get all possible doctor name sources
       const possibleDoctorNames = [
         item.doctorName,
         item.doctor_name,
@@ -175,7 +131,6 @@ const VitalsTab = ({
         getNestedValue(item, 'appointment.doctor_name'),
       ];
       
-      // Filter out null/undefined/empty values and "Dr. Unknown"
       const validDoctorNames = possibleDoctorNames.filter(
         name =>
           name &&
@@ -183,10 +138,7 @@ const VitalsTab = ({
           name !== "null" &&
           name !== "undefined"
       );
-
-      console.log("Valid Doctor Names found:", validDoctorNames);
       
-      // Get all possible specialization sources
       const possibleSpecializations = [
         item.specialization,
         item.department,
@@ -209,9 +161,7 @@ const VitalsTab = ({
         spec !== "null" && spec !== "undefined"
       );
       
-      console.log("Valid Specializations found:", validSpecializations);
-      
-      // STRATEGY 1: Try to find doctor by ID from vitals
+      // Strategy 1: Find doctor by ID
       if (validDoctorIds.length > 0 && doctorsList.length > 0) {
         for (const id of validDoctorIds) {
           const foundDoctor = doctorsList.find(doc => {
@@ -221,13 +171,12 @@ const VitalsTab = ({
           
           if (foundDoctor) {
             doctor = foundDoctor;
-            console.log(`Found doctor by ID ${id}:`, doctor);
             break;
           }
         }
       }
       
-      // STRATEGY 2: Try to find doctor by name
+      // Strategy 2: Find doctor by name
       if (!doctor && validDoctorNames.length > 0 && doctorsList.length > 0) {
         for (const name of validDoctorNames) {
           const searchName = String(name).toLowerCase().trim();
@@ -236,23 +185,18 @@ const VitalsTab = ({
             const docName1 = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
             const docName2 = (doc.fullName || "").toLowerCase().trim();
             
-            return (
-              docName1 === searchName ||
-              docName2 === searchName
-            );
+            return docName1 === searchName || docName2 === searchName;
           });
           
           if (foundDoctor) {
             doctor = foundDoctor;
-            console.log(`Found doctor by name "${name}":`, doctor);
             break;
           }
         }
       }
       
-      // STRATEGY 3: Try to find from booking
+      // Strategy 3: Find from booking
       if (!doctor) {
-        // Get booking ID from various sources
         const bookingIds = [
           item.bookingId,
           item.booking_id,
@@ -268,8 +212,6 @@ const VitalsTab = ({
           id !== null && id !== undefined && id !== "" && id !== "null" && id !== "undefined"
         );
         
-        console.log("Valid Booking IDs:", validBookingIds);
-        
         if (validBookingIds.length > 0 && bookingsList.length > 0) {
           for (const bookingId of validBookingIds) {
             const booking = bookingsList.find(b => {
@@ -278,9 +220,6 @@ const VitalsTab = ({
             });
             
             if (booking) {
-              console.log("Found booking:", booking);
-              
-              // Try to get doctor info from booking
               const bookingDoctorName = booking.doctor_name || 
                                        booking.doctorName || 
                                        booking.displayName || 
@@ -293,9 +232,6 @@ const VitalsTab = ({
                                                   getNestedValue(booking, 'doctor.specialization') ||
                                                   getNestedValue(booking, 'doctor.department');
               
-              console.log("Booking doctor info:", { bookingDoctorName, bookingDoctorSpecialization });
-              
-              // Try to find the doctor in doctors list using booking info
               if (bookingDoctorName && doctorsList.length > 0) {
                 const searchName = String(bookingDoctorName).toLowerCase().trim();
                 const foundDoctor = doctorsList.find(doc => {
@@ -307,16 +243,13 @@ const VitalsTab = ({
                 
                 if (foundDoctor) {
                   doctor = foundDoctor;
-                  console.log("Found doctor from booking:", doctor);
                   break;
                 }
               }
               
-              // If no doctor found but we have booking doctor info, use it
               if (!doctor && bookingDoctorName) {
                 doctorName = bookingDoctorName;
                 doctorSpecialization = bookingDoctorSpecialization;
-                console.log("Using booking doctor info directly:", { doctorName, doctorSpecialization });
                 break;
               }
             }
@@ -324,12 +257,10 @@ const VitalsTab = ({
         }
       }
       
-      // STRATEGY 4: Try to find from consultation data
+      // Strategy 4: Find from consultation data
       if (!doctor && !doctorName) {
         const consultation = item.consultation || getNestedValue(item, 'fullData.consultation');
         if (consultation) {
-          console.log("Found consultation data:", consultation);
-          
           const consultationDoctorName = consultation.doctorName || 
                                         consultation.doctor_name || 
                                         getNestedValue(consultation, 'doctor.name') ||
@@ -338,9 +269,6 @@ const VitalsTab = ({
           const consultationSpecialization = consultation.specialization || 
                                              consultation.department;
           
-          console.log("Consultation doctor info:", { consultationDoctorName, consultationSpecialization });
-          
-          // Try to find doctor in doctors list
           if (consultationDoctorName && doctorsList.length > 0) {
             const searchName = String(consultationDoctorName).toLowerCase().trim();
             const foundDoctor = doctorsList.find(doc => {
@@ -352,24 +280,20 @@ const VitalsTab = ({
             
             if (foundDoctor) {
               doctor = foundDoctor;
-              console.log("Found doctor from consultation:", doctor);
             }
           }
           
           if (!doctor && consultationDoctorName) {
             doctorName = consultationDoctorName;
             doctorSpecialization = consultationSpecialization || "General Medicine";
-            console.log("Using consultation doctor info directly:", { doctorName, doctorSpecialization });
           }
         }
       }
       
-      // STRATEGY 5: Try to find from prescription data (nested)
+      // Strategy 5: Find from prescription
       if (!doctor && !doctorName) {
         const prescription = item.prescription || getNestedValue(item, 'fullData.prescription');
         if (prescription) {
-          console.log("Found prescription data:", prescription);
-          
           const prescriptionDoctorName = prescription.doctorName || 
                                         prescription.doctor_name || 
                                         prescription.prescribedBy;
@@ -378,7 +302,6 @@ const VitalsTab = ({
                                              prescription.department;
           
           if (prescriptionDoctorName) {
-            // Try to find doctor in doctors list
             if (doctorsList.length > 0) {
               const searchName = String(prescriptionDoctorName).toLowerCase().trim();
               const foundDoctor = doctorsList.find(doc => {
@@ -390,22 +313,19 @@ const VitalsTab = ({
               
               if (foundDoctor) {
                 doctor = foundDoctor;
-                console.log("Found doctor from prescription:", doctor);
               }
             }
             
             if (!doctor) {
               doctorName = prescriptionDoctorName;
               doctorSpecialization = prescriptionSpecialization || "General Medicine";
-              console.log("Using prescription doctor info directly:", { doctorName, doctorSpecialization });
             }
           }
         }
       }
 
-      // STRATEGY 6: Get doctor from prescription by ID (ENHANCED)
+      // Strategy 6: Find from prescription by ID
       if (!doctor && !doctorName) {
-        // Check both top-level and nested fullData for prescriptionId
         const prescriptionId = 
           item.prescriptionId ||
           item.prescription_id ||
@@ -413,8 +333,6 @@ const VitalsTab = ({
           getNestedValue(item, 'fullData.prescription_id') ||
           getNestedValue(item, 'prescription.id') ||
           getNestedValue(item, 'fullData.prescription.id');
-
-        console.log("Looking for prescription ID:", prescriptionId);
 
         if (prescriptionId && prescriptionsList.length > 0) {
           const prescription = prescriptionsList.find(
@@ -424,25 +342,7 @@ const VitalsTab = ({
             }
           );
 
-          console.log("Prescription lookup result:", { prescriptionId, prescription });
-          console.log("Full prescription object:", JSON.stringify(prescription, null, 2));
-
           if (prescription) {
-            // Log all possible doctor-related fields in the prescription
-            console.log("Prescription doctor fields:", {
-              doctorName: prescription.doctorName,
-              doctor_name: prescription.doctor_name,
-              prescribedBy: prescription.prescribedBy,
-              doctor: prescription.doctor,
-              doctorId: prescription.doctorId,
-              doctor_id: prescription.doctor_id,
-              doctorSpecialization: prescription.doctorSpecialization,
-              specialization: prescription.specialization,
-              department: prescription.department,
-              doctorSpeciality: prescription.doctorSpeciality
-            });
-
-            // Get doctor name from prescription - try all possible paths
             const prescriptionDoctorName = 
               prescription.doctorName ||
               prescription.doctor_name ||
@@ -457,7 +357,6 @@ const VitalsTab = ({
               getNestedValue(prescription, 'doctor.fullName') ||
               getNestedValue(prescription, 'doctorName.name');
 
-            // Get specialization from prescription - try all possible paths
             const prescriptionSpecialization = 
               prescription.doctorSpecialization ||
               prescription.specialization ||
@@ -470,13 +369,7 @@ const VitalsTab = ({
               prescription.doctorSpeciality ||
               getNestedValue(prescription, 'doctor.speciality');
 
-            console.log("Extracted prescription doctor data:", { 
-              prescriptionDoctorName, 
-              prescriptionSpecialization 
-            });
-
             if (prescriptionDoctorName) {
-              // Try to find the doctor in doctors list
               if (doctorsList.length > 0) {
                 const searchName = String(prescriptionDoctorName).toLowerCase().trim();
                 const foundDoctor = doctorsList.find(doc => {
@@ -488,26 +381,20 @@ const VitalsTab = ({
                 
                 if (foundDoctor) {
                   doctor = foundDoctor;
-                  console.log("Found doctor from prescription ID lookup:", doctor);
                 }
               }
 
-              // If doctor not found in doctors list, use the prescription data
               if (!doctor) {
                 doctorName = prescriptionDoctorName;
                 doctorSpecialization = prescriptionSpecialization || "General Medicine";
-                console.log("Using prescription doctor info from ID lookup:", { doctorName, doctorSpecialization });
               }
             } else {
-              // If no doctor name found in prescription, try to get it from doctor ID
               const prescriptionDoctorId = 
                 prescription.doctorId ||
                 prescription.doctor_id ||
                 prescription.doctor?.id ||
                 getNestedValue(prescription, 'doctor.doctorId') ||
                 getNestedValue(prescription, 'doctor.id');
-
-              console.log("Looking for doctor by ID from prescription:", prescriptionDoctorId);
 
               if (prescriptionDoctorId && doctorsList.length > 0) {
                 const foundDoctor = doctorsList.find(doc => {
@@ -517,7 +404,6 @@ const VitalsTab = ({
                 
                 if (foundDoctor) {
                   doctor = foundDoctor;
-                  console.log("Found doctor by ID from prescription:", doctor);
                 }
               }
             }
@@ -525,35 +411,23 @@ const VitalsTab = ({
         }
       }
       
-      // If doctor found from any strategy, get the name and specialization
       if (doctor) {
         doctorName = doctor.displayName || doctor.name || doctor.doctorName || "Dr. Unknown";
         doctorSpecialization = doctor.specialization || doctor.department || "General Medicine";
-        console.log("Final: Using doctor object:", { doctorName, doctorSpecialization });
       } else if (!doctorName) {
-        // Final fallback - use whatever is in the vital record
         const fallbackName = validDoctorNames.length > 0 ? validDoctorNames[0] : "Dr. Unknown";
         const fallbackSpecialization = validSpecializations.length > 0 ? validSpecializations[0] : "General Medicine";
         
         doctorName = fallbackName;
         doctorSpecialization = fallbackSpecialization;
-        console.log("Final: Using fallback values:", { doctorName, doctorSpecialization });
       }
 
-      const result = {
+      return {
         ...item,
         doctorName: doctorName,
         doctorSpecialization: doctorSpecialization,
         department: doctorSpecialization,
       };
-      
-      console.log("Final mapped result:", { 
-        id: result.id || result._id,
-        doctorName: result.doctorName, 
-        department: result.department 
-      });
-      
-      return result;
     });
   }, [vitalsList, doctorsList, bookingsList, prescriptionsList]);
 
@@ -572,50 +446,39 @@ const VitalsTab = ({
   const getVitalSummary = (vital) => {
     const metrics = [];
     
-    // Blood Pressure
     if (vital.bloodPressure && vital.bloodPressure !== "null" && vital.bloodPressure !== "") 
       metrics.push(`BP: ${vital.bloodPressure}`);
     
-    // Temperature
     if (vital.temperature && vital.temperature !== "null" && vital.temperature !== "") 
       metrics.push(`${vital.temperature}°F`);
     
-    // Pulse
     if (vital.pulse && vital.pulse !== "null" && vital.pulse !== "") 
       metrics.push(`Pulse: ${vital.pulse}`);
     
-    // Heart Rate
     if (vital.heartRate && vital.heartRate !== "null" && vital.heartRate !== "") 
       metrics.push(`HR: ${vital.heartRate}`);
     
-    // SPO2
     if (vital.spo2 && vital.spo2 !== "null" && vital.spo2 !== "") 
       metrics.push(`SPO2: ${vital.spo2}%`);
     
-    // Respiratory Rate
     if (vital.respiratoryRate && vital.respiratoryRate !== "null" && vital.respiratoryRate !== "") 
       metrics.push(`RR: ${vital.respiratoryRate}`);
     
-    // Weight
     if (vital.weight && vital.weight !== "null" && vital.weight !== "") 
       metrics.push(`Wt: ${vital.weight}kg`);
     
-    // Height
     if (vital.height && vital.height !== "null" && vital.height !== "") 
       metrics.push(`Ht: ${vital.height}cm`);
     
-    // BMI
     if (vital.bmi && vital.bmi !== "null" && vital.bmi !== "") 
       metrics.push(`BMI: ${vital.bmi}`);
     
-    // Blood Sugar
     if (vital.bloodSugar && vital.bloodSugar !== "null" && vital.bloodSugar !== "") 
       metrics.push(`Sugar: ${vital.bloodSugar}mg/dL`);
     
     return metrics.length > 0 ? metrics.join(" • ") : "No vital signs recorded";
   };
 
-  // Format date display
   const formatDate = (item) => {
     const dateSources = [
       item.date,
@@ -631,7 +494,6 @@ const VitalsTab = ({
     );
     
     if (validDate) {
-      // If it's a date object or ISO string, format it
       try {
         const dateObj = new Date(validDate);
         if (!isNaN(dateObj.getTime())) {
@@ -641,9 +503,7 @@ const VitalsTab = ({
             year: 'numeric'
           });
         }
-      } catch (e) {
-        // If formatting fails, return the original value
-      }
+      } catch (e) {}
       return validDate;
     }
     
@@ -675,16 +535,13 @@ const VitalsTab = ({
             hour12: false
           });
         }
-      } catch (e) {
-        // If formatting fails, return the original value
-      }
+      } catch (e) {}
       return validTime;
     }
     
     return null;
   };
 
-  // Helper function to get initials from name
   const getInitials = (name) => {
     if (!name || name === "Dr. Unknown") return "D";
     const parts = name.split(' ');
@@ -694,7 +551,6 @@ const VitalsTab = ({
     return name[0].toUpperCase();
   };
 
-  // Loading state
   if (doctorsLoading || bookingLoading || prescriptionsLoading) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
@@ -741,81 +597,79 @@ const VitalsTab = ({
                 </tr>
               </thead>
               <tbody>
-                {paginatedVitals.map((item, index) => {
-                  return (
-                    <tr
-                      key={item.id || item._id || index}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100"
-                      onClick={() => handleViewVitalDetails(item)}
-                    >
-                      <td className="px-6 py-4 text-gray-600">
-                        {formatDate(item)}
-                        {formatTime(item) && (
-                          <span className="text-gray-400 text-xs block">{formatTime(item)}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-xs font-medium text-blue-600">
-                              {getInitials(item.doctorName)}
-                            </span>
-                          </div>
-                          <span className="font-medium text-gray-800">
-                            {item.doctorName}
+                {paginatedVitals.map((item, index) => (
+                  <tr
+                    key={item.id || item._id || index}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100"
+                    onClick={() => handleViewVitalDetails(item)}
+                  >
+                    <td className="px-6 py-4 text-gray-600">
+                      {formatDate(item)}
+                      {formatTime(item) && (
+                        <span className="text-gray-400 text-xs block">{formatTime(item)}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-xs font-medium text-blue-600">
+                            {getInitials(item.doctorName)}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-500 text-xs">
-                          {item.department}
+                        <span className="font-medium text-gray-800">
+                          {item.doctorName}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-600 max-w-md truncate" title={getVitalSummary(item)}>
-                          {getVitalSummary(item)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-gray-500 text-xs">
+                        {item.department}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600 max-w-md truncate" title={getVitalSummary(item)}>
+                        {getVitalSummary(item)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right relative action-menu-container">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setOpenMenu(openMenu === `vitals-${item.id || item._id}` ? null : `vitals-${item.id || item._id}`);
+                        }}
+                        className="p-2"
+                      >
+                        <MoreVertical size={16} className="text-gray-500" />
+                      </Button>
+                      {openMenu === `vitals-${item.id || item._id}` && (
+                        <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              handleViewVitalDetails(item);
+                              setOpenMenu(null);
+                            }}
+                            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Eye size={15} /> View Details
+                          </button>
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              handleDeleteClick('vital', item.id || item._id, `vitals from ${formatDate(item)}`);
+                              setOpenMenu(null);
+                            }}
+                            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
+                          >
+                            <Trash2 size={15} /> Delete
+                          </button>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-right relative action-menu-container">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setOpenMenu(openMenu === `vitals-${item.id || item._id}` ? null : `vitals-${item.id || item._id}`);
-                          }}
-                          className="p-2"
-                        >
-                          <MoreVertical size={16} className="text-gray-500" />
-                        </Button>
-                        {openMenu === `vitals-${item.id || item._id}` && (
-                          <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                            <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleViewVitalDetails(item);
-                                setOpenMenu(null);
-                              }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Eye size={15} /> View Details
-                            </button>
-                            <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleDeleteClick('vital', item.id || item._id, startIndex + index, `vitals from ${formatDate(item)}`);
-                                setOpenMenu(null);
-                              }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
-                            >
-                              <Trash2 size={15} /> Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

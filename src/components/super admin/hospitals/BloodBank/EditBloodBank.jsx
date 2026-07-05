@@ -15,97 +15,93 @@ const EditBloodBank = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data } =
-    useGetBloodBankQuery({ id });
-
+  const { data } = useGetBloodBankQuery({ id });
   const blood = data?.data;
 
-  const [updateBloodBank,{isLoading}] =
-    useUpdateBloodBankMutation();
+  const [updateBloodBank, { isLoading }] = useUpdateBloodBankMutation();
 
-  const [formData,setFormData] = useState({
-    bloodGroup:"",
-    count:""
+  const [formData, setFormData] = useState({
+    bloodGroup: "",
+    count: ""
   });
 
-  useEffect(()=>{
-    if(blood){
+  useEffect(() => {
+    if (blood) {
       setFormData({
-        bloodGroup:blood.bloodGroup,
-        count:blood.count
+        bloodGroup: blood.bloodGroup,
+        count: blood.count
       });
     }
-  },[blood]);
+  }, [blood]);
 
-  const handleSubmit = async(e)=>{
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try{
+    try {
       await updateBloodBank({
         id,
-        data:formData
+        data: formData
       }).unwrap();
 
-      showSuccessToast("Stock updated");
-
+      showSuccessToast("Stock updated successfully");
       navigate(-1);
-
-    }catch(error){
+    } catch (error) {
       showErrorToast(
-        error?.data?.message ||
-        "Update failed"
+        error?.data?.message || "Update failed"
       );
     }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   return (
     <div>
       <Button
         variant="outline"
-        onClick={()=>navigate(-1)}
+        onClick={() => navigate(-1)}
         className="mb-4"
       >
-        <ArrowLeft size={16}/>
+        <ArrowLeft size={16} />
         Back
       </Button>
 
       <div className="bg-white rounded-xl p-6">
-
         <h2 className="text-2xl font-bold mb-6">
           Edit Blood Stock
         </h2>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-5"
-        >
-
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label>Blood Group</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Blood Group
+            </label>
             <input
+              name="bloodGroup"
               value={formData.bloodGroup}
-              onChange={(e)=>
-                setFormData({
-                  ...formData,
-                  bloodGroup:e.target.value
-                })
-              }
-              className="w-full border rounded-lg p-3"
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+              placeholder="Enter blood group"
             />
           </div>
 
           <div>
-            <label>Units</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Units
+            </label>
             <input
               type="number"
+              name="count"
               value={formData.count}
-              onChange={(e)=>
-                setFormData({
-                  ...formData,
-                  count:e.target.value
-                })
-              }
-              className="w-full border rounded-lg p-3"
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+              placeholder="Enter number of units"
+              min="0"
             />
           </div>
 
@@ -113,12 +109,11 @@ const EditBloodBank = () => {
             type="submit"
             variant="primary"
             disabled={isLoading}
+            loading={isLoading}
           >
-            Update Stock
+            {isLoading ? "Updating..." : "Update Stock"}
           </Button>
-
         </form>
-
       </div>
     </div>
   );

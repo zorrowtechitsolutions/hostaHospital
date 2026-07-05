@@ -20,21 +20,19 @@ const AutoDeclineModal = ({ isOpen, onClose, currentMinutes = 5, onSave }) => {
     if (value >= 1 && value <= 1440) {
       setIsSaving(true);
       
-      setTimeout(() => {
-        if (onSave) onSave(value);
-        
-        showSuccessToast(
-          `Auto decline time has been updated to ${value} minute${value !== 1 ? 's' : ''}!`,
-          4000,
-          {
-            'Previous': `${currentMinutes} minute${currentMinutes !== 1 ? 's' : ''}`,
-            'New': `${value} minute${value !== 1 ? 's' : ''}`
-          }
-        );
-        
-        setIsSaving(false);
-        onClose();
-      }, 500);
+      if (onSave) onSave(value);
+      
+      showSuccessToast(
+        `Auto decline time has been updated to ${value} minute${value !== 1 ? 's' : ''}!`,
+        4000,
+        {
+          'Previous': `${currentMinutes} minute${currentMinutes !== 1 ? 's' : ''}`,
+          'New': `${value} minute${value !== 1 ? 's' : ''}`
+        }
+      );
+      
+      setIsSaving(false);
+      onClose();
     } else {
       showWarningToast("Please enter a value between 1 and 1440 minutes", 3000);
     }

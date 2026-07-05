@@ -1,6 +1,6 @@
 // src/components/Settings/Billing.jsx - Refactored
 import React, { useState } from 'react';
-import { Button, Card, Badge, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Alert } from '../ui';
+import { Button, Card, Badge, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../ui';
 
 const Billing = () => {
   const [selectedCard, setSelectedCard] = useState(null);
@@ -21,11 +21,13 @@ const Billing = () => {
 
   const handleSetDefault = (cardId) => {
     setSelectedCard(cardId);
+    // In production, this would call an API
     alert(`Card set as default successfully!`);
   };
 
   const handleUpgrade = () => {
     setIsUpgrading(true);
+    // In production, this would open a modal
     alert('Upgrade plan modal would open here');
     setIsUpgrading(false);
   };
@@ -107,28 +109,41 @@ const Billing = () => {
         </div>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr><TableHeader>Invoice ID</TableHeader><TableHeader>Created Date</TableHeader><TableHeader>Amount</TableHeader><TableHeader>Plan</TableHeader><TableHeader>Status</TableHeader><TableHeader>Action</TableHeader></tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeader>Invoice ID</TableHeader>
+                <TableHeader>Created Date</TableHeader>
+                <TableHeader>Amount</TableHeader>
+                <TableHeader>Plan</TableHeader>
+                <TableHeader>Status</TableHeader>
+                <TableHeader>Action</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {billingHistory.map((invoice, idx) => (
-                <TableRow key={idx} hover>
+                <TableRow key={idx}>
                   <TableCell><span className="text-sm font-medium text-gray-900">{invoice.id}</span></TableCell>
                   <TableCell><span className="text-sm text-gray-500">{invoice.createdDate}</span></TableCell>
                   <TableCell><span className="text-sm font-medium text-gray-900">{invoice.amount}</span></TableCell>
                   <TableCell><span className="text-sm text-gray-500">{invoice.plan}</span></TableCell>
                   <TableCell><Badge variant={getStatusBadge(invoice.status)}>{invoice.status}</Badge></TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => alert(`Download invoice ${invoice.id}`)} className="text-[#1C62A0]">Download</Button></TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => alert(`Download invoice ${invoice.id}`)} className="text-[#1C62A0]">
+                      Download
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
           <p className="text-sm text-gray-500">Showing {billingHistory.length} invoices</p>
-          <Button variant="ghost" size="sm" onClick={() => alert('View all invoices')} className="text-[#1C62A0]">View All</Button>
+          <Button variant="ghost" size="sm" onClick={() => alert('View all invoices')} className="text-[#1C62A0]">
+            View All
+          </Button>
         </div>
       </Card>
     </div>

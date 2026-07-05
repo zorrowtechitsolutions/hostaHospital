@@ -17,7 +17,8 @@ import {
   Globe,
   Loader2,
   ChevronRight,
-  Bell
+  Bell,
+  UserPlus
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { useGetHospitalByIdQuery } from '../../../../app/service/hospitalApi';
@@ -27,7 +28,6 @@ import { useGetStaffQuery } from '../../../../app/service/staffApi';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
-// ✅ Import the correct notification hooks (same as HospitalNotificationList)
 import { 
   useGetUnreadNotificationsQuery,
   useGetReadNotificationsQuery 
@@ -37,33 +37,32 @@ const HospitalDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // Fetch hospital details
   const { data: hospitalData, isLoading: isHospitalLoading, error } = useGetHospitalByIdQuery(id);
   const hospital = hospitalData?.data || hospitalData;
 
-  // Fetch data for this hospital
-  const { data: patientsData, isLoading: patientsLoading } = useGetPatientsQuery({ 
+  // Fetch patients with hospitalId filter
+  const { data: patientsData, isLoading: patientsLoading, refetch: refetchPatients } = useGetPatientsQuery({ 
     hospitalId: id,
     page: 1,
-    limit: 1000
+    limit: 100
   });
   
   const { data: doctorsData, isLoading: doctorsLoading } = useGetDoctorsQuery({ 
     hospitalId: id,
     page: 1,
-    limit: 1000
+    limit: 100
   });
   
   const { data: staffData, isLoading: staffLoading } = useGetStaffQuery({ 
     hospitalId: id,
     page: 1,
-    limit: 1000
+    limit: 100
   });
   
   const { data: bookingsData, isLoading: bookingsLoading } = useGetBookingsQuery({ 
     hospitalId: id,
     page: 1,
-    limit: 1000
+    limit: 100
   });
   
   const { data: ambulanceData, isLoading: ambulanceLoading } = useGetAmbulanceQuery({ 
@@ -74,7 +73,6 @@ const HospitalDetails = () => {
     hospitalId: id
   });
 
-  // ✅ Fetch unread notifications using the same endpoint as HospitalNotificationList
   const { 
     data: unreadData, 
     isLoading: unreadLoading 
@@ -85,7 +83,6 @@ const HospitalDetails = () => {
     skip: !id,
   });
 
-  // ✅ Fetch read notifications using the same endpoint as HospitalNotificationList
   const { 
     data: readData, 
     isLoading: readLoading 
@@ -96,48 +93,29 @@ const HospitalDetails = () => {
     skip: !id,
   });
 
-  // ✅ Get notifications from responses (same as HospitalNotificationList)
   const unreadNotifications = unreadData?.data || [];
   const readNotifications = readData?.data || [];
-  const allNotifications = [...unreadNotifications, ...readNotifications];
-  
-  // ✅ Count unread notifications directly from the unread endpoint (same as HospitalNotificationList)
   const notificationCount = unreadNotifications.length;
 
-  console.log('📊 HospitalDetails - Unread Notifications:', unreadNotifications);
-  console.log('📊 HospitalDetails - Read Notifications:', readNotifications);
-  console.log('📊 HospitalDetails - Total Notifications:', allNotifications.length);
-  console.log('📊 HospitalDetails - Notification Count:', notificationCount);
+  // Calculate counts - using the actual filtered data from API
+  const patientsList = patientsData?.data || [];
+  const doctorsList = doctorsData?.data || [];
+  const staffList = staffData?.data || [];
+  const bookingsList = bookingsData?.data || [];
+  const ambulancesList = ambulanceData?.data || [];
+  const bloodBanksList = bloodBankData?.data || [];
 
-  // Filter counts by hospitalId manually
-  const patientsCount = patientsData?.data?.filter(
-    patient => String(patient.hospitalId) === String(id)
-  ).length || 0;
-  
-  const doctorsCount = doctorsData?.data?.filter(
-    doctor => String(doctor.hospitalId) === String(id)
-  ).length || 0;
-  
-  const staffCount = staffData?.data?.filter(
-    staff => String(staff.hospitalId) === String(id)
-  ).length || 0;
-  
-  const appointmentsCount = bookingsData?.data?.filter(
-    booking => String(booking.hospitalId) === String(id)
-  ).length || 0;
-  
-  const ambulancesCount = ambulanceData?.data?.filter(
-    ambulance => String(ambulance.hospitalId) === String(id)
-  ).length || 0;
-  
-  const bloodBanksCount = bloodBankData?.data?.filter(
-    bank => String(bank.hospitalId) === String(id)
-  ).length || 0;
-  
-  // Visits count - appointments with status "accepted"
-  const visitsCount = bookingsData?.data?.filter(
-    booking => String(booking.hospitalId) === String(id) && booking.status === 'accepted'
-  ).length || 0;
+  const patientsCount = patientsList.length;
+  const doctorsCount = doctorsList.length;
+  const staffCount = staffList.length;
+  const appointmentsCount = bookingsList.filter(
+    booking => booking.status !== 'completed' && booking.status !== 'cancelled'
+  ).length;
+  const visitsCount = bookingsList.filter(
+    booking => booking.status === 'completed' || booking.status === 'accepted'
+  ).length;
+  const ambulancesCount = ambulancesList.length;
+  const bloodBanksCount = bloodBanksList.length;
 
   const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || unreadLoading || readLoading;
 
@@ -149,35 +127,85 @@ const HospitalDetails = () => {
 
   // Navigation handlers
   const navigateToPatients = () => {
-    navigate(`/super-admin/hospitals/${id}/patients`);
+    navigate(`/super-admin/hospitals/${id}/patients`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToDoctors = () => {
-    navigate(`/super-admin/hospitals/${id}/doctors`);
+    navigate(`/super-admin/hospitals/${id}/doctors`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToStaff = () => {
-    navigate(`/super-admin/hospitals/${id}/staff`);
+    navigate(`/super-admin/hospitals/${id}/staff`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToAppointments = () => {
-    navigate(`/super-admin/hospitals/${id}/appointments`);
+    navigate(`/super-admin/hospitals/${id}/appointments`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToVisits = () => {
-    navigate(`/super-admin/hospitals/${id}/visits`);
+    navigate(`/super-admin/hospitals/${id}/visits`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToAmbulances = () => {
-    navigate(`/super-admin/hospitals/${id}/ambulances`);
+    navigate(`/super-admin/hospitals/${id}/ambulances`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToBloodBanks = () => {
-    navigate(`/super-admin/hospitals/${id}/blood-banks`);
+    navigate(`/super-admin/hospitals/${id}/blood-banks`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
   };
 
   const navigateToNotifications = () => {
-    navigate(`/super-admin/hospitals/${id}/notifications`);
+    navigate(`/super-admin/hospitals/${id}/notifications`, { 
+      state: { 
+        hospitalId: id,
+        hospitalName: hospital?.name 
+      } 
+    });
+  };
+
+  // Handle add new patient
+  const handleAddPatient = () => {
+    navigate(`/super-admin/hospitals/${id}/patients/add`, {
+      state: {
+        hospitalId: id,
+        hospitalName: hospital?.name
+      }
+    });
   };
 
   if (isLoading) {
@@ -214,7 +242,8 @@ const HospitalDetails = () => {
       borderColor: 'border-blue-200',
       hoverBg: 'hover:bg-blue-50/50',
       onClick: navigateToPatients,
-      description: 'View all patients'
+      description: `${patientsCount} patients registered`,
+      actionLabel: 'View All Patients'
     },
     { 
       title: 'Total Doctors', 
@@ -226,7 +255,8 @@ const HospitalDetails = () => {
       borderColor: 'border-green-200',
       hoverBg: 'hover:bg-green-50/50',
       onClick: navigateToDoctors,
-      description: 'View all doctors'
+      description: `${doctorsCount} doctors available`,
+      actionLabel: 'View All Doctors'
     },
     { 
       title: 'Total Staff', 
@@ -238,7 +268,8 @@ const HospitalDetails = () => {
       borderColor: 'border-purple-200',
       hoverBg: 'hover:bg-purple-50/50',
       onClick: navigateToStaff,
-      description: 'View all staff'
+      description: `${staffCount} staff members`,
+      actionLabel: 'View All Staff'
     },
     { 
       title: 'Appointments', 
@@ -250,7 +281,8 @@ const HospitalDetails = () => {
       borderColor: 'border-orange-200',
       hoverBg: 'hover:bg-orange-50/50',
       onClick: navigateToAppointments,
-      description: 'View all appointments'
+      description: `${appointmentsCount} upcoming appointments`,
+      actionLabel: 'View Appointments'
     },
     { 
       title: 'Total Visits', 
@@ -262,7 +294,8 @@ const HospitalDetails = () => {
       borderColor: 'border-indigo-200',
       hoverBg: 'hover:bg-indigo-50/50',
       onClick: navigateToVisits,
-      description: 'View all visits'
+      description: `${visitsCount} completed visits`,
+      actionLabel: 'View Visits'
     },
     { 
       title: 'Ambulances', 
@@ -274,7 +307,8 @@ const HospitalDetails = () => {
       borderColor: 'border-red-200',
       hoverBg: 'hover:bg-red-50/50',
       onClick: navigateToAmbulances,
-      description: 'View all ambulances'
+      description: `${ambulancesCount} ambulance${ambulancesCount !== 1 ? 's' : ''}`,
+      actionLabel: 'View Ambulances'
     },
     { 
       title: 'Blood Banks', 
@@ -286,7 +320,8 @@ const HospitalDetails = () => {
       borderColor: 'border-pink-200',
       hoverBg: 'hover:bg-pink-50/50',
       onClick: navigateToBloodBanks,
-      description: 'View blood bank inventory'
+      description: `${bloodBanksCount} blood bank${bloodBanksCount !== 1 ? 's' : ''}`,
+      actionLabel: 'View Blood Banks'
     },
     { 
       title: 'Notifications', 
@@ -298,13 +333,13 @@ const HospitalDetails = () => {
       borderColor: 'border-yellow-200',
       hoverBg: 'hover:bg-yellow-50/50',
       onClick: navigateToNotifications,
-      description: `${notificationCount} unread notification${notificationCount !== 1 ? 's' : ''}`
+      description: `${notificationCount} unread notification${notificationCount !== 1 ? 's' : ''}`,
+      actionLabel: 'View Notifications'
     }
   ];
 
   return (
     <div>
-      {/* Header with Back Button */}
       <div className="mb-6">
         <Button 
           variant="secondary" 
@@ -315,7 +350,7 @@ const HospitalDetails = () => {
           <ArrowLeft size={18} className="mr-1" /> Back to Hospitals
         </Button>
         
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
               <Building2 size={32} className="text-white" />
@@ -323,7 +358,7 @@ const HospitalDetails = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{hospital.name}</h1>
               <p className="text-sm text-gray-500 mt-1">ID: {hospital.id}</p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-xs text-gray-400">Status:</span>
                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
                 <span className="text-xs text-gray-400 ml-2">Last Updated:</span>
@@ -334,7 +369,6 @@ const HospitalDetails = () => {
         </div>
       </div>
 
-      {/* Hospital Information Card */}
       <Card className="p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Hospital Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -387,9 +421,11 @@ const HospitalDetails = () => {
         )}
       </Card>
 
-      {/* Statistics Cards Grid */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Overview Statistics</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Overview Statistics</h2>
+          <span className="text-sm text-gray-400">Click any card to view details</span>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {statCards.map((stat, index) => {
             const Icon = stat.icon;
@@ -401,23 +437,24 @@ const HospitalDetails = () => {
               >
                 <Card className={`p-5 border ${stat.borderColor} hover:shadow-lg transition-all duration-300 ${stat.hoverBg}`}>
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-500">
                         {stat.title}
                       </p>
                       <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-1 group-hover:text-gray-600 transition-colors">
+                      <p className="text-xs text-gray-400 mt-1 group-hover:text-gray-600 transition-colors truncate">
                         {stat.description}
                       </p>
                     </div>
-                    <div className={`${stat.iconBgColor || stat.bgColor} p-3 rounded-xl group-hover:scale-110 transition-transform duration-300 flex-shrink-0`}>
+                    <div className={`${stat.iconBgColor || stat.bgColor} p-3 rounded-xl group-hover:scale-110 transition-transform duration-300 flex-shrink-0 ml-2`}>
                       <Icon size={22} className={stat.textColor} />
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end">
-                    <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors flex items-center gap-1">
-                      View Details <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors">
+                      {stat.actionLabel}
                     </span>
+                    <ChevronRight size={14} className="text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
                   </div>
                 </Card>
               </div>

@@ -6,10 +6,7 @@ import { Card, Button, Pagination, Badge } from '../../ui';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerBookingEvents, unregisterBookingEvents } from '../../../socket/bookingEvents';
 
 const HospitalAppointmentsList = () => {
@@ -19,25 +16,20 @@ const HospitalAppointmentsList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ FIXED: Pass hospitalId to API so backend can filter
   const { data: bookingsData, isLoading: isLoadingAppointments, refetch } = useGetBookingsQuery({
-    hospitalId: id,  // ← CRITICAL: Pass hospital ID from URL
-    page: currentPage,  // Use currentPage for pagination
+    hospitalId: id,
+    page: currentPage,
     limit: itemsPerPage,
     search_query: searchTerm || undefined
   });
 
-  // Fetch all doctors to get doctor names
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery({
-    hospitalId: id,  // Also filter doctors by hospital
-    page: 1,
-    limit: 1000
+    hospitalId: id,
+    page: 1
   });
 
-  // Create a doctor lookup map
   const doctorMap = new Map();
   const allDoctors = doctorsData?.data || [];
   allDoctors.forEach(doctor => {
@@ -52,38 +44,26 @@ const HospitalAppointmentsList = () => {
   const totalItems = bookingsData?.pagination?.totalItems || allAppointments.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // ✅ Register socket event listeners for booking events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners for Hospital Appointments...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
-      onBookingRegistered: (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
+      onBookingRegistered: () => {
         showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
-      
-      onBookingUpdated: (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
+      onBookingUpdated: () => {
         showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
-      
-      onBookingCancelled: (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
+      onBookingCancelled: () => {
         showSuccessToast(`Booking cancelled!`, 3000);
         refetch();
       },
-      
-      onBookingAccepted: (data) => {
-        console.log("✅ BOOKING ACCEPTED:", data);
+      onBookingAccepted: () => {
         showSuccessToast(`Booking accepted!`, 3000);
         refetch();
       },
-      
-      onBookingCompleted: (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
+      onBookingCompleted: () => {
         showSuccessToast(`Booking completed!`, 3000);
         refetch();
       }
@@ -92,40 +72,33 @@ const HospitalAppointmentsList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering booking events for Hospital Appointments...");
       unregisterBookingEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
       if (!eventsRegistered) {
         registerBookingEvents({
-          onBookingRegistered: (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+          onBookingRegistered: () => {
             showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
-          onBookingUpdated: (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+          onBookingUpdated: () => {
             showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
-          onBookingCancelled: (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+          onBookingCancelled: () => {
             showSuccessToast(`Booking cancelled!`, 3000);
             refetch();
           },
-          onBookingAccepted: (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+          onBookingAccepted: () => {
             showSuccessToast(`Booking accepted!`, 3000);
             refetch();
           },
-          onBookingCompleted: (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+          onBookingCompleted: () => {
             showSuccessToast(`Booking completed!`, 3000);
             refetch();
           }
@@ -134,49 +107,13 @@ const HospitalAppointmentsList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING/HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Debug logging
-  useEffect(() => {
-    if (allAppointments.length > 0) {
-      console.log("=== HOSPITAL APPOINTMENTS LIST DEBUG ===");
-      console.log("Hospital ID from URL:", id);
-      console.log("Appointments Data from API:", bookingsData);
-      console.log("Total Appointments:", totalItems);
-      console.log("Doctor Map Size:", doctorMap.size);
-      
-      // Log what hospitalIds are in the response
-      const uniqueHospitalIds = [...new Set(allAppointments.map(a => a.hospitalId))];
-      console.log("Unique hospitalIds in response:", uniqueHospitalIds);
-    }
-  }, [id, bookingsData, allAppointments, totalItems, doctorMap]);
-
-  // Reset to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -239,7 +176,7 @@ const HospitalAppointmentsList = () => {
             placeholder="Search appointments by patient or doctor..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent border border-gray-300 outline-none"
           />
         </div>
       </div>
@@ -255,7 +192,6 @@ const HospitalAppointmentsList = () => {
                 <Card 
                   key={appointment.id} 
                 >
-                  {/* Header with Status */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">
@@ -273,7 +209,6 @@ const HospitalAppointmentsList = () => {
                     </div>
                   </div>
 
-                  {/* Doctor Info */}
                   <div className="space-y-2 mb-3">
                     <div className="flex items-center gap-2 text-sm">
                       <Stethoscope size={14} className="text-gray-400 flex-shrink-0" />
@@ -295,10 +230,8 @@ const HospitalAppointmentsList = () => {
                     )}
                   </div>
 
-                  {/* Divider */}
                   <div className="border-t border-gray-100 my-2"></div>
 
-                  {/* Appointment Details */}
                   <div className="space-y-2 mb-3">
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Calendar size={12} className="text-gray-400 flex-shrink-0" />
@@ -316,7 +249,6 @@ const HospitalAppointmentsList = () => {
                     )}
                   </div>
 
-                  {/* Reason (if exists) */}
                   {appointment.reason && (
                     <>
                       <div className="border-t border-gray-100 my-2"></div>
@@ -327,7 +259,6 @@ const HospitalAppointmentsList = () => {
                     </>
                   )}
 
-                  {/* Rejection Reason (if exists) */}
                   {appointment.rejectionReason && (
                     <div className="mt-2 text-xs text-red-600">
                       <span className="font-medium">Rejected:</span>

@@ -15,12 +15,16 @@ import {
   useUpdateBloodBankMutation,
   useDeleteBloodBankMutation
 } from '../../../app/service/bloodbank';
+import { getHospitalId } from '../../utils/auth';
 
+// Import socket
 import { socket } from '../../socket/socket';
 import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../socket/bloodBankEvents';
 
+// Blood groups list
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+// Helper function to format ID for display only
 const formatBloodId = (id) => {
   if (!id) return '#BLD0000';
   let numericId;
@@ -33,6 +37,7 @@ const formatBloodId = (id) => {
   return `#BLD${String(numericId).padStart(4, '0')}`;
 };
 
+// Transform API response - SEPARATE display ID from database ID
 const transformBloodStockData = (stockList) => {
   if (!stockList || !Array.isArray(stockList)) return [];
   
@@ -46,6 +51,7 @@ const transformBloodStockData = (stockList) => {
   }));
 };
 
+// Skeleton Loading Component
 const BloodBankSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -96,6 +102,7 @@ const BloodBankSkeleton = () => {
   );
 };
 
+// Add Blood Stock Modal
 const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
   const [formData, setFormData] = useState({
     bloodGroup: 'A+',
@@ -165,6 +172,7 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
   );
 };
 
+// Edit Blood Stock Modal
 const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
   const [formData, setFormData] = useState({
     bloodGroup: '',
@@ -241,6 +249,7 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
   );
 };
 
+// View Modal Component
 const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
   if (!stock) return null;
   
@@ -289,34 +298,46 @@ const BloodBank = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   
+  // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBloodStock, setSelectedBloodStock] = useState(null);
+  
+  // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
+  
+  // Filter states
   const [bloodGroupFilter, setBloodGroupFilter] = useState('all');
 
+  // Get hospital ID from auth
+  const hospitalId = getHospitalId();
+
+  // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('bloodBankViewMode', viewMode);
   }, [viewMode]);
 
+  // ✅ API Hooks - WITH hospitalId from auth
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
     refetch,
     isFetching
   } = useGetBloodBankQuery({
-    page: currentPage,
-    limit: itemsPerPage,
+    hospitalId: hospitalId,
     bloodGroup: bloodGroupFilter !== "all" ? bloodGroupFilter : undefined,
-    search_query: searchTerm?.trim() ? searchTerm : undefined
+    search_query: searchTerm?.trim() ? searchTerm : undefined,
+  }, {
+    skip: !hospitalId, // Skip if no hospital ID
   });
 
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
 
+  // ✅ Register socket event listeners
   useEffect(() => {
     registerBloodBankEvents({
       onStockCreated: async () => {
@@ -338,6 +359,7 @@ const BloodBank = () => {
     };
   }, [refetch]);
 
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       registerBloodBankEvents({
@@ -356,17 +378,28 @@ const BloodBank = () => {
       });
     };
 
+    const handleDisconnect = () => {};
+
     socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch]);
 
+  // Transform data from API response
+  const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
+  const totalPages = bloodStocksResponse?.pagination?.totalPages || 1;
+  const totalItems = bloodStocksResponse?.pagination?.totalItems || 0;
+
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, bloodGroupFilter]);
 
+  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -377,14 +410,13 @@ const BloodBank = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // CRUD Handlers
   const handleAddBloodStock = async (newBloodStock) => {
     try {
-      const stockToAdd = {
+      await createBloodBank({
         bloodGroup: newBloodStock.bloodGroup,
         count: newBloodStock.count
-      };
-      
-      await createBloodBank(stockToAdd).unwrap();
+      }).unwrap();
       
       showSuccessToast(`${newBloodStock.bloodGroup} blood stock added successfully!`, 3000);
       await refetch();
@@ -396,14 +428,12 @@ const BloodBank = () => {
 
   const handleEditBloodStock = async (updatedStock) => {
     try {
-      const updateData = {
-        bloodGroup: updatedStock.bloodGroup,
-        count: updatedStock.count
-      };
-      
       await updateBloodBank({ 
         id: updatedStock.id, 
-        data: updateData 
+        data: {
+          bloodGroup: updatedStock.bloodGroup,
+          count: updatedStock.count
+        }
       }).unwrap();
       
       showSuccessToast(`${updatedStock.bloodGroup} blood stock updated successfully!`, 3000);
@@ -431,6 +461,7 @@ const BloodBank = () => {
     }
   };
 
+  // Menu handlers
   const toggleMenu = (id, e) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === id ? null : id);
@@ -445,7 +476,6 @@ const BloodBank = () => {
   };
 
   const handleExport = () => {
-    const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
     const exportData = paginatedBloodStocks.map(stock => ({
       'ID': stock.formattedId,
       'Blood Group': stock.bloodGroup,
@@ -482,27 +512,20 @@ const BloodBank = () => {
               count: stock['Count (Units)'] || stock.count || 0
             }).unwrap();
             successCount++;
-          } catch (error) {
+          } catch {
             errorCount++;
           }
         }
         
         showSuccessToast(`Successfully imported ${successCount} blood stock records! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
         refetch();
-      } catch (error) {
+      } catch {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
     
     reader.readAsText(file);
     event.target.value = '';
-  };
-
-  const clearAllFilters = () => {
-    setBloodGroupFilter('all');
-    setSearchTerm('');
-    setCurrentPage(1);
-    showSuccessToast("All filters cleared", 2000);
   };
 
   const getActiveFilterCount = () => {
@@ -521,16 +544,13 @@ const BloodBank = () => {
     }
   };
 
-  const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
-  const totalPages = bloodStocksResponse?.pagination?.totalPages || 1;
-  const totalItems = bloodStocksResponse?.pagination?.totalItems || 0;
-
   if (loading) {
     return <BloodBankSkeleton />;
   }
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+      {/* Breadcrumb Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -552,6 +572,7 @@ const BloodBank = () => {
         <h1 className="text-xl font-bold text-gray-800">Blood Bank Management</h1>
       </div>
 
+      {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
           <div className="relative flex-1 max-w-sm">
@@ -581,6 +602,7 @@ const BloodBank = () => {
             </button>
           </div>
 
+          {/* Blood Group Dropdown - Filter */}
           <select
             value={bloodGroupFilter}
             onChange={(e) => {
@@ -638,49 +660,53 @@ const BloodBank = () => {
         </div>
       </div>
 
+      {/* GRID VIEW */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedBloodStocks.map((stock) => (
-              <div key={stock.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
-                <div className="w-full flex justify-between items-start mb-4">
-                  <Badge variant="info" className="text-[10px]">
-                    {stock.formattedId}
-                  </Badge>
-                  <div className="relative menu-container">
-                    <button onClick={(e) => toggleMenu(stock.id, e)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold">
-                      ⋮
-                    </button>
-                    {activeMenu === stock.id && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                        <button onClick={() => { setSelectedBloodStock(stock); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <Eye size={16} /> View Details
-                        </button>
-                        <button onClick={() => { setSelectedBloodStock(stock); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <Edit size={16} /> Edit
-                        </button>
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <button onClick={() => { setSelectedBloodStock(stock); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                          <Trash2 size={16} /> Delete
-                        </button>
-                      </div>
-                    )}
+            {paginatedBloodStocks.map((stock) => {
+              return (
+                <div key={stock.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-full flex justify-between items-start mb-4">
+                    <Badge variant="info" className="text-[10px]">
+                      {stock.formattedId}
+                    </Badge>
+                    <div className="relative menu-container">
+                      <button onClick={(e) => toggleMenu(stock.id, e)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold">
+                        ⋮
+                      </button>
+                      {activeMenu === stock.id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                          <button onClick={() => { setSelectedBloodStock(stock); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <Eye size={16} /> View Details
+                          </button>
+                          <button onClick={() => { setSelectedBloodStock(stock); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <Edit size={16} /> Edit
+                          </button>
+                          <div className="border-t border-gray-100 my-1"></div>
+                          <button onClick={() => { setSelectedBloodStock(stock); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                            <Trash2 size={16} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <h3 className="text-xl font-bold text-gray-800">{stock.bloodGroup}</h3>
+                    <p className="text-2xl font-bold text-[#1C62A0] mt-1">{stock.count} <span className="text-xs text-gray-400 font-normal">units</span></p>
+                  </div>
+
+                  <div className="w-full border-t border-gray-50 pt-4 mt-4 text-center">
+                    <p className="text-[9px] text-gray-400 uppercase font-bold">Last Updated</p>
+                    <p className="text-xs font-medium text-gray-700">{stock.lastUpdated || new Date().toISOString().split('T')[0]}</p>
                   </div>
                 </div>
-
-                <div className="text-center">
-                  <h3 className="text-xl font-bold text-gray-800">{stock.bloodGroup}</h3>
-                  <p className="text-2xl font-bold text-[#1C62A0] mt-1">{stock.count} <span className="text-xs text-gray-400 font-normal">units</span></p>
-                </div>
-
-                <div className="w-full border-t border-gray-50 pt-4 mt-4 text-center">
-                  <p className="text-[9px] text-gray-400 uppercase font-bold">Last Updated</p>
-                  <p className="text-xs font-medium text-gray-700">{stock.lastUpdated || new Date().toISOString().split('T')[0]}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
+          {/* Pagination for Grid View */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
@@ -697,6 +723,7 @@ const BloodBank = () => {
         </>
       )}
 
+      {/* LIST VIEW */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -764,6 +791,7 @@ const BloodBank = () => {
               </table>
             </div>
 
+            {/* Pagination - Sticks to bottom */}
             {totalPages > 1 && (
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
@@ -780,6 +808,7 @@ const BloodBank = () => {
         </div>
       )}
 
+      {/* No Results */}
       {!loading && paginatedBloodStocks.length === 0 && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -787,6 +816,7 @@ const BloodBank = () => {
         </div>
       )}
 
+      {/* Modals */}
       <AddBloodStockModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}

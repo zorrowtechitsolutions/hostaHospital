@@ -3,24 +3,44 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Modal, Pagination, Button } from '../ui';
-import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi"; // 👈 Added useRecoverDoctorMutation
+import { Badge, Pagination } from '../ui';
+import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
-// ✅ Import socket event listeners
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
 
 // S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 
+// FIX 1: Updated getS3ImageUrl with cache-busting using Date.now()
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
+  
+  // If it's already a full URL, add cache-busting
   if (imageKey.startsWith("http")) {
-    return imageKey;
+    return `${imageKey}?t=${Date.now()}`;
   }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  
+  // Otherwise construct the S3 URL with cache-busting
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
+
+// FIX 2: Alternative - Use updatedAt for cache-busting (recommended)
+// Uncomment this version if your API returns updatedAt field
+/*
+const getS3ImageUrl = (imageKey, updatedAt) => {
+  if (!imageKey) return "";
+  
+  const cacheBuster = updatedAt ? `v=${updatedAt}` : `t=${Date.now()}`;
+  
+  if (imageKey.startsWith("http")) {
+    return `${imageKey}?${cacheBuster}`;
+  }
+  
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?${cacheBuster}`;
+};
+*/
 
 // Helper functions
 const getDoctorName = (doctor) =>
@@ -38,7 +58,6 @@ const getAppointmentValue = (doctor) =>
 
 const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
 
-// Helper function to get department display
 const getDepartmentDisplay = (doctor) => {
   if (doctor.department) {
     return doctor.department;
@@ -52,8 +71,8 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
-// Reusable Doctor Action Menu Component
-const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => { // 👈 Added onRecover prop
+// Doctor Action Menu Component
+const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== doctor.id) return null;
   
   return (
@@ -97,7 +116,6 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
         Delete
       </button>
       
-      {/* 👇 NEW: Recover button - only show for deleted doctors */}
       {doctor.isDelete && (
         <>
           <div className="border-t border-gray-100 my-1"></div>
@@ -210,7 +228,6 @@ const Doctors = () => {
 
   const fileInputRef = useRef(null);
 
-  // 👇 NEW: Add recoverDoctor mutation
   const [recoverDoctor] = useRecoverDoctorMutation();
 
   // API Query with pagination parameters - server-side pagination
@@ -228,57 +245,38 @@ const Doctors = () => {
     limit: itemsPerPage
   });
 
-  // ✅ Register socket event listeners for real-time updates
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering doctor event listeners...");
-    
     registerDoctorEvents({
-      onDoctorRegistered: (data) => {
-        console.log("👨‍⚕️ New doctor registered:", data);
+      onDoctorRegistered: () => {
         showSuccessToast(`New doctor registered!`, 3000);
         refetch();
       },
-      
-      onDoctorUpdated: (data) => {
-        console.log("✏️ Doctor updated:", data);
+      onDoctorUpdated: () => {
         showSuccessToast(`Doctor updated!`, 3000);
         refetch();
       },
-      
-      onDoctorDeleted: (data) => {
-        console.log("🗑️ Doctor deleted:", data);
+      onDoctorDeleted: () => {
         showSuccessToast(`Doctor deleted!`, 3000);
         refetch();
       },
-      
-      // 👇 NEW: Handle doctor recovered event
-      onDoctorRecovered: (data) => {
-        console.log("♻️ Doctor recovered:", data);
+      onDoctorRecovered: () => {
         showSuccessToast(`Doctor recovered successfully!`, 3000);
         refetch();
       },
-      
-      onDoctorPasswordReset: (data) => {
-        console.log("🔑 Doctor password reset:", data);
+      onDoctorPasswordReset: () => {
         showSuccessToast(`Doctor password reset initiated!`, 3000);
-        // Optionally refetch or handle password reset UI
       },
-      
-      onDoctorPasswordChanged: (data) => {
-        console.log("🔐 Doctor password changed:", data);
+      onDoctorPasswordChanged: () => {
         showSuccessToast(`Doctor password changed successfully!`, 3000);
-        // Optionally refetch or handle password change UI
       }
     });
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering doctor events...");
       unregisterDoctorEvents();
     };
   }, [refetch]);
 
-  
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('doctorViewMode', viewMode);
@@ -294,7 +292,7 @@ const Doctors = () => {
     }));
   }, [response?.data]);
 
-  // Get unique departments from API response for filter dropdown
+  // Get unique departments from API response
   const departments = useMemo(() => {
     if (response?.departments && Array.isArray(response.departments)) {
       return ['All', ...response.departments];
@@ -307,13 +305,9 @@ const Doctors = () => {
     return ['All', ...Array.from(departmentSet)];
   }, [response?.departments, doctors]);
 
-  // Get total pages and total items from API response (server-side pagination)
+  // Get total pages and total items from API response
   const totalPages = response?.pagination?.totalPages || 1;
   const totalItems = response?.pagination?.totalItems || 0;
-
-  useEffect(() => {
-  console.log(doctors);
-}, [doctors]);
 
   // Handle location state for department filter
   useEffect(() => {
@@ -357,11 +351,10 @@ const Doctors = () => {
         if (!Array.isArray(importedData)) {
           throw new Error('Invalid data format: Expected an array');
         }
-        console.log('Imported doctors:', importedData);
-        alert(`${importedData.length} doctors imported successfully!`);
+        showSuccessToast(`${importedData.length} doctors imported successfully!`, 3000);
         refetch();
       } catch (error) {
-        alert('Error parsing JSON file: ' + error.message);
+        showErrorToast('Error parsing JSON file: ' + error.message, 3000);
       }
     };
     reader.readAsText(file);
@@ -398,6 +391,7 @@ const Doctors = () => {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', `doctors_export_${new Date().toISOString().split('T')[0]}.json`);
     linkElement.click();
+    showSuccessToast(`Exported ${exportData.length} doctors`, 2000);
   }, [doctors]);
 
   const handleRefresh = useCallback(() => {
@@ -407,6 +401,7 @@ const Doctors = () => {
     setActiveMenu(null);
     setCurrentPage(1);
     refetch();
+    showSuccessToast("Refreshed doctors", 2000);
   }, [refetch]);
 
   const handleViewDetails = useCallback((doctor) => {
@@ -431,7 +426,6 @@ const Doctors = () => {
     setActiveMenu(null);
   }, []);
 
-  // 👇 NEW: Handle recover doctor
   const handleRecoverDoctor = useCallback(async (doctor) => {
     try {
       await recoverDoctor(doctor.id).unwrap();
@@ -439,12 +433,11 @@ const Doctors = () => {
       setActiveMenu(null);
       showSuccessToast(`${getDoctorName(doctor)} recovered successfully`);
     } catch (error) {
-      console.error(error);
       showErrorToast(error?.data?.message || "Failed to recover doctor");
     }
   }, [recoverDoctor, refetch]);
 
-  const handleDeleteDoctor = useCallback(async (deletedDoctorId) => {
+  const handleDeleteDoctor = useCallback(async () => {
     await refetch();
     setActiveMenu(null);
     setDoctorToDelete(null);
@@ -666,7 +659,7 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* Empty State - Show when no doctors found */}
+      {/* Empty State */}
       {doctors.length === 0 && !isLoading && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -702,7 +695,7 @@ const Doctors = () => {
                       onEdit={handleEdit}
                       onDelete={handleDeleteClick}
                       onAppointment={handleAppointmentManagement}
-                      onRecover={handleRecoverDoctor} /* 👈 Added */
+                      onRecover={handleRecoverDoctor}
                     />
                   </div>
                 </div>
@@ -858,7 +851,7 @@ const Doctors = () => {
                             onEdit={handleEdit}
                             onDelete={handleDeleteClick}
                             onAppointment={handleAppointmentManagement}
-                            onRecover={handleRecoverDoctor} /* 👈 Added */
+                            onRecover={handleRecoverDoctor}
                           />
                         </div>
                       </td>

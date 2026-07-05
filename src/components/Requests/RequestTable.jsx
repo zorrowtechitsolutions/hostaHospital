@@ -1,4 +1,4 @@
-// src/components/Requests/RequestTable.jsx - Complete Updated Version
+// src/components/Requests/RequestTable.jsx - With Server-Side Pagination
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Check,
@@ -13,13 +13,12 @@ import {
   Phone
 } from "lucide-react";
 import {
-  Card,
   Pagination,
   SearchBar
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
-import { showSuccessToast, showWarningToast, showErrorToast, showAddToast } from "../ui/Toast";
+import { showSuccessToast, showErrorToast, showAddToast } from "../ui/Toast";
 import {
   useGetBookingsQuery,
   useApproveBookingMutation,
@@ -28,15 +27,12 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from "../../../app/service/S3";
 
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
 // Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
-const DEFAULT_AVATAR = "https://randomuser.me/api/portraits/lego/1.jpg";
 
 const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transition-colors";
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
@@ -85,18 +81,13 @@ const transformBookingsData = (bookingList) => {
       patientName: booking.patient_name || booking.patientName || "N/A",
       age: calculateAge(booking.patient_dob || booking.dob),
       contact: booking.patient_phone || booking.contact || "N/A",
-      gender: booking.gender || "Male",
       doctorId: booking.doctorId,
       doctorName: booking.doctor_name || booking.doctorName || "N/A",
       department: booking.doctor_department || booking.department || "N/A",
       appointmentDate: rawDate === "N/A" ? "N/A" : rawDate.split("T")[0],
       consulting_time: rawTime,
-      reason: booking.reason || "",
       status: booking.status || "pending",
       patientImageKey: patientImageKey,
-      avatar: patientImageKey || DEFAULT_PROFILE_IMAGE,
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
     };
   });
 };
@@ -138,13 +129,12 @@ const SkeletonLoader = () => (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
-        <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <th key={i} className="px-6 py-3">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </th>
@@ -154,7 +144,7 @@ const SkeletonLoader = () => (
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
                   </td>
@@ -197,14 +187,12 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  // Loading states for mutations
+  // Loading states
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API Hooks
+  // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
     isLoading: loading,
@@ -213,91 +201,70 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   } = useGetBookingsQuery({
     page: currentPage,
     limit: itemsPerPage,
-    status: statusFilter || "pending",
+    status: "pending", // ✅ Always show pending requests
     ...(searchTerm && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
-    ...(statusFilter && { status: statusFilter }),
   });
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
-      onBookingRegistered: async (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
+      onBookingRegistered: async () => {
         showSuccessToast(`New booking registered!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (REGISTERED):", result);
+        await refetch();
       },
-      onBookingUpdated: async (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
+      onBookingUpdated: async () => {
         showSuccessToast(`Booking updated!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
+        await refetch();
       },
-      onBookingCancelled: async (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
+      onBookingCancelled: async () => {
         showSuccessToast(`Booking cancelled!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (CANCELLED):", result);
+        await refetch();
       },
-      onBookingAccepted: async (data) => {
-        console.log("✅ BOOKING ACCEPTED:", data);
+      onBookingAccepted: async () => {
         showSuccessToast(`Booking accepted!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (ACCEPTED):", result);
+        await refetch();
       },
-      onBookingCompleted: async (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
+      onBookingCompleted: async () => {
         showSuccessToast(`Booking completed!`, 3000);
-        const result = await refetch();
-        console.log("📊 REFETCH RESULT (COMPLETED):", result);
+        await refetch();
       }
     });
 
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering booking events...");
       unregisterBookingEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection
+  // Socket connection handlers
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
       if (!eventsRegistered) {
         registerBookingEvents({
-          onBookingRegistered: async (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
+          onBookingRegistered: async () => {
             showSuccessToast(`New booking registered!`, 3000);
             await refetch();
           },
-          onBookingUpdated: async (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
+          onBookingUpdated: async () => {
             showSuccessToast(`Booking updated!`, 3000);
             await refetch();
           },
-          onBookingCancelled: async (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
+          onBookingCancelled: async () => {
             showSuccessToast(`Booking cancelled!`, 3000);
             await refetch();
           },
-          onBookingAccepted: async (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
+          onBookingAccepted: async () => {
             showSuccessToast(`Booking accepted!`, 3000);
             await refetch();
           },
-          onBookingCompleted: async (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
+          onBookingCompleted: async () => {
             showSuccessToast(`Booking completed!`, 3000);
             await refetch();
           }
@@ -307,7 +274,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
       setEventsRegistered(false);
     };
 
@@ -320,37 +286,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Modal close helpers
-  const closeApproveModal = () => {
-    setShowApproveModal(false);
-    setSelectedRequest(null);
-  };
-
-  const closeRejectModal = () => {
-    setShowRejectModal(false);
-    setSelectedRequest(null);
-    setRejectReason('');
-  };
-
-  // Transform API response with useMemo
+  // Transform API response
   const safeData = useMemo(() => {
     return transformBookingsData(bookingsResponse?.data || []);
   }, [bookingsResponse]);
 
-  // Get all unique departments
+  // ✅ Use server-side pagination data
+  const totalItems = bookingsResponse?.pagination?.totalItems || safeData.length;
+  const totalPages = bookingsResponse?.pagination?.totalPages || 1;
+
+  // Get all unique departments from the data
   const departments = useMemo(() => {
     let sourceData;
     if (doctorId && !showAllData) {
@@ -361,7 +306,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  // Filter requests based on all criteria
+  // Filter requests for doctor view
   const filteredRequests = useMemo(() => {
     if (doctorId && !showAllData) {
       return safeData.filter(item =>
@@ -371,17 +316,12 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return safeData;
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  const totalItems = filteredRequests.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
-
-  const activeFilterCount = [departmentFilter, dateFilter, searchTerm, statusFilter].filter(Boolean).length;
+  const activeFilterCount = [departmentFilter, dateFilter, searchTerm].filter(Boolean).length;
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter, statusFilter, showAllData]);
+  }, [searchTerm, departmentFilter, dateFilter, showAllData]);
 
   // Handlers
   const handleRefresh = () => {
@@ -425,7 +365,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
-    showSuccessToast(`Exported ${exportData.length} pending requests`, TOAST_DURATION);
+    showSuccessToast(`Exported ${exportData.length} requests`, TOAST_DURATION);
   };
 
   const handleImport = (event) => {
@@ -442,6 +382,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           'Pending': pendingImports.length,
           'Other': importedData.length - pendingImports.length
         });
+        refetch();
       } catch (error) {
         showErrorToast('Error parsing JSON file. Please check file format.', TOAST_DURATION);
       }
@@ -490,7 +431,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         {
           'Patient': selectedRequest.patientName,
           'Date': appointmentData.date,
-          'consulting_time': appointmentData.consulting_time,
+          'Time': appointmentData.consulting_time,
           'Token': `#${appointmentData.token}`
         }
       );
@@ -568,6 +509,17 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
+  const closeApproveModal = () => {
+    setShowApproveModal(false);
+    setSelectedRequest(null);
+  };
+
+  const closeRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedRequest(null);
+    setRejectReason('');
+  };
+
   const showDoctorBanner = doctorId && !showAllData;
 
   if (loading) {
@@ -575,13 +527,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   }
 
   return (
-    // ✅ FIX: Proper wrapper with flex-1 and overflow-x-hidden
     <div className="flex-1 p-6 bg-[#F8F9FA] min-h-screen w-full overflow-x-hidden font-sans">
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-800">Requests</h1>
         <p className="text-sm text-gray-500">Home / Requests</p>
       </div>
 
+      {/* Doctor Banner */}
       {showDoctorBanner && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -620,6 +573,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
+      {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 w-full">      
         <div className="flex-1 w-full lg:max-w-md">
           <SearchBar
@@ -645,7 +599,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <button
             onClick={handleExport}
             className={ICON_BUTTON_CLASS}
-            title="Export Pending Requests"
+            title="Export Requests"
           >
             <Download size={16} />
           </button>
@@ -666,6 +620,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       </div>
 
+      {/* Filters */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
           <div className="flex items-center justify-between mb-4">
@@ -726,7 +681,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Request Table - ✅ Responsive with horizontal scroll */}
+      {/* Request Table */}
       {filteredRequests.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -739,7 +694,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           )}
         </div>
       ) : (
-        // ✅ RESPONSIVE WRAPPER: Only table scrolls, page stays full width
         <div className="w-full overflow-hidden">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -752,7 +706,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             </div>
 
             <div className="flex flex-col min-h-[500px]">
-              {/* ✅ Only this div scrolls horizontally if needed */}
               <div className="overflow-x-auto flex-1">
                 <table className="min-w-[1200px] w-full text-sm text-left">
                   <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -768,7 +721,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {paginatedRequests.map((item, index) => (
+                    {filteredRequests.map((item, index) => (
                       <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
@@ -838,6 +791,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
+              {/* Pagination - Uses server-side totalPages */}
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}

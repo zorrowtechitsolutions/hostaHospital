@@ -12,20 +12,22 @@ const TopBar = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get user data from localStorage
     const authData = localStorage.getItem('authData');
     if (authData) {
-      const user = JSON.parse(authData);
-      if (user.name) {
-        setUserName(user.name);
-        setUserInitial(user.name.charAt(0).toUpperCase());
+      try {
+        const user = JSON.parse(authData);
+        if (user.name) {
+          setUserName(user.name);
+          setUserInitial(user.name.charAt(0).toUpperCase());
+        }
+      } catch (error) {
+        // Silently handle parse error
       }
     }
   }, []);
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
-      // Clear all localStorage items
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('roleId');
@@ -38,17 +40,13 @@ const TopBar = () => {
       localStorage.removeItem('staffId');
       localStorage.removeItem('superAdminId');
       
-      // Call logout from auth context
       logout();
-      
-      // Navigate to login page
       navigate("/sign-in", { replace: true });
     }
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    console.log("Searching for:", searchTerm);
     // Implement search functionality here
   };
 

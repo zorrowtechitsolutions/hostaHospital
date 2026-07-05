@@ -399,7 +399,7 @@ const AddStaff = () => {
         imageKey: uploaded.key
       });
       showSuccessToast('Image uploaded successfully!', TOAST_DURATION);
-    } catch (error) {
+    } catch {
       showErrorToast('Failed to upload image', TOAST_DURATION);
     }
   };
@@ -546,7 +546,6 @@ const AddStaff = () => {
       }, 2000);
       
     } catch (error) {
-      console.error("❌ API Error:", error);
       handleApiError(error);
     }
   };

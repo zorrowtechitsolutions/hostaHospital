@@ -10,20 +10,15 @@ import {
   Calendar,
   Clock,
   Briefcase,
-  GraduationCap,
   IdCard,
-  DollarSign,
   User as UserIcon,
   Languages,
-  CheckCircle,
-  XCircle,
   Building,
   Loader2,
   Calendar as CalendarIcon,
-  Users,
   FileText
 } from 'lucide-react';
-import { Card, Button, Badge, Tabs } from '../../../ui';
+import { Card, Button, Badge } from '../../../ui';
 import { useGetDoctorByIdQuery } from '../../../../../app/service/doctorApi';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Appointments from '../../../Appointment/Appointment';

@@ -5,8 +5,6 @@ import {
   Mail,
   Phone,
   MapPin,
-  Calendar,
-  Users,
   Link as LinkIcon,
   Save,
   Edit2,
@@ -50,15 +48,15 @@ const getFullImageUrl = (imageKey) => {
 
 // ==================== TOAST FUNCTIONS ====================
 const showSuccessToast = (message) => {
-  console.log('✅ Success:', message);
+  // Toast implementation
 };
 
 const showErrorToast = (message) => {
-  console.error('❌ Error:', message);
+  // Toast implementation
 };
 
 const showWarningToast = (message) => {
-  console.warn('⚠️ Warning:', message);
+  // Toast implementation
 };
 
 // ==================== SKELETON LOADER ====================
@@ -93,7 +91,7 @@ const HospitalProfile = () => {
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
-  const [updateHospital, { isLoading: isUpdating }] = useUpdateHospitalMutation();
+  const [updateHospital] = useUpdateHospitalMutation();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -134,15 +132,11 @@ const HospitalProfile = () => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
       
-      console.log("🔍 Hospital Data:", hospital);
-      
       const imageKey = 
         hospital?.profilePicture ||
         hospital?.imageUrl ||
         hospital?.image ||
         null;
-      
-      console.log("🖼️ Extracted imageKey:", imageKey);
       
       const locationParts = [
         hospital.address?.place,
@@ -224,8 +218,7 @@ const HospitalProfile = () => {
       
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
-    } catch (error) {
-      console.error("Upload error:", error);
+    } catch {
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
@@ -245,7 +238,7 @@ const HospitalProfile = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setEditForm(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
-    showSuccessToast('Image removed', 2000);
+    showSuccessToast('Image removed');
   };
 
   const handleEdit = () => {
@@ -254,7 +247,6 @@ const HospitalProfile = () => {
     resetUploadState();
   };
 
-  // FIXED: This is the key function - updates image immediately after save
   const handleSave = async () => {
     setIsSaving(true);
     
@@ -269,8 +261,6 @@ const HospitalProfile = () => {
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
       
-      console.log("💾 Saving with profilePicture:", updateData.profilePicture);
-      
       const response = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 
@@ -278,18 +268,13 @@ const HospitalProfile = () => {
       
       const updatedHospital = response.data || response;
       
-      // Get the new profile picture from response
       let newProfilePicture = updatedHospital.profilePicture || 
                               updatedHospital.profileImage || 
                               updatedHospital.imageUrl ||
                               updateData.profilePicture;
       
-      console.log("🖼️ New profile picture from API:", newProfilePicture);
-      
-      // Create full URL for immediate display
       const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
       
-      // Update formData with the new image
       const updatedFormData = {
         ...editForm,
         profileImage: newProfilePicture,
@@ -299,16 +284,13 @@ const HospitalProfile = () => {
       
       setFormData(updatedFormData);
       
-      // CRITICAL: Update preview image immediately
       if (newImageUrl) {
-        console.log("🖼️ Setting preview to:", newImageUrl);
         setPreviewImage(newImageUrl);
       }
       
       setIsEditing(false);
       resetUploadState();
       
-      // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { 
         ...storedUser, 
@@ -321,19 +303,17 @@ const HospitalProfile = () => {
       
       showSuccessToast('Profile updated successfully!');
       
-      // Background refetch (don't wait for it)
       refetch();
       
     } catch (error) {
-      console.error('Save error:', error);
-      if (error.status === 401) {
+      if (error?.status === 401) {
         showErrorToast('Session expired. Redirecting to login...');
         setTimeout(() => {
           logout();
           navigate('/sign-in');
         }, 2000);
       } else {
-        showErrorToast(error.data?.message || 'Failed to update profile');
+        showErrorToast(error?.data?.message || 'Failed to update profile');
       }
     } finally {
       setIsSaving(false);
@@ -349,24 +329,20 @@ const HospitalProfile = () => {
   };
 
   const getProfileImage = () => {
-    // Priority 1: Show preview image (this will show new image immediately after save)
     if (previewImage) {
       return previewImage;
     }
 
-    // Priority 2: Show saved profile image from formData
     if (formData.profileImage || formData.imageUrl || formData.imageKey) {
       const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
       const url = getFullImageUrl(imageValue);
       if (url) return url;
     }
 
-    // Priority 3: Fallback
     return FALLBACK_IMAGE;
   };
 
   const handleImageError = (e) => {
-    console.error('❌ Failed to load image:', e.target.src);
     e.target.onerror = null;
     e.target.src = FALLBACK_IMAGE;
   };

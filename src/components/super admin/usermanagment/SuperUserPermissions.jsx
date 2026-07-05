@@ -10,10 +10,7 @@ import {
   useUpdatePermissionMutation
 } from '../../../../app/service/permission';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
 
 const SuperUserPermissions = () => {
@@ -27,10 +24,8 @@ const SuperUserPermissions = () => {
   });
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Fetch permissions
   const { data: permissionsData, isLoading, refetch } = useGetPermissionsQuery();
   const [deletePermission] = useDeletePermissionMutation();
   const [createPermission] = useCreatePermissionMutation();
@@ -38,26 +33,18 @@ const SuperUserPermissions = () => {
 
   const permissions = permissionsData?.data || [];
 
-  // ✅ Register socket event listeners for permission events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering permission event listeners for Super User Permissions...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerPermissionEvents({
-      onPermissionRegistered: (data) => {
-        console.log("🔑 NEW PERMISSION REGISTERED:", data);
-        showSuccessToast(`New permission "${data.module || 'Permission'}" created!`, 3000);
+      onPermissionRegistered: () => {
+        showSuccessToast(`New permission created!`, 3000);
         refetch();
       },
-      
-      onPermissionUpdated: (data) => {
-        console.log("✏️ PERMISSION UPDATED:", data);
-        showSuccessToast(`Permission "${data.module || 'Permission'}" updated!`, 3000);
+      onPermissionUpdated: () => {
+        showSuccessToast(`Permission updated!`, 3000);
         refetch();
       },
-      
-      onPermissionDeleted: (data) => {
-        console.log("🗑️ PERMISSION DELETED:", data);
+      onPermissionDeleted: () => {
         showSuccessToast(`Permission deleted!`, 3000);
         refetch();
       }
@@ -66,30 +53,25 @@ const SuperUserPermissions = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering permission events for Super User Permissions...");
       unregisterPermissionEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Permission events will work!");
       if (!eventsRegistered) {
         registerPermissionEvents({
-          onPermissionRegistered: (data) => {
-            console.log("🔑 NEW PERMISSION REGISTERED (reconnect):", data);
+          onPermissionRegistered: () => {
             showSuccessToast(`New permission created!`, 3000);
             refetch();
           },
-          onPermissionUpdated: (data) => {
-            console.log("✏️ PERMISSION UPDATED (reconnect):", data);
+          onPermissionUpdated: () => {
             showSuccessToast(`Permission updated!`, 3000);
             refetch();
           },
-          onPermissionDeleted: (data) => {
-            console.log("🗑️ PERMISSION DELETED (reconnect):", data);
+          onPermissionDeleted: () => {
             showSuccessToast(`Permission deleted!`, 3000);
             refetch();
           }
@@ -98,50 +80,26 @@ const SuperUserPermissions = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Permission events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PERMISSION/SUPER: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Filter permissions based on search term
   const filteredPermissions = permissions.filter(permission => 
     permission.module?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     permission.action?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination
   const paginatedPermissions = filteredPermissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filteredPermissions.length / itemsPerPage);
 
-  // Handle delete permission
   const handleDelete = async (permission) => {
     if (window.confirm(`Are you sure you want to delete permission "${permission.module} - ${permission.action}"?`)) {
       try { 
         await deletePermission(permission.id).unwrap(); 
         
-        // ✅ Emit socket event for permission deleted
         socket.emit("permission_event", {
           event: "PERMISSION_DELETED",
           data: {
@@ -161,7 +119,6 @@ const SuperUserPermissions = () => {
     }
   };
 
-  // Handle add new permission
   const handleAddPermission = () => {
     setFormData({
       module: '',
@@ -170,13 +127,11 @@ const SuperUserPermissions = () => {
     setIsModalOpen(true);
   };
 
-  // Handle form submit for create
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const result = await createPermission(formData).unwrap();
       
-      // ✅ Emit socket event for permission registered
       socket.emit("permission_event", {
         event: "PERMISSION_REGISTERED",
         data: {
@@ -195,13 +150,11 @@ const SuperUserPermissions = () => {
     }
   };
 
-  // Handle input change
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Get action badge color
   const getActionBadgeVariant = (action) => {
     const actionMap = {
       'create': 'success',
@@ -214,7 +167,6 @@ const SuperUserPermissions = () => {
     return actionMap[action?.toLowerCase()] || 'secondary';
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex items-center justify-center">

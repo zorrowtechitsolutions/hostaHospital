@@ -5,31 +5,24 @@ import {
   Clock as ClockIcon, Droplet, ChevronRight, Heart, Activity, 
   Thermometer, Weight
 } from "lucide-react";
-import { Button, Badge, Card, Avatar } from "../../ui";
+import { Button, Badge, Card } from "../../ui";
 
-const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleViewAppointmentDetails, handleViewVisitDetails, handleViewVitalDetails, setTab, getStatusBadge }) => {
-  // State for image error handling
+const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleViewAppointmentDetails, handleViewVisitDetails, handleViewVitalDetails, setTab }) => {
   const [imageError, setImageError] = useState(false);
 
-  // Helper function to get profile image URL
   const getProfileImageUrl = () => {
     if (!patient.image) return null;
     
-    // If it's already a full URL, return as is
     if (patient.image.startsWith('http')) {
       return patient.image;
     }
     
-    // Otherwise, construct S3 URL
     return `https://hostahealthcare.s3.eu-north-1.amazonaws.com/${patient.image}`;
   };
 
   const profileImageUrl = getProfileImageUrl();
-
-  // Calculate total bookings from appointments list
   const totalBookings = patient.appointments?.length || patient.appointmentsList?.length || 0;
 
-  // Get status badge variant for appointments
   const getAppointmentBadgeVariant = (status) => {
     const statusMap = {
       'accepted': 'success',
@@ -41,7 +34,6 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
     return statusMap[status?.toLowerCase()] || 'default';
   };
 
-  // Get display text for appointment status
   const getAppointmentStatusText = (status) => {
     const statusMap = {
       'accepted': 'Accepted',
@@ -53,13 +45,22 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
     return statusMap[status?.toLowerCase()] || status || 'Pending';
   };
 
+  // Create vital signs object for reusability
+  const vitalSigns = {
+    bloodPressure: patient.bloodPressure,
+    heartRate: patient.heartRate,
+    temperature: patient.temperature,
+    spo2: patient.spo2,
+    respiratoryRate: patient.respiratoryRate,
+    weight: patient.weight
+  };
+
   return (
     <div className="grid grid-cols-12 gap-6">
       {/* Left Column */}
       <div className="col-span-12 lg:col-span-4 space-y-6">
         <Card className="p-6">
           <div className="flex items-center gap-4 mb-4">
-            {/* Avatar with image support */}
             <div className="relative">
               {profileImageUrl && !imageError ? (
                 <img
@@ -225,14 +226,7 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <div 
               className="bg-gray-50 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-100 transition" 
-              onClick={() => handleViewVitalDetails({ 
-                bloodPressure: patient.bloodPressure, 
-                heartRate: patient.heartRate, 
-                temperature: patient.temperature, 
-                spo2: patient.spo2, 
-                respiratoryRate: patient.respiratoryRate, 
-                weight: patient.weight 
-              })}
+              onClick={() => handleViewVitalDetails(vitalSigns)}
             >
               <Droplet size={20} className="text-blue-500 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Blood Pressure</p>
@@ -240,14 +234,7 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
             </div>
             <div 
               className="bg-gray-50 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-100 transition" 
-              onClick={() => handleViewVitalDetails({ 
-                bloodPressure: patient.bloodPressure, 
-                heartRate: patient.heartRate, 
-                temperature: patient.temperature, 
-                spo2: patient.spo2, 
-                respiratoryRate: patient.respiratoryRate, 
-                weight: patient.weight 
-              })}
+              onClick={() => handleViewVitalDetails(vitalSigns)}
             >
               <Heart size={20} className="text-red-500 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Heart Rate</p>
@@ -255,14 +242,7 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
             </div>
             <div 
               className="bg-gray-50 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-100 transition" 
-              onClick={() => handleViewVitalDetails({ 
-                bloodPressure: patient.bloodPressure, 
-                heartRate: patient.heartRate, 
-                temperature: patient.temperature, 
-                spo2: patient.spo2, 
-                respiratoryRate: patient.respiratoryRate, 
-                weight: patient.weight 
-              })}
+              onClick={() => handleViewVitalDetails(vitalSigns)}
             >
               <Activity size={20} className="text-green-500 mx-auto mb-1" />
               <p className="text-xs text-gray-500">SPO2</p>
@@ -270,14 +250,7 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
             </div>
             <div 
               className="bg-gray-50 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-100 transition" 
-              onClick={() => handleViewVitalDetails({ 
-                bloodPressure: patient.bloodPressure, 
-                heartRate: patient.heartRate, 
-                temperature: patient.temperature, 
-                spo2: patient.spo2, 
-                respiratoryRate: patient.respiratoryRate, 
-                weight: patient.weight 
-              })}
+              onClick={() => handleViewVitalDetails(vitalSigns)}
             >
               <Thermometer size={20} className="text-orange-500 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Temperature</p>
@@ -285,14 +258,7 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
             </div>
             <div 
               className="bg-gray-50 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-100 transition" 
-              onClick={() => handleViewVitalDetails({ 
-                bloodPressure: patient.bloodPressure, 
-                heartRate: patient.heartRate, 
-                temperature: patient.temperature, 
-                spo2: patient.spo2, 
-                respiratoryRate: patient.respiratoryRate, 
-                weight: patient.weight 
-              })}
+              onClick={() => handleViewVitalDetails(vitalSigns)}
             >
               <Weight size={20} className="text-purple-500 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Weight</p>

@@ -43,14 +43,7 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
 
   const getAllPatients = () => {
     if (allPatients && allPatients.length > 0) return allPatients;
-    return [
-      { id: "PT0025", name: "James Carter", type: "Out Patient" },
-      { id: "PT0026", name: "Emily Rodriguez", type: "Out Patient" },
-      { id: "PT0029", name: "Sophia Martinez", type: "Out Patient" },
-      { id: "PT0027", name: "Michael Chen", type: "In Patient" },
-      { id: "PT0028", name: "Lisa Wong", type: "In Patient" },
-      { id: "PT0030", name: "David Thompson", type: "In Patient" }
-    ];
+    return [];
   };
 
   const handleChange = (e) => {
@@ -136,26 +129,107 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, patient, onSave, a
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Appointment" size="lg" showCloseButton={false}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Select label="Select Patient" name="patientId" options={getAllPatients().map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))} value={form.patientId} onChange={handlePatientChange} />
-          <Select label="Patient Type" name="patientType" options={["In Patient", "Out Patient"]} value={form.patientType} onChange={handleChange} />
+          <Select 
+            label="Select Patient" 
+            name="patientId" 
+            options={getAllPatients().map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))} 
+            value={form.patientId} 
+            onChange={handlePatientChange} 
+          />
+          <Select 
+            label="Patient Type" 
+            name="patientType" 
+            options={["In Patient", "Out Patient"]} 
+            value={form.patientType} 
+            onChange={handleChange} 
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Select label="Select Department" name="department" options={departments} value={form.department} onChange={handleChange} error={errors.department} required />
-          <Select label="Select Doctor" name="doctor" options={doctors} value={form.doctor} onChange={handleChange} error={errors.doctor} required />
+          <Select 
+            label="Select Department" 
+            name="department" 
+            options={departments} 
+            value={form.department} 
+            onChange={handleChange} 
+            error={errors.department} 
+            required 
+          />
+          <Select 
+            label="Select Doctor" 
+            name="doctor" 
+            options={doctors} 
+            value={form.doctor} 
+            onChange={handleChange} 
+            error={errors.doctor} 
+            required 
+          />
         </div>
 
-        <Select label="Preferred Mode of Consultation" name="mode" options={modes} value={form.mode} onChange={handleChange} />
+        <Select 
+          label="Preferred Mode of Consultation" 
+          name="mode" 
+          options={modes} 
+          value={form.mode} 
+          onChange={handleChange} 
+        />
 
         <div className="grid grid-cols-3 gap-3">
-          <Input label="Date" name="date" type="date" value={form.date} onChange={handleChange} error={errors.date} required />
-          <Input label="Start Time" name="startTime" type="time" value={form.startTime} onChange={handleChange} error={errors.startTime} required />
-          <Input label="End Time" name="endTime" type="time" value={form.endTime} onChange={handleChange} error={errors.endTime} required />
+          <Input 
+            label="Date" 
+            name="date" 
+            type="date" 
+            value={form.date} 
+            onChange={handleChange} 
+            error={errors.date} 
+            required 
+          />
+          <Input 
+            label="Start Time" 
+            name="startTime" 
+            type="time" 
+            value={form.startTime} 
+            onChange={handleChange} 
+            error={errors.startTime} 
+            required 
+          />
+          <Input 
+            label="End Time" 
+            name="endTime" 
+            type="time" 
+            value={form.endTime} 
+            onChange={handleChange} 
+            error={errors.endTime} 
+            required 
+          />
         </div>
 
-        <Input label="Reason" name="reason" value={form.reason} onChange={handleChange} placeholder="Enter reason for appointment" error={errors.reason} required />
-        <Textarea label="Quick Notes" name="notes" rows={3} value={form.notes} onChange={handleChange} placeholder="Provide detailed instructions..." />
-        <Select label="Mode of Payment" name="payment" options={paymentMethods} value={form.payment} onChange={handleChange} />
+        <Input 
+          label="Reason" 
+          name="reason" 
+          value={form.reason} 
+          onChange={handleChange} 
+          placeholder="Enter reason for appointment" 
+          error={errors.reason} 
+          required 
+        />
+        
+        <Textarea 
+          label="Quick Notes" 
+          name="notes" 
+          rows={3} 
+          value={form.notes} 
+          onChange={handleChange} 
+          placeholder="Provide detailed instructions..." 
+        />
+        
+        <Select 
+          label="Mode of Payment" 
+          name="payment" 
+          options={paymentMethods} 
+          value={form.payment} 
+          onChange={handleChange} 
+        />
 
         <div className="flex justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={onClose}>Cancel</Button>

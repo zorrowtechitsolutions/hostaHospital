@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Droplet,
-  Calendar
 } from "lucide-react";
 import { Button, Badge } from "../../../ui";
 import { useGetBloodBankQuery }

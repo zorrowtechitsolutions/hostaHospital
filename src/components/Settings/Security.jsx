@@ -52,7 +52,7 @@ const Security = () => {
   const performLogout = async () => {
     try {
       await logoutHospital().unwrap();
-    } catch (error) {
+    } catch {
       // Silent fail - we'll log out anyway
     } finally {
       clearAuth();
@@ -193,7 +193,7 @@ const Security = () => {
           setLocalCurrentPassword,
           setLocalPasswordError
         });
-      } catch (error) {
+      } catch {
         // Error already handled in handleChangePassword
       } finally {
         setIsSubmitting(false);
@@ -367,12 +367,12 @@ const Security = () => {
                   if (isDangerAction) {
                     return (
                       <button
-  key={idx}
-  onClick={action.onClick}
-  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300"
->
-  {action.label}
-</button>
+                        key={idx}
+                        onClick={action.onClick}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        {action.label}
+                      </button>
                     );
                   }
                   

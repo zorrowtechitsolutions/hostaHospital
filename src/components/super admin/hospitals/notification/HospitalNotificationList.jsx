@@ -11,9 +11,8 @@ import { showSuccessToast } from '../../../ui/Toast';
 import { Pagination } from '../../../ui/Pagination';
 import { Button, Card, Badge } from '../../../ui';
 
-// ✅ Import socket
+// Import socket
 import { socket } from '../../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerNotificationEvents, unregisterNotificationEvents } from '../../../../socket/notificationEvents';
 
 const HospitalNotificationList = () => {
@@ -24,7 +23,7 @@ const HospitalNotificationList = () => {
   
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ Get unread notifications: /notification/unread/hospital/1
+  // Get unread notifications: /notification/unread/hospital/1
   const { 
     data: unreadData, 
     isLoading: unreadLoading,
@@ -37,7 +36,7 @@ const HospitalNotificationList = () => {
     skip: !hospitalId,
   });
 
-  // ✅ Get read notifications: /notification/read/hospital/1
+  // Get read notifications: /notification/read/hospital/1
   const { 
     data: readData, 
     isLoading: readLoading,
@@ -50,7 +49,7 @@ const HospitalNotificationList = () => {
     skip: !hospitalId,
   });
 
-  // ✅ Get notifications from responses
+  // Get notifications from responses
   const unreadNotifications = unreadData?.data || [];
   const readNotifications = readData?.data || [];
   const allNotifications = [...unreadNotifications, ...readNotifications];
@@ -58,30 +57,20 @@ const HospitalNotificationList = () => {
   const unreadCount = unreadNotifications.length;
   const totalNotifications = allNotifications.length;
 
-  console.log('📊 Unread Notifications:', unreadNotifications);
-  console.log('📊 Read Notifications:', readNotifications);
-  console.log('📊 All Notifications:', allNotifications);
-  console.log('📊 Hospital ID:', hospitalId);
-
-  // ✅ Combined refetch function
+  // Combined refetch function
   const refetchAll = () => {
     refetchUnread();
     refetchRead();
   };
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering notification events for Hospital...");
-    console.log("📡 Socket connected:", socket.connected);
-
     registerNotificationEvents({
-      onNotificationCreated: (data) => {
-        console.log("🔔 NEW NOTIFICATION CREATED:", data);
+      onNotificationCreated: () => {
         refetchAll();
         showSuccessToast("New notification received!", 2000);
       },
-      onNotificationRead: (data) => {
-        console.log("📖 NOTIFICATION READ:", data);
+      onNotificationRead: () => {
         refetchAll();
       }
     });
@@ -89,25 +78,21 @@ const HospitalNotificationList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering notification events...");
       unregisterNotificationEvents();
       setEventsRegistered(false);
     };
   }, [refetchAll]);
 
-  // ✅ Listen for socket connection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Notification events will work!");
       if (!eventsRegistered) {
         registerNotificationEvents({
-          onNotificationCreated: (data) => {
-            console.log("🔔 NEW NOTIFICATION CREATED (reconnect):", data);
+          onNotificationCreated: () => {
             refetchAll();
             showSuccessToast("New notification received!", 2000);
           },
-          onNotificationRead: (data) => {
-            console.log("📖 NOTIFICATION READ (reconnect):", data);
+          onNotificationRead: () => {
             refetchAll();
           }
         });
@@ -116,7 +101,6 @@ const HospitalNotificationList = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Notification events won't work!");
       setEventsRegistered(false);
     };
 
@@ -128,19 +112,6 @@ const HospitalNotificationList = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetchAll, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   const handleRefresh = () => {
     refetchAll();
@@ -182,7 +153,7 @@ const HospitalNotificationList = () => {
     }
   };
 
-  // ✅ Combined loading state
+  // Combined loading state
   const isLoading = unreadLoading || readLoading;
 
   if (isLoading) {
@@ -266,9 +237,6 @@ const HospitalNotificationList = () => {
           <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetchingUnread || isFetchingRead}>
             <RefreshCcw size={16} className={(isFetchingUnread || isFetchingRead) ? "animate-spin" : ""} />
           </Button>
-          {/* ❌ Removed Filter button */}
-          {/* ❌ Removed Mark all as read button */}
-          {/* ❌ Removed Delete All button */}
         </div>
       </div>
 
@@ -341,9 +309,6 @@ const HospitalNotificationList = () => {
                               )}
                             </div>
                           </div>
-                          
-                          {/* ❌ Removed Mark as read button */}
-                          {/* ❌ Removed Delete button */}
                         </div>
                       </div>
                     </div>

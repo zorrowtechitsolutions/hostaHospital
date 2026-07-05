@@ -1,7 +1,5 @@
 // app/service/s3.ts
 import {
-  getHospitalId,
-  getUserRole,
   getToken,
 } from "../../src/utils/auth";
 
@@ -118,45 +116,20 @@ const compressImage = (
 };
 
 // ========================
-// GET USER ID BASED ON ROLE
+// GET USER ID FROM AUTH
 // ========================
 
 const getUserId = (): string | number | undefined => {
   const auth = JSON.parse(
     localStorage.getItem("user") || "{}"
   );
-
-  const role = getUserRole()?.toLowerCase();
-
+  
   console.log("=== getUserId DEBUG ===");
   console.log("Auth object:", auth);
-  console.log("Role:", role);
 
-  let userId: string | number | undefined = undefined;
-
-  switch (role) {
-    case "doctor":
-      userId = auth.doctorId || auth.id;
-      break;
-    case "staff":
-      // ✅ For staff, use hospitalId
-      userId = getHospitalId() || auth.hospitalId || auth.id;
-      console.log("Staff - Using hospitalId:", userId);
-      break;
-    case "hospital":
-      userId = auth.hospitalId || auth.id;
-      break;
-    case "super_admin":
-    case "superadmin":
-    case "admin":
-      userId = auth.hospitalId || getHospitalId() || auth.id;
-      console.log("Super Admin - Using ID:", userId);
-      break;
-    default:
-      userId = auth.id || auth.userId || auth.hospitalId || getHospitalId();
-      break;
-  }
-
+  // Return the user ID from auth
+  const userId = auth.id || auth.userId || auth.hospitalId;
+  
   console.log("Final User ID:", userId);
   console.log("=======================");
   
@@ -171,62 +144,35 @@ export const uploadToS3 = async (
   file: File,
   key: string | null = null,
   customId?: number | string,
-  customRole?: string
+  customRole: string = "hospital" // ✅ Add role parameter with default
 ): Promise<UploadResponse> => {
   try {
-    const role = customRole || getUserRole()?.toLowerCase() || "hospital";
     const token = getToken();
 
-    // Get ID - use provided id or get from storage
-    let id: string | number | undefined = customId;
-    
-    // If no customId provided, try to get from storage based on role
+    // Get ID - use provided customId or get from storage
+    let id: string | number | undefined = customId || getUserId();
+
+    console.log("=== S3 UPLOAD DEBUG ===");
+    console.log("Original size:", (file.size / 1024 / 1024).toFixed(2), "MB");
+    console.log("Compressed size:", (file.size / 1024 / 1024).toFixed(2), "MB");
+    console.log("ID:", id);
+    console.log("Custom ID passed:", customId);
+    console.log("Custom Role:", customRole);
+    console.log("Token exists:", !!token);
+    console.log("Existing key:", key);
+
     if (!id) {
-      if (role === 'staff') {
-        // For staff, always use hospitalId
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          id = hospitalId;
-          console.log("Staff upload - Using hospitalId:", id);
-        } else {
-          throw new Error("Hospital ID not found. Please make sure you are logged in.");
-        }
-      } else {
-        id = getUserId();
-      }
-    }
-    
-    // For Super Admin, if id is still undefined, try to get hospitalId
-    if (!id && (role === 'super_admin' || role === 'superadmin' || role === 'admin')) {
-      const hospitalId = getHospitalId();
-      if (hospitalId) {
-        id = hospitalId;
-        console.log("Super Admin fallback - Using hospitalId:", id);
-      }
+      throw new Error("ID is required for S3 upload. Please make sure you are logged in.");
     }
 
     // COMPRESS
     const compressed = await compressImage(file);
 
-    console.log("=== S3 UPLOAD DEBUG ===");
-    console.log("Original size:", (file.size / 1024 / 1024).toFixed(2), "MB");
-    console.log("Compressed size:", (compressed.size / 1024 / 1024).toFixed(2), "MB");
-    console.log("Role:", role);
-    console.log("ID:", id);
-    console.log("Custom ID passed:", customId);
-    console.log("Custom Role passed:", customRole);
-    console.log("Token exists:", !!token);
-    console.log("Existing key:", key);
-
-    // Validate required fields
-    if (!id) {
-      throw new Error("ID is required for S3 upload. Please make sure you are logged in.");
-    }
-
+    // ✅ Include role in the request body (backend requires it)
     const body = {
       filename: compressed.name,
       contentType: compressed.type,
-      role: role,
+      role: customRole, // ✅ Add role field
       id: id,
       ...(key
         ? { key }
@@ -296,23 +242,14 @@ export const uploadToS3 = async (
 // DELETE
 // ========================
 
-export const deleteFromS3 = async (key: string, role?: string, id?: string | number) => {
+export const deleteFromS3 = async (key: string, id?: string | number, role: string = "hospital") => {
   const token = getToken();
-  const finalRole = role || getUserRole() || "hospital";
   let finalId: string | number | undefined = id || getUserId();
-  
-  if (!finalId && (finalRole === 'super_admin' || finalRole === 'superadmin' || finalRole === 'admin')) {
-    const hospitalId = getHospitalId();
-    if (hospitalId) {
-      finalId = hospitalId;
-      console.log("Super Admin delete - Using hospitalId:", finalId);
-    }
-  }
 
   console.log("=== S3 DELETE DEBUG ===");
   console.log("Key:", key);
-  console.log("Role:", finalRole);
   console.log("ID:", finalId);
+  console.log("Role:", role);
   console.log("Token exists:", !!token);
 
   if (!finalId) {
@@ -328,7 +265,7 @@ export const deleteFromS3 = async (key: string, role?: string, id?: string | num
     },
     body: JSON.stringify({
       key,
-      role: finalRole,
+      role: role, // ✅ Add role field
       id: finalId,
     }),
   });

@@ -23,18 +23,14 @@ const HospitalUsers = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Fetch all hospitals
   const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
-  
-  // Fetch all doctors and staff to calculate counts
-  const { data: doctorsData } = useGetDoctorsQuery({ limit: 1000 });
-  const { data: staffData } = useGetStaffQuery({ limit: 1000 });
+  const { data: doctorsData } = useGetDoctorsQuery();
+  const { data: staffData } = useGetStaffQuery();
 
   const hospitals = hospitalsData?.data || hospitalsData || [];
   const doctors = doctorsData?.data || [];
   const staff = staffData?.data || [];
 
-  // Calculate user counts per hospital
   const hospitalsWithCounts = hospitals.map(hospital => ({
     ...hospital,
     doctorCount: doctors.filter(d => d.hospitalId === hospital.id).length,
@@ -54,7 +50,6 @@ const HospitalUsers = () => {
   );
   const totalPages = Math.ceil(filteredHospitals.length / itemsPerPage);
 
-  // ✅ FIXED: Correct navigation path matching router
   const handleHospitalClick = (hospital) => {
     navigate(`/super-admin/hospital-users/${hospital.id}/permissions`, {
       state: { 
@@ -74,7 +69,6 @@ const HospitalUsers = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6">
-      {/* Header */}
       <div className="mb-6">
         <button 
           onClick={() => navigate('/super-admin/dashboard')}
@@ -93,7 +87,6 @@ const HospitalUsers = () => {
         </div>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -102,12 +95,11 @@ const HospitalUsers = () => {
             placeholder="Search hospitals by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0]"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
           />
         </div>
       </div>
 
-      {/* Hospitals Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {paginatedHospitals.map((hospital) => (
           <Card 

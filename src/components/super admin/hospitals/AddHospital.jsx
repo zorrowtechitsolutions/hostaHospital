@@ -216,13 +216,11 @@ const AddHospital = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   
-  // Fetch categories from API
   const { data: categoriesData, isLoading: isLoadingCategories, error: categoriesError } = useGetCategoryQuery({
     isActive: true,
     limit: 100
   });
 
-  // Extract categories from response
   const categories = categoriesData?.data && Array.isArray(categoriesData.data) 
     ? categoriesData.data 
     : [];
@@ -235,7 +233,7 @@ const AddHospital = () => {
   const [emergencyNumber, setEmergencyNumber] = useState("");
   const [longitude, setLongitude] = useState("");
   const [latitude, setLatitude] = useState("");
-  const [hospitalCategory, setHospitalCategory] = useState(""); // Changed from hospitalType
+  const [hospitalCategory, setHospitalCategory] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
@@ -455,7 +453,6 @@ const AddHospital = () => {
         });
       });
 
-      // Find the selected category object to get its ID
       const selectedCategory = categories.find(cat => cat._id === hospitalCategory || cat.id === hospitalCategory);
       
       const hospitalData = {
@@ -470,8 +467,8 @@ const AddHospital = () => {
           place: streetAddress,
           pincode: Number(pincode)
         },
-        categoryId: selectedCategory?._id || selectedCategory?.id || hospitalCategory, // Send category ID
-        categoryName: selectedCategory?.name || "", // Optional: send category name as well
+        categoryId: selectedCategory?._id || selectedCategory?.id || hospitalCategory,
+        categoryName: selectedCategory?.name || "",
         emergencyContact: emergencyNumber,
         latitude: latitude ? Number(parseFloat(latitude).toFixed(6)) : null,
         longitude: longitude ? Number(parseFloat(longitude).toFixed(6)) : null,
@@ -481,24 +478,18 @@ const AddHospital = () => {
         working_hours_clinic_nobreak
       };
 
-      console.log("🚀 Submitting hospital data:", hospitalData);
-
       try {
-        const response = await register(hospitalData).unwrap();
-        console.log("Registration successful:", response);
+        await register(hospitalData).unwrap();
         
-        // Show success message
         showSuccessToast(`✅ ${hospitalName} has been successfully registered!`, 5000);
         
         setIsSubmitting(false);
         
-        // Navigate back to hospitals list
         setTimeout(() => {
           navigate('/super-admin/hospitals');
         }, 2000);
         
       } catch (error) {
-        console.error("❌ Registration error:", error);
         let errorMessage = "Registration failed. Please try again.";
         if (error.data?.message) errorMessage = error.data.message;
         else if (error.status === 409) errorMessage = "Email already registered. Please use a different email.";
@@ -515,7 +506,6 @@ const AddHospital = () => {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Top Navigation Bar with Back Button */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -530,7 +520,6 @@ const AddHospital = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm p-8 space-y-8">
@@ -548,7 +537,6 @@ const AddHospital = () => {
               <div className="grid md:grid-cols-2 gap-5">
                 <Input label="Hospital Name" placeholder="Enter hospital name" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} required />
                 
-                {/* Category Dropdown - Replaces Hospital Type */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
                     Category <span className="text-red-500">*</span>

@@ -6,10 +6,7 @@ import { Card, Button, Pagination, Modal } from '../../ui';
 import { useGetStaffQuery, useDeleteStaffMutation } from '../../../../app/service/staffApi';
 import StaffDetails from '../hospitals/staff/staffDetails';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerStaffEvents, unregisterStaffEvents } from '../../../socket/staffEvents';
 
 const HospitalStaffList = () => {
@@ -23,10 +20,8 @@ const HospitalStaffList = () => {
   const [staffToDelete, setStaffToDelete] = useState(null);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API hook
   const { data: staffData, isLoading, refetch, isFetching } = useGetStaffQuery({
     hospitalId: id,
     page: currentPage,
@@ -40,44 +35,30 @@ const HospitalStaffList = () => {
   const totalItems = staffData?.pagination?.totalItems || allStaff.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // ✅ Register socket event listeners for staff events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering staff event listeners for Hospital Staff...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerStaffEvents({
-      onStaffRegistered: (data) => {
-        console.log("👤 NEW STAFF REGISTERED:", data);
+      onStaffRegistered: () => {
         showSuccessToast(`New staff registered!`, 3000);
         refetch();
       },
-      
-      onStaffUpdated: (data) => {
-        console.log("✏️ STAFF UPDATED:", data);
+      onStaffUpdated: () => {
         showSuccessToast(`Staff updated!`, 3000);
         refetch();
       },
-      
-      onStaffDeleted: (data) => {
-        console.log("🗑️ STAFF DELETED:", data);
+      onStaffDeleted: () => {
         showSuccessToast(`Staff deleted!`, 3000);
         refetch();
       },
-      
-      onStaffRecovered: (data) => {
-        console.log("♻️ STAFF RECOVERED:", data);
+      onStaffRecovered: () => {
         showSuccessToast(`Staff recovered!`, 3000);
         refetch();
       },
-      
-      onStaffPasswordReset: (data) => {
-        console.log("🔑 STAFF PASSWORD RESET:", data);
+      onStaffPasswordReset: () => {
         showSuccessToast(`Staff password reset!`, 3000);
         refetch();
       },
-      
-      onStaffPasswordChanged: (data) => {
-        console.log("🔐 STAFF PASSWORD CHANGED:", data);
+      onStaffPasswordChanged: () => {
         showSuccessToast(`Staff password changed!`, 3000);
         refetch();
       }
@@ -86,45 +67,37 @@ const HospitalStaffList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering staff events for Hospital Staff...");
       unregisterStaffEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Staff events will work!");
       if (!eventsRegistered) {
         registerStaffEvents({
-          onStaffRegistered: (data) => {
-            console.log("👤 NEW STAFF REGISTERED (reconnect):", data);
+          onStaffRegistered: () => {
             showSuccessToast(`New staff registered!`, 3000);
             refetch();
           },
-          onStaffUpdated: (data) => {
-            console.log("✏️ STAFF UPDATED (reconnect):", data);
+          onStaffUpdated: () => {
             showSuccessToast(`Staff updated!`, 3000);
             refetch();
           },
-          onStaffDeleted: (data) => {
-            console.log("🗑️ STAFF DELETED (reconnect):", data);
+          onStaffDeleted: () => {
             showSuccessToast(`Staff deleted!`, 3000);
             refetch();
           },
-          onStaffRecovered: (data) => {
-            console.log("♻️ STAFF RECOVERED (reconnect):", data);
+          onStaffRecovered: () => {
             showSuccessToast(`Staff recovered!`, 3000);
             refetch();
           },
-          onStaffPasswordReset: (data) => {
-            console.log("🔑 STAFF PASSWORD RESET (reconnect):", data);
+          onStaffPasswordReset: () => {
             showSuccessToast(`Staff password reset!`, 3000);
             refetch();
           },
-          onStaffPasswordChanged: (data) => {
-            console.log("🔐 STAFF PASSWORD CHANGED (reconnect):", data);
+          onStaffPasswordChanged: () => {
             showSuccessToast(`Staff password changed!`, 3000);
             refetch();
           }
@@ -133,34 +106,13 @@ const HospitalStaffList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Staff events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - STAFF/HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Helper function to format address from object to string
   const formatAddress = (address) => {
     if (!address) return 'N/A';
     if (typeof address === 'string') return address;
@@ -177,7 +129,6 @@ const HospitalStaffList = () => {
     return parts.length > 0 ? parts.join(', ') : 'N/A';
   };
 
-  // Helper function to format date
   const formatDate = (date) => {
     if (!date) return '';
     try {
@@ -191,7 +142,6 @@ const HospitalStaffList = () => {
     }
   };
 
-  // Helper function to safely get string value from any field
   const getStringValue = (value) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -204,7 +154,6 @@ const HospitalStaffList = () => {
     return '';
   };
 
-  // Handler to open details modal with transformed data
   const handleViewDetails = (staff) => {
     const transformedStaff = {
       ...staff,
@@ -231,29 +180,24 @@ const HospitalStaffList = () => {
     setShowDetailsModal(true);
   };
 
-  // Handler for adding new staff
   const handleAddStaff = () => {
     navigate('/super-admin/staff/add', { state: { hospitalId: id } });
   };
 
-  // Handler for editing staff
   const handleEditStaff = (staff) => {
     navigate(`/super-admin/staff/edit/${staff.id}`, { state: { staff, hospitalId: id } });
   };
 
-  // Handler for delete click
   const handleDeleteClick = (staff) => {
     setStaffToDelete(staff);
     setShowDeleteModal(true);
   };
 
-  // Confirm delete handler
   const handleConfirmDelete = async () => {
     if (staffToDelete) {
       try {
         await deleteStaff(staffToDelete.id).unwrap();
         
-        // ✅ Emit socket event for staff deleted
         socket.emit("staff_event", {
           event: "STAFF_DELETED",
           data: {
@@ -269,13 +213,11 @@ const HospitalStaffList = () => {
         setShowDeleteModal(false);
         setStaffToDelete(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete staff member', 3000);
       }
     }
   };
 
-  // Three-dot menu component
   const ActionMenu = ({ staff }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -341,7 +283,6 @@ const HospitalStaffList = () => {
     );
   };
 
-  // Reset to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -356,7 +297,6 @@ const HospitalStaffList = () => {
 
   return (
     <div>
-      {/* Header with Back Button and Add Staff Button */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
@@ -377,7 +317,6 @@ const HospitalStaffList = () => {
         </p>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-md">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -386,12 +325,11 @@ const HospitalStaffList = () => {
             placeholder="Search staff by name, designation, or type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent border border-gray-300 outline-none"
           />
         </div>
       </div>
 
-      {/* Staff Grid */}
       {allStaff.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -402,7 +340,6 @@ const HospitalStaffList = () => {
                 onClick={() => handleViewDetails(staffMember)}
               >
                 <div className="flex items-start gap-3">
-                  {/* Avatar with fallback */}
                   <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center flex-shrink-0">
                     {staffMember.imageUrl ? (
                       <img 
@@ -494,7 +431,6 @@ const HospitalStaffList = () => {
         </div>
       )}
 
-      {/* Staff Details Modal */}
       {showDetailsModal && selectedStaff && (
         <StaffDetails
           staff={selectedStaff}
@@ -503,7 +439,6 @@ const HospitalStaffList = () => {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       <Modal 
         isOpen={showDeleteModal} 
         onClose={() => {

@@ -5,10 +5,7 @@ import { ArrowLeft, Search, Stethoscope, Phone, Mail, MapPin, Loader2, Graduatio
 import { Card, Button, Pagination, Modal } from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { useGetDoctorsQuery, useDeleteDoctorMutation } from '../../../../app/service/doctorApi';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../../socket/doctorEvents';
 
 const HospitalDoctorsList = () => {
@@ -20,13 +17,11 @@ const HospitalDoctorsList = () => {
   const [doctorToDelete, setDoctorToDelete] = useState(null);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ FIXED: Pass hospitalId to API so backend can filter
   const { data: doctorsData, isLoading, refetch } = useGetDoctorsQuery({
-    hospitalId: id,  // ← CRITICAL: Pass hospital ID from URL
-    page: currentPage,  // Use currentPage for pagination
+    hospitalId: id,
+    page: currentPage,
     limit: itemsPerPage,
     search_query: searchTerm || undefined
   });
@@ -37,44 +32,30 @@ const HospitalDoctorsList = () => {
   const totalItems = doctorsData?.pagination?.totalItems || allDoctors.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // ✅ Register socket event listeners for doctor events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering doctor event listeners for Hospital Doctors...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerDoctorEvents({
-      onDoctorRegistered: (data) => {
-        console.log("👨‍⚕️ NEW DOCTOR REGISTERED:", data);
+      onDoctorRegistered: () => {
         showSuccessToast(`New doctor registered!`, 3000);
         refetch();
       },
-      
-      onDoctorUpdated: (data) => {
-        console.log("✏️ DOCTOR UPDATED:", data);
+      onDoctorUpdated: () => {
         showSuccessToast(`Doctor updated!`, 3000);
         refetch();
       },
-      
-      onDoctorDeleted: (data) => {
-        console.log("🗑️ DOCTOR DELETED:", data);
+      onDoctorDeleted: () => {
         showSuccessToast(`Doctor deleted!`, 3000);
         refetch();
       },
-      
-      onDoctorRecovered: (data) => {
-        console.log("♻️ DOCTOR RECOVERED:", data);
+      onDoctorRecovered: () => {
         showSuccessToast(`Doctor recovered!`, 3000);
         refetch();
       },
-      
-      onDoctorPasswordReset: (data) => {
-        console.log("🔑 DOCTOR PASSWORD RESET:", data);
+      onDoctorPasswordReset: () => {
         showSuccessToast(`Doctor password reset!`, 3000);
         refetch();
       },
-      
-      onDoctorPasswordChanged: (data) => {
-        console.log("🔐 DOCTOR PASSWORD CHANGED:", data);
+      onDoctorPasswordChanged: () => {
         showSuccessToast(`Doctor password changed!`, 3000);
         refetch();
       }
@@ -83,45 +64,37 @@ const HospitalDoctorsList = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering doctor events for Hospital Doctors...");
       unregisterDoctorEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Doctor events will work!");
       if (!eventsRegistered) {
         registerDoctorEvents({
-          onDoctorRegistered: (data) => {
-            console.log("👨‍⚕️ NEW DOCTOR REGISTERED (reconnect):", data);
+          onDoctorRegistered: () => {
             showSuccessToast(`New doctor registered!`, 3000);
             refetch();
           },
-          onDoctorUpdated: (data) => {
-            console.log("✏️ DOCTOR UPDATED (reconnect):", data);
+          onDoctorUpdated: () => {
             showSuccessToast(`Doctor updated!`, 3000);
             refetch();
           },
-          onDoctorDeleted: (data) => {
-            console.log("🗑️ DOCTOR DELETED (reconnect):", data);
+          onDoctorDeleted: () => {
             showSuccessToast(`Doctor deleted!`, 3000);
             refetch();
           },
-          onDoctorRecovered: (data) => {
-            console.log("♻️ DOCTOR RECOVERED (reconnect):", data);
+          onDoctorRecovered: () => {
             showSuccessToast(`Doctor recovered!`, 3000);
             refetch();
           },
-          onDoctorPasswordReset: (data) => {
-            console.log("🔑 DOCTOR PASSWORD RESET (reconnect):", data);
+          onDoctorPasswordReset: () => {
             showSuccessToast(`Doctor password reset!`, 3000);
             refetch();
           },
-          onDoctorPasswordChanged: (data) => {
-            console.log("🔐 DOCTOR PASSWORD CHANGED (reconnect):", data);
+          onDoctorPasswordChanged: () => {
             showSuccessToast(`Doctor password changed!`, 3000);
             refetch();
           }
@@ -130,54 +103,17 @@ const HospitalDoctorsList = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Doctor events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - DOCTOR/HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Debug logging
-  useEffect(() => {
-    if (allDoctors.length > 0) {
-      console.log("=== HOSPITAL DOCTORS LIST DEBUG ===");
-      console.log("Hospital ID from URL:", id);
-      console.log("Doctors Data from API:", doctorsData);
-      console.log("All Doctors:", allDoctors);
-      console.log("Total Items:", totalItems);
-      
-      // Log what hospitalIds are in the response
-      const uniqueHospitalIds = [...new Set(allDoctors.map(d => d.hospitalId))];
-      console.log("Unique hospitalIds in response:", uniqueHospitalIds);
-    }
-  }, [id, doctorsData, allDoctors, totalItems]);
-
-  // Reset to page 1 when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Helper function to format doctor name with Dr. prefix
   const formatDoctorName = (doctor) => {
     const name = doctor?.displayName || `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim() || doctor?.name || 'Doctor';
     if (!name) return 'Doctor';
@@ -190,36 +126,30 @@ const HospitalDoctorsList = () => {
     return `Dr. ${name}`;
   };
 
-  // Navigate to doctor details page
   const handleDoctorClick = (doctorId) => {
     navigate(`/super-admin/doctors/${doctorId}`);
   };
 
-  // Handle add new doctor
   const handleAddDoctor = () => {
     navigate('/super-admin/doctors/add', { state: { hospitalId: id } });
   };
 
-  // Handle edit doctor
   const handleEditClick = (doctor, e) => {
     e.stopPropagation();
     navigate(`/super-admin/doctors/edit/${doctor.id}`, { state: { doctor, hospitalId: id } });
   };
 
-  // Handle delete doctor
   const handleDeleteClick = (doctor, e) => {
     e.stopPropagation();
     setDoctorToDelete(doctor);
     setShowModal(true);
   };
 
-  // Confirm delete
   const handleConfirmDelete = async () => {
     if (doctorToDelete) {
       try {
         await deleteDoctor(doctorToDelete.id).unwrap();
         
-        // ✅ Emit socket event for doctor deleted
         socket.emit("doctor_event", {
           event: "DOCTOR_DELETED",
           data: {
@@ -235,7 +165,6 @@ const HospitalDoctorsList = () => {
         setShowModal(false);
         setDoctorToDelete(null);
       } catch (error) {
-        console.error('Error deleting doctor:', error);
         showErrorToast(error?.data?.message || 'Failed to delete doctor');
       }
     }
@@ -251,7 +180,6 @@ const HospitalDoctorsList = () => {
 
   return (
     <div>
-      {/* Header with Back Button and Add Doctor Button */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
@@ -272,7 +200,6 @@ const HospitalDoctorsList = () => {
         </p>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-md">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -281,12 +208,11 @@ const HospitalDoctorsList = () => {
             placeholder="Search doctors by name or specialty..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent border border-gray-300 outline-none"
           />
         </div>
       </div>
 
-      {/* Doctors Grid */}
       {allDoctors.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -336,7 +262,6 @@ const HospitalDoctorsList = () => {
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
                   <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-gray-100">
                     <Button
                       size="sm"
@@ -391,7 +316,6 @@ const HospitalDoctorsList = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <Modal 
         isOpen={showModal} 
         onClose={() => {

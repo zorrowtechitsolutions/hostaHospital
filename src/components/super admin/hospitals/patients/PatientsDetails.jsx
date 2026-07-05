@@ -1,54 +1,60 @@
 // src/components/patients/PatientDetails.jsx - With Fixed Prescription Doctor Names
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
-import EditAppointmentModal from "./EditAppointmentModal";
-import EditVisitHistory from "./EditVisitHistoryModal";
-import DeleteModal from "./DeleteModel";
+import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, ShieldIcon, Beaker } from "lucide-react";
+import EditAppointmentModal from "../../../patients/EditAppointmentModal";
+import EditVisitHistory from "../../../patients/EditVisitHistoryModal";
+import DeleteModal from "../../../patients/DeleteModel";
 
 // Import Tab Components
-import ProfileTab from "./tabs/ProfileTab";
-import AppointmentsTab from "./tabs/AppointmentsTab";
-import VitalsTab from "./tabs/VitalsTab";
-import VisitHistoryTab from "./tabs/VisitHistoryTab";
-import PrescriptionTab from "./tabs/PrescriptionTab";
-import MedicalHistoryTab from "./tabs/MedicalHistoryTab";
-import DocumentsTab from "./tabs/DocumentsTab";
-import LabResultsTab from "./tabs/LabResultsTab";
-import InsuranceTab from "./tabs/InsuranceTab";
+import ProfileTab from "../../../patients/tabs/ProfileTab";
+import AppointmentsTab from "../../../patients/tabs/AppointmentsTab";
+import VitalsTab from "../../../patients/tabs/VitalsTab";
+import VisitHistoryTab from "../../../patients/tabs/VisitHistoryTab";
+import PrescriptionTab from "../../../patients/tabs/PrescriptionTab";
+import MedicalHistoryTab from "../../../patients/tabs/MedicalHistoryTab";
+import DocumentsTab from "../../../patients/tabs/DocumentsTab";
+import LabResultsTab from "../../../patients/tabs/LabResultsTab";
+import InsuranceTab from "../../../patients/tabs/InsuranceTab";
 
 // Import Modals
-import AppointmentDetailsModal from "./modals/AppointmentDetailsModal";
-import VitalDetailsModal from "./modals/VitalDetailsModal";
-import VisitDetailsModal from "./modals/VisitDetailsModal";
-import MedicalDetailsModal from "./modals/MedicalDetailsModal";
-import AddAppointmentModal from "./AddAppointmentModal";
-import PrescriptionReportModal from "./modals/PrecriptionReportModal";
+import AppointmentDetailsModal from "../../../patients/modals/AppointmentDetailsModal";
+import VitalDetailsModal from "../../../patients/modals/VitalDetailsModal";
+import VisitDetailsModal from "../../../patients/modals/VisitDetailsModal";
+import MedicalDetailsModal from "../../../patients/modals/MedicalDetailsModal";
+import AddAppointmentModal from "../../../patients/AddAppointmentModal";
+import PrescriptionReportModal from "../../../patients/modals/PrecriptionReportModal";
 
 // Import API hooks
-import { useGetPatientByIdQuery } from "../../../app/service/patients";
-import { useGetBookingsQuery } from "../../../app/service/request";
-import { useGetPrescriptionsQuery, useDeletePrescriptionMutation } from "../../../app/service/prescription";
-import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../app/service/vitals";
-import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
-import { Loader } from "../ui";
-import { showSuccessToast, showErrorToast } from "../ui/Toast";
+import { useGetPatientByIdQuery } from "../../../../../app/service/patients";
+import { useGetBookingsQuery } from "../../../../../app/service/request";
+import { useGetPrescriptionsQuery, useDeletePrescriptionMutation } from "../../../../../app/service/prescription";
+import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../../../app/service/vitals";
+import { useGetDoctorsQuery } from "../../../../../app/service/doctorApi"; // ✅ ADDED for doctor lookup
+import { Loader } from "../../../ui";
+import { showSuccessToast, showErrorToast } from "../../../ui/Toast";
+
 
 const PatientDetails = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams();
   const passedPatient = location.state?.patient;
+  
+  // Get return path from state or determine from URL
+  const returnPath = location.state?.returnPath || location.state?.from;
 
   const [tab, setTab] = useState("profile");
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   
+  // View Modals States
   const [showAppointmentDetailsModal, setShowAppointmentDetailsModal] = useState(false);
   const [showVisitDetailsModal, setShowVisitDetailsModal] = useState(false);
   const [showMedicalDetailsModal, setShowMedicalDetailsModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
   
+  // Prescription Modal States
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   
@@ -62,6 +68,7 @@ const PatientDetails = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [openMenu, setOpenMenu] = useState(null);
   
+  // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState({
     type: '',
@@ -70,14 +77,36 @@ const PatientDetails = () => {
     name: ''
   });
   
+  // State for Edit Visit History Modal
   const [showEditVisitHistoryModal, setShowEditVisitHistoryModal] = useState(false);
   const [visitToEdit, setVisitToEdit] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Get patient ID from URL params or passed state
   const patientId = id || passedPatient?.id || passedPatient?._id;
 
+  // Helper to check if we're in super admin context
+  const isSuperAdmin = location.pathname.includes('/super-admin');
+
+  // Helper to get base path for navigation
+  const getBasePath = () => {
+    return isSuperAdmin ? '/super-admin' : '';
+  };
+
+  // Determine if we came from hospital patients list
+  const cameFromHospitalPatients = location.pathname.includes('/hospitals/') && location.pathname.includes('/patients');
+
+  // Extract hospital ID from URL if we came from hospital patients
+  const getHospitalIdFromPath = () => {
+    const match = location.pathname.match(/\/hospitals\/(\d+)\/patients/);
+    return match ? match[1] : null;
+  };
+
+  const hospitalIdFromPath = getHospitalIdFromPath();
+
+  // Fetch patient data from API
   const { 
     data: patientResponse, 
     isLoading: isLoadingPatient,
@@ -86,12 +115,14 @@ const PatientDetails = () => {
     skip: !patientId
   });
 
+  // Fetch all bookings for appointments and visits
   const {
     data: bookingResponse,
     refetch: refetchBookings,
     isLoading: isLoadingBookings
   } = useGetBookingsQuery({});
 
+  // Fetch prescriptions for this patient
   const {
     data: prescriptionsResponse,
     isLoading: isLoadingPrescriptions,
@@ -103,6 +134,10 @@ const PatientDetails = () => {
 
   const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
 
+  console.log("PATIENT ID", patientId);
+  console.log("PRESCRIPTION ID", prescriptionId);
+
+  // Fetch vitals for this patient
   const {
     data: vitalsResponse,
     isLoading: isLoadingVitals,
@@ -117,17 +152,26 @@ const PatientDetails = () => {
     }
   );
 
+  // Fetch doctors for lookup
   const {
     data: doctorsData,
     isLoading: isLoadingDoctors,
   } = useGetDoctorsQuery({ limit: 1000 });
 
+  // Delete prescription mutation
   const [deletePrescription] = useDeletePrescriptionMutation();
+  
+  // Delete vital mutation
   const [deleteVital] = useDeleteVitalMutation();
 
   const patientData = patientResponse?.data || patientResponse || passedPatient;
 
-  const doctorMap = useMemo(() => {
+  console.log("PATIENT API DATA", patientData);
+  console.log("VITALS RESPONSE", vitalsResponse);
+  console.log("PRESCRIPTIONS RESPONSE", prescriptionsResponse);
+  
+  // Create doctor lookup map
+  const doctorMap = React.useMemo(() => {
     const map = {};
     const doctors = doctorsData?.data || doctorsData?.rows || doctorsData?.doctors || [];
     doctors.forEach(doc => {
@@ -144,7 +188,8 @@ const PatientDetails = () => {
     return map;
   }, [doctorsData]);
 
-  const patientAppointments = useMemo(() => {
+  // Filter appointments for current patient
+  const patientAppointments = React.useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
       : bookingResponse?.data || bookingResponse?.bookings || bookingResponse?.result || [];
@@ -174,7 +219,8 @@ const PatientDetails = () => {
       }));
   }, [bookingResponse, patientData]);
 
-  const patientVisits = useMemo(() => {
+  // Filter visits (accepted/completed appointments) for current patient
+  const patientVisits = React.useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
       : bookingResponse?.data || bookingResponse?.bookings || bookingResponse?.result || [];
@@ -209,7 +255,8 @@ const PatientDetails = () => {
       });
   }, [bookingResponse, patientData]);
 
-  const formattedPrescriptions = useMemo(() => {
+  // Transform prescriptions from API with proper doctor info extraction
+  const formattedPrescriptions = React.useMemo(() => {
     const apiPrescriptions = prescriptionsResponse?.data || [];
     
     return apiPrescriptions.map((prescription, index) => {
@@ -234,6 +281,7 @@ const PatientDetails = () => {
       if (doctorInfo) {
         doctorName = doctorInfo.name;
         doctorSpecialization = doctorInfo.specialization;
+        console.log(`✅ Found doctor in map: ID=${prescription.doctorId}, Name=${doctorName}`);
       }
       
       if (!doctorName && booking) {
@@ -271,6 +319,7 @@ const PatientDetails = () => {
       
       if (!doctorName || doctorName === "null" || doctorName === "undefined") {
         doctorName = `Dr. ${prescription.doctorId || "Unknown"}`;
+        console.log(`⚠️ Using fallback doctor name: ${doctorName} for ID=${prescription.doctorId}`);
       }
       
       if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
@@ -300,7 +349,8 @@ const PatientDetails = () => {
     });
   }, [prescriptionsResponse, bookingResponse, doctorMap]);
 
-  const formattedVitals = useMemo(() => {
+  // Transform vitals from API AND extract from prescriptions
+  const formattedVitals = React.useMemo(() => {
     let apiVitals = [];
     const vitalsData = vitalsResponse?.data;
     
@@ -465,6 +515,7 @@ const PatientDetails = () => {
     
   }, [vitalsResponse, prescriptionsResponse, bookingResponse, doctorMap]);
 
+  // Combined patient state
   const [patient, setPatient] = useState({
     id: '',
     hospitalId: '',
@@ -501,6 +552,7 @@ const PatientDetails = () => {
     visits: []
   });
 
+  // Update patient state when API data loads
   useEffect(() => {
     if (patientData) {
       setPatient({
@@ -605,8 +657,32 @@ const PatientDetails = () => {
     return `px-2 py-1 rounded-full text-xs font-medium ${statusMap[status] || 'bg-gray-100 text-gray-700'}`;
   };
 
-  const handleBackToPatients = () => navigate('/patients');
-  
+  // Navigation handler - Back to Patients (handles both main patients list and hospital patients list)
+
+const hospitalId = location.state?.hospitalId;
+
+const handleBackToPatients = () => {
+  const basePath = getBasePath();
+
+  if (hospitalId) {
+    navigate(`${basePath}/hospitals/${hospitalId}/patients`);
+    return;
+  }
+
+  navigate(`${basePath}/patients`);
+};
+  // Navigation handler - Edit Patient
+  const handleEditPatientNavigation = (patientData) => {
+    const patientId = patientData.id || patientData._id;
+    const basePath = getBasePath();
+    navigate(`${basePath}/patients/edit/${patientId}`, { 
+      state: { 
+        patient: patientData,
+        returnPath: window.location.pathname // Store current path to return after edit
+      } 
+    });
+  };
+
   const handleViewAppointmentDetails = (appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetailsModal(true);
@@ -644,6 +720,10 @@ const PatientDetails = () => {
       design: prescription.fullData?.design || [],
       canvasBg: prescription.fullData?.canvasBg || "#ffffff"
     };
+
+    console.log("FULL PRESCRIPTION", prescription.fullData);
+    console.log("Prescription Design:", prescription.fullData?.design);
+    console.log("Canvas Bg:", prescription.fullData?.canvasBg);
     
     setSelectedPrescription(formattedPrescription);
     setShowPrescriptionModal(true);
@@ -738,6 +818,7 @@ const PatientDetails = () => {
         showSuccessToast("Insurance record deleted successfully");
       }
     } catch (error) {
+      console.error("Delete error:", error);
       showErrorToast(`Failed to delete ${type}: ${error?.data?.message || error.message}`);
     }
     
@@ -928,7 +1009,12 @@ const PatientDetails = () => {
       )}
       
       {showEditModal && (
-        <EditPatientModal patient={patient} setPatient={setPatient} onClose={() => setShowEditModal(false)} />
+        <EditPatientModal 
+          patient={patient} 
+          setPatient={setPatient} 
+          onClose={() => setShowEditModal(false)}
+          onEdit={handleEditPatientNavigation}
+        />
       )}
       
       {showAppointmentModal && (
@@ -971,11 +1057,21 @@ const PatientDetails = () => {
   );
 };
 
-const EditPatientModal = ({ patient, setPatient, onClose }) => {
+// EditPatientModal Component - Updated with navigation handling
+const EditPatientModal = ({ patient, setPatient, onClose, onEdit }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   
   const handleEdit = () => {
-    navigate(`/edit-patient/${patient.id}`, { state: { patient } });
+    if (onEdit) {
+      // Use the passed onEdit function from parent (handles Super Admin context)
+      onEdit(patient);
+    } else {
+      // Fallback: navigate based on context
+      const isSuperAdmin = location.pathname.includes('/super-admin');
+      const basePath = isSuperAdmin ? '/super-admin' : '';
+      navigate(`${basePath}/edit-patient/${patient.id}`, { state: { patient } });
+    }
     onClose();
   };
   

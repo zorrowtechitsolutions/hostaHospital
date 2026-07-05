@@ -12,7 +12,7 @@ import HospitalPatientsList from './hospitals/HospitalPatientsList';
 import HospitalDoctorsList from './hospitals/HospitalDoctorsList';
 import HospitalStaffList from './hospitals/HospitalStaffList';
 import HospitalAppointmentsList from './hospitals/HospitalAppointmentsList';
-import HospitalVisitList from './hospitals/HospitalVisitList'; // ✅ ADDED
+import HospitalVisitList from './hospitals/HospitalVisitList';
 import HospitalAmbulancesList from './hospitals/HospitalAmbulancesList';
 import HospitalBloodBanksList from './hospitals/HospitalBloodBanksList';
 import AddHospital from './hospitals/AddHospital';
@@ -35,7 +35,6 @@ import HospitalUserPermissions from './usermanagment/HospitalUserPermissions';
 import HospitalUserDetails from './usermanagment/HospitalUserDetails';
 import HospitalAddUser from './usermanagment/HospitalAddUser';
 import HospitalEditUser from './usermanagment/HospitalEditUser';
-import SuperUsers from './usermanagment/SuperUsers';
 import SuperAddNewUser from './usermanagment/SuperAddNewUser';
 import SuperEditUser from './usermanagment/SuperEditUser';
 import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
@@ -44,19 +43,24 @@ import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
 import HospitalRoles from './permission/HospitalRoles';
 import HospitalNotificationList from './hospitals/notification/HospitalNotificationList';
 
+// Patient imports
+import AddPatient from './hospitals/patients/AddPatients';
+import EditPatient from './hospitals/patients/EditPatients';
+import PatientDetails from './hospitals/patients/PatientsDetails';
+
+// User Management (RTK Query)
+import UsersList from './users/userslist';
+
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Sidebar width constants
-  const SIDEBAR_OPEN_WIDTH = 256; // 64 * 4 = 256px (w-64)
-  const SIDEBAR_CLOSED_WIDTH = 80;  // 20 * 4 = 80px (w-20)
+  const SIDEBAR_OPEN_WIDTH = 256;
+  const SIDEBAR_CLOSED_WIDTH = 80;
 
   return (
     <div className="flex h-screen bg-[#F8F9FA]">
-      {/* Sidebar - fixed position */}
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
        
-      {/* Main Content - with margin left to account for fixed sidebar */}
       <div 
         className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
         style={{
@@ -66,7 +70,6 @@ const SuperAdminLayout = () => {
         <div className="flex-1 overflow-auto">
           <div className="p-6">
             <Routes>
-              {/* Index route - FIXED: Use absolute path */}
               <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
               
               {/* Dashboard */}
@@ -81,10 +84,15 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/doctors" element={<HospitalDoctorsList />} />
               <Route path="hospitals/:id/staff" element={<HospitalStaffList />} />
               <Route path="hospitals/:id/appointments" element={<HospitalAppointmentsList />} />
-              <Route path="hospitals/:id/visits" element={<HospitalVisitList />} /> {/* ✅ ADDED - Visits Route */}
+              <Route path="hospitals/:id/visits" element={<HospitalVisitList />} />
               <Route path="hospitals/:id/ambulances" element={<HospitalAmbulancesList />} />
               <Route path="hospitals/:id/blood-banks" element={<HospitalBloodBanksList />} />
               <Route path="hospitals/:id/notifications" element={<HospitalNotificationList />} />
+              
+              {/* Patient Routes */}
+              <Route path="patients/add" element={<AddPatient/>} />
+              <Route path="patients/edit/:id" element={<EditPatient />} />
+              <Route path="patients/:id" element={<PatientDetails />} />
               
               {/* Category & Specialty Routes */}
               <Route path="categories" element={<Categories />} />
@@ -95,55 +103,34 @@ const SuperAdminLayout = () => {
               {/* Ads Route */}
               <Route path="ads" element={<Ads />} />
               
-              {/* ============================================ */}
-              {/* SUPER ADMIN PERMISSION ROUTES */}
-              {/* ============================================ */}
-              {/* List all super admin roles */}
+              {/* Super Admin Permission Routes */}
               <Route path="super-permissions" element={<SuperUserPermissions />} />
-              {/* Edit permissions for a specific super admin role */}
               <Route path="super-permissions/:roleId" element={<SuperPermissionList />} />
               
-              {/* ============================================ */}
-              {/* HOSPITAL ROLES ROUTES */}
-              {/* ============================================ */}
-              {/* List hospital roles */}
+              {/* Hospital Roles Routes */}
               <Route path="hospital-roles/:hospitalId" element={<HospitalRoles />} />
               
-              {/* ============================================ */}
-              {/* HOSPITAL PERMISSION ROUTES */}
-              {/* ============================================ */}
-              {/* Edit permissions for a specific hospital role */}
+              {/* Hospital Permission Routes */}
               <Route 
                 path="hospital-permissions/:hospitalId/:roleId" 
                 element={<HospitalPermissionList />} 
               />
               
-              {/* ============================================ */}
-              {/* HOSPITAL USER MANAGEMENT ROUTES */}
-              {/* ============================================ */}
-              {/* Hospital Users - List all hospitals */}
+              {/* Hospital User Management Routes */}
               <Route path="hospital-users" element={<HospitalUsers />} />
-              
-              {/* Hospital User List - Users of a specific hospital */}
-              
-              {/* Add/Edit/View User */}
               <Route path="hospital-users/:hospitalId/add" element={<HospitalAddUser />} />
               <Route path="hospital-users/:hospitalId/edit/:userId" element={<HospitalEditUser />} />
               <Route path="hospital-users/:hospitalId/user/:userId" element={<HospitalUserDetails />} />
               
-              {/* ============================================ */}
-              {/* HOSPITAL USER PERMISSIONS ROUTES - UPDATED */}
-              {/* ============================================ */}
-              {/* List all roles for a hospital (permissions management) */}
+              {/* Hospital User Permissions Routes */}
               <Route path="hospital-users/:hospitalId/permissions" element={<HospitalUserPermissions />} />
-              
-              {/* Edit permissions for a specific hospital role */}
               <Route path="hospital-users/:hospitalId/permissions/:roleId" element={<HospitalPermissionList />} />
 
-              {/* ============================================ */}
-              {/* LEGACY USER MANAGEMENT ROUTES */}
-              {/* ============================================ */}
-              {/* <Route path="users" element={<SuperUsers />} /> */}
+              {/* ===== SUPER ADMIN USER MANAGEMENT (RTK QUERY) ===== */}
+              {/* Main Users List - Super Admin sees ALL users */}
+              <Route path="users" element={<UsersList />} />
+              
+              {/* Legacy User Management Routes (keep for backward compatibility) */}
               <Route path="users/add" element={<SuperAddNewUser />} />
               <Route path="users/edit/:userType" element={<SuperEditUser />} />
               <Route path="users/view-roles" element={<SuperViewAssignedRoles />} />
@@ -162,7 +149,7 @@ const SuperAdminLayout = () => {
                 </div>
               } />
               
-              {/* Catch all - FIXED: Use absolute path */}
+              {/* Catch all */}
               <Route path="*" element={<Navigate to="/super-admin/dashboard" replace />} />
             </Routes>
           </div>

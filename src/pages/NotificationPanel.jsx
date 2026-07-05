@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Trash2, CheckCheck, X, Eye, CheckCircle } from 'lucide-react';
+import { Bell, Trash2, CheckCheck, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -10,10 +10,7 @@ import {
 } from '../../app/service/notification';
 import { getHospitalId, getUserRole } from '../utils/auth';
 import { showSuccessToast, showErrorToast } from '../components/ui/Toast';
-
-// ✅ Import socket
 import { socket } from '../socket/socket';
-// ✅ Import socket event listeners
 import { registerNotificationEvents, unregisterNotificationEvents } from '../socket/notificationEvents';
 
 const NotificationPanel = ({ isOpen, onClose }) => {
@@ -25,7 +22,6 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   const hospitalId = getHospitalId();
   const userRole = getUserRole();
 
-  // ✅ Always fetch when hospitalId exists, not just when isOpen
   const { 
     data: notificationsData, 
     isLoading, 
@@ -34,8 +30,8 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   } = useGetNotificationsByHospitalQuery({
     hospitalId: hospitalId,
   }, {
-    skip: !hospitalId, // ✅ Remove isOpen from skip condition
-    pollingInterval: isOpen ? 30000 : 0, // Poll every 30 seconds when open
+    skip: !hospitalId,
+    pollingInterval: isOpen ? 30000 : 0,
   });
 
   const [markAllAsRead] = useMarkAllNotificationsAsReadByHospitalMutation();
@@ -44,103 +40,60 @@ const NotificationPanel = ({ isOpen, onClose }) => {
 
   const notifications = notificationsData?.data || [];
   
-  // ✅ Filter to only show UNREAD notifications
   const unreadNotifications = notifications.filter(
     n => !n.hospitalReadStatus?.[hospitalId]
   );
   
   const unreadCount = unreadNotifications.length;
 
-  // ✅ Register socket event listeners - ALWAYS register when component mounts
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering notification events (always)...");
-    console.log("📡 Socket connected:", socket.connected);
-
-    // Register socket events regardless of isOpen
     registerNotificationEvents({
-      onNotificationCreated: (data) => {
-        console.log("🔔 NEW NOTIFICATION CREATED:", data);
-        // ✅ Check if refetch is available before calling
-        if (refetch) {
-          refetch();
-        }
+      onNotificationCreated: () => {
+        if (refetch) refetch();
         showSuccessToast("New notification received!", 2000);
       },
-      onNotificationRead: (data) => {
-        console.log("📖 NOTIFICATION READ:", data);
-        // ✅ Check if refetch is available before calling
-        if (refetch) {
-          refetch();
-        }
+      onNotificationRead: () => {
+        if (refetch) refetch();
       }
     });
 
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering notification events...");
       unregisterNotificationEvents();
       setEventsRegistered(false);
     };
-  }, []); // ✅ Run once on mount
+  }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Notification events will work!");
-      // Re-register events on reconnect if they were unregistered
       if (!eventsRegistered) {
         registerNotificationEvents({
-          onNotificationCreated: (data) => {
-            console.log("🔔 NEW NOTIFICATION CREATED (reconnect):", data);
-            if (refetch) {
-              refetch();
-            }
+          onNotificationCreated: () => {
+            if (refetch) refetch();
             showSuccessToast("New notification received!", 2000);
           },
-          onNotificationRead: (data) => {
-            console.log("📖 NOTIFICATION READ (reconnect):", data);
-            if (refetch) {
-              refetch();
-            }
+          onNotificationRead: () => {
+            if (refetch) refetch();
           }
         });
         setEventsRegistered(true);
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Notification events won't work!");
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging (only when isOpen)
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, [isOpen]);
-
-  // ✅ Mark a single notification as read
+  // Mark a single notification as read
   const handleMarkAsRead = async (notificationId) => {
     try {
-      const response = await updateNotification({
+      await updateNotification({
         id: notificationId,
         body: {
           hospitalReadStatus: {
@@ -149,27 +102,20 @@ const NotificationPanel = ({ isOpen, onClose }) => {
         }
       }).unwrap();
       
-      console.log("✅ Mark as read response:", response);
-      
-      // ✅ Emit socket event for real-time updates
       socket.emit("notification_read", {
         notificationId: notificationId,
         hospitalId: hospitalId,
         userId: userRole
       });
       
-      // ✅ Check if refetch is available before calling
-      if (refetch) {
-        await refetch();
-      }
+      if (refetch) await refetch();
       showSuccessToast("Notification marked as read", 2000);
     } catch (error) {
-      console.error("❌ Mark as read error:", error);
       showErrorToast("Failed to mark as read", 2000);
     }
   };
 
-  // ✅ Handle notification click - marks as read if unread
+  // Handle notification click - marks as read if unread
   const handleNotificationClick = (notification) => {
     const isUnread = !notification.hospitalReadStatus?.[hospitalId];
     if (isUnread) {
@@ -188,35 +134,27 @@ const NotificationPanel = ({ isOpen, onClose }) => {
 
       if (!notificationIds.length) return;
 
-      console.log("📤 Marking all as read:", { hospitalId, notificationIds });
-
       await markAllAsRead({
         hospitalId: Number(hospitalId),
         notificationIds,
       }).unwrap();
 
-      // ✅ Emit socket event for real-time updates
       socket.emit("notifications_read_all", {
         hospitalId: hospitalId,
         userId: userRole,
         count: notificationIds.length
       });
 
-      // ✅ Check if refetch is available before calling
-      if (refetch) {
-        await refetch();
-      }
-
+      if (refetch) await refetch();
       showSuccessToast("All notifications marked as read");
     } catch (error) {
-      console.error("❌ Mark all as read error:", error);
       showErrorToast("Failed to mark all as read");
     }
   };
 
   // Delete notification
   const handleDeleteClick = (id, e) => {
-    e.stopPropagation(); // ✅ Prevent notification click from firing
+    e.stopPropagation();
     setSelectedNotificationId(id);
     setShowDeleteConfirm(true);
   };
@@ -225,16 +163,12 @@ const NotificationPanel = ({ isOpen, onClose }) => {
     try {
       await deleteNotification(selectedNotificationId).unwrap();
       
-      // ✅ Emit socket event for real-time updates
       socket.emit("notification_deleted", {
         notificationId: selectedNotificationId,
         hospitalId: hospitalId
       });
       
-      // ✅ Check if refetch is available before calling
-      if (refetch) {
-        await refetch();
-      }
+      if (refetch) await refetch();
       showSuccessToast('Notification deleted successfully');
       setShowDeleteConfirm(false);
       setSelectedNotificationId(null);
@@ -308,7 +242,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Notifications List - ✅ Only show unread notifications */}
+        {/* Notifications List */}
         <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
           {isLoading ? (
             <div className="px-5 py-8 text-center">
@@ -322,9 +256,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
                 {error?.data?.message || error?.message || 'Please try again'}
               </p>
               <button 
-                onClick={() => {
-                  if (refetch) refetch();
-                }}
+                onClick={() => refetch && refetch()}
                 className="mt-2 text-sm text-purple-600 hover:text-purple-700"
               >
                 Try again
@@ -333,7 +265,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
           ) : unreadNotifications.length === 0 ? (
             <div className="px-5 py-8 text-center">
               <Bell size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">All caught up! 🎉</p>
+              <p className="text-gray-500 dark:text-gray-400">All caught up!</p>
               <p className="text-xs text-gray-400 mt-1">No unread notifications</p>
             </div>
           ) : (
@@ -347,7 +279,6 @@ const NotificationPanel = ({ isOpen, onClose }) => {
                   className="group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 bg-purple-50 dark:bg-purple-900/20 cursor-pointer"
                 >
                   <div className="flex items-start gap-3">
-                    {/* Unread indicator */}
                     <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0"></div>
                     
                     <div className="flex-1 min-w-0">
@@ -368,12 +299,9 @@ const NotificationPanel = ({ isOpen, onClose }) => {
                             </span>
                           </div>
                         </div>
-                        
-                        {/* ❌ Removed Mark as read button - now clicking the notification marks it as read */}
                       </div>
                     </div>
                     
-                    {/* Delete button */}
                     <button 
                       onClick={(e) => handleDeleteClick(notif.id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex-shrink-0"
@@ -387,7 +315,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        {/* Footer - ✅ Only show if there are unread notifications */}
+        {/* Footer */}
         {unreadNotifications.length > 0 && (
           <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <button 

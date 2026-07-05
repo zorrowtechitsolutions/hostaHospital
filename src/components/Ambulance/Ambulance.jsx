@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Ambulance as AmbulanceIcon,
   Plus,
   Download,
-  MoreVertical,
   Eye,
   Edit,
   LayoutGrid,
@@ -12,23 +10,16 @@ import {
   RefreshCcw,
   Upload,
   Trash2,
-  Search,
-  Phone,
   MapPin,
-  Truck,
-  AlertCircle
+  Truck
 } from 'lucide-react';
 import DeleteModal from '../patients/DeleteModel';
 import AddAmbulanceModal from './AddAmbulanceModal';
 import EditAmbulanceModal from './EditAmbulanceModal';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
 import { 
-  Button, 
   Badge, 
-  Loader, 
-  Pagination, 
-  SearchBar,
-  Card
+  Pagination
 } from '../ui';
 import { 
   useGetAmbulanceQuery,
@@ -36,11 +27,10 @@ import {
   useUpdateAmbulanceMutation,
   useDeleteAmbulanceMutation
 } from '../../../app/service/ambulance';
-import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
-// ✅ Import socket
+// Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../socket/ambulanceEvents';
 
 const ambulanceTypes = [
@@ -60,7 +50,6 @@ const ambulanceTypes = [
 const AmbulanceSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb Skeleton */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -69,7 +58,6 @@ const AmbulanceSkeleton = () => {
         <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
       </div>
 
-      {/* Search and Action Buttons Skeleton */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
@@ -83,23 +71,17 @@ const AmbulanceSkeleton = () => {
         </div>
       </div>
 
-      {/* Grid Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[...Array(8)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse"
-          >
+          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
             <div className="flex justify-between mb-6">
               <div className="w-16 h-6 bg-gray-200 rounded-full"></div>
               <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
             </div>
-
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 rounded-full bg-gray-200 mb-4"></div>
               <div className="w-32 h-4 bg-gray-200 rounded mb-2"></div>
               <div className="w-24 h-3 bg-gray-200 rounded mb-6"></div>
-
               <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-100 pt-4">
                 <div className="text-center">
                   <div className="w-12 h-3 bg-gray-200 rounded mx-auto mb-2"></div>
@@ -136,9 +118,9 @@ const Ambulance = () => {
   // Menu state for grid view
   const [activeMenu, setActiveMenu] = useState(null);
   
-  // Pagination state
+  // ✅ Pagination state - server-side
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 12;
+  const itemsPerPage = 10;
 
   // Save view mode to localStorage
   useEffect(() => {
@@ -152,51 +134,49 @@ const Ambulance = () => {
     return `#AMB${String(numericId).padStart(4, '0')}`;
   };
 
-  // API Hooks - hospitalId is automatically injected by the API service
+  // ✅ UPDATED API Hooks - Passing pagination and filter parameters
   const { 
     data: ambulancesResponse, 
     isLoading: loading, 
     refetch,
     isFetching
-  } = useGetAmbulanceQuery();
+  } = useGetAmbulanceQuery({
+    page: currentPage,
+    limit: itemsPerPage,
+    search_query: searchTerm?.trim() || undefined,
+    vehicleType: typeFilter !== 'all' ? typeFilter : undefined,
+    country: countryFilter || undefined,
+  });
   
-  const [createAmbulance, { isLoading: isAdding }] = useCreateAmbulanceMutation();
-  const [updateAmbulance, { isLoading: isUpdating }] = useUpdateAmbulanceMutation();
-  const [deleteAmbulance, { isLoading: isDeleting }] = useDeleteAmbulanceMutation();
+  const [createAmbulance] = useCreateAmbulanceMutation();
+  const [updateAmbulance] = useUpdateAmbulanceMutation();
+  const [deleteAmbulance] = useDeleteAmbulanceMutation();
 
-  // ✅ FIX: Register socket event listeners - ALWAYS register regardless of connection
+  // Register socket event listeners
   useEffect(() => {
-    console.log("📡 Socket connected:", socket.connected);
-    
-    // Register ambulance events
     registerAmbulanceEvents({
       onRegistered: async (data) => {
         showSuccessToast(`New ambulance registered!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
-
       onUpdated: async (data) => {
         showSuccessToast(`Ambulance updated!`, 3000);
-        const result = await refetch();
+        await refetch();
       },
-
       onDeleted: async (data) => {
         showSuccessToast(`Ambulance deleted!`, 3000);
-        const result = await refetch();
+        await refetch();
       }
     });
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering ambulance events...");
       unregisterAmbulanceEvents();
     };
-  }, [refetch]); // ✅ Only refetch dependency
+  }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      // Re-register events on reconnect
       registerAmbulanceEvents({
         onRegistered: async (data) => {
           showSuccessToast(`New ambulance registered!`, 3000);
@@ -213,9 +193,7 @@ const Ambulance = () => {
       });
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Ambulance events won't work!");
-    };
+    const handleDisconnect = () => {};
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -225,19 +203,6 @@ const Ambulance = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Transform API response - SEPARATE display ID from database ID
   const transformAmbulanceData = (ambulanceList) => {
@@ -256,9 +221,14 @@ const Ambulance = () => {
     }));
   };
 
+  // ✅ No client-side filtering - use data directly from API
   const ambulancesData = transformAmbulanceData(ambulancesResponse?.data || []);
+  
+  // ✅ Get pagination from API response
+  const totalItems = ambulancesResponse?.pagination?.totalItems || 0;
+  const totalPages = ambulancesResponse?.pagination?.totalPages || 1;
 
-  // Reset page when filters change
+  // ✅ Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, countryFilter]);
@@ -284,13 +254,12 @@ const Ambulance = () => {
         address: newAmbulance.address
       };
       
-      const response = await createAmbulance(ambulanceToAdd).unwrap();
+      await createAmbulance(ambulanceToAdd).unwrap();
       
       showSuccessToast(`${newAmbulance.serviceName} has been added successfully!`, 3000);
       await refetch();
       setShowAddModal(false);
     } catch (error) {
-      console.error('Add error:', error);
       showErrorToast(error?.data?.message || 'Failed to add ambulance', 3000);
     }
   };
@@ -304,7 +273,7 @@ const Ambulance = () => {
         address: updatedAmbulance.address
       };
       
-      const response = await updateAmbulance({ 
+      await updateAmbulance({ 
         id: updatedAmbulance.id, 
         data: updateData 
       }).unwrap();
@@ -314,7 +283,6 @@ const Ambulance = () => {
       setShowEditModal(false);
       setSelectedAmbulance(null);
     } catch (error) {
-      console.error('Update error:', error);
       showErrorToast(error?.data?.message || 'Failed to update ambulance', 3000);
     }
   };
@@ -329,7 +297,6 @@ const Ambulance = () => {
         setShowDeleteModal(false);
         setSelectedAmbulance(null);
       } catch (error) {
-        console.error('Delete error:', error);
         showErrorToast(error?.data?.message || 'Failed to delete ambulance', 3000);
       }
     }
@@ -340,38 +307,6 @@ const Ambulance = () => {
     e.stopPropagation();
     setActiveMenu(activeMenu === id ? null : id);
   };
-
-  // Filter function
-  const getFilteredAmbulances = () => {
-    let filtered = [...ambulancesData];
-    
-    if (searchTerm) {
-      filtered = filtered.filter(amb => 
-        amb.serviceName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        amb.formattedId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        amb.phone?.includes(searchTerm) ||
-        amb.address?.place?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        amb.address?.district?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(amb => amb.vehicleType === typeFilter);
-    }
-    
-    if (countryFilter) {
-      filtered = filtered.filter(amb => 
-        amb.address?.country?.toLowerCase().includes(countryFilter.toLowerCase())
-      );
-    }
-    
-    return filtered;
-  };
-
-  const filteredAmbulances = getFilteredAmbulances();
-  const totalPages = Math.ceil(filteredAmbulances.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAmbulances = filteredAmbulances.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
@@ -390,8 +325,7 @@ const Ambulance = () => {
   };
 
   const handleExport = () => {
-    const filteredData = getFilteredAmbulances();
-    const exportData = filteredData.map(amb => ({
+    const exportData = ambulancesData.map(amb => ({
       'ID': amb.id,
       'Formatted ID': amb.formattedId,
       'Service Name': amb.serviceName,
@@ -459,7 +393,7 @@ const Ambulance = () => {
     event.target.value = '';
   };
 
-  // Loading state with skeleton
+  // ✅ Loading state with skeleton
   if (loading) {
     return <AmbulanceSkeleton />;
   }
@@ -568,11 +502,11 @@ const Ambulance = () => {
         </div>
       </div>
 
-      {/* GRID VIEW */}
+      {/* ✅ GRID VIEW - Using server-side paginated data */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedAmbulances.map((ambulance) => (
+            {ambulancesData.map((ambulance) => (
               <div key={ambulance.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
                 <div className="w-full flex justify-between items-start mb-4">
                   <Badge variant="info" className="text-[10px]">
@@ -627,14 +561,14 @@ const Ambulance = () => {
             ))}
           </div>
 
-          {/* Pagination for Grid View */}
+          {/* ✅ Pagination for Grid View - Using server-side totalPages */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={filteredAmbulances.length}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="ambulances"
                 variant="centered"
@@ -644,13 +578,13 @@ const Ambulance = () => {
         </>
       )}
 
-      {/* LIST VIEW */}
+      {/* ✅ LIST VIEW - Using server-side paginated data */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Ambulances
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredAmbulances.length}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
             </h2>
           </div>
 
@@ -670,7 +604,7 @@ const Ambulance = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedAmbulances.map((ambulance) => (
+                  {ambulancesData.map((ambulance) => (
                     <tr key={ambulance.id} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">
                         {ambulance.formattedId}
@@ -720,12 +654,13 @@ const Ambulance = () => {
               </table>
             </div>
 
+            {/* ✅ Pagination */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
                 totalPages={Math.max(1, totalPages)}
                 onPageChange={handlePageChange}
-                totalItems={filteredAmbulances.length}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="ambulances"
               />
@@ -735,10 +670,11 @@ const Ambulance = () => {
       )}
 
       {/* No Results */}
-      {!loading && filteredAmbulances.length === 0 && (
+      {!loading && ambulancesData.length === 0 && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No ambulances found</h3>
+          <p className="text-sm text-gray-500">Try adjusting your search or filter criteria</p>
         </div>
       )}
 

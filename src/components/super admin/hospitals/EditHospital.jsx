@@ -90,7 +90,6 @@ const SearchableDropdown = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
 
   const filteredOptions = options.filter(option => {
     const label = getOptionLabel(option).toLowerCase();
@@ -128,7 +127,6 @@ const SearchableDropdown = ({
       <div className="relative">
         {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
         <input
-          ref={inputRef}
           type="text"
           value={isOpen ? searchTerm : displayValue()}
           onChange={(e) => {
@@ -281,7 +279,6 @@ const EditHospital = () => {
   const [workingHours, setWorkingHours] = useState(DEFAULT_WORKING_HOURS);
   const [is24HourMode, setIs24HourMode] = useState(false);
   
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -306,10 +303,8 @@ const EditHospital = () => {
   const states = State.getStatesOfCountry(formData.countryCode);
   const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
 
-  // Initialize form with hospital data
   useEffect(() => {
     if (hospitalData) {
-      // Find country and state codes from names
       const country = countries.find(c => c.name === hospitalData.address?.country);
       const state = states.find(s => s.name === hospitalData.address?.state);
       
@@ -331,7 +326,6 @@ const EditHospital = () => {
         cityName: hospitalData.address?.district || ''
       });
       
-      // Initialize working hours from hospital data if available
       if (hospitalData.working_hours) {
         const mappedHours = { ...DEFAULT_WORKING_HOURS };
         DAYS.forEach(day => {
@@ -520,11 +514,8 @@ const EditHospital = () => {
       working_hours: workingHours
     };
 
-    console.log("🚀 Updating hospital data:", updateData);
-
     try {
-      const response = await updateHospital(updateData).unwrap();
-      console.log("Update successful:", response);
+      await updateHospital(updateData).unwrap();
       
       showSuccessToast(`✅ ${formData.name} has been successfully updated!`, 5000);
       
@@ -535,7 +526,6 @@ const EditHospital = () => {
       }, 2000);
       
     } catch (error) {
-      console.error("❌ Update error:", error);
       let errorMessage = "Update failed. Please try again.";
       if (error.data?.message) errorMessage = error.data.message;
       else if (error.status === 409) errorMessage = "Email already registered. Please use a different email.";
@@ -549,7 +539,6 @@ const EditHospital = () => {
     navigate(-1);
   };
 
-  // Redirect if no hospital data
   if (!hospitalData) {
     return (
       <div className="min-h-screen bg-slate-100 p-6 font-sans">
@@ -565,7 +554,6 @@ const EditHospital = () => {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Top Navigation Bar with Back Button */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -583,7 +571,6 @@ const EditHospital = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm p-8 space-y-8">
@@ -598,7 +585,6 @@ const EditHospital = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {updateError && <Alert type="error" message={updateError} />}
 
-              {/* Basic Information Section */}
               <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                   <Building className="h-5 w-5 text-[#154A7D]" /> 
@@ -684,7 +670,6 @@ const EditHospital = () => {
                 </div>
               </div>
 
-              {/* Address Information Section */}
               <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-[#154A7D]" /> 
@@ -751,7 +736,6 @@ const EditHospital = () => {
                 </div>
               </div>
 
-              {/* Location Coordinates Section */}
               <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                   <Navigation className="h-5 w-5 text-[#154A7D]" /> 
@@ -807,7 +791,6 @@ const EditHospital = () => {
                 )}
               </div>
 
-              {/* Working Hours Section */}
               <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
@@ -873,7 +856,6 @@ const EditHospital = () => {
                 </div>
               </div>
 
-              {/* Form Actions */}
               <div className="flex gap-3 justify-end pt-4">
                 <Button
                   type="button"

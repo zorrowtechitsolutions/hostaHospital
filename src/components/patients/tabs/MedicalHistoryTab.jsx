@@ -1,11 +1,11 @@
 // src/components/patients/tabs/MedicalHistoryTab.jsx
 import React, { useState } from "react";
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
-import { Button, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Pagination } from "../../ui";
+import { Button, TableHead, TableHeader, TableCell, Pagination } from "../../ui";
 import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 
-const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
+const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClick, openMenu, setOpenMenu }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -17,8 +17,7 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
 
   const { data: doctorsData } = useGetDoctorsQuery();
 
-const medicalHistoryList =
-  prescriptionData?.data?.map((item) => {
+  const medicalHistoryList = prescriptionData?.data?.map((item) => {
     const doctor = doctorsData?.data?.find(
       (doc) => Number(doc.id) === Number(item.doctorId)
     );
@@ -27,25 +26,14 @@ const medicalHistoryList =
       id: item.id,
       illnessName: item.complaint,
       illnessDate: new Date(item.createdAt).toLocaleDateString(),
-
-      doctorName:
-        doctor?.displayName ||
-        doctor?.name ||
-        "Not Assigned",
-
-      department:
-        doctor?.specialization ||
-        doctor?.department ||
-        "Not Specified",
-
+      doctorName: doctor?.displayName || doctor?.name || "Not Assigned",
+      department: doctor?.specialization || doctor?.department || "Not Specified",
       advice: item.advice,
       investigations: item.investigations || [],
       medications: item.medications || [],
       rawData: item,
     };
   }) || [];
-
-
 
   const totalItems = medicalHistoryList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -58,8 +46,6 @@ const medicalHistoryList =
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
-
-
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
@@ -83,19 +69,21 @@ const medicalHistoryList =
           </thead>
           <tbody>
             {paginatedMedicalHistory.length > 0 ? (
-              paginatedMedicalHistory.map((item, index) => (
-                <TableRow key={item.id} hover>
-                  <TableCell 
-                    className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
-onClick={() => handleViewMedicalDetails(item)}                  >
+              paginatedMedicalHistory.map((item) => (
+                <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td 
+                    className="px-4 py-3 font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
+                    onClick={() => handleViewMedicalDetails(item)}
+                  >
                     {item.illnessName}
-                  </TableCell>
-                  <TableCell 
-                    className="text-gray-600 cursor-pointer hover:text-[#1C62A0]"
-onClick={() => handleViewMedicalDetails(item)}                  >
-                    {item.illnessDate} 
-                  </TableCell>
-                  <TableCell className="text-right">
+                  </td>
+                  <td 
+                    className="px-4 py-3 text-gray-600 cursor-pointer hover:text-[#1C62A0]"
+                    onClick={() => handleViewMedicalDetails(item)}
+                  >
+                    {item.illnessDate}
+                  </td>
+                  <td className="px-4 py-3 text-right">
                     <div className="flex justify-end">
                       <div className="relative action-menu-container">
                         <Button
@@ -115,9 +103,9 @@ onClick={() => handleViewMedicalDetails(item)}                  >
                         {openMenu === `medical-${item.id}` && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-handleViewMedicalDetails(item);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewMedicalDetails(item);
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
@@ -125,9 +113,9 @@ handleViewMedicalDetails(item);
                               <Eye size={15} /> View Details
                             </button>
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleDeleteClick('medical', item.id, startIndex + index, item.illnessName);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick('medical', item.id, item.illnessName);
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-b-lg"
@@ -138,15 +126,15 @@ handleViewMedicalDetails(item);
                         )}
                       </div>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-gray-500 py-12">
+              <tr>
+                <td colSpan={3} className="text-center text-gray-500 py-12">
                   No medical history found
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

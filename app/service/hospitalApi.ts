@@ -193,7 +193,7 @@ export const hospitalApi = api.injectEndpoints({
 
     loginHospital: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => ({
-        url: `/hospital/login`,
+        url: `/hospital/g-login`,
         method: "POST",
         body: loginData,
       }),
@@ -210,35 +210,35 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // ✅ Super Admin Login endpoint
-    loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, SuperAdminLoginCredentials>({
-      query: (loginData) => ({
-        url: `/users/login`,
-        method: "POST",
-        body: loginData,
-      }),
-      transformResponse: (response: SuperAdminLoginResponse) => {
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-        }
-        // Store roleId for Super Admin detection
-        if (response.roleId !== undefined) {
-          localStorage.setItem("roleId", String(response.roleId));
-        }
-        return response;
-      },
-      transformErrorResponse: (response: { status: number; data?: any }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || "Super Admin login failed",
-        };
-      },
-      invalidatesTags: ["Hospital"],
-    }),
+    // // ✅ Super Admin Login endpoint
+    // loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, SuperAdminLoginCredentials>({
+    //   query: (loginData) => ({
+    //     url: `/users/login`,
+    //     method: "POST",
+    //     body: loginData,
+    //   }),
+    //   transformResponse: (response: SuperAdminLoginResponse) => {
+    //     const token = response.token || response.accessToken;
+    //     if (token) {
+    //       localStorage.setItem("accessToken", token);
+    //     }
+    //     if (response.refreshToken) {
+    //       localStorage.setItem("refreshToken", response.refreshToken);
+    //     }
+    //     // Store roleId for Super Admin detection
+    //     if (response.roleId !== undefined) {
+    //       localStorage.setItem("roleId", String(response.roleId));
+    //     }
+    //     return response;
+    //   },
+    //   transformErrorResponse: (response: { status: number; data?: any }) => {
+    //     return {
+    //       status: response.status,
+    //       message: response.data?.message || "Super Admin login failed",
+    //     };
+    //   },
+    //   invalidatesTags: ["Hospital"],
+    // }),
 
     requestHospitalOtp: builder.mutation<{ message: string }, PhoneLoginData>({
       query: (phoneData) => ({
@@ -499,7 +499,7 @@ export const {
   // Auth hooks
   useRegisterMutation,
   useLoginHospitalMutation,
-  useLoginSuperAdminMutation, // ✅ Added Super Admin login hook
+  // useLoginSuperAdminMutation, // ✅ Added Super Admin login hook
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,

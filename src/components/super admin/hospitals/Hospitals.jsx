@@ -21,10 +21,7 @@ import {
   useDeleteHospitalMutation,
   useRecoverHospitalMutation
 } from '../../../../app/service/hospitalApi';
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../../socket/hospitalEvents';
 
 const Hospitals = () => {
@@ -36,10 +33,8 @@ const Hospitals = () => {
   const [showDeleted, setShowDeleted] = useState(false);
   const itemsPerPage = 6;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // API hooks
   const { 
     data: hospitalsData, 
     isLoading, 
@@ -52,38 +47,26 @@ const Hospitals = () => {
   const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
   const [recoverHospital, { isLoading: isRecovering }] = useRecoverHospitalMutation();
 
-  // ✅ Register socket event listeners for hospital events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering hospital event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerHospitalEvents({
       onHospitalRegistered: (data) => {
-        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
         showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
         refetch();
       },
-      
       onHospitalUpdated: (data) => {
-        console.log("✏️ HOSPITAL UPDATED:", data);
         showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
         refetch();
       },
-      
-      onHospitalDeleted: (data) => {
-        console.log("🗑️ HOSPITAL DELETED:", data);
+      onHospitalDeleted: () => {
         showSuccessToast(`Hospital deleted!`, 3000);
         refetch();
       },
-      
-      onHospitalBlacklisted: (data) => {
-        console.log("🚫 HOSPITAL BLACKLISTED:", data);
+      onHospitalBlacklisted: () => {
         showSuccessToast(`Hospital blacklisted!`, 3000);
         refetch();
       },
-      
-      onHospitalRecovered: (data) => {
-        console.log("♻️ HOSPITAL RECOVERED:", data);
+      onHospitalRecovered: () => {
         showSuccessToast(`Hospital recovered successfully!`, 3000);
         refetch();
       }
@@ -92,40 +75,33 @@ const Hospitals = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering hospital events...");
       unregisterHospitalEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Hospital events will work!");
       if (!eventsRegistered) {
         registerHospitalEvents({
           onHospitalRegistered: (data) => {
-            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
             showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
             refetch();
           },
           onHospitalUpdated: (data) => {
-            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
             showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
             refetch();
           },
-          onHospitalDeleted: (data) => {
-            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
+          onHospitalDeleted: () => {
             showSuccessToast(`Hospital deleted!`, 3000);
             refetch();
           },
-          onHospitalBlacklisted: (data) => {
-            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
+          onHospitalBlacklisted: () => {
             showSuccessToast(`Hospital blacklisted!`, 3000);
             refetch();
           },
-          onHospitalRecovered: (data) => {
-            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
+          onHospitalRecovered: () => {
             showSuccessToast(`Hospital recovered successfully!`, 3000);
             refetch();
           }
@@ -134,39 +110,17 @@ const Hospitals = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Transform hospital data to include isDelete and isActive flags
   const transformHospitals = (hospitals) => {
     if (!hospitals || !Array.isArray(hospitals)) return [];
     
     return hospitals.map((hospital) => {
-      // Determine status based on isDelete flag
       let status = 'Active';
       if (hospital.isDelete) {
         status = 'Blacklisted';
@@ -176,7 +130,6 @@ const Hospitals = () => {
       
       return {
         ...hospital,
-        // Ensure these flags exist
         isDelete: hospital.isDelete || false,
         isActive: hospital.isActive !== undefined ? hospital.isActive : true,
         displayStatus: status
@@ -192,7 +145,6 @@ const Hospitals = () => {
       try {
         await deleteHospital(hospitalToDelete.id).unwrap();
         
-        // ✅ Emit socket event for hospital deletion
         socket.emit("hospital_event", {
           event: "HOSPITAL_DELETED",
           data: {
@@ -207,19 +159,16 @@ const Hospitals = () => {
         setShowModal(false);
         setHospitalToDelete(null);
       } catch (error) {
-        console.error('Error deleting hospital:', error);
         showErrorToast(error?.data?.message || 'Failed to delete hospital');
       }
     }
   };
 
-  // Recover handler
   const handleRecoverHospital = async (hospital, e) => {
     e.stopPropagation();
     try {
       await recoverHospital(hospital.id).unwrap();
       
-      // ✅ Emit socket event for hospital recovery
       socket.emit("hospital_event", {
         event: "HOSPITAL_RECOVERED",
         data: {
@@ -232,14 +181,12 @@ const Hospitals = () => {
       showSuccessToast(`${hospital.name} recovered successfully!`);
       refetch();
     } catch (error) {
-      console.error('Error recovering hospital:', error);
       showErrorToast(error?.data?.message || 'Failed to recover hospital');
     }
   };
 
   const handleDeleteClick = (hospital, e) => {
     e.stopPropagation();
-    // Don't allow deleting already blacklisted hospitals
     if (hospital.isDelete) {
       showErrorToast('Cannot delete a blacklisted hospital', 3000);
       return;
@@ -250,7 +197,6 @@ const Hospitals = () => {
 
   const handleEditClick = (hospital, e) => {
     e.stopPropagation();
-    // Don't allow editing blacklisted hospitals
     if (hospital.isDelete) {
       showErrorToast('Cannot edit blacklisted hospital', 3000);
       return;
@@ -259,7 +205,6 @@ const Hospitals = () => {
   };
 
   const handleCardClick = (hospitalId, hospital) => {
-    // Don't allow viewing details of blacklisted hospitals
     if (hospital.isDelete) {
       showErrorToast('Cannot view details of blacklisted hospital', 3000);
       return;
@@ -267,7 +212,6 @@ const Hospitals = () => {
     navigate(`/super-admin/hospitals/${hospitalId}`);
   };
 
-  // Helper function to get full address
   const getFullAddress = (address) => {
     if (!address) return 'N/A';
     const parts = [address.place, address.district, address.state, address.country].filter(Boolean);
@@ -287,12 +231,10 @@ const Hospitals = () => {
     currentPage * itemsPerPage
   );
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, showDeleted]);
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -313,8 +255,7 @@ const Hospitals = () => {
           <p className="text-sm text-gray-500 mt-1">Click on any hospital to view details</p>
         </div>
         <div className="flex gap-2">
-          {/* ✅ Toggle to show deleted hospitals */}
-          <Button
+          {/* <Button
             variant={showDeleted ? "primary" : "outline"}
             size="sm"
             onClick={() => setShowDeleted(!showDeleted)}
@@ -322,7 +263,7 @@ const Hospitals = () => {
           >
             <Trash2 size={14} />
             {showDeleted ? "Hide Deleted" : "Show Deleted"}
-          </Button>
+          </Button> */}
 
           <Button
             variant="primary"
@@ -344,7 +285,7 @@ const Hospitals = () => {
             placeholder="Search hospitals by name, email, or location..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent outline-none"
           />
         </div>
       </div>
@@ -383,7 +324,6 @@ const Hospitals = () => {
                         <p className={`text-xs ${isBlacklisted ? 'text-gray-400' : 'text-gray-500'}`}>
                           ID: {hospital.id}
                         </p>
-                        {/* Status Badge */}
                         <div className="mt-1">
                           {isBlacklisted ? (
                             <Badge variant="secondary" className="text-xs">

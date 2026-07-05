@@ -15,9 +15,7 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Pagination } from '../ui/Pagination';
 import { Button, Card, Badge } from '../ui';
 
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerNotificationEvents, unregisterNotificationEvents } from '../../socket/notificationEvents';
 
 const NotificationsPage = () => {
@@ -74,38 +72,25 @@ const NotificationsPage = () => {
     });
   }
 
-  // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering notification events...");
-    console.log("📡 Socket connected:", socket.connected);
-
     registerNotificationEvents({
       onNotificationCreated: (data) => {
-        console.log("🔔 NEW NOTIFICATION CREATED:", data);
         refetch();
         showSuccessToast("New notification received!", 2000);
       },
       onNotificationRead: (data) => {
-        console.log("📖 NOTIFICATION READ:", data);
         refetch();
       }
     });
 
     return () => {
-      console.log("🧹 Unregistering notification events...");
       unregisterNotificationEvents();
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection
   useEffect(() => {
-    const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Notification events will work!");
-    };
-
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Notification events won't work!");
-    };
+    const handleConnect = () => {};
+    const handleDisconnect = () => {};
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -116,11 +101,8 @@ const NotificationsPage = () => {
     };
   }, []);
 
-  // ✅ Log all socket events for debugging
   useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - ${event}:`, args);
-    };
+    const handleAnyEvent = (event, ...args) => {};
 
     socket.onAny(handleAnyEvent);
 
@@ -133,12 +115,9 @@ const NotificationsPage = () => {
     setCurrentPage(1);
   }, [typeFilter, statusFilter]);
 
-  // ✅ Mark a single notification as read
   const handleMarkAsRead = async (notificationId) => {
     try {
-      console.log("📖 Marking notification as read:", notificationId);
-      
-      const response = await updateNotification({
+      await updateNotification({
         id: notificationId,
         body: {
           hospitalReadStatus: {
@@ -147,9 +126,6 @@ const NotificationsPage = () => {
         }
       }).unwrap();
       
-      console.log("✅ Mark as read response:", response);
-      
-      // ✅ Emit socket event for real-time updates
       socket.emit("notification_read", {
         notificationId: notificationId,
         hospitalId: hospitalId,
@@ -158,13 +134,11 @@ const NotificationsPage = () => {
       
       await refetch();
       showSuccessToast("Notification marked as read", 2000);
-    } catch (error) {
-      console.error("❌ Mark as read error:", error);
+    } catch {
       showErrorToast("Failed to mark as read", 2000);
     }
   };
 
-  // ✅ Handle notification click - marks as read if unread
   const handleNotificationClick = (notification) => {
     const isUnread = !notification.hospitalReadStatus?.[hospitalId];
     if (isUnread) {
@@ -189,7 +163,6 @@ const NotificationsPage = () => {
         notificationIds,
       }).unwrap();
 
-      // ✅ Emit socket event for real-time updates
       socket.emit("notifications_read_all", {
         hospitalId: hospitalId,
         userId: userRole,
@@ -199,13 +172,13 @@ const NotificationsPage = () => {
       await refetch();
 
       showSuccessToast("All notifications marked as read");
-    } catch (error) {
+    } catch {
       showErrorToast("Failed to mark all as read");
     }
   };
 
   const handleDeleteClick = (id, e) => {
-    e.stopPropagation(); // ✅ Prevent notification click from firing
+    e.stopPropagation();
     setSelectedNotificationId(id);
     setShowDeleteConfirm(true);
   };
@@ -220,7 +193,6 @@ const NotificationsPage = () => {
       if (selectedNotificationId === 'all') {
         await deleteAllNotifications(hospitalId).unwrap();
         
-        // ✅ Emit socket event for real-time updates
         socket.emit("notifications_deleted_all", {
           hospitalId: hospitalId,
           userId: userRole
@@ -233,7 +205,6 @@ const NotificationsPage = () => {
       } else {
         await deleteNotification(selectedNotificationId).unwrap();
         
-        // ✅ Emit socket event for real-time updates
         socket.emit("notification_deleted", {
           notificationId: selectedNotificationId,
           hospitalId: hospitalId
@@ -246,7 +217,7 @@ const NotificationsPage = () => {
       await refetch();
       setShowDeleteConfirm(false);
       setSelectedNotificationId(null);
-    } catch (error) {
+    } catch {
       showErrorToast('Failed to delete notification');
     }
   };
@@ -539,7 +510,6 @@ const NotificationsPage = () => {
                           </div>
                           
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* ❌ Removed Mark as read button - now clicking the notification marks it as read */}
                             <button
                               onClick={(e) => handleDeleteClick(notif.id, e)}
                               className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"

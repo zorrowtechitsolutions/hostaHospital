@@ -1,4 +1,4 @@
-// src/components/Settings/PermissionList.jsx - With dynamic permissions and hidden modules filter (Fixed with save logging)
+// src/components/Settings/PermissionList.jsx - With dynamic permissions and hidden modules filter
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Input, Card, Checkbox, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SearchBar } from "../ui";
@@ -9,8 +9,6 @@ import {
 } from "../../../app/service/rolePermission";
 import { useGetPermissionsQuery } from "../../../app/service/permission";
 import { getHospitalId } from '../../utils/auth';
-
-// ✅ Import socket event listeners
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../socket/permissionEvents';
 import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../socket/rolePermissionEvents';
 
@@ -18,79 +16,54 @@ const PermissionList = () => {
   const { roleId } = useParams();
   const navigate = useNavigate();
 
-  // Initialize as empty array
   const [mainModules, setMainModules] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Get hospitalId from auth utility
   const hospitalId = getHospitalId();
 
   const [createRolePermission] = useCreateRolePermissionMutation();
 
-  // Get all permissions data
   const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
-  
-  // Get role permissions data
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
     roleId,
   });
 
-  // ✅ Register socket event listeners for real-time updates
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering permission event listeners...");
-    
-    // Register permission events
     registerPermissionEvents({
-      onPermissionRegistered: (data) => {
-        console.log("🔑 New permission registered:", data);
+      onPermissionRegistered: () => {
         showSuccessToast(`New permission created!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionUpdated: (data) => {
-        console.log("✏️ Permission updated:", data);
+      onPermissionUpdated: () => {
         showSuccessToast(`Permission updated!`, 3000);
         refetchPermissions();
       },
-      
-      onPermissionDeleted: (data) => {
-        console.log("🗑️ Permission deleted:", data);
+      onPermissionDeleted: () => {
         showSuccessToast(`Permission deleted!`, 3000);
         refetchPermissions();
       }
     });
 
-    // Register role permission events
     registerRolePermissionEvents({
-      onRolePermissionUpdated: (data) => {
-        console.log("🔐 Role permission updated:", data);
+      onRolePermissionUpdated: () => {
         showSuccessToast(`Role permissions updated!`, 3000);
         refetchRolePermissions();
-        
-        // Also refetch permissions to get latest data
         refetchPermissions();
       }
     });
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
-      console.log("🧹 Unregistering permission events...");
       unregisterPermissionEvents();
       unregisterRolePermissionEvents();
     };
   }, [refetchPermissions, refetchRolePermissions]);
 
-  // Log the permissions data to see the structure
-  useEffect(() => {
-    console.log("permissionsData", permissionsData);
-  }, [permissionsData]);
-
   // Dynamically build modules from permissionsData using module and action fields
   useEffect(() => {
     if (!permissionsData?.data?.length) return;
 
-    // Define modules to hide/exclude
     const hiddenModules = [
       "users",
       "donors",
@@ -110,7 +83,6 @@ const PermissionList = () => {
       const moduleName = permission.module;
       const action = permission.action;
 
-      // Skip hidden modules
       if (hiddenModules.includes(moduleName?.toLowerCase())) {
         return;
       }
@@ -148,33 +120,32 @@ const PermissionList = () => {
           module.viewId = permission.id;
           break;
         default:
-          console.warn("Unknown action:", action);
+          break;
       }
     });
 
     const modulesArray = Array.from(modulesMap.values());
-    console.log("Built modules (hidden modules excluded):", modulesArray);
     setMainModules(modulesArray);
   }, [permissionsData]);
 
   // Apply assigned permissions to modules
   useEffect(() => {
-  if (!permissionData?.data || mainModules.length === 0) return;
+    if (!permissionData?.data || mainModules.length === 0) return;
 
-  const assignedPermissions = permissionData.data.map(item =>
-    Number(item.permissionId)
-  );
+    const assignedPermissions = permissionData.data.map(item =>
+      Number(item.permissionId)
+    );
 
-  setMainModules(prev =>
-    prev.map(module => ({
-      ...module,
-      create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
-      edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
-      delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
-      view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
-    }))
-  );
-}, [permissionData, mainModules.length]); 
+    setMainModules(prev =>
+      prev.map(module => ({
+        ...module,
+        create: module.createId ? assignedPermissions.includes(Number(module.createId)) : false,
+        edit: module.editId ? assignedPermissions.includes(Number(module.editId)) : false,
+        delete: module.deleteId ? assignedPermissions.includes(Number(module.deleteId)) : false,
+        view: module.viewId ? assignedPermissions.includes(Number(module.viewId)) : false,
+      }))
+    );
+  }, [permissionData, mainModules.length]);
 
   const togglePermission = (setter, moduleId, permissionType) => {
     setter(prev => prev.map(module =>
@@ -199,7 +170,6 @@ const PermissionList = () => {
   );
 
   const handleSave = async () => {
-    
     try {
       setIsSaving(true);
 
@@ -211,31 +181,20 @@ const PermissionList = () => {
         if (module.delete && module.deleteId) permissionIds.push(module.deleteId);
         if (module.view && module.viewId) permissionIds.push(module.viewId);
       });
-     
-      // Log what's being saved
-      console.log("Saving permissions:", permissionIds);
-      console.log("Saving permissions details:", {
-        roleId: Number(roleId),
-        permissionIds: permissionIds,
-        count: permissionIds.length
-      });
 
       const payload = {
         roleId: Number(roleId),
         permissionIds,
       };
 
-      const result = await createRolePermission(payload).unwrap();
-      console.log("Save result:", result);
+      await createRolePermission(payload).unwrap();
 
       showSuccessToast("Permission saved successfully");
       
-      // ✅ Refetch data after save to ensure UI is in sync
       await refetchPermissions();
       await refetchRolePermissions();
       
     } catch (error) {
-      console.error("Save error:", error);
       showErrorToast("Failed to save permission");
     } finally {
       setIsSaving(false);
@@ -249,7 +208,6 @@ const PermissionList = () => {
     }
   };
 
-  // ✅ Handle back navigation - go to User Permissions tab
   const handleBack = () => {
     navigate("/roles", { 
       state: { 
@@ -322,7 +280,6 @@ const PermissionList = () => {
     </Card>
   );
 
-  // Show loading state while fetching permissions
   if (isLoadingPermissions) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">

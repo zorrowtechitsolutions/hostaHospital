@@ -1,17 +1,7 @@
 import { socket } from "./socket";
 
 export const registerBloodBankEvents = (handlers = {}) => {
-  console.log("✅ BloodBank listeners registered");
-  console.log("📡 Socket connected:", socket.connected);
-  console.log("📡 Socket ID:", socket.id);
-
-  socket.onAny((event, ...args) => {
-    console.log("📡 ALL SOCKET EVENTS:", event, args);
-  });
-
   socket.on("system_event", (payload) => {
-    console.log("🔥 SYSTEM EVENT:", payload);
-
     const event = payload.message?.match(/\[(.*?)\]/)?.[1];
 
     switch (event) {
@@ -28,16 +18,13 @@ export const registerBloodBankEvents = (handlers = {}) => {
         break;
 
       default:
-        console.log("Unknown blood bank event:", event);
+        // Unknown event - silently ignore
+        break;
     }
   });
-
-  console.log("✅ BloodBank listeners setup complete");
 };
 
 export const unregisterBloodBankEvents = () => {
   socket.off("system_event");
   socket.offAny();
-
-  console.log("🧹 BloodBank events unregistered");
 };

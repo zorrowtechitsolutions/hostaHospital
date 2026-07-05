@@ -31,10 +31,7 @@ import {
   useUpdateRoleMutation,
   useDeleteRoleMutation,
 } from "../../../../app/service/role";
-
-// ✅ Import socket
 import { socket } from '../../../socket/socket';
-// ✅ Import socket event listeners
 import { registerRoleEvents, unregisterRoleEvents } from '../../../socket/roleEvents';
 
 // Constants
@@ -286,17 +283,12 @@ const HospitalUserPermissions = () => {
   const location = useLocation();
   const hospitalName = location.state?.hospitalName || 'Hospital';
 
-  // Search state
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Fetch roles for this specific hospital
   const {
     data,
     isLoading,
@@ -306,13 +298,10 @@ const HospitalUserPermissions = () => {
   
   const rolesResponse = data ?? error?.data ?? {};
 
-  console.log("Hospital Roles Response:", rolesResponse);
-
   const [createRole] = useCreateRoleMutation();
   const [updateRole] = useUpdateRoleMutation();
   const [deleteRole] = useDeleteRoleMutation();
 
-  // Modal states
   const [showNewRoleModal, setShowNewRoleModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -320,33 +309,25 @@ const HospitalUserPermissions = () => {
   const [roleToDelete, setRoleToDelete] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Dropdown state
   const [openDropdown, setOpenDropdown] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const dropdownRefs = useRef({});
 
-  // Form states
   const [newRole, setNewRole] = useState({ name: '', description: '' });
   const [editRole, setEditRole] = useState({ name: '', description: '' });
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering role event listeners for Hospital...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerRoleEvents({
-      onRoleRegistered: async (data) => {
-        console.log("👤 NEW ROLE REGISTERED:", data);
+      onRoleRegistered: async () => {
         showSuccessToast(`New role registered!`, 3000);
         await refetch();
       },
-      onRoleUpdated: async (data) => {
-        console.log("✏️ ROLE UPDATED:", data);
+      onRoleUpdated: async () => {
         showSuccessToast(`Role updated!`, 3000);
         await refetch();
       },
-      onRoleDeleted: async (data) => {
-        console.log("🗑️ ROLE DELETED:", data);
+      onRoleDeleted: async () => {
         showSuccessToast(`Role deleted!`, 3000);
         await refetch();
       }
@@ -355,30 +336,25 @@ const HospitalUserPermissions = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering role events...");
       unregisterRoleEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Role events will work!");
       if (!eventsRegistered) {
         registerRoleEvents({
-          onRoleRegistered: async (data) => {
-            console.log("👤 NEW ROLE REGISTERED (reconnect):", data);
+          onRoleRegistered: async () => {
             showSuccessToast(`New role registered!`, 3000);
             await refetch();
           },
-          onRoleUpdated: async (data) => {
-            console.log("✏️ ROLE UPDATED (reconnect):", data);
+          onRoleUpdated: async () => {
             showSuccessToast(`Role updated!`, 3000);
             await refetch();
           },
-          onRoleDeleted: async (data) => {
-            console.log("🗑️ ROLE DELETED (reconnect):", data);
+          onRoleDeleted: async () => {
             showSuccessToast(`Role deleted!`, 3000);
             await refetch();
           }
@@ -387,39 +363,17 @@ const HospitalUserPermissions = () => {
       }
     };
 
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Role events won't work!");
-      setEventsRegistered(false);
-    };
-
     socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL ROLE: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Close modal helpers
   const closeEditModal = () => {
     setShowEditRoleModal(false);
     setSelectedRole(null);
@@ -435,7 +389,6 @@ const HospitalUserPermissions = () => {
     setShowDeleteModal(false);
   };
 
-  // Update field helpers
   const updateNewRoleField = updateRoleField(setNewRole);
   const updateEditRoleField = updateRoleField(setEditRole);
 
@@ -539,7 +492,6 @@ const HospitalUserPermissions = () => {
     setShowDeleteModal(true);
   }, []);
 
-  // ✅ FIXED: Navigation to HospitalPermissionList with correct path
   const handleOpenPermissionsPage = useCallback((role) => {
     navigate(
       `/super-admin/hospital-users/${hospitalId}/permissions/${role.id}`,
@@ -553,7 +505,6 @@ const HospitalUserPermissions = () => {
     setOpenDropdown(null);
   }, [navigate, hospitalId, hospitalName]);
 
-  // ✅ FIXED: Back button navigation goes to HospitalUsers
   const handleBack = () => {
     navigate('/super-admin/hospital-users', {
       state: { 
@@ -565,7 +516,6 @@ const HospitalUserPermissions = () => {
 
   const toggleDropdown = useCallback((roleId) => setOpenDropdown(openDropdown === roleId ? null : roleId), [openDropdown]);
 
-  // Filter roles based on search term
   const filterRoles = (roles, searchTerm) => {
     if (!searchTerm.trim()) return roles;
     const term = searchTerm.toLowerCase();
@@ -575,7 +525,6 @@ const HospitalUserPermissions = () => {
     );
   };
 
-  // Filter Admin role by ID
   const filteredAdminRoles = filterRoles(
     (rolesResponse?.admin || []).filter(
       role => role?.id === ADMIN_ROLE_ID && role?.name === "Admin"
@@ -583,13 +532,11 @@ const HospitalUserPermissions = () => {
     searchTerm
   );
 
-  // Filter hospital roles
   const filteredHospitalRoles = filterRoles(
     rolesResponse?.data || [],
     searchTerm
   );
 
-  // Combine and paginate hospital roles
   const totalHospitalRoles = filteredHospitalRoles.length;
   const totalPages = Math.ceil(totalHospitalRoles / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -608,11 +555,10 @@ const HospitalUserPermissions = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Header with Breadcrumb - Hospital context */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
-            onClick={handleBack} // ✅ FIXED: Goes to HospitalUsers
+            onClick={handleBack}
             className="p-1 hover:bg-gray-200 rounded transition-colors"
           >
             <ArrowLeft size={20} className="text-gray-600" />
@@ -644,7 +590,6 @@ const HospitalUserPermissions = () => {
               <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
             </div>
             <div className="flex gap-3">
-              {/* Search Bar */}
               <div className="relative">
                 <input
                   type="text"
@@ -703,7 +648,6 @@ const HospitalUserPermissions = () => {
                 <TableHeader>Actions</TableHeader>
               </tr>
             </thead>
-            {/* Admin Roles Section */}
             {filteredAdminRoles.length > 0 && (
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredAdminRoles.map((admin) => (
@@ -731,7 +675,6 @@ const HospitalUserPermissions = () => {
               </tbody>
             )}
             
-            {/* Hospital Roles Section */}
             {paginatedHospitalRoles.length > 0 && (
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedHospitalRoles.map((role) => (

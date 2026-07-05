@@ -17,9 +17,7 @@ import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
 
-// ✅ Import socket
 import { socket } from '../../socket/socket';
-// ✅ Import socket event listeners
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
 
 const TIME_OPTIONS = [
@@ -205,7 +203,6 @@ const Settings = () => {
   });
   const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
 
-  // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const [hospitalInfo, setHospitalInfo] = useState({
@@ -241,36 +238,23 @@ const Settings = () => {
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
   const isFormSaving = isSaving || isUpdating;
 
-  // ✅ Register socket event listeners for hospital events
+  // Register socket event listeners for hospital events
   useEffect(() => {
-    console.log("🔄 Registering hospital event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerHospitalEvents({
-      onHospitalRegistered: (data) => {
-        console.log("🏥 NEW HOSPITAL REGISTERED:", data);
-        showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+      onHospitalRegistered: () => {
+        showSuccessToast(`New hospital registered!`, 3000);
       },
-      
-      onHospitalUpdated: (data) => {
-        console.log("✏️ HOSPITAL UPDATED:", data);
-        showSuccessToast(`Hospital ${data.name || 'Hospital'} updated successfully!`, 3000);
-        // Refetch hospital data to update the UI
+      onHospitalUpdated: () => {
+        showSuccessToast(`Hospital updated successfully!`, 3000);
         refetch();
       },
-      
-      onHospitalDeleted: (data) => {
-        console.log("🗑️ HOSPITAL DELETED:", data);
+      onHospitalDeleted: () => {
         showSuccessToast(`Hospital deleted!`, 3000);
       },
-      
-      onHospitalBlacklisted: (data) => {
-        console.log("🚫 HOSPITAL BLACKLISTED:", data);
+      onHospitalBlacklisted: () => {
         showSuccessToast(`Hospital blacklisted!`, 3000);
       },
-      
-      onHospitalRecovered: (data) => {
-        console.log("♻️ HOSPITAL RECOVERED:", data);
+      onHospitalRecovered: () => {
         showSuccessToast(`Hospital recovered successfully!`, 3000);
       }
     });
@@ -278,37 +262,30 @@ const Settings = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering hospital events...");
       unregisterHospitalEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Hospital events will work!");
       if (!eventsRegistered) {
         registerHospitalEvents({
-          onHospitalRegistered: (data) => {
-            console.log("🏥 NEW HOSPITAL REGISTERED (reconnect):", data);
-            showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
+          onHospitalRegistered: () => {
+            showSuccessToast(`New hospital registered!`, 3000);
           },
-          onHospitalUpdated: (data) => {
-            console.log("✏️ HOSPITAL UPDATED (reconnect):", data);
-            showSuccessToast(`Hospital ${data.name || 'Hospital'} updated successfully!`, 3000);
+          onHospitalUpdated: () => {
+            showSuccessToast(`Hospital updated successfully!`, 3000);
             refetch();
           },
-          onHospitalDeleted: (data) => {
-            console.log("🗑️ HOSPITAL DELETED (reconnect):", data);
+          onHospitalDeleted: () => {
             showSuccessToast(`Hospital deleted!`, 3000);
           },
-          onHospitalBlacklisted: (data) => {
-            console.log("🚫 HOSPITAL BLACKLISTED (reconnect):", data);
+          onHospitalBlacklisted: () => {
             showSuccessToast(`Hospital blacklisted!`, 3000);
           },
-          onHospitalRecovered: (data) => {
-            console.log("♻️ HOSPITAL RECOVERED (reconnect):", data);
+          onHospitalRecovered: () => {
             showSuccessToast(`Hospital recovered successfully!`, 3000);
           }
         });
@@ -317,7 +294,6 @@ const Settings = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Hospital events won't work!");
       setEventsRegistered(false);
     };
 
@@ -329,19 +305,6 @@ const Settings = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - HOSPITAL: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   useEffect(() => {
     if (fetchError?.status === 401) {
@@ -428,7 +391,6 @@ const Settings = () => {
         updateHospital: updateData 
       }).unwrap();
       
-      // ✅ Emit socket event for hospital update
       socket.emit("hospital_event", {
         event: "HOSPITAL_UPDATED",
         data: {

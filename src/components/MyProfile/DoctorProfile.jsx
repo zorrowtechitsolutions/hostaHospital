@@ -197,8 +197,7 @@ const DoctorProfile = () => {
       setUploadProgress(100);
       setEditForm(prev => ({ ...prev, imageUrl: uploaded.key, profileImage: uploaded.key, imageKey: uploaded.key }));
       setTimeout(() => setUploadProgress(0), 1000);
-    } catch (error) {
-      console.error("Upload error:", error);
+    } catch {
       setUploadProgress(0);
       if (formData.profileImage) setPreviewImage(getFullImageUrl(formData.profileImage));
       else setPreviewImage(null);
@@ -257,8 +256,8 @@ const DoctorProfile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
       refetch();
-    } catch (error) {
-      console.error('Save error:', error);
+    } catch {
+      // Silently handle save error
     } finally {
       setIsSaving(false);
     }

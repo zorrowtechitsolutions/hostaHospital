@@ -3,12 +3,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
-  ArrowLeft, Heart, Users, 
+  ArrowLeft, Users, 
   Briefcase, Clock, AlertTriangle,
   ChevronDown, Activity
 } from 'lucide-react';
 import { 
-  Button, Input, Select, Card, Alert
+  Button, Input, Select, Card
 } from '../ui';
 import { 
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast 
@@ -122,12 +122,9 @@ const SearchableDropdown = ({
 const AddPatient = () => {
   const navigate = useNavigate();
   
-  // Get user data from auth utility
   const authUser = getAuthUser();
-  
-  // Only get hospitalId from JWT payload
-  const hospitalId = authUser?.id;        // hospitals.id
-  
+  const hospitalId = authUser?.id;
+
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
   const [formData, setFormData] = useState({
@@ -308,7 +305,6 @@ const AddPatient = () => {
       hospitalId: hospitalId,
     };
 
-    // Add optional fields only if they have values
     if (formData.bloodGroup) patientData.bloodGroup = formData.bloodGroup;
     if (formData.age) patientData.age = Number(formData.age);
     if (formData.dob) patientData.dob = formData.dob;
@@ -325,7 +321,6 @@ const AddPatient = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Check if hospitalId is available
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
@@ -345,8 +340,7 @@ const AddPatient = () => {
       
       try {
         const patientData = preparePatientData();
-        
-        const result = await createPatient(patientData).unwrap();
+        await createPatient(patientData).unwrap();
         
         showSuccessToast(
           `${formData.fullName} has been added successfully as ${formData.patientType}`
@@ -359,8 +353,6 @@ const AddPatient = () => {
         }, 2000);
         
       } catch (error) {
-        console.error('Error creating patient:', error);
-        
         if (error.status === 409) {
           showErrorToast('❌ Mobile number or email already exists!');
         } else if (error.data?.message?.includes('Mobile number already exists')) {

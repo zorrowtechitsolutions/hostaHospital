@@ -17,7 +17,16 @@ import {
   CheckCircle,
   XCircle,
   Clock as ClockIcon,
-  AlertCircle
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  MoreVertical,
+  ArrowRight,
+  Shield,
+  Hospital,
+  UserPlus,
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import { Card, Button } from '../ui';
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
@@ -28,6 +37,7 @@ import { useGetAmbulanceQuery } from '../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../app/service/bloodbank';
 import { useGetPatientsQuery } from '../../../app/service/patients';
 import { useGetStaffQuery } from '../../../app/service/staffApi';
+import { useGetUsersQuery } from '../../../app/service/users';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -45,108 +55,48 @@ const AdminDashboard = () => {
     totalAmbulances: 0,
     totalBloodUnits: 0,
     totalAds: 0,
-    totalStaff: 0
+    totalStaff: 0,
+    totalUsers: 0
   });
 
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [allAppointments, setAllAppointments] = useState([]);
 
-  // ✅ FIX: For Super Admin, we need to fetch ALL appointments across all hospitals
-  // We'll use a larger limit and skip hospital filter
-  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery({
-    limit: 1000,
-    page: 1
-  });
-  
+  const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
   const { data: doctorsData, isLoading: loadingDoctors } = useGetDoctorsQuery({
-    page: 1,
-    limit: 1000,
-    skipHospitalFilter: true  // Super Admin sees all doctors
+    skipHospitalFilter: true
   });
-  
-  const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery({
-    page: 1,
+  const { data: patientsData, isLoading: loadingPatients } = useGetPatientsQuery();
+  const { data: appointmentsData, isLoading: loadingAppointments } = useGetBookingsQuery({
+    skipHospitalFilter: true,
+  });
+  const { data: adsData, isLoading: loadingAds } = useGetAdsQuery();
+  const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery();
+  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery({
+    skipHospitalFilter: true,
+  });
+  const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery();
+  const { data: usersData, isLoading: loadingUsers } = useGetUsersQuery({
     limit: 1000
   });
-  
-  // In AdminDashboard.jsx - update the useGetBookingsQuery call
-const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetchAppointments } = useGetBookingsQuery({
-  page: 1,
-  limit: 10000,
-  skipHospitalFilter: true, // ✅ IMPORTANT: Skip hospital filter for Super Admin
-});
-  
-  const { data: adsData, isLoading: loadingAds } = useGetAdsQuery({
-    page: 1,
-    limit: 1000
-  });
-  
-  const { data: staffData, isLoading: loadingStaff } = useGetStaffQuery({
-    page: 1,
-    limit: 1000,
-  });
 
-  const { data: ambulanceData, isLoading: loadingAmbulance } = useGetAmbulanceQuery({});
-  const { data: bloodBankData, isLoading: loadingBloodBank } = useGetBloodBankQuery({});
-
-  // ✅ NEW: Fetch appointments for each hospital if needed
-  // This is a fallback if the main query doesn't work
-  const fetchAllAppointments = async () => {
-    try {
-      // If appointmentsData is undefined, try to fetch from all hospitals
-      if (!appointmentsData) {
-        console.log('🔄 Appointments data is undefined, trying alternative method...');
-        
-        // Get all hospitals first
-        const hospitals = hospitalsData?.data || hospitalsData || [];
-        
-        // Fetch appointments for each hospital (if your API supports this)
-        // Note: This might not work if the API doesn't support hospitalId filtering
-        let allAppts = [];
-        for (const hospital of hospitals) {
-          try {
-            // You would need to implement a way to fetch appointments by hospitalId
-            // This is just a placeholder
-            console.log(`Fetching appointments for hospital: ${hospital.id}`);
-          } catch (error) {
-            console.error(`Error fetching appointments for hospital ${hospital.id}:`, error);
-          }
-        }
-        return allAppts;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
-      return [];
-    }
-  };
-
-  // Calculate dashboard stats from real data
   useEffect(() => {
     const loadData = async () => {
       if (loadingHospitals || loadingDoctors || loadingPatients || loadingAppointments || 
-          loadingAds || loadingStaff || loadingAmbulance || loadingBloodBank) {
+          loadingAds || loadingStaff || loadingAmbulance || loadingBloodBank || loadingUsers) {
         return;
       }
 
-      // Extract data from responses
       const hospitals = hospitalsData?.data || hospitalsData || [];
       const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
       const patients = patientsData?.data || [];
       
-      // ✅ FIXED: Better extraction of appointments data
       let appointments = [];
       
-      console.log('📊 Raw Appointments Data:', appointmentsData);
-      
-      // Check different possible response structures
       if (appointmentsData) {
-        // If data is an array, use it directly
         if (Array.isArray(appointmentsData)) {
           appointments = appointmentsData;
         } 
-        // If data has data property
         else if (appointmentsData.data) {
           if (Array.isArray(appointmentsData.data)) {
             appointments = appointmentsData.data;
@@ -155,7 +105,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
           } else if (appointmentsData.data.bookings && Array.isArray(appointmentsData.data.bookings)) {
             appointments = appointmentsData.data.bookings;
           } else if (typeof appointmentsData.data === 'object' && !Array.isArray(appointmentsData.data)) {
-            // Try to find any array property
             for (const key in appointmentsData.data) {
               if (Array.isArray(appointmentsData.data[key]) && appointmentsData.data[key].length > 0) {
                 appointments = appointmentsData.data[key];
@@ -164,15 +113,12 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
             }
           }
         } 
-        // If data has bookings property
         else if (appointmentsData.bookings && Array.isArray(appointmentsData.bookings)) {
           appointments = appointmentsData.bookings;
         } 
-        // If data has rows property
         else if (appointmentsData.rows && Array.isArray(appointmentsData.rows)) {
           appointments = appointmentsData.rows;
         } else {
-          // Try to find any array in the response
           for (const key in appointmentsData) {
             if (Array.isArray(appointmentsData[key]) && appointmentsData[key].length > 0) {
               appointments = appointmentsData[key];
@@ -182,13 +128,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         }
       }
       
-      console.log('📊 Extracted Appointments:', appointments);
-      console.log('📊 Total Appointments Count:', appointments.length);
-      
-      // Store appointments for later use
-      setAllAppointments(appointments);
-      
-      // ✅ FIXED: Count appointments by status with case-insensitive comparison
       const pending = appointments.filter(a => {
         const status = (a.status || a.booking_status || a.bookingStatus || '').toLowerCase();
         return status === 'pending' || status === 'requested';
@@ -216,19 +155,9 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
       
       const total = appointments.length;
 
-      console.log('📊 Status Counts:', {
-        pending,
-        accepted,
-        completed,
-        declined,
-        cancelled,
-        total
-      });
-
       const ads = adsData?.data || adsData?.ads || [];
       const ambulances = ambulanceData?.data || [];
       
-      // Extract staff data properly
       let staff = [];
       if (staffData?.data?.rows) {
         staff = staffData.data.rows;
@@ -240,9 +169,11 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         staff = Array.isArray(staffData.staff) ? staffData.staff : [];
       }
       
-      // Calculate total blood units
       const bloodBanks = bloodBankData?.data || [];
       const totalBloodUnits = bloodBanks.length;
+
+      const users = usersData?.data || usersData?.users || [];
+      const totalUsers = users.length;
 
       setStats({
         totalHospitals: hospitals.length,
@@ -258,13 +189,12 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
         totalAmbulances: ambulances.length,
         totalBloodUnits: totalBloodUnits,
         totalAds: ads.length,
-        totalStaff: staff.length
+        totalStaff: staff.length,
+        totalUsers: totalUsers
       });
 
-      // Generate recent activity from latest appointments and hospitals
       const activities = [];
       
-      // Add recent appointments
       appointments
         .slice(0, 3)
         .forEach((appointment) => {
@@ -302,7 +232,6 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
           });
         });
 
-      // Add recent hospitals
       hospitals
         .slice(0, 2)
         .forEach((hospital) => {
@@ -330,6 +259,7 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
     staffData,
     ambulanceData,
     bloodBankData,
+    usersData,
     loadingHospitals,
     loadingDoctors,
     loadingPatients,
@@ -337,68 +267,107 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
     loadingAds,
     loadingStaff,
     loadingAmbulance,
-    loadingBloodBank
+    loadingBloodBank,
+    loadingUsers
   ]);
 
-  // Updated stat cards with real data
+  // Premium stat cards with gradients and icons
   const statCards = [
     { 
       label: 'Total Hospitals', 
       value: stats.totalHospitals, 
       icon: Building2, 
-      color: 'bg-blue-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-blue-500 to-blue-600',
+      bgGradient: 'from-blue-50 to-blue-100',
+      textColor: 'text-blue-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: `${stats.activeHospitals} active`
     },
     { 
       label: 'Total Doctors', 
       value: stats.totalDoctors, 
       icon: Stethoscope, 
-      color: 'bg-green-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-emerald-500 to-emerald-600',
+      bgGradient: 'from-emerald-50 to-emerald-100',
+      textColor: 'text-emerald-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: 'Medical professionals'
     },
     { 
       label: 'Total Patients', 
       value: stats.totalPatients, 
       icon: Users, 
-      color: 'bg-purple-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-purple-500 to-purple-600',
+      bgGradient: 'from-purple-50 to-purple-100',
+      textColor: 'text-purple-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: 'Registered patients'
     },
     { 
       label: 'Total Appointments', 
       value: stats.totalAppointments, 
       icon: CalendarIcon, 
-      color: 'bg-indigo-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-indigo-500 to-indigo-600',
+      bgGradient: 'from-indigo-50 to-indigo-100',
+      textColor: 'text-indigo-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: `${stats.pendingAppointments} pending`
     },
     { 
       label: 'Total Ambulances', 
       value: stats.totalAmbulances, 
       icon: Ambulance, 
-      color: 'bg-red-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-red-500 to-red-600',
+      bgGradient: 'from-red-50 to-red-100',
+      textColor: 'text-red-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: 'Emergency fleet'
     },
     { 
       label: 'Blood Units', 
       value: stats.totalBloodUnits, 
       icon: Droplet, 
-      color: 'bg-rose-500',
-      onClick: () => navigate('/super-admin/hospitals')
+      gradient: 'from-rose-500 to-rose-600',
+      bgGradient: 'from-rose-50 to-rose-100',
+      textColor: 'text-rose-600',
+      onClick: () => navigate('/super-admin/hospitals'),
+      subtitle: 'Available units'
     },
     { 
       label: 'Active Ads', 
       value: stats.totalAds, 
       icon: Megaphone, 
-      color: 'bg-orange-500',
-      onClick: () => navigate('/super-admin/ads')
+      gradient: 'from-amber-500 to-amber-600',
+      bgGradient: 'from-amber-50 to-amber-100',
+      textColor: 'text-amber-600',
+      onClick: () => navigate('/super-admin/ads'),
+      subtitle: 'Live campaigns'
     },
     {
       label: 'Total Staff',
       value: stats.totalStaff,
       icon: User,
-      color: 'bg-teal-500',
-      onClick: () => navigate('/super-admin/hospital-users')
+      gradient: 'from-teal-500 to-teal-600',
+      bgGradient: 'from-teal-50 to-teal-100',
+      textColor: 'text-teal-600',
+      onClick: () => navigate('/super-admin/hospital-users'),
+      subtitle: 'Hospital staff'
+    },
+    {
+      label: 'Total Users',
+      value: stats.totalUsers,
+      icon: Users,
+      gradient: 'from-cyan-500 to-cyan-600',
+      bgGradient: 'from-cyan-50 to-cyan-100',
+      textColor: 'text-cyan-600',
+      onClick: () => navigate('/super-admin/users'),
+      subtitle: 'Platform users'
     }
   ];
+
+  // Group stats into categories for better organization
+  const primaryStats = statCards.slice(0, 4);
+  const secondaryStats = statCards.slice(4, 9);
 
   const getActivityIcon = (type, status) => {
     const icons = {
@@ -410,283 +379,359 @@ const { data: appointmentsData, isLoading: loadingAppointments, refetch: refetch
     };
     const Icon = icons[type] || Activity;
     const colors = {
-      success: 'text-green-500',
-      warning: 'text-yellow-500',
-      info: 'text-blue-500',
-      error: 'text-red-500'
+      success: 'text-emerald-500 bg-emerald-50',
+      warning: 'text-amber-500 bg-amber-50',
+      info: 'text-blue-500 bg-blue-50',
+      error: 'text-red-500 bg-red-50'
     };
-    return <Icon size={16} className={colors[status] || 'text-gray-500'} />;
+    return <Icon size={14} className={colors[status] || 'text-gray-500 bg-gray-50'} />;
+  };
+
+  const getStatusBadge = (status) => {
+    const badges = {
+      success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      warning: 'bg-amber-50 text-amber-700 border-amber-200',
+      info: 'bg-blue-50 text-blue-700 border-blue-200',
+      error: 'bg-red-50 text-red-700 border-red-200'
+    };
+    return badges[status] || 'bg-gray-50 text-gray-700 border-gray-200';
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[600px]">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0]"></div>
-          <p className="mt-3 text-gray-500">Loading dashboard data...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#1C62A0] border-t-transparent"></div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
-        <p className="text-sm text-gray-500 mt-1">Platform-wide statistics and insights</p>
+    <div className="space-y-8">
+      {/* Enhanced Header with gradient background */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1C62A0] to-[#2a7fc7] p-8 text-white">
+        <div className="relative z-10">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
+              <p className="mt-2 text-blue-100">Platform-wide statistics and insights at a glance</p>
+            </div>
+            <div className="flex items-center gap-3">
+            </div>
+          </div>
+          
+          {/* Quick stats chips */}
+          <div className="mt-6 flex flex-wrap gap-3">
+            <div className="bg-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm text-sm">
+              <span className="font-semibold">{stats.totalHospitals}</span> Hospitals
+            </div>
+            <div className="bg-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm text-sm">
+              <span className="font-semibold">{stats.totalDoctors}</span> Doctors
+            </div>
+            <div className="bg-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm text-sm">
+              <span className="font-semibold">{stats.totalPatients}</span> Patients
+            </div>
+            <div className="bg-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm text-sm">
+              <span className="font-semibold">{stats.totalAppointments}</span> Appointments
+            </div>
+          </div>
+        </div>
+        
+        {/* Decorative elements */}
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-white/5"></div>
+        <div className="absolute bottom-0 left-1/2 -mb-20 h-48 w-48 rounded-full bg-white/5"></div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-        {statCards.map((stat, index) => {
+      {/* Primary Stats Grid - 4 columns */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {primaryStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card 
               key={index} 
-              className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+              className="group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer"
               onClick={stat.onClick}
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`${stat.color} p-2 rounded-lg bg-opacity-10`}>
-                  <Icon size={20} className={stat.color.replace('bg-', 'text-')} />
+              <div className={`absolute inset-0 bg-gradient-to-br ${stat.bgGradient} opacity-50`}></div>
+              <div className="relative p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+                    <p className="mt-2 text-3xl font-bold text-gray-900">
+                      {(stat.value ?? 0).toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">{stat.subtitle}</p>
+                  </div>
+                  <div className={`rounded-xl bg-gradient-to-br ${stat.gradient} p-3 text-white shadow-lg`}>
+                    <Icon size={20} />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center text-xs text-gray-400 group-hover:text-[#1C62A0] transition-colors">
+                  <span>View details</span>
+                  <ArrowRight size={12} className="ml-1 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {(stat.value ?? 0).toLocaleString()}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
             </Card>
           );
         })}
       </div>
 
-      {/* Charts and Activity Section */}
+      {/* Secondary Stats - Compact Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {secondaryStats.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <Card 
+              key={index} 
+              className="group border-0 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+              onClick={stat.onClick}
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-lg bg-gradient-to-br ${stat.gradient} p-2 text-white`}>
+                    <Icon size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500 truncate">{stat.label}</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {(stat.value ?? 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Main Content Area - 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Platform Statistics */}
-        <Card className="lg:col-span-2 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Platform Statistics</h2>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Hospital Registrations</span>
-                <span className="font-medium">
-                  {stats.totalHospitals > 0 ? Math.round((stats.activeHospitals / stats.totalHospitals) * 100) : 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full" 
-                  style={{ width: stats.totalHospitals > 0 ? `${(stats.activeHospitals / stats.totalHospitals) * 100}%` : '0%' }}
-                ></div>
+        {/* Platform Statistics - takes 2/3 */}
+        <Card className="lg:col-span-2 border-0 shadow-md">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Platform Analytics</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Real-time metrics</span>
+                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
               </div>
             </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Appointment Status Distribution</span>
-                <span className="font-medium">{stats.totalAppointments} total</span>
+            
+            <div className="space-y-6">
+              {/* Hospital Registration Progress */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Hospital Activation Rate</span>
+                  <span className="text-sm font-bold text-[#1C62A0]">
+                    {stats.totalHospitals > 0 ? Math.round((stats.activeHospitals / stats.totalHospitals) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-[#1C62A0] to-[#2a7fc7] h-2.5 rounded-full transition-all duration-500" 
+                    style={{ width: stats.totalHospitals > 0 ? `${(stats.activeHospitals / stats.totalHospitals) * 100}%` : '0%' }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-400">
+                  <span>{stats.activeHospitals} active</span>
+                  <span>{stats.totalHospitals - stats.activeHospitals} inactive</span>
+                </div>
               </div>
-              <div className="flex h-2 rounded-full overflow-hidden">
-                {stats.totalAppointments > 0 ? (
-                  <>
-                    <div 
-                      className="bg-yellow-500 h-full" 
-                      style={{ width: `${(stats.pendingAppointments / stats.totalAppointments) * 100}%` }}
-                      title={`Pending: ${stats.pendingAppointments}`}
-                    />
-                    <div 
-                      className="bg-green-500 h-full" 
-                      style={{ width: `${(stats.acceptedAppointments / stats.totalAppointments) * 100}%` }}
-                      title={`Accepted: ${stats.acceptedAppointments}`}
-                    />
-                    <div 
-                      className="bg-purple-500 h-full" 
-                      style={{ width: `${(stats.completedAppointments / stats.totalAppointments) * 100}%` }}
-                      title={`Completed: ${stats.completedAppointments}`}
-                    />
-                    <div 
-                      className="bg-red-500 h-full" 
-                      style={{ width: `${(stats.declinedAppointments / stats.totalAppointments) * 100}%` }}
-                      title={`Declined: ${stats.declinedAppointments}`}
-                    />
-                    <div 
-                      className="bg-gray-400 h-full" 
-                      style={{ width: `${(stats.cancelledAppointments / stats.totalAppointments) * 100}%` }}
-                      title={`Cancelled: ${stats.cancelledAppointments}`}
-                    />
-                  </>
-                ) : (
-                  <div className="bg-gray-200 h-full w-full" />
-                )}
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Doctor Coverage</span>
-                <span className="font-medium">
-                  {stats.totalDoctors > 0 && stats.totalHospitals > 0 ? Math.round((stats.totalDoctors / stats.totalHospitals) * 10) : 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full" 
-                  style={{ width: stats.totalDoctors > 0 && stats.totalHospitals > 0 ? `${Math.min((stats.totalDoctors / stats.totalHospitals) * 10, 100)}%` : '0%' }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>System Utilization</span>
-                <span className="font-medium">
-                  {stats.totalHospitals > 100 ? '85%' : stats.totalHospitals > 50 ? '65%' : '45%'}
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-orange-500 h-2 rounded-full" 
-                  style={{ width: stats.totalHospitals > 100 ? '85%' : stats.totalHospitals > 50 ? '65%' : '45%' }}
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Appointment Status Summary */}
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-medium text-gray-900 mb-3">Appointment Status Breakdown</h3>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-              <div className="bg-yellow-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <ClockIcon size={14} className="text-yellow-600" />
-                  <p className="text-sm font-semibold text-yellow-600">{stats.pendingAppointments}</p>
+              {/* Appointment Status Distribution */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Appointment Status Distribution</span>
+                  <span className="text-sm text-gray-500">{stats.totalAppointments} total</span>
                 </div>
-                <p className="text-xs text-gray-600">Pending</p>
+                <div className="flex h-3 rounded-full overflow-hidden shadow-inner">
+                  {stats.totalAppointments > 0 ? (
+                    <>
+                      <div 
+                        className="bg-amber-400 h-full transition-all duration-500 hover:opacity-80" 
+                        style={{ width: `${(stats.pendingAppointments / stats.totalAppointments) * 100}%` }}
+                        title={`Pending: ${stats.pendingAppointments}`}
+                      />
+                      <div 
+                        className="bg-emerald-400 h-full transition-all duration-500 hover:opacity-80" 
+                        style={{ width: `${(stats.acceptedAppointments / stats.totalAppointments) * 100}%` }}
+                        title={`Accepted: ${stats.acceptedAppointments}`}
+                      />
+                      <div 
+                        className="bg-purple-400 h-full transition-all duration-500 hover:opacity-80" 
+                        style={{ width: `${(stats.completedAppointments / stats.totalAppointments) * 100}%` }}
+                        title={`Completed: ${stats.completedAppointments}`}
+                      />
+                      <div 
+                        className="bg-red-400 h-full transition-all duration-500 hover:opacity-80" 
+                        style={{ width: `${(stats.declinedAppointments / stats.totalAppointments) * 100}%` }}
+                        title={`Declined: ${stats.declinedAppointments}`}
+                      />
+                      <div 
+                        className="bg-gray-300 h-full transition-all duration-500 hover:opacity-80" 
+                        style={{ width: `${(stats.cancelledAppointments / stats.totalAppointments) * 100}%` }}
+                        title={`Cancelled: ${stats.cancelledAppointments}`}
+                      />
+                    </>
+                  ) : (
+                    <div className="bg-gray-200 h-full w-full" />
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4 mt-2 text-xs">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400"></span>
+                    Pending {stats.pendingAppointments}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
+                    Accepted {stats.acceptedAppointments}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-purple-400"></span>
+                    Completed {stats.completedAppointments}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-red-400"></span>
+                    Declined {stats.declinedAppointments}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-gray-300"></span>
+                    Cancelled {stats.cancelledAppointments}
+                  </span>
+                </div>
               </div>
-              <div className="bg-green-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <CheckCircle size={14} className="text-green-600" />
-                  <p className="text-sm font-semibold text-green-600">{stats.acceptedAppointments}</p>
+
+              {/* Doctor to Patient Ratio */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Doctor to Patient Ratio</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    1:{stats.totalDoctors > 0 ? Math.round(stats.totalPatients / stats.totalDoctors) : 0}
+                  </span>
                 </div>
-                <p className="text-xs text-gray-600">Accepted</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <Activity size={14} className="text-purple-600" />
-                  <p className="text-sm font-semibold text-purple-600">{stats.completedAppointments}</p>
+                <div className="w-full bg-gray-100 rounded-full h-2.5">
+                  <div 
+                    className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-2.5 rounded-full transition-all duration-500" 
+                    style={{ width: stats.totalDoctors > 0 ? `${Math.min((stats.totalDoctors / stats.totalPatients) * 100, 100)}%` : '0%' }}
+                  />
                 </div>
-                <p className="text-xs text-gray-600">Completed</p>
-              </div>
-              <div className="bg-red-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <XCircle size={14} className="text-red-600" />
-                  <p className="text-sm font-semibold text-red-600">{stats.declinedAppointments}</p>
+                <div className="flex justify-between mt-1 text-xs text-gray-400">
+                  <span>{stats.totalDoctors} doctors</span>
+                  <span>{stats.totalPatients} patients</span>
                 </div>
-                <p className="text-xs text-gray-600">Declined</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <AlertCircle size={14} className="text-gray-600" />
-                  <p className="text-sm font-semibold text-gray-600">{stats.cancelledAppointments}</p>
-                </div>
-                <p className="text-xs text-gray-600">Cancelled</p>
               </div>
             </div>
-          </div>
 
-          {/* Quick Stats Summary */}
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-medium text-gray-900 mb-3">Quick Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-blue-600">{stats.totalHospitals}</p>
-                <p className="text-xs text-gray-600">Total Hospitals</p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-green-600">{stats.totalDoctors}</p>
-                <p className="text-xs text-gray-600">Total Doctors</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-purple-600">{stats.totalPatients}</p>
-                <p className="text-xs text-gray-600">Total Patients</p>
-              </div>
-              <div className="bg-teal-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-teal-600">{stats.totalStaff}</p>
-                <p className="text-xs text-gray-600">Total Staff</p>
+            {/* Quick Summary Grid */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-700 mb-4">Quick Summary</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{stats.totalHospitals}</p>
+                  <p className="text-xs text-gray-500 mt-1">Hospitals</p>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-emerald-600">{stats.totalDoctors}</p>
+                  <p className="text-xs text-gray-500 mt-1">Doctors</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-600">{stats.totalPatients}</p>
+                  <p className="text-xs text-gray-500 mt-1">Patients</p>
+                </div>
+                <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-teal-600">{stats.totalStaff}</p>
+                  <p className="text-xs text-gray-500 mt-1">Staff</p>
+                </div>
               </div>
             </div>
           </div>
         </Card>
 
-        {/* Recent Activity */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => navigate('/super-admin/hospitals')}
-            >
-              View All
-            </Button>
-          </div>
-          <div className="space-y-4 max-h-[400px] overflow-y-auto">
-            {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
-                  <div className="mt-0.5">
-                    {getActivityIcon(activity.type, activity.status)}
+        {/* Recent Activity - takes 1/3 */}
+        <Card className="border-0 shadow-md">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="text-xs hover:bg-[#1C62A0] hover:text-white transition-colors"
+                onClick={() => navigate('/super-admin/hospitals')}
+              >
+                View All
+              </Button>
+            </div>
+            
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity) => (
+                  <div key={activity.id} className="group flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className={`p-2 rounded-lg ${getStatusBadge(activity.status)}`}>
+                      {getActivityIcon(activity.type, activity.status)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700">
+                        <span className="font-semibold">{activity.entity}</span>
+                        <span className="text-gray-500"> {activity.action}</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">{activity.time}</p>
+                    </div>
+                    <div className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(activity.status)}`}>
+                      {activity.status}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-700">
-                      <span className="font-medium">{activity.entity}</span>
-                      <span className="text-gray-500"> was {activity.action}</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <Activity size={32} className="mx-auto text-gray-300" />
+                  <p className="mt-2 text-sm text-gray-500">No recent activity</p>
                 </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm text-center py-4">No recent activity</p>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Quick Actions */}
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="font-medium text-gray-900 mb-3">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="text-sm"
-                onClick={() => navigate('/super-admin/hospitals/add')}
-              >
-                Add Hospital
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="text-sm"
-                onClick={() => navigate('/super-admin/categories')}
-              >
-                View Categories
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="text-sm"
-                onClick={() => navigate('/super-admin/specialties')}
-              >
-                Manage Specialties
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="text-sm"
-                onClick={() => navigate('/super-admin/ads')}
-              >
-                Create Ad
-              </Button>
+            {/* Quick Actions */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs justify-start hover:bg-[#1C62A0] hover:text-white transition-colors"
+                  onClick={() => navigate('/super-admin/hospitals/add')}
+                >
+                  <Hospital size={14} className="mr-1" />
+                  Add Hospital
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs justify-start hover:bg-[#1C62A0] hover:text-white transition-colors"
+                  onClick={() => navigate('/super-admin/categories')}
+                >
+                  <Layers size={14} className="mr-1" />
+                  Categories
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs justify-start hover:bg-[#1C62A0] hover:text-white transition-colors"
+                  onClick={() => navigate('/super-admin/specialties')}
+                >
+                  <Briefcase size={14} className="mr-1" />
+                  Specialties
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs justify-start hover:bg-[#1C62A0] hover:text-white transition-colors"
+                  onClick={() => navigate('/super-admin/ads')}
+                >
+                  <Megaphone size={14} className="mr-1" />
+                  Create Ad
+                </Button>
+              </div>
             </div>
           </div>
         </Card>

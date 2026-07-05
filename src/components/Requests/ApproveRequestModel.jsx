@@ -34,7 +34,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
   </div>
 );
 
-const validateForm = (date, consulting_time, token, showWarningToast) => {
+const validateForm = (date, consulting_time, token) => {
   if (!date) {
     showWarningToast('Please select appointment date', 3000);
     return false;
@@ -67,7 +67,7 @@ const ApproveRequestModal = ({
   const today = new Date().toISOString().split("T")[0];
 
   const handleConfirm = async () => {
-    if (!validateForm(date, consulting_time, token, showWarningToast)) return;
+    if (!validateForm(date, consulting_time, token)) return;
 
     if (onConfirm) {
       onConfirm({

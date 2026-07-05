@@ -1,4 +1,3 @@
-// src/components/Appointment/Appointment.jsx - With Server-Side Pagination & Gender Fix
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -23,7 +22,6 @@ import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast'
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
 
-// ✅ Import socket
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
@@ -117,11 +115,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-  // ✅ Track if events are registered
-  const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // API Hooks - Server-side pagination
-  const { 
+const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
@@ -139,110 +135,35 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [rejectBooking] = useRejectBookingMutation();
   const [deleteBooking] = useDeleteBookingMutation();
 
-  // ✅ Register socket event listeners for booking events
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering booking event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerBookingEvents({
-      onBookingRegistered: (data) => {
-        console.log("📅 NEW BOOKING REGISTERED:", data);
+      onBookingRegistered: () => {
         showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
-      onBookingUpdated: (data) => {
-        console.log("✏️ BOOKING UPDATED:", data);
+      onBookingUpdated: () => {
         showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
-      onBookingCancelled: (data) => {
-        console.log("❌ BOOKING CANCELLED:", data);
+      onBookingCancelled: () => {
         showWarningToast(`Booking cancelled!`, 3000);
         refetch();
       },
-      onBookingAccepted: (data) => {
-        console.log("✅ BOOKING ACCEPTED:", data);
+      onBookingAccepted: () => {
         showSuccessToast(`Booking accepted!`, 3000);
         refetch();
       },
-      onBookingCompleted: (data) => {
-        console.log("✔️ BOOKING COMPLETED:", data);
+      onBookingCompleted: () => {
         showSuccessToast(`Booking completed!`, 3000);
         refetch();
       }
     });
 
-    setEventsRegistered(true);
-
     return () => {
-      console.log("🧹 Unregistering booking events...");
       unregisterBookingEvents();
-      setEventsRegistered(false);
     };
   }, [refetch]);
-
-  // ✅ Listen for socket connection/disconnection
-  useEffect(() => {
-    const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Booking events will work!");
-      if (!eventsRegistered) {
-        registerBookingEvents({
-          onBookingRegistered: (data) => {
-            console.log("📅 NEW BOOKING REGISTERED (reconnect):", data);
-            showSuccessToast(`New booking received!`, 3000);
-            refetch();
-          },
-          onBookingUpdated: (data) => {
-            console.log("✏️ BOOKING UPDATED (reconnect):", data);
-            showSuccessToast(`Booking updated!`, 3000);
-            refetch();
-          },
-          onBookingCancelled: (data) => {
-            console.log("❌ BOOKING CANCELLED (reconnect):", data);
-            showWarningToast(`Booking cancelled!`, 3000);
-            refetch();
-          },
-          onBookingAccepted: (data) => {
-            console.log("✅ BOOKING ACCEPTED (reconnect):", data);
-            showSuccessToast(`Booking accepted!`, 3000);
-            refetch();
-          },
-          onBookingCompleted: (data) => {
-            console.log("✔️ BOOKING COMPLETED (reconnect):", data);
-            showSuccessToast(`Booking completed!`, 3000);
-            refetch();
-          }
-        });
-        setEventsRegistered(true);
-      }
-    };
-
-    const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Booking events won't work!");
-      setEventsRegistered(false);
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-    };
-  }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - BOOKING: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Helper functions
   const formatAppointmentId = (id) => {
@@ -256,7 +177,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
-
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -363,6 +283,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         formattedId: formatAppointmentId(booking.id || booking._id),
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
+        patientId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
@@ -371,21 +292,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
-        appointmentDate: rawDate && rawDate !== "N/A" ? rawDate.split('T')[0] : "N/A",
         appointmentDateDisplay: formatDate(rawDate),
         consulting_time: booking.consulting_time || "N/A",
         status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
-        fee: booking.fee || "$0",
-        duration: "1 hour",
         reason: booking.reason || "",
         notes: booking.notes || "",
-        paymentMethod: booking.payment_method || "Pending",
         patientImageKey: patientImageKey,
-        patientAvatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),
-        avatar: patientImageKey || DEFAULT_PROFILE_IMAGE((index % 10) + 1),       
-        patientType: booking.patient_type || "Out Patient",
-        preferredMode: booking.preferred_mode || "In-person",
         originalStatus: booking.status,
         userId: booking.userId || null,
         // ✅ Store the raw gender for debugging
@@ -403,10 +316,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   // Use server-side pagination data
   const totalItems = bookingsResponse?.pagination?.totalItems || appointmentsData.length;
   const totalPages = bookingsResponse?.pagination?.totalPages || 1;
-
-  console.log("Current Page:", currentPage);
-  console.log("Bookings:", bookingList.length);
-  console.log("Pagination:", bookingsResponse?.pagination);
 
   // Filter doctor-specific data (client-side filter for doctor view)
   const filteredAppointments = (() => {
@@ -482,7 +391,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleStartConsultation = (appointment) => {
-    console.log("Appointment sent to consultation:", appointment);
     navigate('/appointments/consultation', {
       state: {
         appointment,
@@ -532,7 +440,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         }
       }).unwrap();
       
-      // ✅ Emit socket event for booking accepted
       socket.emit("booking_event", {
         event: "BOOKING_ACCEPTED",
         data: {
@@ -578,7 +485,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         data: { reason: rejectReason }
       }).unwrap();
       
-      // ✅ Emit socket event for booking cancelled
       socket.emit("booking_event", {
         event: "BOOKING_CANCELLED",
         data: {
@@ -607,7 +513,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleSaveEdit = (updatedData) => {
-    // ✅ Emit socket event for booking updated
     if (appointmentToEdit) {
       socket.emit("booking_event", {
         event: "BOOKING_UPDATED",
@@ -638,7 +543,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     try {
       await deleteBooking(appointmentToDelete.id).unwrap();
       
-      // ✅ Emit socket event for booking deleted
       socket.emit("booking_event", {
         event: "BOOKING_DELETED",
         data: {

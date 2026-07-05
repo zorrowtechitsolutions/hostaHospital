@@ -43,11 +43,25 @@ import {
   AvatarFallback
 } from "@/components/ui/avatar";
 
-import { getS3ImageUrl } from '../../../app/service/S3';
+import { getS3ImageUrl, S3_BASE_URL } from '../../../app/service/S3';
 
 // Import socket
 import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
+
+// FIX: Enhanced getS3ImageUrl with cache-busting
+// If your getS3ImageUrl from S3.js doesn't have cache-busting, use this version
+const getS3ImageUrlWithCache = (imageKey) => {
+  if (!imageKey) return null;
+  
+  // If it's already a full URL, add cache-busting
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return `${imageKey}?t=${Date.now()}`;
+  }
+  
+  // Otherwise, construct the S3 URL with cache-busting
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+};
 
 const Staffs = () => {
   const navigate = useNavigate();
@@ -73,6 +87,9 @@ const Staffs = () => {
   // Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
+  // FIX: Add a state to force image refresh
+  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+
   // API Hooks with pagination parameters
   const {
     data: staffApiResponse,
@@ -93,45 +110,41 @@ const Staffs = () => {
   const [deleteStaff] = useDeleteStaffMutation();
   const [recoverStaff] = useRecoverStaffMutation();
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering staff event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
-    
     registerStaffEvents({
-      onStaffRegistered: async (data) => {
-        console.log("👤 NEW STAFF REGISTERED:", data);
+      onStaffRegistered: async () => {
         showSuccessToast(`New staff registered!`, 3000);
         await refetch();
+        // FIX: Force image refresh when staff is updated
+        setImageRefreshKey(Date.now());
       },
 
-      onStaffUpdated: async (data) => {
-        console.log("✏️ STAFF UPDATED:", data);
+      onStaffUpdated: async () => {
         showSuccessToast(`Staff updated!`, 3000);
         await refetch();
+        // FIX: Force image refresh when staff is updated
+        setImageRefreshKey(Date.now());
       },
 
-      onStaffDeleted: async (data) => {
-        console.log("🗑️ STAFF DELETED:", data);
+      onStaffDeleted: async () => {
         showSuccessToast(`Staff deleted!`, 3000);
         await refetch();
+        setImageRefreshKey(Date.now());
       },
 
-      // ✅ Handle STAFF_RECOVERED event
-      onStaffRecovered: async (data) => {
-        console.log("♻️ STAFF RECOVERED:", data);
+      onStaffRecovered: async () => {
         showSuccessToast(`Staff recovered successfully!`, 3000);
         await refetch();
+        setImageRefreshKey(Date.now());
       },
 
-      onStaffPasswordReset: async (data) => {
-        console.log("🔑 STAFF PASSWORD RESET:", data);
+      onStaffPasswordReset: async () => {
         showSuccessToast(`Staff password reset!`, 3000);
         await refetch();
       },
 
-      onStaffPasswordChanged: async (data) => {
-        console.log("🔐 STAFF PASSWORD CHANGED:", data);
+      onStaffPasswordChanged: async () => {
         showSuccessToast(`Staff password changed!`, 3000);
         await refetch();
       }
@@ -140,46 +153,41 @@ const Staffs = () => {
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering staff events...");
       unregisterStaffEvents();
       setEventsRegistered(false);
     };
   }, [refetch]);
 
-  // ✅ Listen for socket connection/disconnection
+  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Staff events will work!");
       if (!eventsRegistered) {
         registerStaffEvents({
-          onStaffRegistered: async (data) => {
-            console.log("👤 NEW STAFF REGISTERED (reconnect):", data);
+          onStaffRegistered: async () => {
             showSuccessToast(`New staff registered!`, 3000);
             await refetch();
+            setImageRefreshKey(Date.now());
           },
-          onStaffUpdated: async (data) => {
-            console.log("✏️ STAFF UPDATED (reconnect):", data);
+          onStaffUpdated: async () => {
             showSuccessToast(`Staff updated!`, 3000);
             await refetch();
+            setImageRefreshKey(Date.now());
           },
-          onStaffDeleted: async (data) => {
-            console.log("🗑️ STAFF DELETED (reconnect):", data);
+          onStaffDeleted: async () => {
             showSuccessToast(`Staff deleted!`, 3000);
             await refetch();
+            setImageRefreshKey(Date.now());
           },
-          // ✅ Handle STAFF_RECOVERED on reconnect
-          onStaffRecovered: async (data) => {
-            console.log("♻️ STAFF RECOVERED (reconnect):", data);
+          onStaffRecovered: async () => {
             showSuccessToast(`Staff recovered successfully!`, 3000);
             await refetch();
+            setImageRefreshKey(Date.now());
           },
-          onStaffPasswordReset: async (data) => {
-            console.log("🔑 STAFF PASSWORD RESET (reconnect):", data);
+          onStaffPasswordReset: async () => {
             showSuccessToast(`Staff password reset!`, 3000);
             await refetch();
           },
-          onStaffPasswordChanged: async (data) => {
-            console.log("🔐 STAFF PASSWORD CHANGED (reconnect):", data);
+          onStaffPasswordChanged: async () => {
             showSuccessToast(`Staff password changed!`, 3000);
             await refetch();
           }
@@ -189,7 +197,6 @@ const Staffs = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Staff events won't work!");
       setEventsRegistered(false);
     };
 
@@ -201,19 +208,6 @@ const Staffs = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
-
-  // ✅ Log all socket events for debugging
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - STAFF: ${event}:`, args);
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
 
   // Helper function to format staff ID
   const formatStaffId = (id) => {
@@ -228,14 +222,24 @@ const Staffs = () => {
     return `#SF${String(numericId).padStart(4, '0')}`;
   };
 
+  // FIX: Updated helper function to get image URL with cache-busting
+  const getStaffImageUrl = (staff) => {
+    // Check all possible image fields
+    const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
+    
+    if (!imageKey) return null;
+    
+    // Use the cache-busting version
+    return getS3ImageUrlWithCache(imageKey);
+  };
+
   // Transform API response to match the expected format
   const transformStaffData = (staffList) => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
     return staffList.map((staff, index) => {
-      console.log("STAFF DATA:", staff);
-      
-      const imageKey = staff.imageUrl || staff.profileImage || staff.imageKey || null;
+      // Get the image key from all possible fields
+      const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
       
       // Modified status logic
       let staffStatus = 'Inactive';
@@ -273,7 +277,8 @@ const Staffs = () => {
         isActive: staff.isActive || false,
         isDelete: staff.isDelete || false,
         deleteDate: staff.deleteDate || null,
-        originalStatus: staff.status
+        originalStatus: staff.status,
+        updatedAt: staff.updatedAt || staff.updated_at || null // FIX: Include updatedAt for better cache-busting
       };
     });
   };
@@ -305,6 +310,8 @@ const Staffs = () => {
   const handleRefresh = () => {
     clearAllFilters();
     refetch();
+    // FIX: Force image refresh
+    setImageRefreshKey(Date.now());
     showSuccessToast("Refreshed staff list", 2000);
   };
 
@@ -343,7 +350,8 @@ const Staffs = () => {
         const importedData = JSON.parse(e.target.result);
         showSuccessToast(`Successfully imported ${importedData.length} staff members! (Note: Import to API requires additional implementation)`, 3000);
         refetch();
-      } catch (error) {
+        setImageRefreshKey(Date.now());
+      } catch {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
@@ -351,7 +359,7 @@ const Staffs = () => {
     event.target.value = '';
   };
 
-  // ✅ View Details - Only for Active/Inactive staff
+  // View Details - Only for Active/Inactive staff
   const handleViewDetails = (staff) => {
     if (staff.isDelete) {
       showErrorToast('Cannot view details of blacklisted staff', 3000);
@@ -361,7 +369,7 @@ const Staffs = () => {
     setShowDetailsModal(true);
   };
 
-  // ✅ Edit - Only for Active/Inactive staff
+  // Edit - Only for Active/Inactive staff
   const handleEditStaff = (staff) => {
     if (staff.isDelete) {
       showErrorToast('Cannot edit blacklisted staff', 3000);
@@ -382,24 +390,24 @@ const Staffs = () => {
         await deleteStaff(staffToDelete.id).unwrap();
         showSuccessToast(`${staffToDelete.name} has been deleted successfully!`, 2000);
         refetch();
+        setImageRefreshKey(Date.now());
         setShowDeleteModal(false);
         setStaffToDelete(null);
-      } catch (error) {
-        console.error('Delete error:', error);
-        showErrorToast(error?.data?.message || 'Failed to delete staff member', 3000);
+      } catch {
+        showErrorToast('Failed to delete staff member', 3000);
       }
     }
   };
 
-  // ✅ Recover handler
+  // Recover handler
   const handleRecoverStaff = async (staff) => {
     try {
       await recoverStaff(staff.id).unwrap();
       showSuccessToast(`${staff.name} recovered successfully!`, 2000);
       refetch();
-    } catch (error) {
-      console.error('Recover error:', error);
-      showErrorToast(error?.data?.message || 'Failed to recover staff member', 3000);
+      setImageRefreshKey(Date.now());
+    } catch {
+      showErrorToast('Failed to recover staff member', 3000);
     }
   };
 
@@ -415,16 +423,19 @@ const Staffs = () => {
       showDeleted
     ].filter(Boolean).length;
 
-  // ✅ StaffDetailsModal - Only shown for Active/Inactive staff
+  // StaffDetailsModal - Only shown for Active/Inactive staff
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
+    
+    // Get the image URL for the modal with cache-busting
+    const imageUrl = getStaffImageUrl(staff);
     
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
           <Avatar className="w-16 h-16">
             <AvatarImage 
-              src={getS3ImageUrl(staff.imageUrl)} 
+              src={imageUrl || undefined} 
               alt={staff.name} 
             />
             <AvatarFallback className="text-xl font-medium">
@@ -515,7 +526,7 @@ const Staffs = () => {
     );
   };
 
-  // ✅ Updated RowActionMenu - View & Edit only for Active/Inactive, Recover for Blacklisted
+  // RowActionMenu - View & Edit only for Active/Inactive, Recover for Blacklisted
   const RowActionMenu = ({ staff }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -535,7 +546,7 @@ const Staffs = () => {
         </Button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {/* ✅ View Details - Only for Active/Inactive staff */}
+            {/* View Details - Only for Active/Inactive staff */}
             {!staff.isDelete && (
               <button 
                 onClick={() => { handleViewDetails(staff); setShowMenu(false); }} 
@@ -545,7 +556,7 @@ const Staffs = () => {
               </button>
             )}
             
-            {/* ✅ Edit - Only for Active/Inactive staff */}
+            {/* Edit - Only for Active/Inactive staff */}
             {!staff.isDelete && (
               <button 
                 onClick={() => { handleEditStaff(staff); setShowMenu(false); }} 
@@ -558,7 +569,7 @@ const Staffs = () => {
             {/* Show divider only if there are items above */}
             {!staff.isDelete && <div className="border-t border-gray-100 my-1"></div>}
             
-            {/* ✅ Show Delete or Recover based on isDelete status */}
+            {/* Show Delete or Recover based on isDelete status */}
             {staff.isDelete ? (
               <button 
                 onClick={() => { handleRecoverStaff(staff); setShowMenu(false); }} 
@@ -682,6 +693,17 @@ const Staffs = () => {
               <Download size={16} />
             </Button>
             
+            {/* Toggle to show deleted staff */}
+            <Button 
+              variant={showDeleted ? "primary" : "outline"} 
+              size="sm" 
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="flex items-center gap-1"
+            >
+              <Trash2 size={14} />
+              {showDeleted ? "Hide Deleted" : "Show Deleted"}
+            </Button>
+
             <button
               onClick={() => setShowFilters(prev => !prev)}
               className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -816,67 +838,72 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {staffsData.map((staff, index) => (
-                      <tr 
-                        key={staff.id || index} 
-                        className={`hover:bg-gray-50 border-b border-gray-100 ${
-                          staff.isDelete ? 'bg-gray-50' : ''
-                        }`}
-                      >
-                        <td className={`px-6 py-4 font-medium ${
-                          staff.isDelete ? 'text-gray-500' : 'text-[#1C62A0]'
-                        }`}>
-                          {staff.formattedId}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="w-10 h-10">
-                              <AvatarImage 
-                                src={getS3ImageUrl(staff.imageUrl)} 
-                                alt={staff.name} 
-                              />
-                              <AvatarFallback className={`text-sm font-medium ${
-                                staff.isDelete ? 'bg-gray-200 text-gray-500' : ''
+                    {staffsData.map((staff, index) => {
+                      // FIX: Get image URL with cache-busting
+                      const imageUrl = getStaffImageUrl(staff);
+                      
+                      return (
+                        <tr 
+                          key={staff.id || index} 
+                          className={`hover:bg-gray-50 border-b border-gray-100 ${
+                            staff.isDelete ? 'bg-gray-50' : ''
+                          }`}
+                        >
+                          <td className={`px-6 py-4 font-medium ${
+                            staff.isDelete ? 'text-gray-500' : 'text-[#1C62A0]'
+                          }`}>
+                            {staff.formattedId}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage 
+                                  src={imageUrl || undefined} 
+                                  alt={staff.name} 
+                                />
+                                <AvatarFallback className={`text-sm font-medium ${
+                                  staff.isDelete ? 'bg-gray-200 text-gray-500' : ''
+                                }`}>
+                                  {staff.name?.charAt(0)?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className={`font-medium ${
+                                staff.isDelete ? 'text-gray-500' : 'text-gray-800'
                               }`}>
-                                {staff.name?.charAt(0)?.toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className={`font-medium ${
-                              staff.isDelete ? 'text-gray-500' : 'text-gray-800'
-                            }`}>
-                              {staff.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{staff.gender || 'N/A'}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.designation || 'N/A'}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.phone || 'N/A'}</td>
-                        <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay || 'N/A'}</td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant={
-                              staff.isDelete
-                                ? 'secondary'
+                                {staff.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">{staff.gender || 'N/A'}</td>
+                          <td className="px-6 py-4 text-gray-600">{staff.designation || 'N/A'}</td>
+                          <td className="px-6 py-4 text-gray-600">{staff.phone || 'N/A'}</td>
+                          <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay || 'N/A'}</td>
+                          <td className="px-6 py-4">
+                            <Badge
+                              variant={
+                                staff.isDelete
+                                  ? 'secondary'
+                                  : staff.isActive
+                                  ? 'success'
+                                  : 'danger'
+                              }
+                              className="text-xs"
+                            >
+                              {staff.isDelete
+                                ? 'Blacklisted'
                                 : staff.isActive
-                                ? 'success'
-                                : 'danger'
-                            }
-                            className="text-xs"
-                          >
-                            {staff.isDelete
-                              ? 'Blacklisted'
-                              : staff.isActive
-                              ? 'Active'
-                              : 'Inactive'}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end">
-                            <RowActionMenu staff={staff} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                ? 'Active'
+                                : 'Inactive'}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end">
+                              <RowActionMenu staff={staff} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -1,4 +1,4 @@
-// src/components/staffs/EditStaff.jsx - With Debug Logs
+// src/components/staffs/EditStaff.jsx - Fixed version with cache-busting
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ChevronRight, Upload, X, Shield, ArrowLeft, Lock, Eye, EyeOff } from 'lucide-react';
@@ -30,15 +30,17 @@ import { useGetRolesQuery } from '../../../app/service/role';
 import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// Helper function to get full image URL from key/filename with URL encoding
+// FIX: Enhanced helper function to get full image URL with cache-busting
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
-  if (imageKey.startsWith("http")) {
-    return imageKey;
+  // If it's already a full URL, add cache-busting
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    return `${imageKey}?t=${Date.now()}`;
   }
   
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  // Otherwise, construct the S3 URL with cache-busting
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
 // Password Input Component
@@ -102,6 +104,9 @@ const EditStaff = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // FIX: Add state to force image refresh
+  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+  
   // Password change states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -119,9 +124,6 @@ const EditStaff = () => {
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
-  
-  console.log("🏥 Hospital ID from auth:", hospitalId);
-  console.log("🏥 Hospital Name from auth:", hospitalName);
   
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
@@ -141,7 +143,7 @@ const EditStaff = () => {
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  // ✅ API hooks - Use getStaffById for single staff fetch
+  // API hooks - Use getStaffById for single staff fetch
   const {
     data: staffData,
     isLoading: loading,
@@ -303,15 +305,6 @@ const EditStaff = () => {
     setIsChangingPassword(true);
 
     try {
-      console.log("formData.id:", formData.id);
-
-      console.log("Password Request:", {
-        staffId: Number(formData.id),
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-        confirmPassword: passwordData.confirmPassword,
-      });
-
       await changeStaffPassword({
         staffId: Number(formData.id),
         currentPassword: passwordData.currentPassword,
@@ -329,10 +322,10 @@ const EditStaff = () => {
 
       setPasswordErrors({});
       setPasswordTouched({});
-      setIsChangingPassword(false);
 
-    } catch (error) {
-      console.error("Password change error:", error);
+    } catch {
+      // Error handled by API interceptor
+    } finally {
       setIsChangingPassword(false);
     }
   };
@@ -348,12 +341,8 @@ const EditStaff = () => {
   }, [staffData, location]);
 
   const populateFormData = (staff) => {
-    console.log("🔍 RAW STAFF DATA:", staff);
-    
     // Prioritize imageUrl, then imageKey, then profileImage
     const imageKey = staff.imageUrl || staff.imageKey || staff.profileImage || null;
-    
-    console.log("🖼️ Extracted imageKey:", imageKey);
     
     const address = staff.address || {};
     const place = address.place || '';
@@ -388,18 +377,16 @@ const EditStaff = () => {
       imageKey: imageKey,
     });
     
-    // Set preview image using getFullImageUrl helper
+    // FIX: Set preview image using getFullImageUrl with cache-busting
     if (imageKey) {
       const fullUrl = getFullImageUrl(imageKey);
-      console.log("🖼️ Setting preview image URL:", fullUrl);
       setPreviewImage(fullUrl);
     } else {
-      console.log("❌ No profile image found");
       setPreviewImage(null);
     }
   };
 
-  // ✅ FIXED: Image upload handler with hospital ID and DEBUG LOGS
+  // Image upload handler with hospital ID
   const handleImageUpload = async (file) => {
     if (!file) return false;
     
@@ -420,27 +407,15 @@ const EditStaff = () => {
     try {
       setUploadProgress(30);
       
-      // ✅ DEBUG LOGS - Add these before the uploadToS3 call
-      console.log("🔍 === EDIT STAFF UPLOAD DEBUG ===");
-      console.log("🏥 Hospital ID:", hospitalId);
-      console.log("🖼️ Image Key:", formData.imageKey);
-      console.log("👤 Role:", "staff");
-      console.log("📁 Staff ID:", formData.id);
-      console.log("📄 File name:", file.name);
-      console.log("📦 File size:", (file.size / 1024).toFixed(2), "KB");
-      console.log("==================================");
-      
-      // ✅ FIX: Use hospitalId for S3 upload (NOT staff ID)
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null,
-        Number(formData.id),  // ✅ Use hospital ID
-        "staff"              // ✅ Role is "staff"
+        Number(formData.id),
+        "staff"
       );
       
       setUploadProgress(100);
       
-      // Store the key in all three fields
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
@@ -448,11 +423,13 @@ const EditStaff = () => {
         imageKey: uploaded.key
       }));
       
+      // FIX: Force image refresh after upload
+      setImageRefreshKey(Date.now());
+      
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 2000);
       return true;
-    } catch (error) {
-      console.error("Upload error details:", error);
+    } catch {
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
@@ -483,6 +460,8 @@ const EditStaff = () => {
       ...prev,
       profileImage: ''
     }));
+    // FIX: Force image refresh after removal
+    setImageRefreshKey(Date.now());
     showSuccessToast('Image removed', 2000);
   };
 
@@ -594,8 +573,8 @@ const EditStaff = () => {
       setIsDeleting(false);
       setSubmitSuccess(true);
       setTimeout(() => navigate('/staffs'), 1500);
-    } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to delete staff member', 3000);
+    } catch {
+      showErrorToast('Failed to delete staff member', 3000);
       setIsDeleting(false);
       setDeleteConfirm(false);
     }
@@ -647,8 +626,6 @@ const EditStaff = () => {
         removeUndefined(updateData.address);
       }
 
-      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updateData, null, 2));
-
       await updateStaff({
         id: formData.id,
         data: updateData
@@ -673,6 +650,9 @@ const EditStaff = () => {
 
       await refetch();
       
+      // FIX: Force image refresh after update
+      setImageRefreshKey(Date.now());
+      
       showUpdateToast(
         `${formData.name}'s information has been updated successfully!`,
         4000,
@@ -689,11 +669,10 @@ const EditStaff = () => {
       setIsSubmitting(false);
       setSubmitSuccess(true);
       setTimeout(() => navigate('/staffs'), 1500);
-    } catch (error) {
-      console.error("Update error:", error);
-      showErrorToast(error?.data?.message || 'Failed to update staff member', 3000);
+    } catch {
+      showErrorToast('Failed to update staff member', 3000);
       setIsSubmitting(false);
-      setSubmitError(error?.data?.message || 'Failed to update staff');
+      setSubmitError('Failed to update staff');
     }
   };
 
@@ -799,11 +778,11 @@ const EditStaff = () => {
                     <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                       {previewImage ? (
                         <img 
+                          key={imageRefreshKey} // FIX: Add key to force re-render
                           src={previewImage} 
                           alt="Profile" 
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            console.error("❌ Image failed to load:", previewImage);
                             e.target.style.display = 'none';
                             const parent = e.target.parentElement;
                             if (parent) {
@@ -872,7 +851,7 @@ const EditStaff = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
-                {/* ✅ Staff ID field */}
+                {/* Staff ID field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
                   <input 

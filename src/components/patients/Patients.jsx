@@ -39,7 +39,7 @@ import {
   useRecoverPatientMutation 
 } from '../../../app/service/patients';
 import { useCreateBookingMutation } from '../../../app/service/request';
-import { getHospitalId, isDoctor, isStaff, isHospitalAdmin } from '../../utils/auth';
+import { getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
@@ -85,14 +85,9 @@ const Patients = () => {
   // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // ✅ Get hospitalId using the fixed helper
-  const hospitalId = getHospitalId();
-  const isDoctorRole = isDoctor();
-  const isStaffRole = isStaff();
-  const isHospitalAdminRole = isHospitalAdmin();
-
-  // ✅ Check if user can modify patients (create, edit, delete)
-  const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
+  // Get hospitalId from auth
+  const authUser = getAuthUser();
+  const hospitalId = authUser?.id;
 
   // API hooks WITH QUERY PARAMETERS - using server-side pagination
   const { 
@@ -290,20 +285,11 @@ const Patients = () => {
   };
 
   const handleAddPatient = () => {
-    // ✅ Only Hospital Admin and Super Admin can add patients
-    if (!canModifyPatients) {
-      showErrorToast('You do not have permission to add patients', 3000);
-      return;
-    }
     navigate('/add-patient');
   };
 
   const handleEditPatient = (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can edit patients
-    if (!canModifyPatients) {
-      showErrorToast('You do not have permission to edit patients', 3000);
-      return;
-    }
+    // ✅ Don't allow editing of blacklisted patients
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
@@ -312,11 +298,6 @@ const Patients = () => {
   };
 
   const handleDeleteClick = (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can delete patients
-    if (!canModifyPatients) {
-      showErrorToast('You do not have permission to delete patients', 3000);
-      return;
-    }
     setPatientToDelete(patient);
     setShowDeleteModal(true);
   };
@@ -338,11 +319,6 @@ const Patients = () => {
 
   // ✅ Recover handler
   const handleRecoverPatient = async (patient) => {
-    // ✅ Only Hospital Admin and Super Admin can recover patients
-    if (!canModifyPatients) {
-      showErrorToast('You do not have permission to recover patients', 3000);
-      return;
-    }
     try {
       await recoverPatient(patient.id || patient._id).unwrap();
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
@@ -570,8 +546,8 @@ const Patients = () => {
               </button>
             )}
             
-            {/* ✅ Edit - Only for Active/Inactive patients AND if user has permission */}
-            {!patient.isDelete && canModifyPatients && (
+            {/* ✅ Edit - Only for Active/Inactive patients */}
+            {!patient.isDelete && (
               <button 
                 onClick={() => { handleEditPatient(patient); setShowMenu(false); }} 
                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -593,25 +569,21 @@ const Patients = () => {
             {/* Show divider only if there are items above */}
             {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
             
-            {/* ✅ Show Delete or Recover based on isDelete status and permissions */}
+            {/* ✅ Show Delete or Recover based on isDelete status */}
             {patient.isDelete ? (
-              canModifyPatients && (
-                <button 
-                  onClick={() => { handleRecoverPatient(patient); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
-                >
-                  <RotateCcw size={16} /> Recover Patient
-                </button>
-              )
+              <button 
+                onClick={() => { handleRecoverPatient(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+              >
+                <RotateCcw size={16} /> Recover Patient
+              </button>
             ) : (
-              canModifyPatients && (
-                <button 
-                  onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
-              )
+              <button 
+                onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+              >
+                <Trash2 size={16} /> Delete
+              </button>
             )}
           </div>
         )}
@@ -754,6 +726,16 @@ const Patients = () => {
             <Download size={16} />
           </button>
 
+          {/* Toggle to show deleted patients */}
+          <Button 
+            variant={showDeleted ? "primary" : "outline"} 
+            size="sm" 
+            onClick={() => setShowDeleted(!showDeleted)}
+            className="flex items-center gap-1"
+          >
+            <Trash2 size={14} />
+            {showDeleted ? "Hide Deleted" : "Show Deleted"}
+          </Button>
 
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -770,15 +752,12 @@ const Patients = () => {
             )}
           </button>
 
-          {/* ✅ New Patient button - Only shown for users with permission */}
-          {canModifyPatients && (
-            <Button 
-              onClick={handleAddPatient} 
-              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus size={16} /> New Patient
-            </Button>
-          )}
+          <Button 
+            onClick={handleAddPatient} 
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
+            <Plus size={16} /> New Patient
+          </Button>
         </div>
       </div>
 
@@ -937,18 +916,16 @@ const Patients = () => {
                     {/* Action buttons - Show Recover for blacklisted, Appointment for active */}
                     <div className="flex gap-2 border-t border-gray-100 pt-4">
                       {isBlacklisted ? (
-                        canModifyPatients && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRecoverPatient(patient);
-                            }} 
-                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                          >
-                            <RotateCcw className="w-4 h-4" /> 
-                            Recover
-                          </button>
-                        )
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRecoverPatient(patient);
+                          }} 
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                        >
+                          <RotateCcw className="w-4 h-4" /> 
+                          Recover
+                        </button>
                       ) : (
                         <button 
                           onClick={(e) => {

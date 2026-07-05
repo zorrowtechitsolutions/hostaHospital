@@ -23,5 +23,4 @@ export const unregisterAmbulanceEvents = () => {
   socket.off("AMBULANCE_REGISTERED");
   socket.off("AMBULANCE_UPDATED");
   socket.off("AMBULANCE_DELETED");
-  console.log("🧹 Ambulance events unregistered");
 };

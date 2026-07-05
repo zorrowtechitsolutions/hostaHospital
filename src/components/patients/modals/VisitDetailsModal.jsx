@@ -1,7 +1,7 @@
 // src/components/patients/modals/VisitDetailsModal.jsx - Refactored
 import React from "react";
 import { X } from "lucide-react";
-import { Modal, Button, Badge } from "../../ui";
+import { Modal, Button } from "../../ui";
 
 const VisitDetailsModal = ({ data, patientName, onClose }) => {
   if (!data) return null;

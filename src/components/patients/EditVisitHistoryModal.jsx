@@ -3,7 +3,17 @@ import React, { useState, useEffect } from "react";
 import { Modal, Input, Select, Button } from "../ui";
 import { showUpdateToast, showWarningToast } from "../ui/Toast";
 
-const EditVisitModal = ({ isOpen, onClose, visitData, onSave }) => {
+const EditVisitModal = ({ 
+  isOpen, 
+  onClose, 
+  visitData, 
+  onSave,
+  patients = [],
+  departments = [],
+  doctors = [],
+  patientTypes = ["Out Patient", "In Patient"],
+  paymentMethods = ["Cash", "Card", "Insurance", "Online Transfer", "Check"]
+}) => {
   const [formData, setFormData] = useState({
     patient: "",
     patientType: "Out Patient",
@@ -17,17 +27,16 @@ const EditVisitModal = ({ isOpen, onClose, visitData, onSave }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Populate form when visitData changes
   useEffect(() => {
     if (visitData) {
       setFormData({
-        patient: visitData.patientName || visitData.patient || "James Carter",
+        patient: visitData.patientName || visitData.patient || "",
         patientType: visitData.patientType || "Out Patient",
-        department: visitData.department || "Anaesthesiology",
-        doctor: visitData.doctorName || visitData.doctor || "Dr. Andrew Clark",
-        date: visitData.visitDate || visitData.date || "2025-01-16",
-        time: visitData.startTime || visitData.time || "08:17",
-        reason: visitData.reason || "Fever, Headache",
+        department: visitData.department || "",
+        doctor: visitData.doctorName || visitData.doctor || "",
+        date: visitData.visitDate || visitData.date || "",
+        time: visitData.startTime || visitData.time || "",
+        reason: visitData.reason || "",
         payment: visitData.paymentMethod || visitData.payment || "Cash"
       });
     }
@@ -88,12 +97,6 @@ const EditVisitModal = ({ isOpen, onClose, visitData, onSave }) => {
       onClose();
     }, 500);
   };
-
-  const patients = ["James Carter", "Emily Rodriguez", "Michael Chen", "Sophia Martinez", "Lisa Wong", "David Thompson"];
-  const patientTypes = ["Out Patient", "In Patient"];
-  const departments = ["Anaesthesiology", "Cardiology", "Dental Surgery", "Dermatology", "ENT Surgery", "General Medicine", "Neurology", "Ophthalmology", "Orthopaedics", "Paediatrics", "Radiology"];
-  const doctors = ["Dr. Andrew Clark", "Dr. Katherine Brooks", "Dr. Benjamin Harris", "Dr. Laura Mitchell", "Dr. Christopher Lewis", "Dr. Sarah Wilson", "Dr. Jonathan Adams", "Dr. Michael Lee", "Dr. Emily Chen", "Dr. Robert Johnson", "Dr. Maria Garcia"];
-  const paymentMethods = ["Cash", "Card", "Insurance", "Online Transfer", "Check"];
 
   if (!isOpen) return null;
 
