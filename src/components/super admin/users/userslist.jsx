@@ -1,4 +1,4 @@
-// components/UsersList.jsx - Cards View without Status Indicator
+// components/UsersList.jsx - Cards View with Recover Functionality
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,6 +6,7 @@ import {
   useCreateUserMutation,
   useUpdateUserMutation,
   useDeleteUserMutation,
+  useRecoverUserMutation,
 } from '../../../../app/service/users';
 import {
   Plus,
@@ -21,7 +22,8 @@ import {
   Building,
   CheckCircle,
   XCircle,
-  Calendar
+  Calendar,
+  RotateCcw
 } from 'lucide-react';
 
 import {
@@ -48,6 +50,7 @@ const UsersList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   
   // State for create/update form
   const [formData, setFormData] = useState({
@@ -81,6 +84,7 @@ const UsersList = () => {
   const queryParams = {
     search_query: searchTerm?.trim() || undefined,
     limit: 1000, // Get all users
+    includeDeleted: showDeleted,
   };
 
   // RTK Query hooks
@@ -97,6 +101,7 @@ const UsersList = () => {
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
+  const [recoverUser, { isLoading: isRecovering }] = useRecoverUserMutation();
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -145,6 +150,24 @@ const UsersList = () => {
   const handleDeleteClick = (user) => {
     setUserToDelete(user);
     setShowDeleteModal(true);
+  };
+
+  // Handle recover user
+  const handleRecoverUser = async (user) => {
+    try {
+      await recoverUser(user.id).unwrap();
+      showSuccessToast(
+        `${user.name} recovered successfully!`,
+        2000
+      );
+      refetch();
+    } catch (error) {
+      showErrorToast(
+        error?.data?.message ||
+        "Failed to recover user",
+        3000
+      );
+    }
   };
 
   // Confirm delete
@@ -261,16 +284,20 @@ const UsersList = () => {
           <div>
             <label className="block text-xs font-medium text-gray-500">Status</label>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-              user.isActive 
+              user.isDelete 
+                ? 'bg-gray-100 text-gray-700'
+                : user.isActive 
                 ? 'bg-green-100 text-green-700' 
                 : 'bg-red-100 text-red-700'
             }`}>
-              {user.isActive ? (
+              {user.isDelete ? (
+                <RotateCcw size={12} className="text-gray-500" />
+              ) : user.isActive ? (
                 <CheckCircle size={12} className="text-green-500" />
               ) : (
                 <XCircle size={12} className="text-red-500" />
               )}
-              {user.isActive ? 'Active' : 'Inactive'}
+              {user.isDelete ? 'Blacklisted' : user.isActive ? 'Active' : 'Inactive'}
             </span>
           </div>
           <div>
@@ -291,7 +318,7 @@ const UsersList = () => {
     );
   };
 
-  // Row Action Menu
+  // Row Action Menu - UPDATED: Only show Recover for deleted users
   const UserActionMenu = ({ user }) => {
     const [showMenu, setShowMenu] = useState(false);
     
@@ -305,25 +332,50 @@ const UsersList = () => {
         </button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button 
-              onClick={() => { handleViewDetails(user); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-            >
-              <Eye size={16} /> View Details
-            </button>
-            <button 
-              onClick={() => { handleEdit(user); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <Edit size={16} /> Edit
-            </button>
-            <div className="border-t border-gray-100 my-1"></div>
-            <button 
-              onClick={() => { handleDeleteClick(user); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-            >
-              <Trash2 size={16} /> Delete
-            </button>
+            {/* For deleted users - show only Recover */}
+            {user.isDelete ? (
+              <button 
+                onClick={() => { 
+                  handleRecoverUser(user); 
+                  setShowMenu(false); 
+                }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
+              >
+                <RotateCcw size={16} /> Recover User
+              </button>
+            ) : (
+              // For active users - show View, Edit, and Delete
+              <>
+                <button 
+                  onClick={() => { 
+                    handleViewDetails(user); 
+                    setShowMenu(false); 
+                  }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                >
+                  <Eye size={16} /> View Details
+                </button>
+                <button 
+                  onClick={() => { 
+                    handleEdit(user); 
+                    setShowMenu(false); 
+                  }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Edit size={16} /> Edit
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button 
+                  onClick={() => { 
+                    handleDeleteClick(user); 
+                    setShowMenu(false); 
+                  }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -331,7 +383,11 @@ const UsersList = () => {
   };
 
   // Get users array
-  const users = usersData?.data || usersData?.users || [];
+  const users = [...(usersData?.data || usersData?.users || [])]
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt) - new Date(b.createdAt)
+    );
   const totalItems = users.length;
 
   // Loading state
@@ -349,6 +405,7 @@ const UsersList = () => {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="flex gap-2">
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
             <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
             <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
             <div className="w-28 h-10 bg-gray-200 rounded-md animate-pulse"></div>
@@ -444,6 +501,7 @@ const UsersList = () => {
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
               <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
+            
             <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
             <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
               <Upload size={16} />
@@ -460,7 +518,7 @@ const UsersList = () => {
           </div>
         </div>
 
-        {/* Users Cards Grid - Status indicator removed from card header */}
+        {/* Users Cards Grid */}
         {users.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -471,27 +529,34 @@ const UsersList = () => {
           <>
             <div className="mb-4 text-sm text-gray-500">
               Showing {totalItems} user{totalItems !== 1 ? 's' : ''}
+              {showDeleted && <span className="ml-2 text-amber-600">(including deleted)</span>}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
               {users.map((user) => (
-                <Card key={user.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <Card
+                  key={user.id}
+                  className={`bg-white rounded-xl border ${
+                    user.isDelete
+                      ? 'border-gray-300 opacity-75'
+                      : 'border-gray-200'
+                  } shadow-sm overflow-hidden`}
+                >
                   <div className="p-6">
-                    {/* Header - Avatar and Action Menu (Status removed) */}
+                    {/* Header - Avatar and Action Menu */}
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <Avatar className="w-14 h-14">
-                          <AvatarFallback className="text-xl font-medium bg-blue-100 text-blue-600">
+                          <AvatarFallback className={`text-xl font-medium ${user.isDelete ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
                             {user.name?.charAt(0)?.toUpperCase() || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <h3 className="font-semibold text-gray-800 text-base truncate max-w-[180px]">
+                          <h3 className={`font-semibold text-base truncate max-w-[180px] ${user.isDelete ? 'text-gray-500' : 'text-gray-800'}`}>
                             {user.name}
                           </h3>
                           <p className="text-xs text-gray-500">ID: #{user.id}</p>
                         </div>
                       </div>
-                      {/* Only the action menu - no status indicator */}
                       <div className="flex items-center">
                         <UserActionMenu user={user} />
                       </div>
@@ -501,21 +566,21 @@ const UsersList = () => {
                     <div className="space-y-3">
                       <div className="flex items-center gap-3 text-sm text-gray-600">
                         <Mail size={16} className="text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{user.email}</span>
+                        <span className={`truncate ${user.isDelete ? 'line-through text-gray-400' : ''}`}>{user.email}</span>
                       </div>
                       {user.phone && (
                         <div className="flex items-center gap-3 text-sm text-gray-600">
                           <Phone size={16} className="text-gray-400 flex-shrink-0" />
-                          <span>{user.phone}</span>
+                          <span className={user.isDelete ? 'line-through text-gray-400' : ''}>{user.phone}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-3 text-sm text-gray-600">
                         <Building size={16} className="text-gray-400 flex-shrink-0" />
-                        <span className="capitalize">{user.role || 'User'}</span>
+                        <span className={`capitalize ${user.isDelete ? 'line-through text-gray-400' : ''}`}>{user.role || 'User'}</span>
                       </div>
                       {user.hospitalId && (
                         <div className="flex items-center gap-3 text-sm text-gray-600">
-                          <span className="text-xs bg-gray-100 px-2.5 py-1 rounded-md">
+                          <span className={`text-xs bg-gray-100 px-2.5 py-1 rounded-md ${user.isDelete ? 'text-gray-400' : ''}`}>
                             Hospital: {user.hospitalId}
                           </span>
                         </div>
@@ -530,15 +595,30 @@ const UsersList = () => {
                           {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
+                      {/* Status */}
                       <div className="flex items-center gap-1.5">
-                        {user.isActive ? (
-                          <CheckCircle size={14} className="text-green-500" />
+                        {user.isDelete ? (
+                          <>
+                            <RotateCcw size={14} className="text-gray-500" />
+                            <span className="text-xs text-gray-500 font-medium">
+                              Blacklisted
+                            </span>
+                          </>
+                        ) : user.isActive ? (
+                          <>
+                            <CheckCircle size={14} className="text-green-500" />
+                            <span className="text-xs text-gray-500 font-medium">
+                              Active
+                            </span>
+                          </>
                         ) : (
-                          <XCircle size={14} className="text-red-500" />
+                          <>
+                            <XCircle size={14} className="text-red-500" />
+                            <span className="text-xs text-gray-500 font-medium">
+                              Inactive
+                            </span>
+                          </>
                         )}
-                        <span className="text-xs text-gray-500 font-medium">
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </span>
                       </div>
                     </div>
                   </div>

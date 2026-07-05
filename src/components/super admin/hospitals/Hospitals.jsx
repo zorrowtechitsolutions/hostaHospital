@@ -496,7 +496,7 @@ const Hospitals = () => {
           <p className="text-sm text-gray-500 mt-1">Click on any hospital to view details</p>
         </div>
         <div className="flex gap-2">
-          <Button
+          {/* <Button
             variant={showDeleted ? "primary" : "outline"}
             size="sm"
             onClick={() => setShowDeleted(!showDeleted)}
@@ -504,7 +504,7 @@ const Hospitals = () => {
           >
             <Trash2 size={14} />
             {showDeleted ? "Hide Deleted" : "Show Deleted"}
-          </Button>
+          </Button> */}
 
           <Button
             variant="primary"

@@ -20,8 +20,8 @@ export interface Ambulance {
   vehicleType: string;
   address?: AmbulanceAddress;
   hospitalId?: number;
-  userId?: string | number; 
-  name?: string; 
+  userId?: string | number;
+  name?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -42,7 +42,7 @@ export interface AmbulanceResponse {
 
 export interface GetAmbulanceParams {
   id?: string | number;
-  userId?: string | number; 
+  userId?: string | number;
   hospitalId?: string | number;
   name?: string;
   country?: string;
@@ -82,7 +82,7 @@ export const ambulanceApi = api.injectEndpoints({
 
         // Override hospitalId if provided in params (takes precedence)
         if (params.hospitalId) {
-          queryParams.set("hospitalId", String(params.hospitalId));
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
         // User ID filter
@@ -137,12 +137,10 @@ export const ambulanceApi = api.injectEndpoints({
 
         const queryString = queryParams.toString();
 
-        // If ID is provided, get single ambulance
         if (params.id) {
           return `/ambulance/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all ambulances for the hospital
         return `/ambulance${queryString ? `?${queryString}` : ""}`;
       },
 
@@ -180,7 +178,6 @@ export const ambulanceApi = api.injectEndpoints({
       invalidatesTags: ["Ambulance"],
     }),
 
-    // ================= UPDATE AMBULANCE =================
     updateAmbulance: builder.mutation<
       AmbulanceResponse,
       {
@@ -207,7 +204,6 @@ export const ambulanceApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE AMBULANCE =================
     deleteAmbulance: builder.mutation<
       { message: string },
       string | number
@@ -225,7 +221,6 @@ export const ambulanceApi = api.injectEndpoints({
   }),
 });
 
-// ================= EXPORT HOOKS =================
 export const {
   useGetAmbulanceQuery,
   useCreateAmbulanceMutation,

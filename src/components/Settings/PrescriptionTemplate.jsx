@@ -1,4 +1,3 @@
-// PrescriptionTemplate.jsx
 import React, { useState, useEffect } from "react";
 import { Rnd } from "react-rnd";
 import html2canvas from "html2canvas";
@@ -305,27 +304,49 @@ const PrescriptionTemplate = () => {
   const { data: doctorData, isLoading: doctorLoading } = useGetDoctorByIdQuery(doctorId, { skip: !doctorId });
   const { data: bookingData, isLoading: bookingLoading } = useGetBookingByIdQuery(bookingId, { skip: !bookingId });
   
-  // Fetch existing templates with hospitalId
-  const { data: templatesResponse, refetch: refetchTemplates } = useGetPrescriptionTemplatesQuery({ hospitalId });
+  // ✅ FIXED: Fetch ALL templates without filtering by hospitalId
+  const { data: templatesResponse, refetch: refetchTemplates } = useGetPrescriptionTemplatesQuery({});
 
   const [createPrescriptionTemplate] = useCreatePrescriptionTemplateMutation();
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-  // Filter templates by hospital
+  // ✅ FIXED: Get ALL templates from response
   const allTemplates = templatesResponse?.data || [];
-  
-  // Get demo template - either hospital-specific or global fallback
-  const demoTemplate = allTemplates.find(t => 
-    t.templateType === "demo" && 
-    (Number(t.hospitalId) === Number(hospitalId) || t.hospitalId === null || t.hospitalId === 0)
+
+  // ✅ FIXED: Demo template - look for templateType === "demo"
+  // The demo template should NOT have a hospitalId or should have null/0
+  const demoTemplate = allTemplates.find(
+    t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
   ) || null;
 
-  // Get custom template for this specific hospital only
-  const customTemplate = allTemplates.find(t => 
-    t.templateType === "custom" && 
-    Number(t.hospitalId) === Number(hospitalId)
+  // ✅ FIXED: Custom template - MUST match current hospital ID
+  const customTemplate = allTemplates.find(
+    t => t.templateType === "custom" && Number(t.hospitalId) === Number(hospitalId)
   ) || null;
+
+  console.log("🔍 FULL TEMPLATE DEBUG:", {
+    allTemplatesCount: allTemplates.length,
+    hospitalId,
+    demoTemplate: demoTemplate ? {
+      id: demoTemplate.id,
+      type: demoTemplate.templateType,
+      hospitalId: demoTemplate.hospitalId,
+      designLength: demoTemplate.design?.length || 0
+    } : null,
+    customTemplate: customTemplate ? {
+      id: customTemplate.id,
+      type: customTemplate.templateType,
+      hospitalId: customTemplate.hospitalId,
+      designLength: customTemplate.design?.length || 0
+    } : null,
+    allTemplates: allTemplates.map(t => ({
+      id: t.id,
+      type: t.templateType,
+      hospitalId: t.hospitalId,
+      name: t.name
+    }))
+  });
 
   // Background color for custom templates
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
@@ -345,13 +366,19 @@ const PrescriptionTemplate = () => {
     { value: "30px", label: "30px" },
   ];
 
-  // Load custom template from backend or initialize with demo template design
+  // Load templates with proper priority
   useEffect(() => {
-    if (customTemplate) {
+    console.log("🔄 Loading templates for hospital:", hospitalId);
+    console.log("Custom template found:", !!customTemplate);
+    console.log("Demo template found:", !!demoTemplate);
+    
+    // First check if we have a custom template for this hospital
+    if (customTemplate && customTemplate.design && customTemplate.design.length > 0) {
+      console.log("✅ Loading CUSTOM template for hospital:", hospitalId);
       setItems(
         (customTemplate.design || []).map((item, index) => ({
           ...item,
-          id: item.id || index,
+          id: item.id || `custom-${index}`,
           text: item.content || item.text || "",
           style: {
             textAlign: item.style?.textAlign || "left",
@@ -365,12 +392,14 @@ const PrescriptionTemplate = () => {
       );
       setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
       setHasCustomTemplate(true);
-    } else if (demoTemplate) {
-      // Initialize custom template with demo template design
+    } 
+    // If no custom template, use demo template
+    else if (demoTemplate && demoTemplate.design && demoTemplate.design.length > 0) {
+      console.log("✅ Loading DEMO template (no custom for hospital:", hospitalId, ")");
       setItems(
         (demoTemplate.design || []).map((item, index) => ({
           ...item,
-          id: Date.now() + index,
+          id: `demo-${Date.now()}-${index}`,
           text: item.content || item.text || "",
           style: {
             textAlign: item.style?.textAlign || "left",
@@ -384,14 +413,16 @@ const PrescriptionTemplate = () => {
       );
       setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
       setHasCustomTemplate(false);
-    } else {
-      // Create default fallback template if nothing exists
+    } 
+    // No templates exist - create default
+    else {
+      console.log("⚠️ No templates found, using DEFAULT");
       const defaultTemplate = getDefaultTemplate();
       setItems(defaultTemplate.design);
       setCustomCanvasBg(defaultTemplate.bgColor);
       setHasCustomTemplate(false);
     }
-  }, [customTemplate, demoTemplate]);
+  }, [customTemplate, demoTemplate, hospitalId]);
 
   // Default fallback template
   const getDefaultTemplate = () => {
@@ -609,13 +640,12 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  // Save Template - Creates on first save, Updates on subsequent saves
+  // Save Template
   const saveTemplate = async () => {
     if (isSaving) return;
     
     setIsSaving(true);
     try {
-      // Clean up items - remove temporary IDs and editable flag
       const designData = items.map(item => {
         const { id, editable, ...cleanBlock } = item;
         return cleanBlock;
@@ -630,17 +660,14 @@ const PrescriptionTemplate = () => {
 
       let result;
       if (customTemplate) {
-        // UPDATE existing custom template
         result = await updatePrescriptionTemplate({
           id: customTemplate.id,
           data: payload,
         }).unwrap();
       } else {
-        // CREATE new custom template (first time save)
         result = await createPrescriptionTemplate(payload).unwrap();
       }
       
-      // Refetch to get the latest data
       await refetchTemplates();
       setHasCustomTemplate(true);
       
@@ -657,12 +684,25 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  // Create prescription with real data - uses custom template design
+  // Create prescription with real data
   const handleCreatePrescription = async (prescriptionFormData) => {
     try {
-      // Use custom template if available for this hospital, otherwise demo
-      const selectedTemplate = customTemplate || demoTemplate;
-      const designToUse = selectedTemplate?.design || getDefaultTemplate().design;
+      // ✅ FIXED: Use custom template if available, otherwise demo
+      let selectedTemplate = null;
+      let designToUse = [];
+      
+      if (customTemplate) {
+        selectedTemplate = customTemplate;
+        designToUse = customTemplate.design;
+        console.log("✅ Using CUSTOM template for hospital:", hospitalId);
+      } else if (demoTemplate) {
+        selectedTemplate = demoTemplate;
+        designToUse = demoTemplate.design;
+        console.log("✅ Using DEMO template (no custom for hospital:", hospitalId, ")");
+      } else {
+        designToUse = getDefaultTemplate().design;
+        console.log("✅ Using DEFAULT template");
+      }
 
       const prescriptionPayload = {
         bookingId: parseInt(bookingId),
@@ -679,9 +719,8 @@ const PrescriptionTemplate = () => {
         next_consultation: prescriptionFormData.next_consultation,
         empty_stomach: prescriptionFormData.empty_stomach || false,
         
-        // Use hospital-specific template
         templateType: customTemplate ? "custom" : "demo",
-        canvasBg: customTemplate?.canvasBg || selectedTemplate?.canvasBg || "#ffffff",
+        canvasBg: selectedTemplate?.canvasBg || "#ffffff",
         design: designToUse,
         
         temperature: prescriptionFormData.temperature,
@@ -694,6 +733,13 @@ const PrescriptionTemplate = () => {
         waist: prescriptionFormData.waist,
         bsa: prescriptionFormData.bsa
       };
+
+      console.log("📝 Creating Prescription:", {
+        hospitalId,
+        templateType: customTemplate ? "custom" : "demo",
+        designLength: designToUse.length,
+        usingTemplate: customTemplate ? "custom" : "demo"
+      });
 
       const result = await createPrescription(prescriptionPayload).unwrap();
       
@@ -709,9 +755,7 @@ const PrescriptionTemplate = () => {
 
   const toggleEditMode = () => {
     if (!isEditMode) {
-      // Enter edit mode
       if (!customTemplate && demoTemplate) {
-        // Initialize with demo template if no custom exists
         setItems(
           (demoTemplate.design || []).map((item, index) => ({
             ...item,
@@ -732,11 +776,9 @@ const PrescriptionTemplate = () => {
       setIsEditMode(true);
       setActiveTab("custom");
     } else {
-      // Exit edit mode without saving
       if (window.confirm("Exit without saving changes?")) {
         setIsEditMode(false);
         setSelectedItemId(null);
-        // Reload custom template or reset
         if (customTemplate) {
           setItems(
             (customTemplate.design || []).map((item, index) => ({
@@ -892,6 +934,7 @@ const PrescriptionTemplate = () => {
                 <span className="flex items-center gap-2">
                   <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">Default</span>
                   Demo Template
+                  {demoTemplate && <span className="text-green-500 text-xs">✓</span>}
                 </span>
               </button>
               <button
@@ -907,6 +950,7 @@ const PrescriptionTemplate = () => {
                     {isEditMode ? "Editing" : "Hospital"}
                   </span>
                   Custom Template
+                  {customTemplate && <span className="text-green-500 text-xs">✓</span>}
                 </span>
               </button>
             </nav>
@@ -920,19 +964,23 @@ const PrescriptionTemplate = () => {
             <div>
               <h3 className="font-semibold mb-3 text-gray-700">
                 Demo Template
+                {!demoTemplate && <span className="text-sm font-normal text-gray-500 ml-2">(No demo template available)</span>}
+                {demoTemplate && <span className="text-sm font-normal text-green-600 ml-2">✓ Template ID: {demoTemplate.id}</span>}
               </h3>
-              {demoTemplate ? (
+              {demoTemplate && demoTemplate.design && demoTemplate.design.length > 0 ? (
                 <TemplatePreview
                   template={demoTemplate}
                   patientData={patient}
                   doctorData={doctor}
                 />
               ) : (
-                <TemplatePreview
-                  template={getDefaultTemplate()}
-                  patientData={patient}
-                  doctorData={doctor}
-                />
+                <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <p className="text-lg font-medium">No demo template available</p>
+                  <p className="text-sm mt-2">Please contact your administrator</p>
+                </div>
               )}
             </div>
           )}
@@ -943,6 +991,10 @@ const PrescriptionTemplate = () => {
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-semibold text-gray-700">
                   {isEditMode ? "Editing Custom Template" : "Custom Template"}
+                  {!customTemplate && !isEditMode && <span className="text-sm font-normal text-gray-500 ml-2">(No custom template yet)</span>}
+                  {customTemplate && !isEditMode && (
+                    <span className="text-sm font-normal text-green-600 ml-2">✓ Custom template exists for this hospital</span>
+                  )}
                 </h3>
                 {isEditMode && (
                   <div className="flex items-center gap-4">
@@ -1164,9 +1216,11 @@ const PrescriptionTemplate = () => {
         doctor={doctor}
         booking={booking}
         existingPrescription={currentPrescription}
-        templateDesign={currentPrescription?.design || customTemplate?.design || demoTemplate?.design || getDefaultTemplate().design}
-        templateBgColor={currentPrescription?.canvasBg || customTemplate?.canvasBg || demoTemplate?.canvasBg || "#ffffff"}
+        templateDesign={currentPrescription?.design || (customTemplate ? customTemplate.design : demoTemplate?.design) || getDefaultTemplate().design}
+        templateBgColor={currentPrescription?.canvasBg || (customTemplate ? customTemplate.canvasBg : demoTemplate?.canvasBg) || "#ffffff"}
         hospitalId={hospitalId}
+        customTemplate={customTemplate}
+        demoTemplate={demoTemplate}
       />
     </div>
   );

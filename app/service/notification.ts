@@ -1,10 +1,6 @@
 // src/app/service/notification.ts
 import { api } from './api';
 
-// ==============================
-// TYPES
-// ==============================
-
 export interface Notification {
   id: number;
   title?: string;
@@ -16,8 +12,6 @@ export interface Notification {
   createdAt: string;
   updatedAt: string;
   createdBy?: number;
-  
-  // Arrays for different user types
   userIds?: number[];
   hospitalIds?: number[];
   doctorIds?: number[];
@@ -25,8 +19,6 @@ export interface Notification {
   pharmacyIds?: number[];
   labIds?: number[];
   superAdminIds?: number[];
-  
-  // Read status objects
   userReadStatus?: Record<string, boolean>;
   hospitalReadStatus?: Record<string, boolean>;
   doctorReadStatus?: Record<string, boolean>;
@@ -97,18 +89,9 @@ export interface RoleNotificationsResponse {
   error?: null;
 }
 
-// ==============================
-// NOTIFICATION API
-// ==============================
-
 export const notificationApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ==============================
-    // GET ALL NOTIFICATIONS
-    // GET /notification?hospitalId=3
-    // GET /notification?page=1&limit=10
-    // ==============================
     getNotifications: builder.query<NotificationsResponse, GetNotificationsParams>({
       query: (params = {}) => {
         const queryParams = new URLSearchParams();
@@ -130,19 +113,11 @@ export const notificationApi = api.injectEndpoints({
           : [{ type: 'Notifications', id: 'LIST' }],
     }),
 
-    // ==============================
-    // GET NOTIFICATION BY ID
-    // GET /notification/1
-    // ==============================
     getNotificationById: builder.query<SingleNotificationResponse, number>({
       query: (id) => `/notification/${id}`,
       providesTags: (result, error, id) => [{ type: 'Notification', id }],
     }),
 
-    // ==============================
-    // GET NOTIFICATIONS BY ROLE
-    // GET /notification/role/hospital
-    // ==============================
     getNotificationsByRole: builder.query<NotificationsResponse, { role: string; page?: number; limit?: number }>({
       query: ({ role, page, limit }) => {
         const queryParams = new URLSearchParams();
@@ -154,10 +129,6 @@ export const notificationApi = api.injectEndpoints({
       providesTags: [{ type: 'Notifications', id: 'BY_ROLE' }],
     }),
 
-    // ==============================
-    // GET NOTIFICATIONS BY HOSPITAL
-    // GET /notification/hospital/8
-    // ==============================
     getNotificationsByHospital: builder.query<NotificationsResponse, { hospitalId: number; page?: number; limit?: number }>({
       query: ({ hospitalId, page, limit }) => {
         const queryParams = new URLSearchParams();
@@ -169,28 +140,16 @@ export const notificationApi = api.injectEndpoints({
       providesTags: [{ type: 'Notifications', id: 'BY_HOSPITAL' }],
     }),
 
-    // ==============================
-    // GET READ NOTIFICATIONS BY ROLE
-    // GET /notification/read/hospital/3
-    // ==============================
     getReadNotifications: builder.query<RoleNotificationsResponse, { role: string; id: number }>({
       query: ({ role, id }) => `/notification/read/${role}/${id}`,
       providesTags: [{ type: 'Notifications', id: 'READ' }],
     }),
 
-    // ==============================
-    // GET UNREAD NOTIFICATIONS BY ROLE
-    // GET /notification/unread/hospital/3
-    // ==============================
     getUnreadNotifications: builder.query<RoleNotificationsResponse, { role: string; id: number }>({
       query: ({ role, id }) => `/notification/unread/${role}/${id}`,
       providesTags: [{ type: 'Notifications', id: 'UNREAD' }],
     }),
 
-    // ==============================
-    // CREATE NOTIFICATION
-    // POST /notification
-    // ==============================
     createNotification: builder.mutation<SingleNotificationResponse, CreateNotificationRequest>({
       query: (body) => ({
         url: '/notification',
@@ -200,10 +159,6 @@ export const notificationApi = api.injectEndpoints({
       invalidatesTags: [{ type: 'Notifications', id: 'LIST' }],
     }),
 
-    // ==============================
-    // UPDATE NOTIFICATION
-    // PUT /notification/1
-    // ==============================
     updateNotification: builder.mutation<SingleNotificationResponse, { id: number; body: UpdateNotificationRequest }>({
       query: ({ id, body }) => ({
         url: `/notification/${id}`,
@@ -216,10 +171,6 @@ export const notificationApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // MARK NOTIFICATION AS READ
-    // PUT /notification/read/:role/:userId/:notificationId
-    // ==============================
     markNotificationAsRead: builder.mutation<
       SingleNotificationResponse,
       { notificationId: number; role: string; userId: number }
@@ -236,10 +187,6 @@ export const notificationApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // MARK ALL NOTIFICATIONS AS READ FOR HOSPITAL
-    // PUT /notification/read-all/hospital/8
-    // ==============================
     markAllNotificationsAsReadByHospital: builder.mutation<
       MarkReadResponse,
       { hospitalId: number; notificationIds: number[] }
@@ -257,10 +204,6 @@ export const notificationApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // MARK ALL NOTIFICATIONS AS READ FOR ROLE
-    // PUT /notification/read-all/:role/:userId
-    // ==============================
     markAllNotificationsAsRead: builder.mutation<
       MarkReadResponse,
       { role: string; userId: number; notificationIds: number[] }
@@ -279,10 +222,6 @@ export const notificationApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // DELETE NOTIFICATION
-    // DELETE /notification/1
-    // ==============================
     deleteNotification: builder.mutation<{ success: boolean; message: string }, number>({
       query: (id) => ({
         url: `/notification/${id}`,
@@ -294,10 +233,6 @@ export const notificationApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // DELETE ALL NOTIFICATIONS FOR HOSPITAL
-    // DELETE /notification/hospital/8
-    // ==============================
     deleteNotificationsByHospital: builder.mutation<{ success: boolean; message: string; data: { deletedCount: number } }, number>({
       query: (hospitalId) => ({
         url: `/notification/hospital/${hospitalId}`,
@@ -312,29 +247,18 @@ export const notificationApi = api.injectEndpoints({
   overrideExisting: false,
 });
 
-// ==============================
-// EXPORT HOOKS
-// ==============================
-
 export const {
-  // GET
   useGetNotificationsQuery,
   useGetNotificationByIdQuery,
   useGetNotificationsByRoleQuery,
   useGetNotificationsByHospitalQuery,
   useGetReadNotificationsQuery,
   useGetUnreadNotificationsQuery,
-  
-  // POST
   useCreateNotificationMutation,
-  
-  // PUT
   useUpdateNotificationMutation,
   useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
   useMarkAllNotificationsAsReadByHospitalMutation,
-  
-  // DELETE
   useDeleteNotificationMutation,
   useDeleteNotificationsByHospitalMutation,
 } = notificationApi;

@@ -1,11 +1,8 @@
 import { api } from "./api";
 
-// ================= TYPES =================
-
 export interface VitalPayload {
   patientId: number | string;
   prescriptionId: number | string;
-
   temperature?: number;
   pulse?: number;
   heartRate?: number;
@@ -38,7 +35,6 @@ export interface VitalRecord {
   id: number;
   patientId: number;
   prescriptionId: number;
-
   temperature?: number;
   pulse?: number;
   heartRate?: number;
@@ -52,23 +48,18 @@ export interface VitalRecord {
   bmi?: number;
   waist?: number;
   bsa?: number;
-
   notes?: string;
   createdAt: string;
   updatedAt: string;
-
   doctorName?: string;
   doctorSpecialization?: string;
   department?: string;
   patientName?: string;
 }
 
-// ================= API =================
-
 export const vitalsApi = api.injectEndpoints({
   endpoints: (builder) => ({
     
-    // GET VITALS BY PATIENT + PRESCRIPTION
     getVitalsByPatientId: builder.query<
       VitalsListResponse,
       {
@@ -83,7 +74,6 @@ export const vitalsApi = api.injectEndpoints({
       providesTags: ["Vitals"],
     }),
 
-    // GET VITALS
     getVitals: builder.query<
       VitalsListResponse,
       {
@@ -95,7 +85,6 @@ export const vitalsApi = api.injectEndpoints({
     >({
       query: (params) => {
         let url = "/vitals?";
-
         const queryParams = new URLSearchParams();
 
         if (params?.patientId) {
@@ -103,10 +92,7 @@ export const vitalsApi = api.injectEndpoints({
         }
 
         if (params?.prescriptionId) {
-          queryParams.append(
-            "prescriptionId",
-            String(params.prescriptionId)
-          );
+          queryParams.append("prescriptionId", String(params.prescriptionId));
         }
 
         if (params?.page) {
@@ -127,7 +113,6 @@ export const vitalsApi = api.injectEndpoints({
       providesTags: ["Vitals"],
     }),
 
-    // GET SINGLE VITAL
     getVitalById: builder.query<VitalResponse, string | number>({
       query: (id) => ({
         url: `/vitals/${id}`,
@@ -138,7 +123,6 @@ export const vitalsApi = api.injectEndpoints({
       ],
     }),
 
-    // CREATE VITAL
     createVital: builder.mutation<VitalResponse, VitalPayload>({
       query: (data) => ({
         url: "/vitals",
@@ -146,7 +130,6 @@ export const vitalsApi = api.injectEndpoints({
         body: {
           patientId: data.patientId,
           prescriptionId: data.prescriptionId,
-
           temperature: data.temperature,
           pulse: data.pulse,
           heartRate: data.heartRate,
@@ -166,7 +149,6 @@ export const vitalsApi = api.injectEndpoints({
       invalidatesTags: ["Vitals"],
     }),
 
-    // UPDATE VITAL
     updateVital: builder.mutation<
       VitalResponse,
       {
@@ -184,7 +166,6 @@ export const vitalsApi = api.injectEndpoints({
       ],
     }),
 
-    // DELETE VITAL
     deleteVital: builder.mutation<
       VitalResponse,
       string | number
@@ -197,8 +178,6 @@ export const vitalsApi = api.injectEndpoints({
     }),
   }),
 });
-
-// ================= EXPORTS =================
 
 export const {
   useGetVitalsByPatientIdQuery,

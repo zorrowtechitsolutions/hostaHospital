@@ -1,4 +1,3 @@
-// src/components/Appointment/Appointment.jsx - With Server-Side Pagination
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -116,8 +115,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
+
   // API Hooks - Server-side pagination
-  const { 
+const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
@@ -177,7 +177,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
-
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -214,6 +213,31 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
   };
 
+  // ✅ FIX: Helper function to extract gender from multiple sources
+  const extractGender = (booking) => {
+    // Check all possible gender sources
+    const gender = 
+      booking?.patient_gender ||
+      booking?.patient?.gender ||
+      booking?.gender ||
+      booking?.patientGender ||
+      booking?.genderDisplay ||
+      null;
+    
+    console.log(`Extracted gender for ${booking?.patient_name || booking?.patientName || 'Unknown'}:`, gender);
+    
+    // Return normalized gender or null
+    if (gender) {
+      const normalized = gender.toLowerCase();
+      if (normalized === 'male') return 'Male';
+      if (normalized === 'female') return 'Female';
+      if (normalized === 'other') return 'Other';
+      return gender; // Return as-is if not matching
+    }
+    
+    return null; // Return null so we don't default to "Male"
+  };
+
   // Transform API response
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
@@ -247,14 +271,24 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         booking.patient_id ||
         booking.patientID;
 
+      // ✅ FIX: Extract gender using the helper function
+      const extractedGender = extractGender(booking);
+      // If no gender found, use "N/A" instead of defaulting to "Male"
+      const finalGender = extractedGender || "N/A";
+
+      console.log(`Patient ${booking.patient_name || booking.patientName || 'Unknown'} gender:`, finalGender);
+
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
+        patientId: actualPatientId,
+        patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
+        gender: finalGender, // ✅ FIX: Now uses extracted gender or "N/A"
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
@@ -266,7 +300,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         notes: booking.notes || "",
         patientImageKey: patientImageKey,
         originalStatus: booking.status,
-        userId: booking.userId || null
+        userId: booking.userId || null,
+        // ✅ Store the raw gender for debugging
+        rawGender: booking.gender,
+        patientGender: booking.patient_gender,
+        patientGenderNested: booking.patient?.gender
       };
     });
   };
@@ -318,6 +356,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Patient Name': apt.patientName,
       'Contact': apt.contact,
       'Age': apt.age,
+      'Gender': apt.gender, // ✅ Now includes correct gender
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
@@ -362,7 +401,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         department: appointment.department,
         appointmentDate: appointment.appointmentDateDisplay,
         reason: appointment.reason,
-        notes: appointment.notes
+        notes: appointment.notes,
+        // ✅ Pass gender correctly
+        gender: appointment.gender,
+        patient_gender: appointment.gender
       }
     });
   };
@@ -600,6 +642,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             <div>
               <p className="font-medium text-sm mb-1">Contact</p>
               <p className="text-sm text-gray-800">{appointment.contact}</p>
+            </div>
+
+            {/* ✅ Add Gender to Details Modal */}
+            <div>
+              <p className="font-medium text-sm mb-1">Gender</p>
+              <p className="text-sm text-gray-800">{appointment.gender}</p>
             </div>
             
             <div>

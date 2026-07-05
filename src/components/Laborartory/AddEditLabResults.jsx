@@ -71,6 +71,70 @@ const PageHeader = ({ title, subtitle, onBack }) => (
   </div>
 );
 
+const FormField = ({ field, value, onChange, onBlur, error, touched }) => {
+  const { label, name, type, placeholder, required, options, gridCols } = field;
+  
+  return (
+    <div className={gridCols || ""}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {type === 'select' ? (
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {options.map(opt => (
+            <option key={opt} value={opt}>{opt || `Select ${label}`}</option>
+          ))}
+        </select>
+      ) : type === 'textarea' ? (
+        <textarea
+          name={name}
+          rows={3}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      )}
+      {touched && error && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
+
+const SectionCard = ({ icon, title, children }) => (
+  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-blue-100 rounded-md">
+          {icon}
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      </div>
+    </div>
+    <div className="p-6">
+      {children}
+    </div>
+  </div>
+);
+
 const AddEditLabResults = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -118,7 +182,6 @@ const AddEditLabResults = () => {
     }
   }, [id, isEditMode]);
 
-  // Validation functions
   const validateField = (name, value) => {
     switch (name) {
       case 'patientName':
@@ -135,10 +198,8 @@ const AddEditLabResults = () => {
           return 'Please enter a valid email address';
         return '';
       case 'testName':
-        if (isEmpty(value)) return 'Test name is required';
-        return '';
       case 'referredBy':
-        if (isEmpty(value)) return 'Referred by doctor is required';
+        if (isEmpty(value)) return `${name === 'testName' ? 'Test' : 'Referred by doctor'} is required`;
         return '';
       case 'amount':
         if (isEmpty(value)) return 'Amount is required';
@@ -170,7 +231,6 @@ const AddEditLabResults = () => {
     const { name, value } = e.target;
     const updatedData = { ...formData, [name]: value };
     
-    // Check if we need to recalculate financial fields
     if (['amount', 'discount', 'paid'].includes(name)) {
       const totals = calculateTotals(updatedData);
       setFormData({ ...updatedData, ...totals });
@@ -207,91 +267,91 @@ const AddEditLabResults = () => {
     const touchedFields = Object.fromEntries(REQUIRED_FIELDS.map(field => [field, true]));
     setTouched(touchedFields);
     
-    if (validateForm()) {
-      setIsSubmitting(true);
-      
-      try {
-        const existingResults = getStorageData(STORAGE_KEY, []);
-        const newIndex = existingResults.length;
-        
-        const newLabResult = {
-          id: isEditMode ? id : generateId('LAB-', newIndex + 1),
-          testId: isEditMode ? formData.testId : generateId('LDH', newIndex + 1),
-          patientName: formData.patientName,
-          gender: formData.gender,
-          appointmentDate: formData.appointmentDate,
-          referredBy: formData.referredBy,
-          testName: formData.testName,
-          status: formData.status,
-          patientId: isEditMode 
-            ? (existingResults.find(r => r.id === id)?.patientId || generateId('PT', newIndex + 1))
-            : generateId('PT', newIndex + 1),
-          age: formData.age,
-          testType: formData.testType === "Test" ? "General" : "Panel",
-          amount: parseFloat(formData.amount),
-          paymentStatus: parseFloat(formData.balance) === 0 ? "Paid" : "Pending",
-          department: formData.testType === "Test" ? "Pathology" : "Biochemistry",
-          labTechnician: "Dr. Assigned",
-          resultSummary: formData.interpretation || "Results recorded",
-          avatar: `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/1.jpg`,
-          mobile: formData.mobile,
-          email: formData.email,
-          address: formData.address,
-          resultValue: formData.resultValue,
-          referenceRange: formData.referenceRange,
-          unit: formData.unit,
-          interpretation: formData.interpretation,
-          discount: parseFloat(formData.discount) || 0,
-          paid: parseFloat(formData.paid) || 0,
-          balance: parseFloat(formData.balance) || 0,
-          investigations: formData.resultValue 
-            ? [{ 
-                name: formData.testName, 
-                result: formData.resultValue, 
-                refLow: formData.referenceRange?.split('-')[0] || 0, 
-                refHigh: formData.referenceRange?.split('-')[1] || 0, 
-                unit: formData.unit 
-              }] 
-            : []
-        };
-        
-        if (isEditMode) {
-          const updatedResults = existingResults.map(r => r.id === id ? newLabResult : r);
-          setStorageData(STORAGE_KEY, updatedResults);
-          showUpdateToast(
-            `Lab result for ${formData.patientName} has been updated!`,
-            4000,
-            {
-              'Patient': formData.patientName,
-              'Test': formData.testName,
-              'Status': formData.status
-            }
-          );
-        } else {
-          setStorageData(STORAGE_KEY, [...existingResults, newLabResult]);
-          showAddToast(
-            `New lab result for ${formData.patientName} has been added!`,
-            4000,
-            {
-              'Patient': formData.patientName,
-              'Test': formData.testName,
-              'Amount': `₹${formData.amount}`
-            }
-          );
-        }
-        
-        navigate('/lab/results');
-        
-      } catch (error) {
-        showErrorToast('Failed to save lab result. Please try again.', 3000);
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
+    if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
         showWarningToast(`Please fix the ${firstErrorField} field`, 3000);
       }
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const existingResults = getStorageData(STORAGE_KEY, []);
+      const newIndex = existingResults.length;
+      
+      const newLabResult = {
+        id: isEditMode ? id : generateId('LAB-', newIndex + 1),
+        testId: isEditMode ? formData.testId : generateId('LDH', newIndex + 1),
+        patientName: formData.patientName,
+        gender: formData.gender,
+        appointmentDate: formData.appointmentDate,
+        referredBy: formData.referredBy,
+        testName: formData.testName,
+        status: formData.status,
+        patientId: isEditMode 
+          ? (existingResults.find(r => r.id === id)?.patientId || generateId('PT', newIndex + 1))
+          : generateId('PT', newIndex + 1),
+        age: formData.age,
+        testType: formData.testType === "Test" ? "General" : "Panel",
+        amount: parseFloat(formData.amount),
+        paymentStatus: parseFloat(formData.balance) === 0 ? "Paid" : "Pending",
+        department: formData.testType === "Test" ? "Pathology" : "Biochemistry",
+        labTechnician: "Dr. Assigned",
+        resultSummary: formData.interpretation || "Results recorded",
+        avatar: `https://randomuser.me/api/portraits/${formData.gender === 'Male' ? 'men' : 'women'}/1.jpg`,
+        mobile: formData.mobile,
+        email: formData.email,
+        address: formData.address,
+        resultValue: formData.resultValue,
+        referenceRange: formData.referenceRange,
+        unit: formData.unit,
+        interpretation: formData.interpretation,
+        discount: parseFloat(formData.discount) || 0,
+        paid: parseFloat(formData.paid) || 0,
+        balance: parseFloat(formData.balance) || 0,
+        investigations: formData.resultValue 
+          ? [{ 
+              name: formData.testName, 
+              result: formData.resultValue, 
+              refLow: formData.referenceRange?.split('-')[0] || 0, 
+              refHigh: formData.referenceRange?.split('-')[1] || 0, 
+              unit: formData.unit 
+            }] 
+          : []
+      };
+      
+      if (isEditMode) {
+        const updatedResults = existingResults.map(r => r.id === id ? newLabResult : r);
+        setStorageData(STORAGE_KEY, updatedResults);
+        showUpdateToast(
+          `Lab result for ${formData.patientName} has been updated!`,
+          4000,
+          {
+            'Patient': formData.patientName,
+            'Test': formData.testName,
+            'Status': formData.status
+          }
+        );
+      } else {
+        setStorageData(STORAGE_KEY, [...existingResults, newLabResult]);
+        showAddToast(
+          `New lab result for ${formData.patientName} has been added!`,
+          4000,
+          {
+            'Patient': formData.patientName,
+            'Test': formData.testName,
+            'Amount': `₹${formData.amount}`
+          }
+        );
+      }
+      
+      navigate('/lab/results');
+    } catch (error) {
+      showErrorToast('Failed to save lab result. Please try again.', 3000);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -337,175 +397,105 @@ const AddEditLabResults = () => {
         />
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Main Information Card */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-100 rounded-md">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <h2 className="text-lg font-semibold text-gray-900">Patient & Test Information</h2>
-              </div>
+          {/* Patient & Test Information */}
+          <SectionCard 
+            icon={
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            }
+            title="Patient & Test Information"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {formFields.map((field) => (
+                <FormField
+                  key={field.name}
+                  field={field}
+                  value={formData[field.name]}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors[field.name]}
+                  touched={touched[field.name]}
+                />
+              ))}
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {formFields.map((field) => (
-                  <div key={field.name} className={field.gridCols || ""}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </label>
-                    {field.type === 'select' ? (
-                      <select
-                        name={field.name}
-                        value={formData[field.name]}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {field.options.map(opt => (
-                          <option key={opt} value={opt}>{opt || `Select ${field.label}`}</option>
-                        ))}
-                      </select>
-                    ) : field.type === 'textarea' ? (
-                      <textarea
-                        name={field.name}
-                        rows={3}
-                        placeholder={field.placeholder}
-                        value={formData[field.name]}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <input
-                        type={field.type}
-                        name={field.name}
-                        placeholder={field.placeholder}
-                        value={formData[field.name]}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    )}
-                    {touched[field.name] && errors[field.name] && (
-                      <p className="text-sm text-red-600 mt-1">{errors[field.name]}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </SectionCard>
 
-          {/* Result Details Card */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-100 rounded-md">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <h2 className="text-lg font-semibold text-gray-900">Test Results</h2>
-              </div>
+          {/* Test Results */}
+          <SectionCard 
+            icon={
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            }
+            title="Test Results"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {resultFields.map((field) => (
+                <FormField
+                  key={field.name}
+                  field={field}
+                  value={formData[field.name]}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                />
+              ))}
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {resultFields.map((field) => (
-                  <div key={field.name} className={field.gridCols || ""}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
-                    {field.type === 'textarea' ? (
-                      <textarea
-                        name={field.name}
-                        rows={3}
-                        placeholder={field.placeholder}
-                        value={formData[field.name]}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <input
-                        type={field.type}
-                        name={field.name}
-                        placeholder={field.placeholder}
-                        value={formData[field.name]}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </SectionCard>
 
-          {/* Payment Information Card */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-100 rounded-md">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h2 className="text-lg font-semibold text-gray-900">Payment Details</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {financialFields.map((field) => (
-                  <div key={field.name}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type={field.type}
-                      name={field.name}
-                      placeholder={field.placeholder}
-                      value={formData[field.name]}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {touched[field.name] && errors[field.name] && (
-                      <p className="text-sm text-red-600 mt-1">{errors[field.name]}</p>
-                    )}
+          {/* Payment Details */}
+          <SectionCard 
+            icon={
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+            title="Payment Details"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {financialFields.map((field) => (
+                <FormField
+                  key={field.name}
+                  field={field}
+                  value={formData[field.name]}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors[field.name]}
+                  touched={touched[field.name]}
+                />
+              ))}
+              
+              {/* Calculated Totals */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Subtotal:</span>
+                    <span className="font-semibold text-gray-900">₹{formData.amount || 0}</span>
                   </div>
-                ))}
-                
-                {/* Calculated Totals */}
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Discount:</span>
+                    <span className="font-semibold text-green-600">-₹{formData.discount || 0}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Subtotal:</span>
-                      <span className="font-semibold text-gray-900">₹{formData.amount || 0}</span>
+                      <span className="text-sm font-medium text-gray-900">Grand Total:</span>
+                      <span className="text-lg font-bold text-blue-600">₹{formData.grandTotal || 0}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Discount:</span>
-                      <span className="font-semibold text-green-600">-₹{formData.discount || 0}</span>
-                    </div>
-                    <div className="border-t border-gray-200 pt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-900">Grand Total:</span>
-                        <span className="text-lg font-bold text-blue-600">₹{formData.grandTotal || 0}</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="text-sm text-gray-600">Paid:</span>
-                      <span className="font-semibold text-green-600">₹{formData.paid || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Balance:</span>
-                      <span className={`font-semibold ${parseFloat(formData.balance) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ₹{formData.balance || 0}
-                      </span>
-                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-sm text-gray-600">Paid:</span>
+                    <span className="font-semibold text-green-600">₹{formData.paid || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Balance:</span>
+                    <span className={`font-semibold ${parseFloat(formData.balance) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{formData.balance || 0}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Form Actions */}
           <div className="flex justify-end gap-3 pt-2">

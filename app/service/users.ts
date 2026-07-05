@@ -15,6 +15,7 @@ export interface User {
   roleId?: number;
   hospitalId?: number;
   isActive?: boolean;
+  isDelete?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -45,6 +46,7 @@ export interface GetUsersParams {
   search_query?: string;
   page?: number;
   limit?: number;
+  includeDeleted?: boolean; // NEW
 }
 
 export interface CreateUserData {
@@ -168,6 +170,11 @@ export const usersApi = api.injectEndpoints({
 
         if (params.limit) {
           queryParams.append("limit", String(params.limit));
+        }
+
+        // NEW: Include deleted users
+        if (params.includeDeleted) {
+          queryParams.append("includeDeleted", String(params.includeDeleted));
         }
 
         const queryString = queryParams.toString();
@@ -306,6 +313,27 @@ export const usersApi = api.injectEndpoints({
         "Users",
       ],
     }),
+
+    // ================= RECOVER USER =================
+    recoverUser: builder.mutation<
+      { success: boolean; message: string; data?: User },
+      string | number
+    >({
+      query: (id) => {
+        console.log("♻️ RECOVER USER REQUEST");
+        console.log("🆔 USER ID:", id);
+        
+        return {
+          url: `/users/recover/${id}`,
+          method: "PUT",
+        };
+      },
+
+      invalidatesTags: (result, error, id) => [
+        { type: "Users", id },
+        "Users",
+      ],
+    }),
   }),
 });
 
@@ -317,4 +345,5 @@ export const {
   useCreateUserMutation,
   useUpdateUserMutation,
   useDeleteUserMutation,
+  useRecoverUserMutation,
 } = usersApi;

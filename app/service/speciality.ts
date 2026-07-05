@@ -1,8 +1,6 @@
 // app/service/speciality.ts - Speciality API service
 import { api } from "./api";
 
-// ================= TYPES =================
-
 export interface Speciality {
   id?: number;
   name: string;
@@ -30,33 +28,23 @@ export interface GetSpecialityParams {
   limit?: number;
 }
 
-// ================= API =================
-
 export const specialityApi = api.injectEndpoints({
-  // ✅ Add this to prevent the override error
   overrideExisting: false,
   
   endpoints: (builder) => ({
 
-    // ================= GET SPECIALITIES =================
     getSpecialities: builder.query<SpecialityResponse, GetSpecialityParams | void>({
       query: (params: GetSpecialityParams = {}) => {
-        console.log("🚀 SPECIALITIES REQUEST");
-        console.log("📦 PARAMS:", params);
-        
         const queryParams = new URLSearchParams();
         
-        // Filter by name
         if (params?.name) {
           queryParams.append("name", params.name);
         }
 
-        // Search query
         if (params?.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
-        // Pagination (if your backend supports it)
         if (params?.page) {
           queryParams.append("page", String(params.page));
         }
@@ -68,17 +56,10 @@ export const specialityApi = api.injectEndpoints({
         const queryString = queryParams.toString();
         const url = queryString ? `/speciality?${queryString}` : "/speciality";
         
-        console.log("🌐 REQUEST URL:", url);
-        
-        // If ID is provided, get single speciality
         if (params?.id) {
-          const singleUrl = `/speciality/${params.id}`;
-          console.log("📍 SINGLE SPECIALITY URL:", singleUrl);
-          return singleUrl;
+          return `/speciality/${params.id}`;
         }
 
-        // Otherwise get all specialities
-        console.log("📋 ALL SPECIALITIES URL:", url);
         return url;
       },
 
@@ -90,22 +71,16 @@ export const specialityApi = api.injectEndpoints({
       },
     }),
 
-    // ================= REGISTER SPECIALITY =================
     registerSpeciality: builder.mutation<
       SpecialityResponse,
       { name: string; imageUrl?: string; isActive?: boolean }
     >({
       query: (data) => {
-        console.log("📝 REGISTER SPECIALITY REQUEST");
-        console.log("📦 DATA:", data);
-        
         const requestBody = {
           name: data.name,
           imageUrl: data.imageUrl || null,
           isActive: data.isActive !== undefined ? data.isActive : true,
         };
-        
-        console.log("📤 REQUEST BODY:", requestBody);
         
         return {
           url: "/speciality",
@@ -117,7 +92,6 @@ export const specialityApi = api.injectEndpoints({
       invalidatesTags: ["speciality"],
     }),
 
-    // ================= UPDATE SPECIALITY =================
     updateSpeciality: builder.mutation<
       SpecialityResponse,
       {
@@ -126,17 +100,11 @@ export const specialityApi = api.injectEndpoints({
       }
     >({
       query: ({ id, data }) => {
-        console.log("✏️ UPDATE SPECIALITY REQUEST");
-        console.log("🆔 SPECIALITY ID:", id);
-        console.log("📦 UPDATE DATA:", data);
-        
         const requestBody = {
           name: data.name,
           imageUrl: data.imageUrl !== undefined ? data.imageUrl : null,
           isActive: data.isActive,
         };
-        
-        console.log("📤 REQUEST BODY:", requestBody);
         
         return {
           url: `/speciality/${id}`,
@@ -151,20 +119,14 @@ export const specialityApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE SPECIALITY =================
     deleteSpeciality: builder.mutation<
       SpecialityResponse,
       string | number
     >({
-      query: (id) => {
-        console.log("🗑️ DELETE SPECIALITY REQUEST");
-        console.log("🆔 SPECIALITY ID:", id);
-        
-        return {
-          url: `/speciality/${id}`,
-          method: "DELETE",
-        };
-      },
+      query: (id) => ({
+        url: `/speciality/${id}`,
+        method: "DELETE",
+      }),
 
       invalidatesTags: (result, error, id) => [
         { type: "speciality" as const, id },
@@ -173,8 +135,6 @@ export const specialityApi = api.injectEndpoints({
     }),
   }),
 });
-
-// ================= EXPORT HOOKS =================
 
 export const {
   useGetSpecialitiesQuery,

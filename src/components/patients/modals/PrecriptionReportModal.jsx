@@ -1,4 +1,3 @@
-// PrescriptionReportModal.jsx
 import React, { useEffect, useState } from "react";
 import { X, Printer, Download } from "lucide-react";
 import { Button } from "../../ui";
@@ -12,11 +11,12 @@ const PrescriptionReportModal = ({
   existingPrescription,
   templateDesign = [],
   templateBgColor = "#ffffff",
-  hospitalId
+  hospitalId,
+  customTemplate = null,
+  demoTemplate = null
 }) => {
-  const [hasValidTemplate, setHasValidTemplate] = useState(false);
-  const [fallbackDesign, setFallbackDesign] = useState([]);
-  const [fallbackBg, setFallbackBg] = useState("#ffffff");
+  const [activeDesign, setActiveDesign] = useState([]);
+  const [activeBg, setActiveBg] = useState("#ffffff");
 
   // Default fallback template
   const getDefaultTemplate = () => {
@@ -81,23 +81,79 @@ const PrescriptionReportModal = ({
   };
 
   useEffect(() => {
-    // Validate the template design
-    const hasDesignElements = templateDesign && templateDesign.length > 0;
-    const hasPositioning = templateDesign.some(item => 
-      typeof item.x === 'number' && typeof item.y === 'number'
-    );
-    
-    if (hasDesignElements && hasPositioning) {
-      setHasValidTemplate(true);
-      setFallbackDesign([]);
-    } else {
-      // Use fallback template
-      setHasValidTemplate(false);
-      const defaultTemplate = getDefaultTemplate();
-      setFallbackDesign(defaultTemplate.design);
-      setFallbackBg(defaultTemplate.bgColor);
+    console.log("📋 Modal Template Debug:", {
+      templateDesignLength: templateDesign?.length,
+      templateBgColor,
+      existingPrescriptionId: existingPrescription?.id,
+      hasCustomTemplate: !!customTemplate,
+      customTemplateId: customTemplate?.id,
+      customTemplateHospitalId: customTemplate?.hospitalId,
+      hasDemoTemplate: !!demoTemplate,
+      demoTemplateId: demoTemplate?.id,
+      currentHospitalId: hospitalId
+    });
+
+    // ✅ CRITICAL FIX: Determine which template to use with proper priority
+    let designToUse = [];
+    let bgToUse = "#ffffff";
+
+    // 🔴 PRIORITY 1: Use template from existing prescription (if it has valid design)
+    if (templateDesign && templateDesign.length > 0) {
+      const hasPositioning = templateDesign.some(item => 
+        typeof item.x === 'number' && typeof item.y === 'number'
+      );
+      
+      // Only use prescription template if it has valid positioning
+      if (hasPositioning) {
+        designToUse = templateDesign;
+        bgToUse = templateBgColor || "#ffffff";
+        console.log("✅ Using template from existing prescription");
+      }
     }
-  }, [templateDesign]);
+    
+    // 🔴 PRIORITY 2: Use custom template for THIS hospital (if available)
+    // IMPORTANT: Only use if customTemplate belongs to the current hospital
+    if (designToUse.length === 0 && customTemplate && customTemplate.design) {
+      // Verify this custom template belongs to the current hospital
+      if (Number(customTemplate.hospitalId) === Number(hospitalId)) {
+        const hasPositioning = customTemplate.design.some(item => 
+          typeof item.x === 'number' && typeof item.y === 'number'
+        );
+        
+        if (hasPositioning) {
+          designToUse = customTemplate.design;
+          bgToUse = customTemplate.canvasBg || "#ffffff";
+          console.log("✅ Using custom template for current hospital:", hospitalId);
+        }
+      } else {
+        console.log("⚠️ Custom template belongs to different hospital:", customTemplate.hospitalId, "current:", hospitalId);
+      }
+    }
+    
+    // 🔴 PRIORITY 3: Use demo template (if no custom template for this hospital)
+    if (designToUse.length === 0 && demoTemplate && demoTemplate.design) {
+      const hasPositioning = demoTemplate.design.some(item => 
+        typeof item.x === 'number' && typeof item.y === 'number'
+      );
+      
+      if (hasPositioning) {
+        designToUse = demoTemplate.design;
+        bgToUse = demoTemplate.canvasBg || "#ffffff";
+        console.log("✅ Using demo template (no custom template for this hospital)");
+      }
+    }
+    
+    // 🔴 PRIORITY 4: Use default fallback
+    if (designToUse.length === 0) {
+      const defaultTemplate = getDefaultTemplate();
+      designToUse = defaultTemplate.design;
+      bgToUse = defaultTemplate.bgColor;
+      console.log("✅ Using default fallback template");
+    }
+
+    setActiveDesign(designToUse);
+    setActiveBg(bgToUse);
+  }, [templateDesign, templateBgColor, customTemplate, demoTemplate, hospitalId, existingPrescription]);
 
   if (!isOpen) return null;
 
@@ -196,6 +252,11 @@ const PrescriptionReportModal = ({
     return Math.max(minHeight, calculatedHeight);
   };
 
+  const medicinesBlock = activeDesign.find(item => item.type === "medicinesTable");
+  const medicinesTableHeight = getMedicinesTableHeight();
+  const extraHeight = Math.max(0, medicinesTableHeight - (medicinesBlock?.height || 250));
+  const containerHeight = 920 + extraHeight;
+
   // Render template blocks
   const renderTemplateBlock = (block, index) => {
     let blockHeight = block.height;
@@ -207,27 +268,15 @@ const PrescriptionReportModal = ({
       blockMinHeight = dynamicHeight;
     }
 
+    const medicinesBlock = activeDesign.find(item => item.type === "medicinesTable");
+    const originalMedicineHeight = medicinesBlock?.height || 250;
+    const heightDifference = medicinesTableHeight - originalMedicineHeight;
 
+    let adjustedTop = block.y;
 
-const medicinesTableHeight = getMedicinesTableHeight();
-
-const medicinesBlock = activeDesign.find(
-  item => item.type === "medicinesTable"
-);
-
-const originalMedicineHeight = medicinesBlock?.height || 250;
-const heightDifference = medicinesTableHeight - originalMedicineHeight;
-
-
-let adjustedTop = block.y;
-
-// Move only blocks below medicine table
-if (
-  block.type !== "medicinesTable" &&
-  block.y > medicinesBlock?.y
-) {
-  adjustedTop += heightDifference;
-}
+    if (block.type !== "medicinesTable" && block.y > medicinesBlock?.y) {
+      adjustedTop += heightDifference;
+    }
 
     const blockStyle = {
       position: "absolute",
@@ -357,7 +406,7 @@ if (
         return (
           <div key="medicines-table" style={{ 
             ...blockStyle,
-overflow: "visible",
+            overflow: "visible",
             height: `${getMedicinesTableHeight()}px`,
             minHeight: `${getMedicinesTableHeight()}px`,
           }}>
@@ -500,24 +549,6 @@ overflow: "visible",
     }
   };
 
-  // Determine which design to use
-  const activeDesign = hasValidTemplate ? templateDesign : fallbackDesign;
-  const activeBg = hasValidTemplate ? templateBgColor : fallbackBg;
-
-  const medicinesBlock = activeDesign.find(
-  item => item.type === "medicinesTable"
-);
-
-const medicinesTableHeight = getMedicinesTableHeight();
-
-const extraHeight = Math.max(
-  0,
-  medicinesTableHeight - (medicinesBlock?.height || 250)
-);
-
-const containerHeight = 920 + extraHeight;
-
-  // If no template design at all, show message
   if (activeDesign.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -564,23 +595,18 @@ const containerHeight = 920 + extraHeight;
         </div>
 
         {/* Prescription Content */}
-        <div
-          className="prescription-content"
-          style={{
-            padding: "5px"
-          }}
-        >
-<div
-  className="prescription-inner"
-  style={{
-    position: "relative",
-    width: "990px",
-    height: `${containerHeight}px`,
-    margin: "0 auto",
-    background: activeBg,
-  }}
->
-              {activeDesign.map((block, index) => renderTemplateBlock(block, index))}
+        <div className="prescription-content" style={{ padding: "5px" }}>
+          <div
+            className="prescription-inner"
+            style={{
+              position: "relative",
+              width: "990px",
+              height: `${containerHeight}px`,
+              margin: "0 auto",
+              background: activeBg,
+            }}
+          >
+            {activeDesign.map((block, index) => renderTemplateBlock(block, index))}
           </div>
         </div>
 

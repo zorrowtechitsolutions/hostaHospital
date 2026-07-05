@@ -1,4 +1,3 @@
-// service/prescriptionTemplate.ts
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
 
@@ -34,39 +33,38 @@ export const prescriptionTemplateApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // CREATE PRESCRIPTION TEMPLATE
-createPrescriptionTemplate: builder.mutation<
-  PrescriptionTemplateResponse,
-  PrescriptionTemplatePayload
->({
-  query: (data) => ({
-    url: "/prescription-template",
-    method: "POST",
-    body: data,
-  }),
-  invalidatesTags: ["PrescriptionTemplate"],
-}),
+    createPrescriptionTemplate: builder.mutation<
+      PrescriptionTemplateResponse,
+      PrescriptionTemplatePayload
+    >({
+      query: (data) => ({
+        url: "/prescription-template",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["PrescriptionTemplate"],
+    }),
 
-
-    // GET ALL PRESCRIPTION TEMPLATES
+    // GET ALL PRESCRIPTION TEMPLATES - FIXED to get all templates
     getPrescriptionTemplates: builder.query({
       query: (params) => {
-        const hospitalId = getHospitalId();
-        
-        // Build URL with hospitalId as a query parameter
-        let url = `/prescription-template?hospitalId=${hospitalId}`;
+        // Get ALL templates without filtering by hospitalId on backend
+        let url = `/prescription-template`;
         
         if (params?.specialty) {
-          url += `&specialty=${params.specialty}`;
+          url += `?specialty=${params.specialty}`;
         }
         if (params?.isDefault) {
-          url += `&isDefault=${params.isDefault}`;
+          url += `${url.includes('?') ? '&' : '?'}isDefault=${params.isDefault}`;
         }
         if (params?.page) {
-          url += `&page=${params.page}`;
+          url += `${url.includes('?') ? '&' : '?'}page=${params.page}`;
         }
         if (params?.limit) {
-          url += `&limit=${params.limit}`;
+          url += `${url.includes('?') ? '&' : '?'}limit=${params.limit}`;
         }
+        
+        console.log("📡 Fetching all templates");
         
         return {
           url,
@@ -90,18 +88,17 @@ createPrescriptionTemplate: builder.mutation<
     }),
 
     // UPDATE/EDIT PRESCRIPTION TEMPLATE
-updatePrescriptionTemplate: builder.mutation({
-  query: ({ id, data }) => {
-    const hospitalId = getHospitalId();
-    return {
-      url: `/prescription-template/${id}?hospitalId=${hospitalId}`,
-      method: "PUT",
-      body: data,
-    };
-  },
-  invalidatesTags: ["PrescriptionTemplate"],
-}),
-
+    updatePrescriptionTemplate: builder.mutation({
+      query: ({ id, data }) => {
+        const hospitalId = getHospitalId();
+        return {
+          url: `/prescription-template/${id}?hospitalId=${hospitalId}`,
+          method: "PUT",
+          body: data,
+        };
+      },
+      invalidatesTags: ["PrescriptionTemplate"],
+    }),
 
     // DELETE PRESCRIPTION TEMPLATE
     deletePrescriptionTemplate: builder.mutation({

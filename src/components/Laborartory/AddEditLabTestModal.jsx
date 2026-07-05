@@ -1,80 +1,76 @@
-// src/components/Laboratory/AddEditLabTestModal.jsx - With toast notifications
+// src/components/Laboratory/AddEditLabTestModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { Modal, Input, Select, Textarea, Button } from '../ui';
 import { showAddToast, showUpdateToast, showWarningToast } from '../ui/Toast';
 
-const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
-  const [formData, setFormData] = useState({
-    testName: "",
-    type: "Test",
-    price: "",
-    category: "",
-    sampleType: "Blood",
-    preparation: "",
-    turnaroundTime: "",
-    status: "Active"
-  });
+const INITIAL_STATE = {
+  testName: "",
+  type: "Test",
+  price: "",
+  category: "",
+  sampleType: "Blood",
+  preparation: "",
+  turnaroundTime: "",
+  status: "Active"
+};
 
+const REQUIRED = ['testName', 'price', 'category'];
+
+const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
+  const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (test) {
-      setFormData({
-        testName: test.testName || "",
-        type: test.type || "Test",
-        price: test.price || "",
-        category: test.category || "",
-        sampleType: test.sampleType || "Blood",
-        preparation: test.preparation || "",
-        turnaroundTime: test.turnaroundTime || "",
-        status: test.status || "Active"
-      });
-    } else {
-      setFormData({
-        testName: "",
-        type: "Test",
-        price: "",
-        category: "",
-        sampleType: "Blood",
-        preparation: "",
-        turnaroundTime: "",
-        status: "Active"
-      });
-    }
+    setFormData(test ? {
+      testName: test.testName || "",
+      type: test.type || "Test",
+      price: test.price || "",
+      category: test.category || "",
+      sampleType: test.sampleType || "Blood",
+      preparation: test.preparation || "",
+      turnaroundTime: test.turnaroundTime || "",
+      status: test.status || "Active"
+    } : INITIAL_STATE);
+    setErrors({});
   }, [test, isOpen]);
 
   if (!isOpen) return null;
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.testName) newErrors.testName = 'Test name is required';
-    if (!formData.price) newErrors.price = 'Price is required';
-    if (!formData.category) newErrors.category = 'Category is required';
+    REQUIRED.forEach(field => {
+      if (!formData[field]) {
+        const labels = { testName: 'Test name', price: 'Price', category: 'Category' };
+        newErrors[field] = `${labels[field]} is required`;
+      }
+    });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      if (test) {
-        showUpdateToast(`Test "${formData.testName}" has been updated successfully!`, 3000, {
-          'Test Name': formData.testName,
-          'Price': `₹${formData.price}`,
-          'Status': formData.status
-        });
-      } else {
-        showAddToast(`New test "${formData.testName}" has been added successfully!`, 3000, {
-          'Test Name': formData.testName,
-          'Price': `₹${formData.price}`,
-          'Category': formData.category
-        });
-      }
-      onSave(formData);
-    } else {
+    if (!validateForm()) {
       showWarningToast('Please fill all required fields', 3000);
+      return;
     }
+
+    const isEdit = !!test;
+    const message = isEdit 
+      ? `Test "${formData.testName}" has been updated successfully!`
+      : `New test "${formData.testName}" has been added successfully!`;
+    const details = isEdit
+      ? { 'Test Name': formData.testName, 'Price': `₹${formData.price}`, 'Status': formData.status }
+      : { 'Test Name': formData.testName, 'Price': `₹${formData.price}`, 'Category': formData.category };
+    
+    isEdit ? showUpdateToast(message, 3000, details) : showAddToast(message, 3000, details);
+    onSave(formData);
   };
 
   return (
@@ -84,7 +80,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
           label="Test Name" 
           name="testName" 
           value={formData.testName} 
-          onChange={(e) => setFormData({...formData, testName: e.target.value})} 
+          onChange={handleChange} 
           placeholder="Enter test name" 
           required 
           error={errors.testName}
@@ -96,14 +92,14 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
             name="type" 
             options={['Test', 'Group']} 
             value={formData.type} 
-            onChange={(e) => setFormData({...formData, type: e.target.value})} 
+            onChange={handleChange} 
             required 
           />
           <Input 
             label="Category" 
             name="category" 
             value={formData.category} 
-            onChange={(e) => setFormData({...formData, category: e.target.value})} 
+            onChange={handleChange} 
             placeholder="e.g., Biochemistry, Hematology" 
             required 
             error={errors.category}
@@ -116,7 +112,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
             name="price" 
             type="number" 
             value={formData.price} 
-            onChange={(e) => setFormData({...formData, price: e.target.value})} 
+            onChange={handleChange} 
             placeholder="Enter price" 
             required 
             error={errors.price}
@@ -126,7 +122,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
             name="sampleType" 
             options={['Blood', 'Urine', 'Stool', 'Saliva', 'Blood/Urine']} 
             value={formData.sampleType} 
-            onChange={(e) => setFormData({...formData, sampleType: e.target.value})} 
+            onChange={handleChange} 
           />
         </div>
         
@@ -135,7 +131,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
             label="Turnaround Time" 
             name="turnaroundTime" 
             value={formData.turnaroundTime} 
-            onChange={(e) => setFormData({...formData, turnaroundTime: e.target.value})} 
+            onChange={handleChange} 
             placeholder="e.g., 4-6 hours" 
           />
           <Select 
@@ -143,7 +139,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
             name="status" 
             options={['Active', 'Inactive']} 
             value={formData.status} 
-            onChange={(e) => setFormData({...formData, status: e.target.value})} 
+            onChange={handleChange} 
           />
         </div>
         
@@ -152,7 +148,7 @@ const AddEditLabTestModal = ({ isOpen, onClose, onSave, test }) => {
           name="preparation" 
           rows={2} 
           value={formData.preparation} 
-          onChange={(e) => setFormData({...formData, preparation: e.target.value})} 
+          onChange={handleChange} 
           placeholder="Any special preparation required before test" 
         />
         

@@ -1,5 +1,4 @@
-// app/service/category.ts - Complete Category API service
-
+// app/service/category.ts - Category API service
 import { api } from "./api";
 
 // ================= TYPES =================
@@ -65,7 +64,6 @@ export interface UpdateCategoryRequest {
 export const categoryApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET CATEGORIES (LIST) =================
     getCategory: builder.query<
       CategoryResponse,
       GetCategoryParams | void
@@ -73,27 +71,22 @@ export const categoryApi = api.injectEndpoints({
       query: (params: GetCategoryParams = {}) => {
         const queryParams = new URLSearchParams();
 
-        // Filter by name
         if (params?.name) {
           queryParams.append("name", params.name);
         }
 
-        // Search query (searches name and description)
         if (params?.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
-        // Filter by active status
         if (params?.isActive !== undefined) {
           queryParams.append("isActive", String(params.isActive));
         }
 
-        // Filter by parent category (for subcategories)
         if (params?.parentCategoryId !== undefined) {
           queryParams.append("parentCategoryId", String(params.parentCategoryId));
         }
 
-        // Pagination
         if (params?.page) {
           queryParams.append("page", String(params.page));
         }
@@ -101,7 +94,6 @@ export const categoryApi = api.injectEndpoints({
           queryParams.append("limit", String(params.limit));
         }
 
-        // Sorting
         if (params?.sortBy) {
           queryParams.append("sortBy", params.sortBy);
         }
@@ -111,26 +103,21 @@ export const categoryApi = api.injectEndpoints({
 
         const queryString = queryParams.toString();
 
-        // If ID is provided, get single category
         if (params?.id) {
           return `/category/${params.id}${queryString ? `?${queryString}` : ""}`;
         }
 
-        // Otherwise get all categories
         return `/category${queryString ? `?${queryString}` : ""}`;
       },
 
       providesTags: (result, error, params) => {
-        // If we have a single category, provide a specific tag
         if (params?.id && result?.data && !Array.isArray(result.data)) {
           return [{ type: "Category", id: params.id }];
         }
-        // Otherwise provide the general tag
         return ["Category"];
       },
     }),
 
-    // ================= GET CATEGORY BY ID =================
     getCategoryById: builder.query<
       CategoryResponse,
       string | number
@@ -139,7 +126,6 @@ export const categoryApi = api.injectEndpoints({
       providesTags: (result, error, id) => [{ type: "Category", id }],
     }),
 
-    // ================= CREATE CATEGORY =================
     createCategory: builder.mutation<
       CategoryResponse,
       CreateCategoryRequest
@@ -152,7 +138,6 @@ export const categoryApi = api.injectEndpoints({
       invalidatesTags: ["Category"],
     }),
 
-    // ================= UPDATE CATEGORY =================
     updateCategory: builder.mutation<
       CategoryResponse,
       { id: string | number; data: UpdateCategoryRequest }
@@ -168,7 +153,6 @@ export const categoryApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE CATEGORY =================
     deleteCategory: builder.mutation<
       CategoryResponse,
       string | number
@@ -185,14 +169,9 @@ export const categoryApi = api.injectEndpoints({
   }),
 });
 
-// ================= EXPORT HOOKS =================
-
 export const {
-  // Query hooks
   useGetCategoryQuery,
   useGetCategoryByIdQuery,
-  
-  // Mutation hooks
   useCreateCategoryMutation,
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,

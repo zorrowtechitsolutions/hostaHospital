@@ -2,8 +2,6 @@
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
 
-// ================= TYPES =================
-
 export interface RolePermission {
   id?: string | number;
   roleId?: string | number;
@@ -19,7 +17,6 @@ export interface RolePermissionResponse {
   data?: RolePermission | RolePermission[];
 }
 
-// New types for assign/unassign doctor/staff permissions
 export interface AssignDoctorPermissionData {
   hospitalId: number;
   roleId: number;
@@ -48,13 +45,9 @@ export interface AssignPermissionResponse {
   data?: any;
 }
 
-// ================= API =================
-
 export const rolePermissionApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET ROLE PERMISSIONS =================
-    // Automatically adds hospitalId from authenticated user
     getRolePermissions: builder.query<
       RolePermissionResponse,
       { roleId?: string | number }
@@ -62,7 +55,6 @@ export const rolePermissionApi = api.injectEndpoints({
       query: ({ roleId }) => {
         const queryParams = new URLSearchParams();
         
-        // Auto-inject hospitalId from auth
         const hospitalId = getHospitalId();
         if (hospitalId) {
           queryParams.append("hospitalId", String(hospitalId));
@@ -78,14 +70,11 @@ export const rolePermissionApi = api.injectEndpoints({
       providesTags: ["RolePermission"],
     }),
 
-    // ================= GET ROLE PERMISSION BY ID =================
     getRolePermissionById: builder.query<RolePermissionResponse, string | number>({
       query: (id) => `/rolepermission/${id}`,
       providesTags: (result, error, id) => [{ type: "RolePermission", id }],
     }),
 
-    // ================= CREATE ROLE PERMISSION =================
-    // Automatically adds hospitalId from authenticated user
     createRolePermission: builder.mutation<
       RolePermissionResponse,
       {
@@ -101,15 +90,13 @@ export const rolePermissionApi = api.injectEndpoints({
           method: "POST",
           body: {
             ...data,
-            hospitalId: hospitalId, // Auto-inject from auth
+            hospitalId: hospitalId,
           },
         };
       },
       invalidatesTags: ["RolePermission"],
     }),
 
-    // ================= ASSIGN PERMISSIONS TO DOCTORS/STAFF =================
-    // PATCH endpoint for assigning doctor or staff permissions
     assignPermissions: builder.mutation<
       AssignPermissionResponse,
       AssignPermissionData
@@ -122,8 +109,6 @@ export const rolePermissionApi = api.injectEndpoints({
       invalidatesTags: ["RolePermission"],
     }),
 
-    // ================= UPDATE ROLE PERMISSION =================
-    // PUT endpoint for updating existing role permission
     updateRolePermission: builder.mutation<
       RolePermissionResponse,
       {
@@ -150,7 +135,6 @@ export const rolePermissionApi = api.injectEndpoints({
       ],
     }),
 
-    // ================= DELETE ROLE PERMISSION =================
     deleteRolePermission: builder.mutation<
       { success: boolean; message?: string },
       string | number
@@ -167,12 +151,11 @@ export const rolePermissionApi = api.injectEndpoints({
   }),
 });
 
-// ================= EXPORT HOOKS =================
 export const {
   useGetRolePermissionsQuery,
   useGetRolePermissionByIdQuery,
   useCreateRolePermissionMutation,
-  useAssignPermissionsMutation,        // NEW - for PATCH endpoint
-  useUpdateRolePermissionMutation,     // NEW - for PUT endpoint
-  useDeleteRolePermissionMutation,     // NEW - for DELETE endpoint
+  useAssignPermissionsMutation,
+  useUpdateRolePermissionMutation,
+  useDeleteRolePermissionMutation,
 } = rolePermissionApi;

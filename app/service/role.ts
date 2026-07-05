@@ -2,8 +2,6 @@
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
 
-// ================= TYPES =================
-
 export interface Role {
   id?: string | number;
   _id?: string;
@@ -30,13 +28,9 @@ export interface RoleResponse {
   };
 }
 
-// ================= API =================
-
 export const roleApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ================= GET ROLES =================
-    // ENHANCED: Supports pagination, search, labId, pharmacyId filters
     getRoles: builder.query<
       any,
       {
@@ -51,27 +45,20 @@ export const roleApi = api.injectEndpoints({
       query: (params) => {
         const queryParams = new URLSearchParams();
 
-        // Get hospitalId from params or auto-inject from auth
         const hospitalId = params?.hospitalId || getHospitalId();
-
-        console.log("getRoles - hospitalId:", hospitalId);
-        console.log("getRoles - params:", params);
 
         if (hospitalId) {
           queryParams.append("hospitalId", String(hospitalId));
         }
 
-        // Add labId if provided
         if (params?.labId) {
           queryParams.append("labId", String(params.labId));
         }
 
-        // Add pharmacyId if provided
         if (params?.pharmacyId) {
           queryParams.append("pharmacyId", String(params.pharmacyId));
         }
 
-        // Add pagination parameters
         if (params?.page) {
           queryParams.append("page", String(params.page));
         } else {
@@ -84,28 +71,22 @@ export const roleApi = api.injectEndpoints({
           queryParams.append("limit", "10");
         }
 
-        // Add search query if provided
         if (params?.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
         const queryString = queryParams.toString();
         
-        console.log("getRoles - URL:", queryString ? `/role?${queryString}` : `/role`);
-        
-        // Return correct URL based on whether query params exist
         return queryString ? `/role?${queryString}` : `/role`;
       },
       providesTags: ["Role"],
     }),
 
-    // ================= GET ROLE BY ID =================
     getRoleById: builder.query<RoleResponse, string | number>({
       query: (id) => `/role/${id}`,
       providesTags: (result, error, id) => [{ type: "Role", id }],
     }),
 
-    // ================= CREATE ROLE =================
     createRole: builder.mutation<RoleResponse, Omit<Role, 'id' | 'hospitalId'>>({
       query: (data) => {
         const hospitalId = getHospitalId();
@@ -122,7 +103,6 @@ export const roleApi = api.injectEndpoints({
       invalidatesTags: ["Role"],
     }),
 
-    // ================= UPDATE ROLE =================
     updateRole: builder.mutation<
       RoleResponse,
       {
@@ -138,7 +118,6 @@ export const roleApi = api.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: "Role", id }],
     }),
 
-    // ================= DELETE ROLE =================
     deleteRole: builder.mutation<{ message: string }, string | number>({
       query: (id) => ({
         url: `/role/${id}`,
@@ -149,7 +128,6 @@ export const roleApi = api.injectEndpoints({
   }),
 });
 
-// ================= EXPORT HOOKS =================
 export const {
   useGetRolesQuery,
   useGetRoleByIdQuery,

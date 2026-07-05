@@ -1,4 +1,4 @@
-// src/components/HelpSupport/HelpSupport.jsx - Contact Us with API Integration
+// src/components/HelpSupport/HelpSupport.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,23 +24,33 @@ const HelpSupport = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  const FIELDS = ['name', 'email', 'subject', 'message'];
+  const FIELD_LABELS = {
+    name: 'Name',
+    email: 'Email',
+    subject: 'Subject',
+    message: 'Message'
+  };
+
   const validateField = (name, value) => {
+    const trimmed = value.trim();
+    
     switch (name) {
       case 'name':
-        if (!value.trim()) return 'Name is required';
-        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        if (!trimmed) return 'Name is required';
+        if (trimmed.length < 2) return 'Name must be at least 2 characters';
         return '';
       case 'email':
-        if (!value.trim()) return 'Email is required';
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Please enter a valid email address';
+        if (!trimmed) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Please enter a valid email address';
         return '';
       case 'subject':
-        if (!value.trim()) return 'Subject is required';
-        if (value.trim().length < 3) return 'Subject must be at least 3 characters';
+        if (!trimmed) return 'Subject is required';
+        if (trimmed.length < 3) return 'Subject must be at least 3 characters';
         return '';
       case 'message':
-        if (!value.trim()) return 'Message is required';
-        if (value.trim().length < 10) return 'Message must be at least 10 characters';
+        if (!trimmed) return 'Message is required';
+        if (trimmed.length < 10) return 'Message must be at least 10 characters';
         return '';
       default:
         return '';
@@ -66,13 +76,10 @@ const HelpSupport = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    const fieldsToValidate = ['name', 'email', 'subject', 'message'];
-    
-    fieldsToValidate.forEach(field => {
+    FIELDS.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -80,15 +87,14 @@ const HelpSupport = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate all fields
     const allTouched = {};
-    ['name', 'email', 'subject', 'message'].forEach(field => {
+    FIELDS.forEach(field => {
       allTouched[field] = true;
     });
     setTouched(allTouched);
     
     if (!validateForm()) {
-      showWarningToast('Please fill in all required fields correctly', 3000);
+      showWarningToast('Please fill in all required fields correctly');
       return;
     }
 
@@ -96,9 +102,7 @@ const HelpSupport = () => {
       const response = await createEnquiry(formData).unwrap();
       
       if (response.success) {
-        showSuccessToast('Your message has been sent successfully!', 4000);
-        
-        // Reset form after successful submission
+        showSuccessToast('Your message has been sent successfully!');
         setFormData({
           name: '',
           email: '',
@@ -108,13 +112,13 @@ const HelpSupport = () => {
         setErrors({});
         setTouched({});
       } else {
-        showErrorToast(response.message || 'Failed to send message', 3000);
+        showErrorToast(response.message || 'Failed to send message');
       }
       
     } catch (error) {
-      console.error('❌ Error sending message:', error);
+      console.error('Error sending message:', error);
       const errorMessage = error?.data?.message || 'Failed to send message. Please try again.';
-      showErrorToast(errorMessage, 3000);
+      showErrorToast(errorMessage);
     }
   };
 
@@ -127,12 +131,59 @@ const HelpSupport = () => {
     });
     setErrors({});
     setTouched({});
-    showWarningToast('Form cleared', 2000);
+    showWarningToast('Form cleared');
+  };
+
+  const FormField = ({ name, type = 'text', icon: Icon, placeholder }) => {
+    const isTextarea = name === 'message';
+    const error = errors[name];
+    const touchedField = touched[name];
+    const value = formData[name];
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {FIELD_LABELS[name]} <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          {isTextarea ? (
+            <textarea
+              name={name}
+              value={value}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              placeholder={placeholder}
+              rows={5}
+              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent resize-none transition ${
+                error && touchedField ? 'border-red-500' : 'border-gray-300'
+              }`}
+              disabled={isSubmitting}
+            />
+          ) : (
+            <input
+              type={type}
+              name={name}
+              value={value}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              placeholder={placeholder}
+              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
+                error && touchedField ? 'border-red-500' : 'border-gray-300'
+              }`}
+              disabled={isSubmitting}
+            />
+          )}
+        </div>
+        {error && touchedField && (
+          <p className="text-xs text-red-500 mt-1">{error}</p>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
@@ -152,7 +203,6 @@ const HelpSupport = () => {
         <p className="text-sm text-gray-500 mt-1">Get in touch with our support team</p>
       </div>
 
-      {/* Contact Form */}
       <div className="max-w-2xl mx-auto">
         <Card>
           <div className="p-4 border-b border-gray-200">
@@ -162,107 +212,31 @@ const HelpSupport = () => {
 
           <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Your Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    placeholder="Enter your full name"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
-                      errors.name && touched.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                {errors.name && touched.name && (
-                  <p className="text-xs text-red-500 mt-1">{errors.name}</p>
-                )}
-              </div>
+              <FormField
+                name="name"
+                icon={User}
+                placeholder="Enter your full name"
+              />
 
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    placeholder="Enter your email address"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
-                      errors.email && touched.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                {errors.email && touched.email && (
-                  <p className="text-xs text-red-500 mt-1">{errors.email}</p>
-                )}
-              </div>
+              <FormField
+                name="email"
+                type="email"
+                icon={Mail}
+                placeholder="Enter your email address"
+              />
 
-              {/* Subject */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subject <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    name="subject"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    placeholder="Enter message subject"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
-                      errors.subject && touched.subject ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                {errors.subject && touched.subject && (
-                  <p className="text-xs text-red-500 mt-1">{errors.subject}</p>
-                )}
-              </div>
+              <FormField
+                name="subject"
+                icon={FileText}
+                placeholder="Enter message subject"
+              />
 
-              {/* Message */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Message <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <textarea
-                    name="message"
-                    value={formData.message}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    placeholder="Enter your message here..."
-                    rows={5}
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent resize-none transition ${
-                      errors.message && touched.message ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                {errors.message && touched.message && (
-                  <p className="text-xs text-red-500 mt-1">{errors.message}</p>
-                )}
-              </div>
+              <FormField
+                name="message"
+                icon={MessageSquare}
+                placeholder="Enter your message here..."
+              />
 
-              {/* Submit Buttons */}
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"

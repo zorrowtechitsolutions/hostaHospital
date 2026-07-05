@@ -21,33 +21,27 @@ import {
   User as UserIcon,
   IdCard,
   Languages,
-  Star // Added for reviews
+  Star
 } from "lucide-react";
 import RequestTable from "../Requests/RequestTable";
 import Appointments from "../Appointment/Appointment";
-import ReviewTable from "../Doctor/ReviewTable"; // Import ReviewTable
+import ReviewTable from "../Doctor/ReviewTable";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-// Helper function to get S3 image URL
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
-  
-  if (imageKey.startsWith("http")) {
-    return imageKey;
-  }
-  
+  if (imageKey.startsWith("http")) return imageKey;
   const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 
-// ==================== CONSTANTS ====================
 const TABS = [
   { id: "basic", label: "Basic Information" },
   { id: "schedule", label: "Schedule & Consulting" },
   { id: "appointments", label: "Appointments" },
   { id: "requests", label: "Requests" },
-  { id: "reviews", label: "Reviews" } // Added Reviews tab
+  { id: "reviews", label: "Reviews" }
 ];
 
 const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-4";
@@ -63,7 +57,6 @@ const DAY_ORDER = {
   sunday: 7
 };
 
-// ==================== HELPER FUNCTIONS ====================
 const getValue = (value, fallback = "N/A") => value || fallback;
 const isBookingOpen = (doctor) => doctor?.bookingOpen !== false;
 
@@ -75,7 +68,6 @@ const getDoctorName = (doctor) =>
 const hasAddress = (address) =>
   address && Object.values(address).some(Boolean);
 
-// Format time from 24h to 12h format
 const formatTime = (time) => {
   if (!time || time === 'N/A') return 'N/A';
   const [hours, minutes] = time.split(':');
@@ -85,13 +77,11 @@ const formatTime = (time) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
-// Format day name to display
 const formatDay = (day) => {
   if (!day) return '';
   return day.charAt(0).toUpperCase() + day.slice(1);
 };
 
-// ==================== REUSABLE COMPONENTS ====================
 const SectionTitle = ({ icon: Icon, title }) => (
   <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
     {Icon && <Icon className="h-5 w-5 text-blue-500" />}
@@ -132,7 +122,6 @@ const InfoCard = ({ title, children, icon: Icon }) => (
   </div>
 );
 
-// Rating Display Component for Doctor Header
 const RatingDisplay = ({ rating, totalReviews }) => {
   if (!rating && rating !== 0) return null;
   
@@ -167,18 +156,9 @@ const RatingDisplay = ({ rating, totalReviews }) => {
 const ViewDoctor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  
-  // Clean the ID
   const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
-  
   const [activeTab, setActiveTab] = useState("basic");
   
-  // Handle tab change
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
-  };
-  
-  // Use getDoctorById query for single doctor
   const {
     data: doctorResponse,
     isLoading,
@@ -188,20 +168,13 @@ const ViewDoctor = () => {
     skip: !doctorId
   });
   
-  // Extract doctor from response
   const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
-  
-  // Get image key
   const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
-  
-  // Get doctor name
   const doctorName = getDoctorName(doctor);
 
-  // Helper to format consulting hours - memoized
   const consultingHours = useMemo(() => {
     const hours = [];
     
-    // Process consultingOne (single session days)
     if (doctor?.consultingOne && Array.isArray(doctor.consultingOne)) {
       doctor.consultingOne.forEach(item => {
         hours.push({
@@ -213,7 +186,6 @@ const ViewDoctor = () => {
       });
     }
     
-    // Process consultingTwo (split session days)
     if (doctor?.consultingTwo && Array.isArray(doctor.consultingTwo)) {
       doctor.consultingTwo.forEach(item => {
         const morning = item.morning_session;
@@ -236,13 +208,11 @@ const ViewDoctor = () => {
     (a, b) => (DAY_ORDER[a.day] || 99) - (DAY_ORDER[b.day] || 99)
   );
 
-  // Get Out Door Consulting data
   const outDoorConsulting = doctor?.outDoorConsulting;
   const hasOutDoorConsulting = outDoorConsulting?.time?.open && 
                                 outDoorConsulting?.time?.close && 
                                 outDoorConsulting?.place;
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -251,7 +221,6 @@ const ViewDoctor = () => {
     );
   }
   
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -282,7 +251,6 @@ const ViewDoctor = () => {
     );
   }
   
-  // Doctor not found
   if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -303,7 +271,6 @@ const ViewDoctor = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-800">Doctor Details</h1>
           <Button variant="outline" onClick={() => navigate('/doctors')} className="text-sm">
@@ -311,7 +278,6 @@ const ViewDoctor = () => {
           </Button>
         </div>
 
-        {/* Doctor Profile Header */}
         <div className={`${CARD_CLASS} p-6 mb-6`}>
           <div className="flex flex-col md:flex-row items-start gap-6">
             <Avatar className="w-24 h-24">
@@ -333,7 +299,6 @@ const ViewDoctor = () => {
                 </SmallBadge>
               </div>
               
-              {/* DEPARTMENT - Display prominently */}
               <div className="mb-2">
                 <p className="text-gray-600 text-sm flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-blue-500" />
@@ -342,7 +307,6 @@ const ViewDoctor = () => {
                 </p>
               </div>
               
-              {/* Specialist - Secondary info */}
               {doctor?.specialist && doctor?.specialist !== doctor?.department && (
                 <p className="text-gray-500 text-sm flex items-center gap-2 mb-2">
                   <IdCard className="h-4 w-4 text-gray-400" />
@@ -367,14 +331,13 @@ const ViewDoctor = () => {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className={CARD_CLASS}>
           <div className="border-b border-gray-200 px-6">
             <div className="flex gap-8 overflow-x-auto">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
@@ -388,10 +351,8 @@ const ViewDoctor = () => {
           </div>
 
           <div className="p-6">
-            {/* Basic Information Tab */}
             {activeTab === "basic" && (
               <div className="space-y-6">
-                {/* Personal Information */}
                 <div>
                   <SectionTitle icon={UserIcon} title="Personal Information" />
                   <div className="bg-white rounded-lg border border-gray-100 p-4">
@@ -406,7 +367,6 @@ const ViewDoctor = () => {
                   </div>
                 </div>
 
-                {/* Professional Details */}
                 <div>
                   <SectionTitle icon={Briefcase} title="Professional Details" />
                   <div className="bg-white rounded-lg border border-gray-100 p-4">
@@ -421,7 +381,6 @@ const ViewDoctor = () => {
                   </div>
                 </div>
 
-                {/* Contact Information */}
                 <div>
                   <SectionTitle icon={Phone} title="Contact Information" />
                   <div className="bg-white rounded-lg border border-gray-100 p-4">
@@ -432,7 +391,6 @@ const ViewDoctor = () => {
                   </div>
                 </div>
 
-                {/* Address Information */}
                 {hasAddress(doctor?.address) && (
                   <div>
                     <SectionTitle icon={MapPin} title="Address Information" />
@@ -448,7 +406,6 @@ const ViewDoctor = () => {
                   </div>
                 )}
 
-                {/* Languages Known */}
                 <div>
                   <SectionTitle icon={Languages} title="Languages Known" />
                   <div className="bg-white rounded-lg border border-gray-100 p-4">
@@ -466,7 +423,6 @@ const ViewDoctor = () => {
                   </div>
                 </div>
 
-                {/* About Section */}
                 {doctor?.about && (
                   <div>
                     <SectionTitle icon={UserIcon} title="About" />
@@ -478,10 +434,8 @@ const ViewDoctor = () => {
               </div>
             )}
 
-            {/* Schedule Tab */}
             {activeTab === "schedule" && (
               <div className="space-y-6">
-                {/* Consulting Hours Section */}
                 <div>
                   <SectionTitle icon={Clock} title="Consulting Hours" />
                   {sortedHours.length > 0 ? (
@@ -524,7 +478,6 @@ const ViewDoctor = () => {
                   )}
                 </div>
 
-                {/* Out Door Consulting Section */}
                 <div>
                   <SectionTitle icon={Building} title="Out Door Consulting" />
                   {hasOutDoorConsulting ? (
@@ -565,7 +518,6 @@ const ViewDoctor = () => {
                   )}
                 </div>
 
-                {/* Booking Status Section */}
                 <div>
                   <SectionTitle icon={Video} title="Booking Status" />
                   <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-5 border border-gray-200">
@@ -594,7 +546,6 @@ const ViewDoctor = () => {
               </div>
             )}
 
-            {/* Appointments Tab */}
             {activeTab === "appointments" && (
               <Appointments 
                 doctorId={doctor?.id}
@@ -602,7 +553,6 @@ const ViewDoctor = () => {
               />
             )}
 
-            {/* Requests Tab */}
             {activeTab === "requests" && (
               <RequestTable 
                 doctorId={doctor?.id}
@@ -610,7 +560,6 @@ const ViewDoctor = () => {
               />
             )}
 
-            {/* Reviews Tab */}
             {activeTab === "reviews" && (
               <ReviewTable 
                 doctorId={doctor?.id}

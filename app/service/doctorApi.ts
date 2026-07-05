@@ -1,5 +1,4 @@
 // src/app/service/doctorApi.ts
-
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
 
@@ -23,7 +22,6 @@ export interface Doctor {
   hospitalName?: string;
   createdAt?: string;
   updatedAt?: string;
-
   appointmentCount?: number;
   autoDecline?: number;
   status?: string | boolean;
@@ -46,7 +44,6 @@ export interface DoctorAuthResponse {
   error?: string;
 }
 
-// UPDATED GetDoctorsParams interface
 export interface GetDoctorsParams {
   hospitalId?: string | number;
   name?: string;
@@ -55,7 +52,7 @@ export interface GetDoctorsParams {
   search_query?: string;
   page?: number;
   limit?: number;
-  skipHospitalFilter?: boolean; // Allows Super Admin to bypass hospital filter
+  skipHospitalFilter?: boolean;
 }
 
 export interface Department {
@@ -79,54 +76,26 @@ interface SpecialityResponse {
 export const doctorApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // ==============================
-    // GET DOCTORS
-    // FIXED: Only auto-inject hospitalId for hospital users, not Super Admin
-    // ==============================
     getDoctors: builder.query({
       query: (params: GetDoctorsParams = {}) => {
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
-        // DEBUG: Log auth info
-        console.log('===== GET DOCTORS QUERY =====');
-        console.log('Auth user:', auth);
-        console.log('Auth role:', auth?.role);
-        console.log('Auth roleId:', auth?.roleId);
-        console.log('Params received:', params);
-
-        // FIX: Only auto-inject hospitalId for Hospital users (not Super Admin)
-        // Check if user has hospital role (roleId === 2 or role === 'hospital')
         const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
         const shouldSkipFilter = params.skipHospitalFilter === true;
         
-        console.log('Is Hospital Admin:', isHospitalAdmin);
-        console.log('Should skip filter:', shouldSkipFilter);
-        
-        // Only add hospitalId automatically if:
-        // 1. User is a hospital admin (not Super Admin)
-        // 2. No hospitalId was explicitly passed in params
-        // 3. skipHospitalFilter is not true
         if (isHospitalAdmin && auth?.id && !params.hospitalId && !shouldSkipFilter) {
           queryParams.append("hospitalId", String(auth.id));
-          console.log(`Auto-added hospitalId: ${auth.id} (hospital admin)`);
         } else if (params.hospitalId) {
-          queryParams.set("hospitalId", String(params.hospitalId));
-          console.log(`Using explicit hospitalId: ${params.hospitalId}`);
-        } else if (shouldSkipFilter) {
-          console.log('Skipping hospital filter (Super Admin mode)');
-        } else {
-          console.log('No hospital filter applied');
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        // filters (all supported by backend)
         if (params.name) {
           queryParams.append("name", params.name);
         }
 
         if (params.speciality) {
           queryParams.append("speciality", params.speciality);
-          console.log(`Filtering by speciality: ${params.speciality}`);
         }
 
         if (params.status !== undefined) {
@@ -137,22 +106,14 @@ export const doctorApi = api.injectEndpoints({
           queryParams.append("search_query", params.search_query);
         }
 
-        // pagination
         queryParams.append("page", String(params.page || 1));
         queryParams.append("limit", String(params.limit || 10));
 
-        const finalUrl = `/doctor?${queryParams.toString()}`;
-        console.log('Final URL:', finalUrl);
-        console.log('================================');
-        
-        return finalUrl;
+        return `/doctor?${queryParams.toString()}`;
       },
       providesTags: ["Doctor"],
     }),
 
-    // ==============================
-    // GET SPECIALITIES
-    // ==============================
     getSpecialities: builder.query<SpecialityResponse, void>({
       query: () => {
         const queryParams = new URLSearchParams();
@@ -161,17 +122,11 @@ export const doctorApi = api.injectEndpoints({
       providesTags: ["speciality"],
     }),
 
-    // ==============================
-    // GET DOCTOR BY ID
-    // ==============================
     getDoctorById: builder.query<DoctorAuthResponse, string>({
       query: (id) => `/doctor/${id}`,
       providesTags: (result, error, id) => [{ type: "Doctor", id }],
     }),
 
-    // ==============================
-    // LOGIN DOCTOR
-    // ==============================
     loginDoctor: builder.mutation<DoctorAuthResponse, LoginDoctorData>({
       query: (logUser) => ({
         url: "/doctor/login",
@@ -196,9 +151,6 @@ export const doctorApi = api.injectEndpoints({
       invalidatesTags: ["Doctor"],
     }),
 
-    // ==============================
-    // LOGOUT DOCTOR
-    // ==============================
     logoutDoctor: builder.mutation<{ message: string }, { hospitalId: string }>({
       query: ({ hospitalId }) => ({
         url: `/doctor/logout/${hospitalId}`,
@@ -211,14 +163,11 @@ export const doctorApi = api.injectEndpoints({
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
         } catch (error) {
-          console.error("Logout error:", error);
+          // Error handled silently
         }
       },
     }),
 
-    // ==============================
-    // REFRESH DOCTOR TOKEN
-    // ==============================
     refreshDoctor: builder.mutation<DoctorAuthResponse, void>({
       query: () => ({
         url: "/doctor/refresh",
@@ -230,7 +179,6 @@ export const doctorApi = api.injectEndpoints({
 
         if (token) {
           localStorage.setItem("accessToken", token);
-          console.log("🔄 Doctor token refreshed successfully");
         }
 
         if (response.refreshToken) {
@@ -243,9 +191,6 @@ export const doctorApi = api.injectEndpoints({
       invalidatesTags: ["Doctor"],
     }),
 
-    // ==============================
-    // ADD NEW DOCTOR
-    // ==============================
     addNewDoctor: builder.mutation<DoctorAuthResponse, Omit<Doctor, 'hospitalId'>>({
       query: (newDoctor) => {
         const auth = getAuthUser();
@@ -256,16 +201,13 @@ export const doctorApi = api.injectEndpoints({
           body: {
             ...newDoctor,
             hospitalId: auth?.id,
-            hospitalName: auth?.name ?? "",      
-        },
+            hospitalName: auth?.name ?? "",
+          },
         };
       },
       invalidatesTags: ["Doctor"],
     }),
 
-    // ==============================
-    // UPDATE DOCTOR
-    // ==============================
     updateDoctor: builder.mutation<Doctor, { id: string; updateDoctor: Partial<Doctor> }>({
       query: ({ id, updateDoctor }) => ({
         url: `/doctor/${id}`,
@@ -278,9 +220,6 @@ export const doctorApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // DELETE DOCTOR
-    // ==============================
     deleteDoctor: builder.mutation<{ message: string }, string>({
       query: (doctorId) => ({
         url: `/doctor/${doctorId}`,
@@ -292,9 +231,6 @@ export const doctorApi = api.injectEndpoints({
       ],
     }),
 
-    // ==============================
-    // RECOVER DOCTOR
-    // ==============================
     recoverDoctor: builder.mutation<{ message: string }, string>({
       query: (doctorId) => ({
         url: `/doctor/recover/${doctorId}`,
@@ -310,19 +246,15 @@ export const doctorApi = api.injectEndpoints({
   overrideExisting: false,
 });
 
-// ==============================
-// EXPORT HOOKS
-// ==============================
-
 export const {
   useGetDoctorsQuery,
   useGetDoctorByIdQuery,
   useLoginDoctorMutation,
   useLogoutDoctorMutation,
-  useRefreshDoctorMutation, // 👈 Added
+  useRefreshDoctorMutation,
   useAddNewDoctorMutation,
   useUpdateDoctorMutation,
   useDeleteDoctorMutation,
   useRecoverDoctorMutation,
-  useGetSpecialitiesQuery, 
+  useGetSpecialitiesQuery,
 } = doctorApi;
