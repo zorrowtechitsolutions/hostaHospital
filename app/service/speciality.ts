@@ -132,7 +132,7 @@ export const specialityApi = api.injectEndpoints({
         
         const requestBody = {
           name: data.name,
-          imageUrl: data.imageUrl,
+          imageUrl: data.imageUrl !== undefined ? data.imageUrl : null,
           isActive: data.isActive,
         };
         
@@ -171,7 +171,7 @@ export const specialityApi = api.injectEndpoints({
         "speciality",
       ],
     }),
-      }),
+  }),
 });
 
 // ================= EXPORT HOOKS =================

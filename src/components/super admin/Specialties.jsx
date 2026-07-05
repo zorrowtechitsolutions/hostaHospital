@@ -24,6 +24,8 @@ import {
 import { socket } from '../../socket/socket';
 import { registerSpecialityEvents, unregisterSpecialityEvents } from '../../socket/specialityEvents';
 
+// ================= HELPER FUNCTIONS =================
+
 // Helper function to format date
 const formatDate = (date) => {
   if (!date) return 'N/A';
@@ -33,6 +35,22 @@ const formatDate = (date) => {
     day: 'numeric'
   });
 };
+
+// Capitalize the first letter of a string
+const capitalizeFirstLetter = (text = "") => {
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+// Convert string to Title Case (capitalize every word)
+const toTitleCase = (text = "") => {
+  if (!text) return "";
+  return text.replace(/\w\S*/g, (word) =>
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
+};
+
+// ================= MODAL COMPONENTS =================
 
 // View Speciality Modal
 const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
@@ -60,7 +78,7 @@ const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500">Speciality Name</label>
-            <p className="text-sm text-gray-800 font-medium">{speciality.name}</p>
+            <p className="text-sm text-gray-800 font-medium">{toTitleCase(speciality.name)}</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500">Created At</label>
@@ -293,6 +311,8 @@ const SpecialitiesSkeleton = () => {
     </div>
   );
 };
+
+// ================= MAIN COMPONENT =================
 
 const Specialties = () => {
   const navigate = useNavigate(); 
@@ -598,7 +618,9 @@ const Specialties = () => {
                   </div>
                   
                   <div className="mb-2">
-                    <h3 className="font-semibold text-lg text-gray-900">{speciality.name}</h3>
+                    <h3 className="font-semibold text-lg text-gray-900">
+                      {toTitleCase(speciality.name)}
+                    </h3>
                     <p className="text-xs text-gray-500 mt-1">ID: #{speciality.id}</p>
                   </div>
                   
