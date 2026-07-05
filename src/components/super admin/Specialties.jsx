@@ -11,6 +11,10 @@ import {
   MoreVertical,
   RefreshCcw,
   Download,
+  Image as ImageIcon,
+  Upload,
+  X,
+  FolderOpen,
 } from 'lucide-react';
 import { Card, Button, Modal, Badge, Pagination, Input } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
@@ -23,6 +27,9 @@ import {
 } from '../../../app/service/speciality';
 import { socket } from '../../socket/socket';
 import { registerSpecialityEvents, unregisterSpecialityEvents } from '../../socket/specialityEvents';
+import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../app/service/S3';
+
+// ================= HELPER FUNCTIONS =================
 
 // Helper function to format date
 const formatDate = (date) => {
@@ -34,17 +41,146 @@ const formatDate = (date) => {
   });
 };
 
+// Capitalize the first letter of a string
+const capitalizeFirstLetter = (text = "") => {
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+// Convert string to Title Case (capitalize every word)
+const toTitleCase = (text = "") => {
+  if (!text) return "";
+  return text.replace(/\w\S*/g, (word) =>
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
+};
+
+// Get S3 image URL with cache busting
+const getImageUrlWithCache = (imageUrl) => {
+  if (!imageUrl) return null;
+  const url = getS3ImageUrl(imageUrl);
+  if (!url) return null;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
+};
+
+// ================= IMAGE UPLOAD COMPONENT =================
+
+const ImageUpload = ({ 
+  imageUrl, 
+  onImageChange, 
+  onImageRemove, 
+  isUploading,
+  label = "Speciality Image",
+  disabled = false
+}) => {
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showErrorToast('Please select an image file', 3000);
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showErrorToast('Image size should be less than 5MB', 3000);
+      return;
+    }
+
+    onImageChange(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      
+      <div className="flex items-start gap-4">
+        {/* Image Preview */}
+        <div className="relative w-24 h-24 flex-shrink-0">
+          {imageUrl ? (
+            <div className="relative w-full h-full">
+              <img
+                src={imageUrl}
+                alt="Speciality"
+                className="w-full h-full object-cover rounded-lg border border-gray-200"
+              />
+              <button
+                type="button"
+                onClick={onImageRemove}
+                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                disabled={isUploading || disabled}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+              <ImageIcon className="w-8 h-8 text-gray-400" />
+            </div>
+          )}
+        </div>
+
+        {/* Upload Button */}
+        <div className="flex-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isUploading || disabled}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || disabled}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1C62A0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUploading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></span>
+                Uploading...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Upload size={16} />
+                {imageUrl ? 'Change Image' : 'Upload Image'}
+              </span>
+            )}
+          </button>
+          <p className="mt-1 text-xs text-gray-500">PNG, JPG, WEBP (Max 5MB)</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ================= MODAL COMPONENTS =================
+
 // View Speciality Modal
 const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
   if (!speciality) return null;
+
+  const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Speciality Details" size="md">
       <div className="space-y-4">
         <div className="flex justify-center mb-4">
-          <div className="w-32 h-32 bg-green-100 rounded-full flex items-center justify-center">
-            <Stethoscope className="w-16 h-16 text-green-600" />
-          </div>
+          {imageUrl ? (
+            <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-green-200">
+              <img src={imageUrl} alt={speciality.name} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-32 h-32 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border-2 border-green-200">
+              <FolderOpen className="w-16 h-16 text-green-500" />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -60,8 +196,14 @@ const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500">Speciality Name</label>
-            <p className="text-sm text-gray-800 font-medium">{speciality.name}</p>
+            <p className="text-sm text-gray-800 font-medium">{toTitleCase(speciality.name)}</p>
           </div>
+          {speciality.imageUrl && (
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500">Image URL</label>
+              <p className="text-sm text-gray-600 truncate">{imageUrl}</p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-500">Created At</label>
             <p className="text-sm text-gray-600">{formatDate(speciality.createdAt)}</p>
@@ -86,6 +228,9 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
     name: '',
     isActive: true
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -93,32 +238,83 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
         name: '',
         isActive: true
       });
+      setImageFile(null);
+      setImagePreview(null);
     }
   }, [isOpen]);
 
-  const handleSubmit = () => {
+  const handleImageChange = async (file) => {
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleImageRemove = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const handleSubmit = async () => {
     if (!formData.name) {
       showErrorToast('Speciality name is required', 3000);
       return;
     }
-    onSave({
-      name: formData.name,
-      isActive: formData.isActive
-    });
+
+    try {
+      setIsUploading(true);
+      
+      let imageKey = null;
+
+      // Upload image if selected
+      if (imageFile) {
+        // ✅ For specialities, use role "speciality" and id null (new speciality)
+        const uploadResult = await uploadToS3(
+          imageFile,
+          null,
+          null,        // ✅ Pass null for new speciality
+          "speciality" // ✅ Role for speciality
+        );
+        imageKey = uploadResult.key;
+      }
+
+      const specialityData = {
+        name: formData.name,
+        isActive: formData.isActive,
+        imageUrl: imageKey
+      };
+
+      await onSave(specialityData);
+      
+      // Clean up
+      setImageFile(null);
+      setImagePreview(null);
+      
+    } catch (error) {
+      showErrorToast(error?.message || 'Failed to upload image', 3000);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add New Speciality" size="lg">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-            <Stethoscope className="w-5 h-5 text-green-600" />
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
+            <FolderOpen className="w-5 h-5 text-green-600" />
           </div>
           <div>
             <h3 className="text-md font-semibold text-gray-800">Add New Speciality</h3>
             <p className="text-xs text-gray-500">Enter speciality details</p>
           </div>
         </div>
+
+        <ImageUpload
+          imageUrl={imagePreview}
+          onImageChange={handleImageChange}
+          onImageRemove={handleImageRemove}
+          isUploading={isUploading}
+          label="Speciality Image (Optional)"
+        />
 
         <Input
           label="Speciality Name *"
@@ -131,8 +327,14 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 
         <div className="flex gap-3 pt-4">
           <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
-            {isSaving ? 'Adding...' : 'Add Speciality'}
+          <Button 
+            variant="primary" 
+            onClick={handleSubmit} 
+            disabled={isSaving || isUploading} 
+            loading={isSaving || isUploading} 
+            fullWidth
+          >
+            {isUploading ? 'Uploading Image...' : isSaving ? 'Adding...' : 'Add Speciality'}
           </Button>
         </div>
       </div>
@@ -144,38 +346,121 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) => {
   const [formData, setFormData] = useState({
     name: '',
-    isActive: true
+    isActive: true,
+    imageUrl: null
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
   useEffect(() => {
     if (speciality && isOpen) {
+      const existingImageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
+      
       setFormData({
         name: speciality.name || '',
-        isActive: speciality.isActive !== undefined ? speciality.isActive : true
+        isActive: speciality.isActive !== undefined ? speciality.isActive : true,
+        imageUrl: speciality.imageUrl || null
       });
+      setImagePreview(existingImageUrl);
+      setRemoveExistingImage(false);
+      setImageFile(null);
     }
   }, [speciality, isOpen]);
 
-  const handleSubmit = () => {
+  const handleImageChange = async (file) => {
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setRemoveExistingImage(false);
+  };
+
+  const handleImageRemove = () => {
+    if (formData.imageUrl) {
+      setRemoveExistingImage(true);
+      setImagePreview(null);
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!formData.name) {
       showErrorToast('Speciality name is required', 3000);
       return;
     }
-    onSave({ ...speciality, ...formData });
+
+    try {
+      setIsUploading(true);
+      
+      let finalImageUrl = formData.imageUrl;
+      const specialityId = speciality?.id;
+
+      // Handle image removal
+      if (removeExistingImage && formData.imageUrl) {
+        // ✅ Delete from S3 with correct role
+        await deleteFromS3(formData.imageUrl, specialityId, "speciality");
+        finalImageUrl = null;
+      }
+
+      // Upload new image if selected
+      if (imageFile) {
+        // Delete existing image if it exists (and not already removed)
+        if (formData.imageUrl && !removeExistingImage) {
+          await deleteFromS3(formData.imageUrl, specialityId, "speciality");
+        }
+        
+        // ✅ Upload new image with correct parameters
+        const uploadResult = await uploadToS3(
+          imageFile,
+          null,
+          specialityId,   // ✅ Pass speciality ID
+          "speciality"    // ✅ Role for speciality
+        );
+        finalImageUrl = uploadResult.key;
+      }
+
+      const updatedData = {
+        name: formData.name,
+        isActive: formData.isActive,
+        imageUrl: finalImageUrl
+      };
+
+      await onSave({ ...speciality, ...updatedData });
+      
+      // Reset state
+      setImageFile(null);
+      setImagePreview(null);
+      setRemoveExistingImage(false);
+      
+    } catch (error) {
+      showErrorToast(error?.message || 'Failed to update image', 3000);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Speciality" size="lg">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-            <Stethoscope className="w-5 h-5 text-green-600" />
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
+            <FolderOpen className="w-5 h-5 text-green-600" />
           </div>
           <div>
             <h3 className="text-md font-semibold text-gray-800">Edit Speciality</h3>
             <p className="text-xs text-gray-500">Update speciality details</p>
           </div>
         </div>
+
+        <ImageUpload
+          imageUrl={imagePreview}
+          onImageChange={handleImageChange}
+          onImageRemove={handleImageRemove}
+          isUploading={isUploading}
+          label="Speciality Image"
+        />
 
         <Input
           label="Speciality Name *"
@@ -188,8 +473,14 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
 
         <div className="flex gap-3 pt-4">
           <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
-            {isSaving ? 'Updating...' : 'Update Speciality'}
+          <Button 
+            variant="primary" 
+            onClick={handleSubmit} 
+            disabled={isSaving || isUploading} 
+            loading={isSaving || isUploading} 
+            fullWidth
+          >
+            {isUploading ? 'Uploading Image...' : isSaving ? 'Updating...' : 'Update Speciality'}
           </Button>
         </div>
       </div>
@@ -293,6 +584,8 @@ const SpecialitiesSkeleton = () => {
     </div>
   );
 };
+
+// ================= MAIN COMPONENT =================
 
 const Specialties = () => {
   const navigate = useNavigate(); 
@@ -401,6 +694,7 @@ const Specialties = () => {
           specialityId: response.data?.id || response.id,
           name: newSpeciality.name,
           isActive: newSpeciality.isActive,
+          imageUrl: newSpeciality.imageUrl,
           timestamp: new Date().toISOString()
         }
       });
@@ -426,6 +720,7 @@ const Specialties = () => {
           specialityId: updatedSpeciality.id,
           name: updatedSpeciality.name,
           isActive: updatedSpeciality.isActive,
+          imageUrl: updatedSpeciality.imageUrl,
           timestamp: new Date().toISOString()
         }
       });
@@ -468,6 +763,11 @@ const Specialties = () => {
   const handleDeleteSpeciality = async () => {
     if (selectedSpeciality) {
       try {
+        // ✅ Delete image from S3 if exists
+        if (selectedSpeciality.imageUrl) {
+          await deleteFromS3(selectedSpeciality.imageUrl, selectedSpeciality.id, "speciality");
+        }
+        
         await deleteSpeciality(selectedSpeciality.id).unwrap();
         
         socket.emit("speciality_event", {
@@ -500,6 +800,7 @@ const Specialties = () => {
     const exportData = specialities.map(speciality => ({
       'ID': speciality.id,
       'Name': speciality.name,
+      'Has Image': speciality.imageUrl ? 'Yes' : 'No',
       'Status': speciality.isActive ? 'Active' : 'Inactive',
       'Created At': speciality.createdAt,
       'Updated At': speciality.updatedAt
@@ -576,46 +877,68 @@ const Specialties = () => {
       {paginatedSpecialities.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedSpecialities.map((speciality) => (
-              <Card
-                key={speciality.id}
-                onClick={() => handleSpecialtyClick(speciality)}
-                className="p-6 hover:shadow-lg transition-shadow relative cursor-pointer"
-              >
-                <div onClick={(e) => e.stopPropagation()}>
-                  <ActionMenu
-                    speciality={speciality}
-                    onView={(s) => { setSelectedSpeciality(s); setShowViewModal(true); }}
-                    onEdit={(s) => { setSelectedSpeciality(s); setShowEditModal(true); }}
-                    onToggleStatus={handleToggleStatus}
-                    onDelete={(s) => { setSelectedSpeciality(s); setShowDeleteModal(true); }}
-                  />
-                </div>
-                
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                    <Stethoscope className="w-10 h-10 text-green-600" />
+            {paginatedSpecialities.map((speciality) => {
+              const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
+              
+              return (
+                <Card
+                  key={speciality.id}
+                  onClick={() => handleSpecialtyClick(speciality)}
+                  className="p-6 hover:shadow-lg transition-shadow relative cursor-pointer"
+                >
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <ActionMenu
+                      speciality={speciality}
+                      onView={(s) => { setSelectedSpeciality(s); setShowViewModal(true); }}
+                      onEdit={(s) => { setSelectedSpeciality(s); setShowEditModal(true); }}
+                      onToggleStatus={handleToggleStatus}
+                      onDelete={(s) => { setSelectedSpeciality(s); setShowDeleteModal(true); }}
+                    />
                   </div>
                   
-                  <div className="mb-2">
-                    <h3 className="font-semibold text-lg text-gray-900">{speciality.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">ID: #{speciality.id}</p>
+                  <div className="flex flex-col items-center text-center">
+                    {imageUrl ? (
+                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-green-200 mb-4">
+                        <img 
+                          src={imageUrl} 
+                          alt={speciality.name} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const fallbackUrl = getS3ImageUrl(speciality.imageUrl);
+                            if (fallbackUrl && e.target.src !== fallbackUrl) {
+                              e.target.src = fallbackUrl;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border-2 border-green-200 mb-4">
+                        <FolderOpen className="w-10 h-10 text-green-500" />
+                      </div>
+                    )}
+                    
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-lg text-gray-900">
+                        {toTitleCase(speciality.name)}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">ID: #{speciality.id}</p>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <Badge variant={speciality.isActive ? 'success' : 'danger'}>
+                        {speciality.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                    
+                    {speciality.createdAt && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Created: {formatDate(speciality.createdAt)}
+                      </p>
+                    )}
                   </div>
-                  
-                  <div className="mb-3">
-                    <Badge variant={speciality.isActive ? 'success' : 'danger'}>
-                      {speciality.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </div>
-                  
-                  {speciality.createdAt && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Created: {formatDate(speciality.createdAt)}
-                    </p>
-                  )}
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
 
           {totalPages > 1 && (
@@ -633,7 +956,7 @@ const Specialties = () => {
         </>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <Stethoscope className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No specialities found</h3>
           <p className="text-gray-500">Click "Add Speciality" to create your first speciality</p>
         </div>

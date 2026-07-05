@@ -102,7 +102,7 @@ export const specialityApi = api.injectEndpoints({
       query: ({ id, data }) => {
         const requestBody = {
           name: data.name,
-          imageUrl: data.imageUrl,
+          imageUrl: data.imageUrl !== undefined ? data.imageUrl : null,
           isActive: data.isActive,
         };
         

@@ -97,6 +97,11 @@ const HospitalPatientsList = () => {
     navigate(`${basePath}${path}`);
   };
 
+  // Helper to check if patient is actionable (not deleted and active)
+  const isPatientActionable = (patient) => {
+    return !patient.isDelete && patient.isActive !== false;
+  };
+
   // CRUD Handlers
   const handleAddPatient = () => {
     if (!canModifyPatients) {
@@ -107,27 +112,51 @@ const HospitalPatientsList = () => {
   };
 
   const handleViewDetails = (patient) => {
-  if (patient.isDelete) {
-    showErrorToast("Cannot view details of deleted patient", 3000);
-    return;
-  }
+    if (patient.isDelete) {
+      showErrorToast("Cannot view details of deleted patient", 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast("Cannot view details of inactive patient", 3000);
+      return;
+    }
 
-  const patientId = patient.id || patient._id;
-  const basePath = getBasePath();
+    const patientId = patient.id || patient._id;
+    const basePath = getBasePath();
 
-  navigate(`${basePath}/patients/${patientId}`, {
-    state: {
-      patient,
-      hospitalId: id,
-      returnPath: `${basePath}/hospitals/${id}/patients`,
-    },
-  });
-};
+    navigate(`${basePath}/patients/${patientId}`, {
+      state: {
+        patient,
+        hospitalId: id,
+        returnPath: `${basePath}/hospitals/${id}/patients`,
+      },
+    });
+  };
 
+  const handleEditPatient = (patient) => {
+    if (!canModifyPatients) {
+      showErrorToast('You do not have permission to edit patients', 3000);
+      return;
+    }
+    if (patient.isDelete) {
+      showErrorToast('Cannot edit deleted patient', 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast('Cannot edit inactive patient', 3000);
+      return;
+    }
+    navigateTo(`/hospitals/${id}/patients/${patient.id || patient._id}/edit`);
+    setActiveMenu(null);
+  };
 
   const handleDeleteClick = (patient) => {
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to delete patients', 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast('Cannot delete inactive patient', 3000);
       return;
     }
     setPatientToDelete(patient);
@@ -166,6 +195,10 @@ const HospitalPatientsList = () => {
   const handleAddAppointmentModal = (patient) => {
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for deleted patient', 3000);
+      return;
+    }
+    if (!patient.isActive) {
+      showErrorToast('Cannot create appointment for inactive patient', 3000);
       return;
     }
     setAppointmentPatient(patient);
@@ -302,6 +335,8 @@ const HospitalPatientsList = () => {
   // Row Action Menu with 3 dots
   const RowActionMenu = ({ patient }) => {
     const isDeleted = patient.isDelete;
+    const isInactive = !patient.isActive && !isDeleted;
+    const isDisabled = isDeleted || isInactive;
     const patientId = patient.id || patient._id;
 
     return (
@@ -309,13 +344,16 @@ const HospitalPatientsList = () => {
         <button 
           onClick={(e) => {
             e.stopPropagation();
-            toggleMenu(patientId);
+            if (!isDisabled) {
+              toggleMenu(patientId);
+            }
           }} 
-          className="p-2 rounded hover:bg-gray-100 transition-colors"
+          className={`p-2 rounded transition-colors ${isDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+          disabled={isDisabled}
         >
-          <MoreVertical size={18} className="text-gray-600" />
+          <MoreVertical size={18} className={isDisabled ? 'text-gray-300' : 'text-gray-600'} />
         </button>
-        {activeMenu === patientId && (
+        {activeMenu === patientId && !isDisabled && (
           <div 
             ref={menuRef}
             className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
@@ -414,9 +452,20 @@ const HospitalPatientsList = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {transformedPatients.map((patient) => {
           const isDeleted = patient.isDelete;
+          const isInactive = !patient.isActive && !isDeleted;
+          const isDisabled = isDeleted || isInactive;
           
           return (
-            <Card key={patient.id || patient._id} className={`p-4 hover:shadow-md transition-shadow ${isDeleted ? 'bg-gray-50 border-gray-300' : ''}`}>
+            <Card 
+              key={patient.id || patient._id} 
+              className={`p-4 transition-shadow ${
+                isDeleted 
+                  ? 'bg-gray-50 border-gray-300 opacity-60' 
+                  : isInactive
+                  ? 'bg-gray-50 border-gray-200'
+                  : 'hover:shadow-md'
+              }`}
+            >
               <div className="flex items-start gap-3">
                 <Avatar className={`w-12 h-12 ${isDeleted ? 'opacity-60' : ''}`}>
                   <AvatarImage 
@@ -437,7 +486,12 @@ const HospitalPatientsList = () => {
                       <p className="text-xs text-gray-500">ID: {formatPatientId(patient.id || patient._id)}</p>
                       {isDeleted && (
                         <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 mt-1">
-                          Deleted
+                          Blacklisted
+                        </Badge>
+                      )}
+                      {isInactive && (
+                        <Badge variant="secondary" className="text-xs bg-gray-300 text-gray-600 mt-1">
+                          Inactive
                         </Badge>
                       )}
                     </div>
@@ -446,49 +500,39 @@ const HospitalPatientsList = () => {
                   <div className="space-y-1 mt-2">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Phone size={14} className="text-gray-400" />
-                      <span>{patient.mobileNumber}</span>
+                      <span className={isDisabled ? 'text-gray-400' : ''}>{patient.mobileNumber}</span>
                     </div>
                     {patient.email && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Mail size={14} className="text-gray-400" />
-                        <span>{patient.email}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>{patient.email}</span>
                       </div>
                     )}
                     {patient.gender && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <User size={14} className="text-gray-400" />
-                        <span>{patient.gender}, {patient.age || 'N/A'} years</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>{patient.gender}, {patient.age || 'N/A'} years</span>
                       </div>
                     )}
                     {patient.bloodGroup && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Droplet size={14} className="text-gray-400" />
-                        <span>Blood Group: {patient.bloodGroup}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>Blood Group: {patient.bloodGroup}</span>
                       </div>
                     )}
                     {patient.patientType && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Calendar size={14} className="text-gray-400" />
-                        <span>Type: {patient.patientType}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>Type: {patient.patientType}</span>
                       </div>
                     )}
                     {patient.addressLine && (
                       <div className="flex items-start gap-2 text-sm text-gray-600">
                         <MapPin size={14} className="text-gray-400 mt-0.5" />
-                        <span>{patient.addressLine}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>{patient.addressLine}</span>
                       </div>
                     )}
                   </div>
-                  {!isDeleted && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <button 
-                        onClick={() => handleAddAppointmentModal(patient)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                      >
-                        <Calendar size={14} /> Add Appointment
-                      </button>
-                    </div>
-                  )}
                   {isDeleted && canModifyPatients && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <button 
@@ -496,6 +540,23 @@ const HospitalPatientsList = () => {
                         className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                       >
                         <RotateCcw size={14} /> Recover Patient
+                      </button>
+                    </div>
+                  )}
+                  {isInactive && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="w-full flex items-center justify-center px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed">
+                        Inactive Patient
+                      </div>
+                    </div>
+                  )}
+                  {!isDeleted && !isInactive && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <button 
+                        onClick={() => handleAddAppointmentModal(patient)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                      >
+                        <Calendar size={14} /> Add Appointment
                       </button>
                     </div>
                   )}
