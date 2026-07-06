@@ -70,37 +70,34 @@ const baseQueryWithReauth: BaseQueryFn<
       refreshUrl = "/super-admin/refresh";
     }
 
-    console.log(`🔄 Attempting token refresh via: ${refreshUrl}`);
 
-    // Get refresh token from localStorage
-    const refreshToken = localStorage.getItem("refreshToken");
+const refreshResult = await baseQuery(
+  {
+    url: refreshUrl,
+    method: "POST",
+  },
+  api,
+  extraOptions
+);
 
-    // ✅ Only attempt refresh if we have a refresh token
-    if (!refreshToken) {
-      console.warn("No refresh token available, logging out...");
-      clearAuth();
-      return {
-        error: {
-          status: 401,
-          data: {
-            message: "Session expired. Please login again.",
-          },
-        },
-      };
-    }
+console.log("🔄 Refresh Response:", refreshResult);
 
-    const refreshResult = await baseQuery(
-      {
-        url: refreshUrl,
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${refreshToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-      api,
-      extraOptions
-    );
+if (refreshResult.data) {
+  const data = refreshResult.data as RefreshResponse;
+  const newToken = data.token || data.accessToken;
+
+  if (newToken) {
+    console.log("✅ Token refreshed successfully");
+
+    localStorage.setItem("accessToken", newToken);
+
+    result = await baseQuery(args, api, extraOptions);
+    return result;
+  }
+}
+
+console.error("❌ Token refresh failed");
+clearAuth();
 
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
@@ -110,10 +107,6 @@ const baseQueryWithReauth: BaseQueryFn<
         console.log("✅ Token refreshed successfully");
         localStorage.setItem("accessToken", newToken);
 
-        // Store new refresh token if provided
-        if (data.refreshToken) {
-          localStorage.setItem("refreshToken", data.refreshToken);
-        }
 
         // ✅ Retry original request with new token
         // Update the headers of the original request

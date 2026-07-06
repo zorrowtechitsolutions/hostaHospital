@@ -693,16 +693,6 @@ const Staffs = () => {
               <Download size={16} />
             </Button>
             
-            {/* Toggle to show deleted staff */}
-            <Button 
-              variant={showDeleted ? "primary" : "outline"} 
-              size="sm" 
-              onClick={() => setShowDeleted(!showDeleted)}
-              className="flex items-center gap-1"
-            >
-              <Trash2 size={14} />
-              {showDeleted ? "Hide Deleted" : "Show Deleted"}
-            </Button>
 
             <button
               onClick={() => setShowFilters(prev => !prev)}
@@ -719,16 +709,6 @@ const Staffs = () => {
               )}
             </button>
             
-            {/* ✅ Toggle Deleted Staff Button */}
-            <Button
-              variant={showDeleted ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setShowDeleted(!showDeleted)}
-              className="flex items-center gap-2"
-            >
-              <Trash2 size={16} />
-              {showDeleted ? 'Show Active' : 'Show Deleted'}
-            </Button>
             
             <Button onClick={handleAddStaff} className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <Plus size={16} /> New Staff
