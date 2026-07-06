@@ -18,10 +18,17 @@ import {
   Loader2,
   ChevronRight,
   Bell,
-  UserPlus
+  UserPlus,
+  Edit2,
+  Save,
+  X,
+  Upload,
+  Image as ImageIcon,
+  CheckCircle,
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
-import { useGetHospitalByIdQuery } from '../../../../app/service/hospitalApi';
+import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
+import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../../app/service/hospitalApi';
 import { useGetPatientsQuery } from '../../../../app/service/patients';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { useGetStaffQuery } from '../../../../app/service/staffApi';
@@ -32,12 +39,390 @@ import {
   useGetUnreadNotificationsQuery,
   useGetReadNotificationsQuery 
 } from '../../../../app/service/notification';
+import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../../app/service/S3';
+
+// ================= HELPER FUNCTIONS =================
+
+// Get S3 image URL with cache busting
+const getImageUrlWithCache = (imageUrl) => {
+  if (!imageUrl) return null;
+  const url = getS3ImageUrl(imageUrl);
+  if (!url) return null;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
+};
+
+// ================= IMAGE UPLOAD COMPONENT =================
+
+const ImageUpload = ({ 
+  imageUrl, 
+  onImageChange, 
+  onImageRemove, 
+  isUploading,
+  label = "Hospital Image",
+  disabled = false
+}) => {
+  const fileInputRef = React.useRef(null);
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showErrorToast('Please select an image file', 3000);
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showErrorToast('Image size should be less than 5MB', 3000);
+      return;
+    }
+
+    onImageChange(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      
+      <div className="flex items-start gap-4">
+        {/* Image Preview */}
+        <div className="relative w-24 h-24 flex-shrink-0">
+          {imageUrl ? (
+            <div className="relative w-full h-full">
+              <img
+                src={imageUrl}
+                alt="Hospital"
+                className="w-full h-full object-cover rounded-lg border border-gray-200"
+              />
+              <button
+                type="button"
+                onClick={onImageRemove}
+                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                disabled={isUploading || disabled}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+              <ImageIcon className="w-8 h-8 text-gray-400" />
+            </div>
+          )}
+        </div>
+
+        {/* Upload Button */}
+        <div className="flex-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isUploading || disabled}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || disabled}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1C62A0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUploading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></span>
+                Uploading...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Upload size={16} />
+                {imageUrl ? 'Change Image' : 'Upload Image'}
+              </span>
+            )}
+          </button>
+          <p className="mt-1 text-xs text-gray-500">PNG, JPG, WEBP (Max 5MB)</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ================= EDIT HOSPITAL MODAL =================
+
+const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    about: '',
+    website: '',
+    type: '',
+    profileImage: null
+  });
+  const [imageFile, setImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
+
+  useEffect(() => {
+    if (hospital && isOpen) {
+      const existingImageUrl = hospital.imageUrl || hospital.profilePicture || hospital.profileImage;
+      const previewUrl = existingImageUrl ? getImageUrlWithCache(existingImageUrl) : null;
+      
+      setFormData({
+        name: hospital.name || '',
+        email: hospital.email || '',
+        phone: hospital.phone || '',
+        about: hospital.about || '',
+        website: hospital.website || '',
+        type: hospital.type || 'Hospital',
+        profileImage: existingImageUrl || null
+      });
+      setImagePreview(previewUrl);
+      setRemoveExistingImage(false);
+      setImageFile(null);
+    }
+  }, [hospital, isOpen]);
+
+  const handleImageChange = async (file) => {
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setRemoveExistingImage(false);
+  };
+
+  const handleImageRemove = () => {
+    if (formData.profileImage) {
+      setRemoveExistingImage(true);
+      setImagePreview(null);
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.name) {
+      showErrorToast('Hospital name is required', 3000);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      let finalImageUrl = formData.profileImage;
+      const hospitalId = hospital?.id;
+
+      // Handle image removal
+      if (removeExistingImage && formData.profileImage) {
+        await deleteFromS3(formData.profileImage, hospitalId, "hospital");
+        finalImageUrl = null;
+      }
+
+      // Upload new image if selected
+      if (imageFile) {
+        // Delete existing image if it exists (and not already removed)
+        if (formData.profileImage && !removeExistingImage) {
+          await deleteFromS3(formData.profileImage, hospitalId, "hospital");
+        }
+        
+        const uploadResult = await uploadToS3(
+          imageFile,
+          null,
+          hospitalId,
+          "hospital"
+        );
+        finalImageUrl = uploadResult.key;
+      }
+
+      const updateData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        about: formData.about,
+        website: formData.website,
+        type: formData.type,
+        profilePicture: finalImageUrl,
+        profileImage: finalImageUrl,
+        imageUrl: finalImageUrl
+      };
+
+      await onSave(updateData);
+      
+      setImageFile(null);
+      setImagePreview(null);
+      setRemoveExistingImage(false);
+      
+    } catch (error) {
+      showErrorToast(error?.message || 'Failed to update hospital', 3000);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          {/* Modal Header */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Edit Hospital</h2>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {/* Modal Form */}
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
+            {/* Image Upload */}
+            <ImageUpload
+              imageUrl={imagePreview}
+              onImageChange={handleImageChange}
+              onImageRemove={handleImageRemove}
+              isUploading={isUploading}
+              label="Hospital Image"
+            />
+
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Hospital Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="Enter hospital name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
+                required
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="Enter email"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone
+              </label>
+              <input
+                type="text"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                placeholder="Enter phone number"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
+              />
+            </div>
+
+            {/* Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Hospital Type
+              </label>
+              <input
+                type="text"
+                name="type"
+                value={formData.type}
+                onChange={handleInputChange}
+                placeholder="Enter hospital type"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
+              />
+            </div>
+
+            {/* Website */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Website
+              </label>
+              <input
+                type="url"
+                name="website"
+                value={formData.website}
+                onChange={handleInputChange}
+                placeholder="Enter website URL"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none"
+              />
+            </div>
+
+            {/* About */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                About
+              </label>
+              <textarea
+                name="about"
+                value={formData.about}
+                onChange={handleInputChange}
+                rows="3"
+                placeholder="Enter description"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent outline-none resize-none"
+              />
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || isUploading}
+                className="flex-1 px-4 py-2 bg-[#1C62A0] hover:bg-[#4c6c88] text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {(isSaving || isUploading) && (
+                  <Loader2 size={18} className="animate-spin" />
+                )}
+                {isUploading ? 'Uploading...' : isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ================= MAIN COMPONENT =================
 
 const HospitalDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
-  const { data: hospitalData, isLoading: isHospitalLoading, error } = useGetHospitalByIdQuery(id);
+  const { data: hospitalData, isLoading: isHospitalLoading, error, refetch } = useGetHospitalByIdQuery(id);
   const hospital = hospitalData?.data || hospitalData;
 
   // Fetch patients with hospitalId filter
@@ -123,6 +508,36 @@ const HospitalDetails = () => {
     if (!address) return 'N/A';
     const parts = [address.place, address.district, address.state, address.country].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : 'N/A';
+  };
+
+  const getProfileImage = () => {
+    if (!hospital) return null;
+    const image = hospital.imageUrl || hospital.profilePicture || hospital.profileImage;
+    return image ? getImageUrlWithCache(image) : null;
+  };
+
+  const handleUpdateHospital = async (updateData) => {
+    setIsSaving(true);
+    try {
+      const response = await updateHospital({
+        id: id,
+        updateHospital: updateData
+      }).unwrap();
+      
+      showSuccessToast('Hospital updated successfully!', 3000);
+      setShowEditModal(false);
+      refetch();
+      
+      // Update the hospital in the parent component if needed
+      // The refetch will update the data
+      
+    } catch (error) {
+      console.error("Update error:", error);
+      showErrorToast(error?.data?.message || 'Failed to update hospital', 3000);
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Navigation handlers
@@ -230,6 +645,8 @@ const HospitalDetails = () => {
       </div>
     );
   }
+
+  const profileImageUrl = getProfileImage();
 
   const statCards = [
     { 
@@ -341,26 +758,53 @@ const HospitalDetails = () => {
   return (
     <div>
       <div className="mb-6">
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          onClick={() => navigate('/super-admin/hospitals')} 
-          className="mb-4"
-        >
-          <ArrowLeft size={18} className="mr-1" /> Back to Hospitals
-        </Button>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={() => navigate('/super-admin/hospitals')} 
+            className="mb-4"
+          >
+            <ArrowLeft size={18} className="mr-1" /> Back to Hospitals
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={() => setShowEditModal(true)}
+            className="mb-4"
+          >
+            <Edit2 size={18} className="mr-1" /> Edit Hospital
+          </Button>
+        </div>
         
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-              <Building2 size={32} className="text-white" />
-            </div>
+            {profileImageUrl ? (
+              <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-blue-200">
+                <img 
+                  src={profileImageUrl} 
+                  alt={hospital.name} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(hospital.name)}&background=1C62A0&color=fff&length=2`;
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
+                <Building2 size={32} className="text-white" />
+              </div>
+            )}
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{hospital.name}</h1>
               <p className="text-sm text-gray-500 mt-1">ID: {hospital.id}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-xs text-gray-400">Status:</span>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <CheckCircle size={10} /> Active
+                </span>
                 <span className="text-xs text-gray-400 ml-2">Last Updated:</span>
                 <span className="text-xs text-gray-500">{new Date().toLocaleDateString()}</span>
               </div>
@@ -393,6 +837,22 @@ const HospitalDetails = () => {
               <p className="text-sm text-gray-900 capitalize">{hospital.type || 'Hospital'}</p>
             </div>
           </div>
+          {hospital.website && (
+            <div className="flex items-center gap-3">
+              <Globe size={18} className="text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500">Website</p>
+                <a 
+                  href={hospital.website} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  {hospital.website}
+                </a>
+              </div>
+            </div>
+          )}
           {hospital.address && (
             <div className="flex items-start gap-3 col-span-2">
               <MapPin size={18} className="text-gray-400 mt-0.5" />
@@ -462,6 +922,15 @@ const HospitalDetails = () => {
           })}
         </div>
       </div>
+
+      {/* Edit Hospital Modal */}
+      <EditHospitalModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        hospital={hospital}
+        onSave={handleUpdateHospital}
+        isSaving={isSaving}
+      />
     </div>
   );
 };
