@@ -134,7 +134,12 @@ export const patientsApi = api.injectEndpoints({
 
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
+
         }
+
+      const url = `/patients?${queryParams.toString()}`;
+
+    console.log("Patients API URL:", url); // 👈 ADD HERe
 
         // ✅ Add includeDeleted parameter
         if (params.includeDeleted) {
