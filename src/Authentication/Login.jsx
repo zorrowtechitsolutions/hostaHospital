@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
+// src/Authentication/Login.jsx - COMPLETE WITH PLATFORM
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -7,7 +7,7 @@ import { showSuccessToast, showErrorToast, showWarningToast } from '../component
 import { useLoginMutation } from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
-import { generateTokenWithTimeout, isFCMAvailable } from "../notification/firebase"; // ✅ Updated imports
+import { generateTokenWithTimeout, isFCMAvailable } from "../notification/firebase";
 import logo from "../assets/logo.jpeg";
 
 import { tokenManager } from '../utils/fcmTokenManager';
@@ -21,7 +21,6 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
   
-  // Multi-hospital selection states
   const [showHospitalSelect, setShowHospitalSelect] = useState(false);
   const [hospitalOptions, setHospitalOptions] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
@@ -39,7 +38,6 @@ const Login = () => {
 
   const isLoading = isLoginLoading || isSubmitting;
 
-  // ✅ Initialize IndexedDB on component mount
   useEffect(() => {
     const initDB = async () => {
       try {
@@ -95,7 +93,6 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ Handle login with selected hospital
   const handleLoginWithHospital = async (hospitalId) => {
     setIsSubmitting(true);
     setLoginError('');
@@ -126,7 +123,6 @@ const Login = () => {
     }
   };
 
-  // ✅ Process successful login
   const processSuccessfulLogin = (response, fcmToken, hospital = null) => {
     const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
     const roleId = response.roleId || response.data?.roleId;
@@ -190,10 +186,10 @@ const Login = () => {
     
     localStorage.setItem("userData", JSON.stringify(userData));
     
-    // ✅ Build authData
     let authData = {
       deviceId: deviceId,
-      fcmToken: fcmToken
+      fcmToken: fcmToken,
+      platform: 'web',  // ✅ Store platform in auth data
     };
     
     if (role === 'super_admin') {
@@ -266,7 +262,6 @@ const Login = () => {
       }
       
     } else {
-      // Hospital Admin
       authData = {
         ...authData,
         id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
@@ -310,7 +305,7 @@ const Login = () => {
     }
   };
 
-  // ✅ MAIN LOGIN HANDLER - UPDATED with better FCM handling
+  // ✅ MAIN LOGIN HANDLER WITH PLATFORM
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -322,58 +317,51 @@ const Login = () => {
         const deviceId = getDeviceId();
         console.log('📱 Device ID for login:', deviceId);
         
-        // ✅ Get FCM token with better handling
+        // Get FCM token
         let fcmToken = null;
-        
-        // Check if FCM is available first
         if (isFCMAvailable()) {
-          console.log('🔔 FCM available, getting token...');
           try {
-            // Use the new helper with 10 second timeout
             fcmToken = await generateTokenWithTimeout(10000);
-            if (fcmToken) {
-              console.log('✅ FCM token generated:', fcmToken);
-            } else {
-              console.log('ℹ️ No FCM token received (user may not have enabled notifications)');
-            }
           } catch (tokenError) {
             console.warn('⚠️ FCM token generation failed:', tokenError.message);
-            // Continue without FCM token - login still works!
           }
-        } else {
-          console.log('ℹ️ FCM not available, skipping token generation');
         }
         
-        // ✅ Single login payload
+        // ✅ Build login payload with platform
         const loginPayload = {
           email: formData.email,
           password: formData.password,
-          deviceId: deviceId
+          deviceId: deviceId,
+          platform: 'web',  // ✅ SEND PLATFORM TO BACKEND
         };
         
         if (fcmToken) {
           loginPayload.fcmToken = fcmToken;
         }
         
-        console.log('📤 Sending login request...');
+        console.log('📤 Sending login request with platform:', loginPayload.platform);
+        console.log('📤 Payload:', JSON.stringify({
+          ...loginPayload,
+          password: '******'
+        }, null, 2));
         
-        // ✅ ONE API call - handles ALL user types
+        // ✅ ONE API call
         const response = await loginUser(loginPayload).unwrap();
         console.log('📥 Login response received');
         
         const roleId = response.roleId || response.data?.roleId;
         
-        // ✅ Save FCM token to IndexedDB (only if we have one)
+        // ✅ Save FCM token to IndexedDB
         if (fcmToken) {
           try {
             await tokenManager.addFCMToken(fcmToken);
             console.log('✅ FCM token saved to IndexedDB');
           } catch (dbError) {
-            console.error('❌ Failed to save token to IndexedDB:', dbError);
+            console.error('❌ Failed to save token:', dbError);
           }
         }
         
-        // ✅ Check if Super Admin (roleId === 1)
+        // ✅ Check if Super Admin
         if (Number(roleId) === 1) {
           processSuccessfulLogin(response, fcmToken, null);
           return;
@@ -391,7 +379,7 @@ const Login = () => {
           return;
         }
         
-        // ✅ Single hospital or no hospital
+        // ✅ Single hospital
         const singleHospital = response.hospitals && response.hospitals.length === 1 
           ? response.hospitals[0] 
           : null;
@@ -440,7 +428,6 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {loginError && <Alert type="error" message={loginError} />}
 
-            {/* Hospital Selection Dropdown */}
             {showHospitalSelect && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -482,7 +469,6 @@ const Login = () => {
               </div>
             )}
 
-            {/* Regular Login Form */}
             {!showHospitalSelect && (
               <>
                 <Input

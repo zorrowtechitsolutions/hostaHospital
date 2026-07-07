@@ -33,6 +33,7 @@ export interface LoginCredentials {
   password: string;
   fcmToken?: string;
   deviceId?: string;
+  platform?: string;
 }
 
 export interface PhoneLoginData {
