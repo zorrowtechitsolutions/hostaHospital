@@ -713,7 +713,6 @@ const Patients = () => {
             <Download size={16} />
           </button>
 
-          
 
           <button
             onClick={() => setShowFilters(!showFilters)}

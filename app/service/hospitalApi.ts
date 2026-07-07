@@ -1,5 +1,6 @@
-// hospitalApi.ts - COMPLETE UPDATED VERSION with Change Password, Forgot Password, Super Admin Login & Recover
+// hospitalApi.ts - SINGLE LOGIN ROUTE (Removed Super Admin separate endpoint)
 import { api } from "./api";
+import { tokenManager } from '../../src/utils/fcmTokenManager';
 
 // Type definitions
 export interface Hospital {
@@ -31,6 +32,7 @@ export interface LoginCredentials {
   email: string;
   password: string;
   fcmToken?: string;
+  deviceId?: string;
 }
 
 export interface PhoneLoginData {
@@ -103,7 +105,7 @@ export interface ResetPasswordResponse {
   error?: string;
 }
 
-// Super Admin Types
+// Super Admin Types - Still needed for response handling
 export interface SuperAdmin {
   id: number;
   name: string;
@@ -114,33 +116,14 @@ export interface SuperAdmin {
   createdAt?: string;
 }
 
-export interface SuperAdminLoginCredentials {
-  email: string;
-  password: string;
-  fcmToken?: string;
-}
-
-export interface SuperAdminLoginResponse {
-  success?: boolean;
-  token?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  roleId?: number;
-  role?: string;
-  roleDetected?: string;
-  data?: SuperAdmin;
-  user?: SuperAdmin;
-  message?: string;
-  error?: string;
-}
-
 export interface AuthResponse {
   success?: boolean;
   token?: string;
   accessToken?: string;
   refreshToken?: string;
-  data?: Hospital;
+  data?: Hospital | SuperAdmin;
   hospital?: Hospital;
+  user?: SuperAdmin;
   message?: string;
   error?: string;
   roleId?: number;
@@ -172,6 +155,9 @@ export interface GetHospitalsParams {
 export const hospitalApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
+    // ============================================
+    // ✅ REGISTER - Hospital Registration
+    // ============================================
     register: builder.mutation<AuthResponse, RegisterData>({
       query: (hospitalData) => ({
         url: `/hospital`,
@@ -191,11 +177,16 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    loginHospital: builder.mutation<AuthResponse, LoginCredentials>({
+    // ============================================
+    // ✅ SINGLE LOGIN ROUTE - Handles ALL users
+    // Super Admin, Hospital Admin, Doctor, Staff
+    // ALL use the SAME endpoint: /hospital/g-login
+    // ============================================
+    login: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => ({
-        url: `/hospital/g-login`,
+        url: `/hospital/g-login`,  // ✅ SINGLE endpoint for ALL users
         method: "POST",
-        body: loginData,
+        body: loginData,  // { email, password, fcmToken?, deviceId? }
       }),
       transformResponse: (response: AuthResponse) => {
         const token = response.token || response.accessToken;
@@ -205,41 +196,24 @@ export const hospitalApi = api.injectEndpoints({
         if (response.refreshToken) {
           localStorage.setItem("refreshToken", response.refreshToken);
         }
+        // ✅ Store roleId for role detection
+        if (response.roleId !== undefined) {
+          localStorage.setItem("roleId", String(response.roleId));
+        }
         return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Login failed",
+        };
       },
       invalidatesTags: ["Hospital"],
     }),
 
-    // // ✅ Super Admin Login endpoint
-    // loginSuperAdmin: builder.mutation<SuperAdminLoginResponse, SuperAdminLoginCredentials>({
-    //   query: (loginData) => ({
-    //     url: `/users/login`,
-    //     method: "POST",
-    //     body: loginData,
-    //   }),
-    //   transformResponse: (response: SuperAdminLoginResponse) => {
-    //     const token = response.token || response.accessToken;
-    //     if (token) {
-    //       localStorage.setItem("accessToken", token);
-    //     }
-    //     if (response.refreshToken) {
-    //       localStorage.setItem("refreshToken", response.refreshToken);
-    //     }
-    //     // Store roleId for Super Admin detection
-    //     if (response.roleId !== undefined) {
-    //       localStorage.setItem("roleId", String(response.roleId));
-    //     }
-    //     return response;
-    //   },
-    //   transformErrorResponse: (response: { status: number; data?: any }) => {
-    //     return {
-    //       status: response.status,
-    //       message: response.data?.message || "Super Admin login failed",
-    //     };
-    //   },
-    //   invalidatesTags: ["Hospital"],
-    // }),
-
+    // ============================================
+    // PHONE LOGIN - OTP
+    // ============================================
     requestHospitalOtp: builder.mutation<{ message: string }, PhoneLoginData>({
       query: (phoneData) => ({
         url: `/hospital/login/phone`,
@@ -264,6 +238,9 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
+    // ============================================
+    // REFRESH TOKEN
+    // ============================================
     refreshToken: builder.mutation<AuthResponse, void>({
       query: () => ({
         url: `/hospital/refresh`,
@@ -278,14 +255,18 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    logoutHospital: builder.mutation<{ message: string }, void>({
-      query: () => ({
-        url: `/hospital/logout`,
+    // ============================================
+    // LOGOUT - Clear all local data
+    // ============================================
+    logout: builder.mutation<{ message: string }, string | void>({
+      query: (deviceId) => ({
+        url: deviceId ? `/hospital/logout/${deviceId}` : `/hospital/logout`,
         method: "POST",
       }),
       onQueryStarted: async (_arg, { queryFulfilled }) => {
         try {
           await queryFulfilled;
+          // ✅ Clear all local storage
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
           localStorage.removeItem("roleId");
@@ -293,13 +274,28 @@ export const hospitalApi = api.injectEndpoints({
           localStorage.removeItem("userData");
           localStorage.removeItem("authData");
           localStorage.removeItem("permissions");
+          localStorage.removeItem("deviceId");
+          localStorage.removeItem("hospitalInfo");
+          localStorage.removeItem("superAdminId");
+          localStorage.removeItem("doctorId");
+          localStorage.removeItem("staffId");
+          
+          // ✅ Clear IndexedDB tokens
+          try {
+            await tokenManager.clearAllDeviceTokens();
+            console.log('✅ IndexedDB tokens cleared on logout');
+          } catch (dbError) {
+            console.warn('⚠️ Could not clear IndexedDB tokens:', dbError);
+          }
         } catch (error) {
-          // Silently handle logout error
+          console.error('❌ Logout error:', error);
         }
       },
     }),
 
-    // Change Password Mutation
+    // ============================================
+    // CHANGE PASSWORD
+    // ============================================
     changePassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
       query: ({ currentPassword, newPassword }) => ({
         url: `/hospital/auth/change-password`,
@@ -318,9 +314,9 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // ========== FORGOT PASSWORD / RESET PASSWORD ENDPOINTS ==========
-    
-    // Send OTP to email for password reset
+    // ============================================
+    // FORGOT PASSWORD / RESET PASSWORD
+    // ============================================
     sendOtp: builder.mutation<OtpResponse, SendOtpData>({
       query: (otpData) => ({
         url: `/hospital/auth/send-otp`,
@@ -338,7 +334,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // Verify OTP sent to email
     verifyOtp: builder.mutation<OtpResponse, VerifyOtpData>({
       query: (otpData) => ({
         url: `/hospital/auth/verify-otp`,
@@ -356,7 +351,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // Reset password using verified OTP
     resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
       query: (resetData) => ({
         url: `/hospital/auth/reset-password`,
@@ -374,8 +368,9 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // ========== HOSPITAL MANAGEMENT ENDPOINTS ==========
-
+    // ============================================
+    // HOSPITAL MANAGEMENT
+    // ============================================
     getAllHospitals: builder.query<HospitalListResponse | Hospital[], GetHospitalsParams | void>({
       query: (params) => {
         const queryParams = new URLSearchParams();
@@ -401,11 +396,9 @@ export const hospitalApi = api.injectEndpoints({
       },
       providesTags: ["Hospital"],
       transformResponse: (response: HospitalListResponse | Hospital[]) => {
-        // If response has pagination, return as is
         if (response && 'pagination' in response) {
           return response;
         }
-        // If response is just an array, wrap it
         if (Array.isArray(response)) {
           return {
             data: response,
@@ -468,7 +461,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // ========== RECOVER HOSPITAL ENDPOINT ==========
     recoverHospital: builder.mutation<
       { success: boolean; message: string; data?: Hospital },
       string
@@ -494,16 +486,15 @@ export const hospitalApi = api.injectEndpoints({
   }),
 });
 
-// Export all hooks
+// ✅ Export ALL hooks - Only ONE login mutation
 export const {
   // Auth hooks
   useRegisterMutation,
-  useLoginHospitalMutation,
-  // useLoginSuperAdminMutation, // ✅ Added Super Admin login hook
+  useLoginMutation,        // ✅ SINGLE login for ALL users
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,
-  useLogoutHospitalMutation,
+  useLogoutMutation,       // ✅ Renamed from logoutHospital
   useChangePasswordMutation,
   
   // Forgot Password hooks

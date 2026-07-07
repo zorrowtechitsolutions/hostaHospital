@@ -1,92 +1,123 @@
-// firebase-messaging-sw.js
-
+// public/firebase-messaging-sw.js
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
-// 🔐 SAME CONFIG HERE (IMPORTANT)
+// 🔐 HARDCODE CONFIG HERE (import.meta.env DOES NOT WORK IN SW)
 firebase.initializeApp({
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyBiEVMf5QSHICm448m-n67-15KZ6wgVBew",
+  authDomain: "hosta-7d497.firebaseapp.com",
+  projectId: "hosta-7d497",
+  storageBucket: "hosta-7d497.firebasestorage.app",
+  messagingSenderId: "951235379752",
+  appId: "1:951235379752:web:2e67b2b522d65f3dafab1d",
+  measurementId: "G-NTYMKX72ZE",
 });
 
 const messaging = firebase.messaging();
 
 // 🔔 Background notification
 self.addEventListener("push", (event) => {
-  const payload = event.data.json();
+  console.log('📨 Push event received in SW');
+  
+  let payload = {};
+  try {
+    payload = event.data.json();
+    console.log('📨 Payload:', payload);
+  } catch (error) {
+    console.error('❌ Failed to parse push payload:', error);
+    return;
+  }
 
-  const title =
-    payload.notification?.title || payload.data?.title || "New Booking";
+  const title = payload.notification?.title || payload.data?.title || "New Booking";
+  const body = payload.notification?.body || payload.data?.body || "You have a new booking request";
 
   const options = {
-    body: payload.notification?.body || payload.data?.body || "",
-    icon: "/favicon.ico",
-    badge: "/badge.png",
+    body: body,
+    vibrate: [200, 100, 200],
     requireInteraction: true,
+    data: payload.data || {},
     actions: [
       { action: "accept", title: "✅ Accept Booking" },
       { action: "reject", title: "❌ Cancel" },
     ],
-    data: payload.data,
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
 // 🔘 Handle notification clicks
 self.addEventListener("notificationclick", (event) => {
+  console.log('🔘 Notification clicked:', event.action);
   event.notification.close();
 
+  const bookingData = event.notification.data || {};
+
   if (event.action === "accept") {
-    // Open the ApproveRequestModal
     event.waitUntil(
       clients.matchAll({ type: "window", includeUncontrolled: true })
         .then(windowClients => {
-          // Check if there's already a tab open with our app
           for (let client of windowClients) {
             if (client.url.includes(self.location.origin) && "focus" in client) {
-              // Found existing tab, focus it and send message to open ApproveRequestModal
               client.focus();
               client.postMessage({
                 action: "openApproveModal",
-                bookingData: event.notification.data
+                bookingData: bookingData
               });
               return;
             }
           }
-          // No existing tab, open a new one with a special query param
           if (clients.openWindow) {
             return clients.openWindow("/?action=approve&modal=approve");
           }
         })
     );
   } else if (event.action === "reject") {
-    // Open the RejectRequestModal
     event.waitUntil(
       clients.matchAll({ type: "window", includeUncontrolled: true })
         .then(windowClients => {
-          // Check if there's already a tab open with our app
           for (let client of windowClients) {
             if (client.url.includes(self.location.origin) && "focus" in client) {
-              // Found existing tab, focus it and send message to open RejectRequestModal
               client.focus();
               client.postMessage({
                 action: "openRejectModal",
-                bookingData: event.notification.data
+                bookingData: bookingData
               });
               return;
             }
           }
-          // No existing tab, open a new one with a special query param
           if (clients.openWindow) {
             return clients.openWindow("/?action=reject&modal=reject");
           }
         })
     );
+  } else {
+    // Default: open the app
+    event.waitUntil(
+      clients.matchAll({ type: "window", includeUncontrolled: true })
+        .then(windowClients => {
+          for (let client of windowClients) {
+            if (client.url.includes(self.location.origin) && "focus" in client) {
+              client.focus();
+              return;
+            }
+          }
+          if (clients.openWindow) {
+            return clients.openWindow("/");
+          }
+        })
+    );
   }
+});
+
+// 🚀 Service Worker Install/Activate events
+self.addEventListener("install", (event) => {
+  console.log("📦 Service Worker installed");
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  console.log("⚡ Service Worker activated");
+  event.waitUntil(self.clients.claim());
 });
