@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
-import { useLogoutHospitalMutation } from '../../app/service/hospitalApi';
+import { useLogoutMutation } from '../../app/service/hospitalApi'; // ✅ FIXED import
 import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
 import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
@@ -82,7 +82,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
-  const [logoutHospital, { isLoading: isLoggingOut }] = useLogoutHospitalMutation();
+  // ✅ FIXED: Changed from useLogoutHospitalMutation to useLogoutMutation
+  const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
   
   const hospitalId = getHospitalId();
   const userRole = user?.role || 'hospital';
@@ -170,13 +171,16 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     }
   };
 
+  // ✅ FIXED: Updated logout handler
   const handleLogout = async () => {
     try {
-      await logoutHospital().unwrap();
+      // Call the API logout
+      await logoutApi().unwrap();
     } catch (error) {
-      // Error handled silently
+      console.error('Logout API error:', error);
     } finally {
-      logout();
+      // Always clear local state and redirect
+      logout(); // Auth context logout (clears localStorage and state)
       navigate("/sign-in");
     }
   };

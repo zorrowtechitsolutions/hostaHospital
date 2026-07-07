@@ -1,19 +1,22 @@
-// src/Authentication/Login.jsx - COMPLETE UPDATED VERSION with Logo & Fixed Loading Issue
-import React, { useState } from 'react';
+// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
-import { useLoginHospitalMutation } from '../../app/service/hospitalApi';
+import { useLoginMutation } from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
-import { generateToken } from "../notification/firebase";
+import { generateTokenWithTimeout, isFCMAvailable } from "../notification/firebase"; // ✅ Updated imports
 import logo from "../assets/logo.jpeg";
+
+import { tokenManager } from '../utils/fcmTokenManager';
+import { getDeviceId } from '../utils/deviceManager';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [loginHospital, { isLoading: isHospitalLoading }] = useLoginHospitalMutation();
+  const [loginUser, { isLoading: isLoginLoading }] = useLoginMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -23,6 +26,8 @@ const Login = () => {
   const [hospitalOptions, setHospitalOptions] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [detectedRole, setDetectedRole] = useState('');
+  const [pendingResponse, setPendingResponse] = useState(null);
+  const [pendingFcmToken, setPendingFcmToken] = useState(null);
   
   const [formData, setFormData] = useState({
     email: "",
@@ -32,7 +37,21 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  const isLoading = isHospitalLoading || isSubmitting;
+  const isLoading = isLoginLoading || isSubmitting;
+
+  // ✅ Initialize IndexedDB on component mount
+  useEffect(() => {
+    const initDB = async () => {
+      try {
+        await tokenManager.init();
+        const deviceId = getDeviceId();
+        console.log('📱 Device ID:', deviceId);
+      } catch (error) {
+        console.error('❌ Failed to initialize IndexedDB:', error);
+      }
+    };
+    initDB();
+  }, []);
 
   const validateField = (name, value) => {
     switch (name) {
@@ -76,82 +95,58 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle login after hospital selection
+  // ✅ Handle login with selected hospital
   const handleLoginWithHospital = async (hospitalId) => {
     setIsSubmitting(true);
     setLoginError('');
     
     try {
-      let fcmToken = null;
-      try {
-        const tokenPromise = generateToken();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('FCM token generation timeout')), 5000)
-        );
-        fcmToken = await Promise.race([tokenPromise, timeoutPromise]);
-      } catch (tokenError) {
-        // Silently handle token error and continue
-      }
-      
-      const loginPayload = {
-        email: formData.email,
-        password: formData.password,
-        hospitalId: hospitalId
-      };
+      const response = pendingResponse;
+      const fcmToken = pendingFcmToken;
       
       if (fcmToken) {
-        loginPayload.fcmToken = fcmToken;
+        try {
+          await tokenManager.addFCMToken(fcmToken);
+          console.log('✅ FCM token saved to IndexedDB');
+        } catch (dbError) {
+          console.error('❌ Failed to save token to IndexedDB:', dbError);
+        }
       }
       
-      const response = await loginHospital(loginPayload).unwrap();
-      
-      // Process successful login
       processSuccessfulLogin(response, fcmToken, selectedHospital);
       
     } catch (error) {
       let errorMessage = "Invalid email or password. Please try again.";
-      
       if (error.data?.message) {
         errorMessage = error.data.message;
-      } else if (error.status === 401) {
-        errorMessage = "Invalid email or password. Please try again.";
-      } else if (error.status === 404) {
-        errorMessage = "Account not found. Please register first.";
-      } else if (error.status === 403) {
-        errorMessage = "You don't have permission to access this hospital.";
       }
-      
       setLoginError(errorMessage);
       showErrorToast(`❌ ${errorMessage}`, 4000);
       setIsSubmitting(false);
     }
   };
 
-  // Process successful login and store data
+  // ✅ Process successful login
   const processSuccessfulLogin = (response, fcmToken, hospital = null) => {
     const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
-    
-    // EXTRACT ROLE ID ONCE
     const roleId = response.roleId || response.data?.roleId;
+    const deviceId = getDeviceId();
     
     if (token) {
       localStorage.setItem("accessToken", token);
+      localStorage.setItem("deviceId", deviceId);
       
-      // Store roleId if present (for Super Admin detection)
       if (roleId) {
         localStorage.setItem("roleId", roleId.toString());
       }
       
-      // Store detected role from response
       let role = response.roleDetected || response.role || response.userType;
       
-      // Super Admin handling
       if (Number(roleId) === 1) {
         role = "super_admin";
       }
       
       if (role) {
-        // Clean up role URL if needed (extract only the role name)
         let cleanRole = role;
         if (role.includes('/')) {
           if (role.includes('doctor')) cleanRole = 'doctor';
@@ -162,36 +157,30 @@ const Login = () => {
         localStorage.setItem("userRole", cleanRole);
       }
       
-      // Store permissions from login API response
       if (response.authPermission?.data) {
         localStorage.setItem("permissions", JSON.stringify(response.authPermission.data));
       } else if (response.permissions) {
         localStorage.setItem("permissions", JSON.stringify(response.permissions));
       }
       
-      // Store hospital info if selected (for reference)
       if (hospital) {
         localStorage.setItem("hospitalInfo", JSON.stringify(hospital));
       }
       
-      // Verify token (silent)
       try {
         jwtDecode(token);
       } catch (decodeError) {
-        // Silently handle decode error
+        // Silent
       }
     }
     
-    // Extract user data from response (this contains the actual profile data)
     const userData = response.data || response.user || response;
     let role = response.roleDetected || response.role || response.userType || 'hospital';
     
-    // Super Admin handling for role variable using the extracted roleId
     if (Number(roleId) === 1) {
       role = "super_admin";
     }
     
-    // Clean up role URL if needed
     if (role && role.includes('/')) {
       if (role.includes('doctor')) role = 'doctor';
       else if (role.includes('staff')) role = 'staff';
@@ -199,32 +188,31 @@ const Login = () => {
       else if (role.includes('super_admin')) role = 'super_admin';
     }
     
-    // Store complete user data for profile page
     localStorage.setItem("userData", JSON.stringify(userData));
     
-    // ✅ Build authData based on role with roleId added to ALL roles
-    let authData = {};
+    // ✅ Build authData
+    let authData = {
+      deviceId: deviceId,
+      fcmToken: fcmToken
+    };
     
     if (role === 'super_admin') {
-      // Super Admin - special handling
       authData = {
+        ...authData,
         id: userData?.id || response.id,
         name: userData?.name || userData?.displayName || 'Super Admin',
         email: userData?.email || formData.email,
         phone: userData?.phone || '',
         role: 'super_admin',
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         isSuperAdmin: true,
-        fcmToken: fcmToken
       };
       
-      // Store super admin ID
       if (userData?.id || response.id) {
         localStorage.setItem("superAdminId", (userData?.id || response.id).toString());
       }
       
     } else if (role === 'doctor') {
-      // Doctor - use full doctor profile from response.data
       const doctorName = userData?.displayName || 
                          (userData?.firstName && userData?.lastName 
                            ? `${userData.firstName} ${userData.lastName}`.trim() 
@@ -232,9 +220,10 @@ const Login = () => {
                          'Doctor';
       
       authData = {
+        ...authData,
         id: userData?.id,
         doctorId: userData?.id,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: doctorName,
@@ -250,20 +239,18 @@ const Login = () => {
         experience: userData?.experience,
         imageUrl: userData?.imageUrl,
         role: role,
-        fcmToken: fcmToken
       };
       
-      // Store doctor-specific IDs
       if (userData?.id) {
         localStorage.setItem("doctorId", userData.id.toString());
       }
       
     } else if (role === 'staff') {
-      // ✅ Staff - with roleId added
       authData = {
+        ...authData,
         id: userData?.id,
         staffId: userData?.id,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
         name: userData?.name || userData?.displayName || 'Staff',
@@ -272,33 +259,28 @@ const Login = () => {
         designation: userData?.designation,
         staffType: userData?.staffType,
         role: role,
-        fcmToken: fcmToken
       };
       
-      // Store staff-specific IDs
       if (userData?.id) {
         localStorage.setItem("staffId", userData.id.toString());
       }
       
     } else {
-      // ✅ Hospital admin - with roleId added
+      // Hospital Admin
       authData = {
+        ...authData,
         id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
-        roleId: roleId, // ✅ Added roleId
+        roleId: roleId,
         hospitalId: userData?.id || userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
         name: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
         email: userData?.email || formData.email,
         phone: userData?.phone || '',
         role: role,
-        fcmToken: fcmToken
       };
     }
     
-    // Store complete auth data in localStorage for easy access
     localStorage.setItem("authData", JSON.stringify(authData));
-    
-    // Call login from auth context
     login(authData);
     
     let welcomeMessage = '';
@@ -313,10 +295,11 @@ const Login = () => {
     }
     
     showSuccessToast(welcomeMessage, 4000);
-    
     setIsSubmitting(false);
+    setShowHospitalSelect(false);
+    setPendingResponse(null);
+    setPendingFcmToken(null);
     
-    // REDIRECT BASED ON ROLE with proper roleId check
     const storedRoleId = Number(localStorage.getItem("roleId"));
     const userRole = localStorage.getItem("userRole");
     
@@ -327,6 +310,7 @@ const Login = () => {
     }
   };
 
+  // ✅ MAIN LOGIN HANDLER - UPDATED with better FCM handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -335,69 +319,82 @@ const Login = () => {
       setLoginError('');
       
       try {
+        const deviceId = getDeviceId();
+        console.log('📱 Device ID for login:', deviceId);
+        
+        // ✅ Get FCM token with better handling
         let fcmToken = null;
-        try {
-          const tokenPromise = generateToken();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('FCM token generation timeout')), 5000)
-          );
-          fcmToken = await Promise.race([tokenPromise, timeoutPromise]);
-        } catch (tokenError) {
-          // Silently handle token error and continue
+        
+        // Check if FCM is available first
+        if (isFCMAvailable()) {
+          console.log('🔔 FCM available, getting token...');
+          try {
+            // Use the new helper with 10 second timeout
+            fcmToken = await generateTokenWithTimeout(10000);
+            if (fcmToken) {
+              console.log('✅ FCM token generated:', fcmToken);
+            } else {
+              console.log('ℹ️ No FCM token received (user may not have enabled notifications)');
+            }
+          } catch (tokenError) {
+            console.warn('⚠️ FCM token generation failed:', tokenError.message);
+            // Continue without FCM token - login still works!
+          }
+        } else {
+          console.log('ℹ️ FCM not available, skipping token generation');
         }
         
+        // ✅ Single login payload
         const loginPayload = {
           email: formData.email,
-          password: formData.password
+          password: formData.password,
+          deviceId: deviceId
         };
         
         if (fcmToken) {
           loginPayload.fcmToken = fcmToken;
         }
         
-        // FIRST: Try Super Admin login
-        let response;
-        let isSuperAdmin = false;
+        console.log('📤 Sending login request...');
         
-        try {
-          response = await loginSuperAdmin(loginPayload).unwrap();
-          
-          // Extract roleId from response
-          const roleId = response.roleId || response.data?.roleId;
-          
-          // Check if it's a Super Admin (roleId === 1)
-          if (Number(roleId) === 1) {
-            isSuperAdmin = true;
-          } else {
-            // If not Super Admin, throw to try hospital login
-            throw new Error("Not Super Admin");
-          }
-        } catch (superAdminError) {
-          // SECOND: Try hospital login
-          response = await loginHospital(loginPayload).unwrap();
-        }
+        // ✅ ONE API call - handles ALL user types
+        const response = await loginUser(loginPayload).unwrap();
+        console.log('📥 Login response received');
         
-        // Extract roleId from response
         const roleId = response.roleId || response.data?.roleId;
         
-        // SUPER ADMIN CHECK - If roleId is 1, it's Super Admin
-        if (Number(roleId) === 1 || isSuperAdmin) {
+        // ✅ Save FCM token to IndexedDB (only if we have one)
+        if (fcmToken) {
+          try {
+            await tokenManager.addFCMToken(fcmToken);
+            console.log('✅ FCM token saved to IndexedDB');
+          } catch (dbError) {
+            console.error('❌ Failed to save token to IndexedDB:', dbError);
+          }
+        }
+        
+        // ✅ Check if Super Admin (roleId === 1)
+        if (Number(roleId) === 1) {
           processSuccessfulLogin(response, fcmToken, null);
           return;
         }
         
-        // Check if multiple hospitals require selection (based on hospitals array length > 1)
+        // ✅ Check if multiple hospitals
         if (response.hospitals && response.hospitals.length > 1) {
+          setPendingResponse(response);
+          setPendingFcmToken(fcmToken);
           setHospitalOptions(response.hospitals || []);
           setDetectedRole(response.roleDetected || '');
           setShowHospitalSelect(true);
           setIsSubmitting(false);
+          showWarningToast('⚠️ Please select a hospital to continue', 3000);
           return;
         }
         
-        // If only one hospital or direct login, process normally
-        // Extract the single hospital if it exists
-        const singleHospital = response.hospitals && response.hospitals.length === 1 ? response.hospitals[0] : null;
+        // ✅ Single hospital or no hospital
+        const singleHospital = response.hospitals && response.hospitals.length === 1 
+          ? response.hospitals[0] 
+          : null;
         processSuccessfulLogin(response, fcmToken, singleHospital);
         
       } catch (error) {
@@ -443,7 +440,7 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {loginError && <Alert type="error" message={loginError} />}
 
-            {/* Hospital Selection Dropdown (shown when multiple hospitals) */}
+            {/* Hospital Selection Dropdown */}
             {showHospitalSelect && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -477,7 +474,7 @@ const Login = () => {
                     size="md"
                     fullWidth
                     onClick={() => handleLoginWithHospital(selectedHospital.hospitalId)}
-                    className="mt-3"
+                    className="mt-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg"
                   >
                     Continue with {selectedHospital.hospitalName}
                   </Button>
@@ -485,7 +482,7 @@ const Login = () => {
               </div>
             )}
 
-            {/* Regular Login Form (hidden when hospital selection is shown) */}
+            {/* Regular Login Form */}
             {!showHospitalSelect && (
               <>
                 <Input
@@ -544,16 +541,7 @@ const Login = () => {
                   fullWidth
                   disabled={isLoading}
                   loading={isLoading}
-                  className="
-                    bg-gradient-to-r
-                    from-green-600
-                    to-emerald-600
-                    hover:from-green-700
-                    hover:to-emerald-700
-                    text-white
-                    border-0
-                    shadow-lg
-                  "
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg"
                 >
                   {isLoading ? "Signing In..." : "Sign In"}
                 </Button>
