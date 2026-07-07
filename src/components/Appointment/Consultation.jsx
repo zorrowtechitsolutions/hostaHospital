@@ -1,4 +1,4 @@
-// Consultation.js - Complete fixed version with proper template selection
+// Consultation.js - COMPLETE FIXED VERSION
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -35,14 +35,92 @@ const calculateAge = (dob) => {
   }
 };
 
-// Helper function to extract numeric ID from string
+// ✅ FIXED: Helper function to extract numeric ID from string
 const extractNumericId = (id) => {
   if (!id) return null;
   if (typeof id === 'number') return id;
   if (typeof id === 'string') {
+    // If it's like "#PT0003", extract just the numbers
     const numericMatch = id.match(/\d+/);
     return numericMatch ? parseInt(numericMatch[0]) : null;
   }
+  return null;
+};
+
+// ✅ NEW: Helper to get patient ID from appointment data
+const getPatientIdFromAppointment = (appointmentData) => {
+  console.log("🔍 Extracting patient ID from appointment:", appointmentData);
+  
+  // Priority 1: Check patient object
+  if (appointmentData.patient) {
+    // Check for numeric ID in patient object
+    if (appointmentData.patient.id) {
+      const numericId = extractNumericId(appointmentData.patient.id);
+      if (numericId) {
+        console.log("✅ Found numeric patient ID from patient.id:", numericId);
+        return numericId;
+      }
+    }
+    if (appointmentData.patient.patientId) {
+      const numericId = extractNumericId(appointmentData.patient.patientId);
+      if (numericId) {
+        console.log("✅ Found numeric patient ID from patient.patientId:", numericId);
+        return numericId;
+      }
+    }
+    if (appointmentData.patient._id) {
+      const numericId = extractNumericId(appointmentData.patient._id);
+      if (numericId) {
+        console.log("✅ Found numeric patient ID from patient._id:", numericId);
+        return numericId;
+      }
+    }
+  }
+  
+  // Priority 2: Check direct patientId field
+  if (appointmentData.patientId) {
+    // If patientId is like "#PT0003", extract the numeric part
+    const numericId = extractNumericId(appointmentData.patientId);
+    if (numericId) {
+      console.log("✅ Extracted numeric ID from patientId:", numericId);
+      return numericId;
+    }
+    // If it's already a number or numeric string
+    if (!isNaN(appointmentData.patientId)) {
+      console.log("✅ PatientId is already numeric:", appointmentData.patientId);
+      return Number(appointmentData.patientId);
+    }
+  }
+  
+  // Priority 3: Check userId
+  if (appointmentData.userId) {
+    const numericId = extractNumericId(appointmentData.userId);
+    if (numericId) {
+      console.log("✅ Found numeric user ID:", numericId);
+      return numericId;
+    }
+  }
+  
+  // Priority 4: Check nested patient data
+  if (appointmentData.patientData?.id) {
+    const numericId = extractNumericId(appointmentData.patientData.id);
+    if (numericId) {
+      console.log("✅ Found numeric ID from patientData.id:", numericId);
+      return numericId;
+    }
+  }
+  
+  console.warn("⚠️ No valid patient ID found in appointment data");
+  return null;
+};
+
+// ✅ NEW: Helper to get patient name from appointment data
+const getPatientNameFromAppointment = (appointmentData) => {
+  if (appointmentData.patientName) return appointmentData.patientName;
+  if (appointmentData.patient?.name) return appointmentData.patient.name;
+  if (appointmentData.patient?.patientName) return appointmentData.patient.patientName;
+  if (appointmentData.name) return appointmentData.name;
+  if (appointmentData.patient?.displayName) return appointmentData.patient.displayName;
   return null;
 };
 
@@ -183,11 +261,9 @@ const Consultation = () => {
   // Fetch prescription templates
   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
-  // ✅ Get patient ID for fetching patient data
-  const patientId = appointmentData.patientId || 
-                   appointmentData.patient?.id || 
-                   appointmentData.patient?.patientId || 
-                   null;
+  // ✅ FIXED: Get patient ID using the helper function
+  const patientId = getPatientIdFromAppointment(appointmentData);
+  const patientNameFromAppointment = getPatientNameFromAppointment(appointmentData);
 
   // ✅ Track current patient ID to detect changes
   const [currentPatientId, setCurrentPatientId] = useState(patientId);
@@ -346,14 +422,15 @@ const Consultation = () => {
     console.log("=== CONSULTATION PAGE DEBUG ===");
     console.log("Appointment Data received:", appointmentData);
     console.log("Patient ID extracted:", patientId);
+    console.log("Patient Name from appointment:", patientNameFromAppointment);
     console.log("Current Patient ID state:", currentPatientId);
     console.log("Patient Data fetched:", patientData);
     console.log("Extracted patient:", patient);
-    console.log("Patient name:", patient?.name);
-    console.log("Patient gender:", patient?.gender);
+    console.log("Patient name from API:", patient?.name);
+    console.log("Patient gender from API:", patient?.gender);
     console.log("Patient ID from API:", patient?.id);
     console.log("==============================");
-  }, [appointmentData, patientData, patientId, currentPatientId, patient]);
+  }, [appointmentData, patientData, patientId, currentPatientId, patient, patientNameFromAppointment]);
 
   // Debug template data
   useEffect(() => {
@@ -401,11 +478,8 @@ const Consultation = () => {
       missingData.push("Booking ID");
     }
     
-    const patientId = appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || null;
-    const userId = appointmentData.userId || appointmentData.patient?.userId || null;
-    
-    if (!patientId && !userId) {
-      missingData.push("Patient ID or User ID");
+    if (!patientId) {
+      missingData.push("Patient ID");
     }
     
     const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
@@ -495,8 +569,9 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-  // ✅ Get gender with HIGHEST PRIORITY from Patient API
+  // ✅ FIXED: Get gender with HIGHEST PRIORITY from Patient API
   const getPatientGender = () => {
+    // Priority 1: Patient API data
     const patientGender = patient?.gender || patient?.patient_gender || null;
     
     if (patientGender) {
@@ -508,6 +583,7 @@ const Consultation = () => {
       return gender;
     }
     
+    // Priority 2: Appointment data
     if (appointmentData.patient_gender) {
       const gender = String(appointmentData.patient_gender);
       const normalized = gender.toLowerCase();
@@ -538,42 +614,94 @@ const Consultation = () => {
     return "N/A";
   };
 
-  // ✅ Helper function to get patient name
+  // ✅ FIXED: Helper function to get patient name with priority
   const getPatientName = () => {
-    const name = patient?.name || 
-                 patient?.patientName ||
-                 appointmentData.patientName || 
-                 appointmentData.patient?.name || 
-                 appointmentData.name || 
-                 "Patient";
-    return name;
+    // Priority 1: Patient API data
+    if (patient?.name) {
+      return patient.name;
+    }
+    if (patient?.patientName) {
+      return patient.patientName;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.patientName) {
+      return appointmentData.patientName;
+    }
+    if (appointmentData.patient?.name) {
+      return appointmentData.patient.name;
+    }
+    if (appointmentData.name) {
+      return appointmentData.name;
+    }
+    if (appointmentData.patient?.patientName) {
+      return appointmentData.patient.patientName;
+    }
+    
+    return "Patient";
   };
 
-  // ✅ Helper function to get patient age
+  // ✅ FIXED: Helper function to get patient age with priority
   const getPatientAge = () => {
-    const age = patient?.age || 
-                patient?.patientAge ||
-                appointmentData.age || 
-                appointmentData.patient?.age || 
-                "N/A";
-    return age;
+    // Priority 1: Patient API data
+    if (patient?.age) {
+      return patient.age;
+    }
+    if (patient?.patientAge) {
+      return patient.patientAge;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.age) {
+      return appointmentData.age;
+    }
+    if (appointmentData.patient?.age) {
+      return appointmentData.patient.age;
+    }
+    if (appointmentData.patientAge) {
+      return appointmentData.patientAge;
+    }
+    
+    return "N/A";
   };
 
-  // ✅ Helper function to get patient contact
+  // ✅ FIXED: Helper function to get patient contact with priority
   const getPatientContact = () => {
-    const contact = patient?.mobileNumber || 
-                    patient?.contact || 
-                    patient?.phone || 
-                    patient?.patientPhone ||
-                    appointmentData.contact || 
-                    appointmentData.patient?.contact || 
-                    appointmentData.phone || 
-                    appointmentData.mobile || 
-                    "N/A";
-    return contact;
+    // Priority 1: Patient API data
+    if (patient?.mobileNumber) {
+      return patient.mobileNumber;
+    }
+    if (patient?.contact) {
+      return patient.contact;
+    }
+    if (patient?.phone) {
+      return patient.phone;
+    }
+    if (patient?.patientPhone) {
+      return patient.patientPhone;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.contact) {
+      return appointmentData.contact;
+    }
+    if (appointmentData.patient?.contact) {
+      return appointmentData.patient.contact;
+    }
+    if (appointmentData.phone) {
+      return appointmentData.phone;
+    }
+    if (appointmentData.mobile) {
+      return appointmentData.mobile;
+    }
+    if (appointmentData.patient?.mobileNumber) {
+      return appointmentData.patient.mobileNumber;
+    }
+    
+    return "N/A";
   };
 
-  // ✅ Get all patient details
+  // ✅ Get all patient details with proper priority
   const displayPatientName = getPatientName();
   const displayPatientAge = getPatientAge();
   const displayPatientGender = getPatientGender();
@@ -593,7 +721,7 @@ const Consultation = () => {
     bgColor: "#ffffff"
   });
 
-  // ✅ handleEndConsultation with fixed template selection
+  // ✅ handleEndConsultation with fixed patient ID handling
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -607,10 +735,13 @@ const Consultation = () => {
     try {
       const bookingId = appointmentData.id || appointmentData.bookingId;
       
-      const extractedPatientId = extractNumericId(
+      // ✅ FIXED: Get the numeric patient ID correctly
+      const extractedPatientId = patientId || extractNumericId(
         appointmentData.patientId || 
         appointmentData.patient?.id || 
         appointmentData.patient?.patientId || 
+        appointmentData.userId || 
+        appointmentData.patient?.userId || 
         null
       );
       
@@ -687,6 +818,12 @@ const Consultation = () => {
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
       
+      console.log("=== PATIENT ID VERIFICATION ===");
+      console.log("Extracted Patient ID:", extractedPatientId);
+      console.log("Patient ID type:", typeof extractedPatientId);
+      console.log("Patient from API:", patient);
+      console.log("================================");
+      
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
         dosage: med.dosage,
@@ -760,6 +897,8 @@ const Consultation = () => {
       };
 
       console.log("=== FINAL PRESCRIPTION PAYLOAD ===");
+      console.log("Patient ID in payload:", prescriptionData.patientId);
+      console.log("Patient Name in payload:", prescriptionData.patientName);
       console.log(JSON.stringify(prescriptionData, null, 2));
       console.log("===================================");
 
@@ -870,8 +1009,8 @@ const Consultation = () => {
                   {displayPatientName}
                 </p>
                 <p className="text-xs text-gray-500">Consultation ID : #{appointmentData.id || appointmentData.bookingId || "N/A"}</p>
-                {patient?.id && (
-                  <p className="text-xs text-gray-400">Patient ID: #{patient.id}</p>
+                {patientId && (
+                  <p className="text-xs text-gray-400">Patient ID: #{patientId}</p>
                 )}
               </div>
             </div>
@@ -1025,11 +1164,7 @@ const Consultation = () => {
       <ViewMedicalHistory
         isOpen={showMedicalHistory}
         onClose={() => setShowMedicalHistory(false)}
-        patientId={
-          appointmentData.patientId ||
-          appointmentData.patient?.id ||
-          appointmentData.patient?.patientId
-        }
+        patientId={patientId}
         department={
           appointmentData.department ||
           appointmentData.doctorDepartment ||
