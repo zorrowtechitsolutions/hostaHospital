@@ -1,4 +1,4 @@
-// src/app/service/documents.ts
+// src/app/service/documentApi.ts
 import { api } from "./api";
 import { getUserRole } from "../../src/utils/auth";
 
@@ -10,6 +10,7 @@ export interface Document {
   id?: string;
   _id?: string;
   patientId: string | number;
+  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -29,6 +30,7 @@ export interface Document {
 
 export interface CreateDocumentData {
   patientId: string | number;
+  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -46,6 +48,7 @@ export interface CreateDocumentData {
 
 export interface UpdateDocumentData {
   patientId: string | number;
+  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -162,6 +165,7 @@ export const documentsApi = api.injectEndpoints({
       invalidatesTags: ["Document"],
     }),
 
+    // ✅ UPDATED: uploadDocumentWithFile with userId and role
     uploadDocumentWithFile: builder.mutation<
       DocumentResponse, 
       { 
@@ -173,7 +177,6 @@ export const documentsApi = api.injectEndpoints({
     >({
       async queryFn({ file, patientId, documentName, date }, _queryApi, _extraOptions, baseQuery) {
         try {
-          const role = getUserRole()?.toLowerCase();
           const uploadedById = getUserIdFromStorage();
           const contentType = file.type;
           const userId = uploadedById;
@@ -182,15 +185,27 @@ export const documentsApi = api.injectEndpoints({
             throw new Error("User ID is required for S3 upload. Please make sure you are logged in.");
           }
           
+          // ✅ Get user role from auth
+          const authUser = JSON.parse(localStorage.getItem("user") || "{}");
+          const userRole = authUser?.role || "document";
+          
           const timestamp = Date.now();
           const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
           const fileKey = `documents/${userId}/${timestamp}_${safeFileName}`;
           
           const { uploadToS3 } = await import("./S3");
-          const s3Result = await uploadToS3(file, fileKey);
+          
+          // ✅ Pass userId as customId and userRole as role
+          const s3Result = await uploadToS3(
+            file, 
+            fileKey, 
+            userId,        // ← Pass userId as customId
+            userRole       // ← Pass user role
+          );
           
           const documentData: CreateDocumentData = {
             patientId: patientId,
+            userId: userId, // ✅ ADDED
             name: documentName,
             date: date || new Date().toLocaleDateString(),
             fileKey: s3Result.key,
@@ -199,8 +214,8 @@ export const documentsApi = api.injectEndpoints({
             fileType: file.type,
             fileSize: formatFileSize(file.size),
             type: getFileExtension(file.name),
-            role: role || null,
-            uploadedById: uploadedById,
+            role: userRole,
+            uploadedById: userId,
             contentType: contentType,
             uploadDate: new Date().toISOString(),
           };

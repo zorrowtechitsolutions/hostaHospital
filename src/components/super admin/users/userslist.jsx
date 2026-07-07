@@ -80,23 +80,20 @@ const UsersList = () => {
   const isSuperAdmin = authUser?.role === 'super_admin' || authUser?.roleId === 1;
   const isHospitalAdmin = authUser?.role === 'hospital' || authUser?.roleId === 2;
 
-  // Build query params - No pagination, get all users
-  const queryParams = {
-    search_query: searchTerm?.trim() || undefined,
-    limit: 1000, // Get all users
-    includeDeleted: showDeleted,
-  };
+
 
   // RTK Query hooks
-  const { 
-    data: usersData, 
-    isLoading, 
-    error, 
-    refetch,
-    isFetching,
-  } = useGetUsersQuery(queryParams, {
-    refetchOnMountOrArgChange: true,
-  });
+const {
+  data: usersData,
+  isLoading,
+  error,
+  refetch,
+  isFetching,
+} = useGetUsersQuery({
+  limit: 1000,
+  includeDeleted: showDeleted,
+});
+
 
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
@@ -383,11 +380,25 @@ const UsersList = () => {
   };
 
   // Get users array
-  const users = [...(usersData?.data || usersData?.users || [])]
-    .sort(
-      (a, b) =>
-        new Date(a.createdAt) - new Date(b.createdAt)
+const allUsers = usersData?.data || usersData?.users || [];
+
+const users = allUsers
+  .filter((user) => {
+    if (!searchTerm?.trim()) return true;
+
+    const search = searchTerm.toLowerCase();
+
+    return (
+      user?.name?.toLowerCase().includes(search) ||
+      user?.email?.toLowerCase().includes(search) ||
+      user?.phone?.toString().includes(search)
     );
+  })
+  .sort(
+    (a, b) =>
+      new Date(a.createdAt) - new Date(b.createdAt)
+  );
+
   const totalItems = users.length;
 
   // Loading state
@@ -490,12 +501,12 @@ const UsersList = () => {
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
-            <SearchBar 
-              placeholder="Search by name, email, or phone..." 
-              value={searchTerm} 
-              onChange={setSearchTerm} 
-              onClear={() => setSearchTerm('')} 
-            />
+<SearchBar
+  placeholder="Search by name, email, or phone..."
+  value={searchTerm}
+  onChange={setSearchTerm}
+  onClear={() => setSearchTerm('')}
+/>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>

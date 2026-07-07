@@ -170,12 +170,19 @@ export const patientsApi = api.injectEndpoints({
           queryParams.append("gender", params.gender);
         }
 
-        // Patient Type filter
-        if (params.patientType) {
-          queryParams.append("patientType", params.patientType);
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
+
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
+
         }
 
-        // Include deleted patients
+      const url = `/patients?${queryParams.toString()}`;
+
+    console.log("Patients API URL:", url); // 👈 ADD HERe
+
+        // ✅ Add includeDeleted parameter
         if (params.includeDeleted) {
           queryParams.append("includeDeleted", String(params.includeDeleted));
         }

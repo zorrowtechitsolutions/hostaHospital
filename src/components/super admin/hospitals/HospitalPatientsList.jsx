@@ -76,6 +76,9 @@ const HospitalPatientsList = () => {
     search_query: searchTerm || undefined
   });
 
+  console.log("Search Term:", searchTerm); // 👈 ADD HERE
+  console.log("Patients Data:", patientsData); // 👈 ADD HERE
+
   const [deletePatient] = useDeletePatientMutation();
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();

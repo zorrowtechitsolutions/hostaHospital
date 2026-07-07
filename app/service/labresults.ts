@@ -6,11 +6,15 @@ export interface LabResult {
   id?: string;
   _id?: string;
   patientId: string | number;
+  patientName: string; // ✅ Required
   name?: string;
   date?: string;
   labId?: string | number | null;
+  labName?: string | null; // ✅ Optional
   hospitalId?: string | number | null;
+  hospitalName: string; // ✅ Required
   doctorId?: string | number | null;
+  doctorName: string; // ✅ Required
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -35,11 +39,15 @@ export interface LabResult {
 
 export interface CreateLabResultData {
   patientId: string | number;
+  patientName: string; // ✅ Required
   name?: string;
   date?: string;
   labId?: string | number | null;
+  labName?: string | null; // ✅ Optional
   hospitalId?: string | number | null;
+  hospitalName: string; // ✅ Required
   doctorId?: string | number | null;
+  doctorName: string; // ✅ Required
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -62,11 +70,15 @@ export interface CreateLabResultData {
 
 export interface UpdateLabResultData {
   patientId: string | number;
+  patientName: string; // ✅ Required
   name?: string;
   date?: string;
   labId?: string | number | null;
+  labName?: string | null; // ✅ Optional
   hospitalId?: string | number | null;
+  hospitalName: string; // ✅ Required
   doctorId?: string | number | null;
+  doctorName: string; // ✅ Required
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -210,12 +222,16 @@ export const labResultsApi = api.injectEndpoints({
       LabResultResponse, 
       { 
         file: File; 
-        patientId: string | number; 
+        patientId: string | number;
+        patientName: string; // ✅ Required
         testName: string; 
         date?: string; 
         labId?: string | number;
+        labName?: string | null; // ✅ Optional
         hospitalId?: string | number;
+        hospitalName: string; // ✅ Required
         doctorId?: string | number;
+        doctorName: string; // ✅ Required
         department?: string;
         status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled';
         category?: string;
@@ -225,7 +241,7 @@ export const labResultsApi = api.injectEndpoints({
         notes?: string;
       }
     >({
-      async queryFn({ file, patientId, testName, date, labId, hospitalId, doctorId, department, status, category, referredBy, appointmentDate, result, notes }, _queryApi, _extraOptions, baseQuery) {
+      async queryFn({ file, patientId, patientName, testName, date, labId, labName, hospitalId, hospitalName, doctorId, doctorName, department, status, category, referredBy, appointmentDate, result, notes }, _queryApi, _extraOptions, baseQuery) {
         try {
           const role = getUserRole()?.toLowerCase();
           const uploadedById = getUserIdFromStorage();
@@ -234,6 +250,18 @@ export const labResultsApi = api.injectEndpoints({
           
           if (!userId) {
             throw new Error("User ID is required for S3 upload. Please make sure you are logged in.");
+          }
+          
+          if (!patientName) {
+            throw new Error("Patient name is required.");
+          }
+          
+          if (!hospitalName) {
+            throw new Error("Hospital name is required.");
+          }
+          
+          if (!doctorName) {
+            throw new Error("Doctor name is required.");
           }
           
           const timestamp = Date.now();
@@ -245,11 +273,15 @@ export const labResultsApi = api.injectEndpoints({
           
           const labResultData: CreateLabResultData = {
             patientId: patientId,
+            patientName: patientName, // ✅ Required
             name: testName,
             date: date || new Date().toLocaleDateString(),
             labId: labId || null,
+            labName: labName || null, // ✅ Optional
             hospitalId: hospitalId || null,
+            hospitalName: hospitalName, // ✅ Required
             doctorId: doctorId || null,
+            doctorName: doctorName, // ✅ Required
             department: department || null,
             testName: testName,
             status: status || 'pending',

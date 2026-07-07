@@ -1,6 +1,7 @@
-// src/components/patients/tabs/DocumentsTab.jsx - With View, Download, and Edit
+// src/components/patients/tabs/DocumentsTab.jsx - With Delete Confirmation Modal
+
 import React, { useState, useEffect } from "react";
-import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image } from "lucide-react";
+import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image, AlertTriangle } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import { 
   showSuccessToast,
@@ -14,22 +15,31 @@ import {
   useCreateDocumentMutation
 } from "../../../../app/service/documentApi";
 import { getS3ImageUrl } from "../../../../app/service/S3";
+import { getAuthUser } from "../../../utils/auth";
 
 const DocumentsTab = ({ patient }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [documentName, setDocumentName] = useState("");
   const [documentDate, setDocumentDate] = useState("");
   const [uploading, setUploading] = useState(false);
   const [editingDocument, setEditingDocument] = useState(null);
   const [viewingDocument, setViewingDocument] = useState(null);
+  const [deletingDocument, setDeletingDocument] = useState(null);
   const [editFile, setEditFile] = useState(null);
   const [editDocumentName, setEditDocumentName] = useState("");
   const [editDocumentDate, setEditDocumentDate] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 5;
+
+  // Get auth user for userId and role
+  const authUser = getAuthUser();
+  const userId = authUser?.id;
+  const userRole = authUser?.role || "documents";
 
   const { 
     data: documentsData, 
@@ -116,6 +126,7 @@ const DocumentsTab = ({ patient }) => {
     setEditFile(file);
   };
 
+  // ✅ FIXED: Create document with userId
   const handleUpload = async () => {
     if (!documentName.trim()) {
       showWarningToast("Please enter a document name");
@@ -127,14 +138,29 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
+    if (!userId) {
+      showErrorToast("❌ User ID not found. Please log in again.");
+      return;
+    }
+
     setUploading(true);
 
     try {
-      await createDocument({
+      const documentData = {
         patientId: patient.id,
         name: documentName.trim(),
+        documentName: documentName.trim(),
         date: documentDate,
-      }).unwrap();
+        userId: userId,
+        uploadedById: userId,
+        role: userRole,
+      };
+
+      console.log("📄 Creating Document with userId:", documentData);
+
+      const result = await createDocument(documentData).unwrap();
+      
+      console.log("✅ Create Response:", result);
 
       showSuccessToast(`✅ Document "${documentName}" created successfully!`);
       
@@ -144,13 +170,16 @@ const DocumentsTab = ({ patient }) => {
       refetchDocuments();
       
     } catch (error) {
+      console.error("❌ Create failed:", error);
       showErrorToast(`❌ Failed to create document: ${error.message || error.data?.message || "Unknown error"}`);
     } finally {
       setUploading(false);
     }
   };
 
+  // ✅ FIXED: Edit document - set editing state
   const handleEditDocument = (document) => {
+    console.log("✏️ Editing Document:", document);
     setEditingDocument(document);
     setEditDocumentName(document.documentName || document.name || "");
     setEditDocumentDate(document.date || "");
@@ -158,6 +187,7 @@ const DocumentsTab = ({ patient }) => {
     setShowEditModal(true);
   };
 
+  // ✅ FIXED: Update document with proper S3 upload
   const handleUpdateDocument = async () => {
     if (!editDocumentName.trim()) {
       showWarningToast("Please enter a document name");
@@ -169,6 +199,18 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
+    if (!userId) {
+      showErrorToast("❌ User ID not found. Please log in again.");
+      return;
+    }
+
+    // Get the document ID
+    const documentId = editingDocument.id || editingDocument._id;
+    if (!documentId) {
+      showErrorToast("❌ Document ID not found.");
+      return;
+    }
+
     setUploading(true);
     setUploadProgress(0);
 
@@ -176,38 +218,66 @@ const DocumentsTab = ({ patient }) => {
       let updateData = {
         patientId: patient.id,
         name: editDocumentName.trim(),
+        documentName: editDocumentName.trim(),
         date: editDocumentDate,
+        userId: userId,
+        uploadedById: userId,
+        role: userRole,
       };
 
+      // If a new file is selected, upload to S3
       if (editFile) {
+        console.log("📤 Uploading file to S3 for document:", documentId);
+        
         const progressInterval = setInterval(() => {
           setUploadProgress(prev => Math.min(prev + 10, 90));
         }, 200);
 
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const documentId = editingDocument.id || editingDocument._id;
+        
+        // File key for S3 storage
         const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
         
+        console.log("📁 Document ID:", documentId);
+        console.log("📁 File Key:", fileKey);
+        
         const { uploadToS3 } = await import("../../../../app/service/S3");
-        const s3Result = await uploadToS3(editFile, fileKey, documentId, "documents");
+        
+        // ✅ CRITICAL FIX: Pass documentId as the entityId
+        // The backend needs the document ID to find the record and generate presign URL
+        const s3Result = await uploadToS3(
+          editFile,
+          fileKey,
+          documentId,    // ✅ entityId = document ID (NOT userId)
+          "documents"    // ✅ role = "documents"
+        );
+        
+        console.log("✅ S3 Upload Result:", s3Result);
+        
+        // Handle the S3 response properly
+        const uploadedKey = s3Result.key || s3Result.Key || fileKey;
+        const uploadedUrl = s3Result.imageUrl || s3Result.url || s3Result.Location || '';
         
         updateData = {
           ...updateData,
-          fileKey: s3Result.key,
-          fileUrl: s3Result.imageUrl,
+          fileKey: uploadedKey,
+          fileUrl: uploadedUrl,
           fileName: editFile.name,
           fileType: editFile.type,
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
+          contentType: editFile.type,
         };
 
         clearInterval(progressInterval);
         setUploadProgress(100);
       }
 
+      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
+
       await updateDocument({
-        id: editingDocument.id || editingDocument._id,
+        id: documentId,
         updateData: updateData
       }).unwrap();
 
@@ -222,20 +292,66 @@ const DocumentsTab = ({ patient }) => {
       refetchDocuments();
       
     } catch (error) {
-      showErrorToast(`❌ Failed to update document: ${error.message || error.data?.message || "Unknown error"}`);
+      console.error("❌ Update failed:", error);
+      
+      let errorMessage = "Unknown error";
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showErrorToast(`❌ Failed to update document: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDeleteDocument = async (id, name) => {
-    try {
-      await deleteDocument(id).unwrap();
-      showSuccessToast(`✅ Document "${name}" deleted successfully!`);
-      refetchDocuments();
-    } catch (error) {
-      showErrorToast(`❌ Failed to delete document: ${error.message || error.data?.message || "Unknown error"}`);
+  // ✅ NEW: Handle delete confirmation
+  const handleDeleteClick = (document) => {
+    const docId = document.id || document._id;
+    if (!docId) {
+      showErrorToast("❌ Document ID not found.");
+      return;
     }
+    setDeletingDocument(document);
+    setShowDeleteModal(true);
+  };
+
+  // ✅ FIXED: Delete document with confirmation
+  const handleConfirmDelete = async () => {
+    if (!deletingDocument) return;
+
+    const docId = deletingDocument.id || deletingDocument._id;
+    const docName = deletingDocument.documentName || deletingDocument.name || "Untitled";
+
+    setIsDeleting(true);
+
+    try {
+      await deleteDocument(docId).unwrap();
+      showSuccessToast(`✅ Document "${docName}" deleted successfully!`);
+      setShowDeleteModal(false);
+      setDeletingDocument(null);
+      refetchDocuments();
+      
+      // Reset pagination if needed
+      const remainingItems = documentsList.length - 1;
+      const maxPage = Math.ceil(remainingItems / itemsPerPage);
+      if (currentPage > maxPage && maxPage > 0) {
+        setCurrentPage(maxPage);
+      }
+    } catch (error) {
+      console.error("❌ Delete failed:", error);
+      showErrorToast(`❌ Failed to delete document: ${error.message || error.data?.message || "Unknown error"}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeletingDocument(null);
+    setIsDeleting(false);
   };
 
   const handleViewDocument = (document) => {
@@ -355,6 +471,10 @@ const DocumentsTab = ({ patient }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
                   disabled={uploading}
                 />
+              </div>
+
+              <div className="text-xs text-gray-400">
+                User ID: {userId || 'Not found'} • Role: {userRole || 'documents'}
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -609,7 +729,7 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
-              {editingDocument.fileUrl && (
+              {editingDocument.fileKey && (
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
                     {isImageFile(editingDocument.fileType || editingDocument.type) ? (
@@ -733,6 +853,73 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
+      {/* ✅ NEW: Delete Confirmation Modal */}
+      {showDeleteModal && deletingDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle size={24} className="text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-800">Delete Document</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Are you sure you want to delete this document?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-3">
+                {getFileIcon(deletingDocument)}
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">
+                    {deletingDocument.documentName || deletingDocument.name || "Untitled"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {deletingDocument.date 
+                      ? new Date(deletingDocument.date).toLocaleDateString() 
+                      : "No date"}
+                    {deletingDocument.fileName && ` • ${deletingDocument.fileName}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
+                  isDeleting
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Delete Document
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -814,10 +1001,7 @@ const DocumentsTab = ({ patient }) => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteDocument(
-                            item.id || item._id,
-                            item.documentName || item.name
-                          )}
+                          onClick={() => handleDeleteClick(item)}
                           title="Delete Document"
                           className="p-2"
                         >

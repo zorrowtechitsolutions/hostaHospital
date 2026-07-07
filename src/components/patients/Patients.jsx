@@ -713,7 +713,16 @@ const Patients = () => {
             <Download size={16} />
           </button>
 
-          {/* ❌ REMOVED: Show Deleted Button */}
+          {/* Toggle to show deleted patients */}
+          <Button 
+            variant={showDeleted ? "primary" : "outline"} 
+            size="sm" 
+            onClick={() => setShowDeleted(!showDeleted)}
+            className="flex items-center gap-1"
+          >
+            <Trash2 size={14} />
+            {showDeleted ? "Hide Deleted" : "Show Deleted"}
+          </Button>
 
           <button
             onClick={() => setShowFilters(!showFilters)}

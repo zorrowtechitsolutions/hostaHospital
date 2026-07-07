@@ -1,4 +1,4 @@
-// src/components/patients/modals/LaboratoryReportModal.jsx - With Direct Download
+// src/components/patients/modals/LaboratoryReportModal.jsx
 import React from "react";
 import { X, Download, FileText, ExternalLink } from "lucide-react";
 import { Button, Badge } from "../../ui";
@@ -47,7 +47,6 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden" style={{ maxHeight: '90vh' }}>
         
-        {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b bg-white sticky top-0 z-10">
           <h2 className="text-xl font-bold text-gray-800">
             {labResult?.testName || labResult?.name || "Lab Report"}
@@ -83,7 +82,7 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
 
         <div className="p-6 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 73px)' }}>
           
-          {/* File Preview */}
+          {/* File display section */}
           {hasFile ? (
             <div className="border rounded-lg overflow-hidden">
               <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
@@ -152,7 +151,7 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
             </div>
           )}
 
-          {/* Lab Result Details */}
+          {/* Details section */}
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Test Name</p>
@@ -168,13 +167,36 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
               <p className="text-gray-500">Department</p>
               <p className="font-medium text-gray-800">{labResult?.department || 'N/A'}</p>
             </div>
+            <div>
+              <p className="text-gray-500">Doctor</p>
+              <p className="font-medium text-gray-800">{labResult?.doctorName || 'N/A'}</p>
+            </div>
           </div>
 
-          {/* Patient Info */}
-          <div className="border-t pt-4">
-            <p className="text-xs text-gray-500">
-              Patient: {patient?.name || 'N/A'} • ID: {patient?.id || 'N/A'}
-            </p>
+          {/* Additional info section with required names */}
+          <div className="border-t pt-4 space-y-2">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-500">Patient Name</p>
+                <p className="font-medium text-gray-800">
+                  {labResult?.patientName || patient?.name || 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500">Patient ID</p>
+                <p className="font-medium text-gray-800">{patient?.id || 'N/A'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-500">Hospital</p>
+                <p className="font-medium text-gray-800">{labResult?.hospitalName || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Lab</p>
+                <p className="font-medium text-gray-800">{labResult?.labName || 'N/A'}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
