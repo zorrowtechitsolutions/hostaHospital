@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
-import { useLogoutMutation } from '../../app/service/hospitalApi'; // ✅ FIXED import
+import { useLogoutMutation } from '../../app/service/hospitalApi';
 import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
 import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
@@ -16,6 +16,8 @@ import {
 } from "../../app/service/notification";
 import { getHospitalId } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
+import { tokenManager } from '../utils/fcmTokenManager';
+import { getDeviceId } from '../utils/deviceManager';
 
 // ================= HELPER FUNCTIONS =================
 
@@ -68,7 +70,8 @@ const getRoleLabel = (role) => {
   const roleMap = {
     'hospital': 'Hospital Admin',
     'doctor': 'Doctor',
-    'staff': 'Staff'
+    'staff': 'Staff',
+    'super_admin': 'Super Admin'
   };
   return roleMap[role] || role || 'User';
 };
@@ -82,11 +85,13 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
-  // ✅ FIXED: Changed from useLogoutHospitalMutation to useLogoutMutation
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
   
   const hospitalId = getHospitalId();
   const userRole = user?.role || 'hospital';
+  
+  // ✅ Check if user is Hospital Admin (has access to Settings)
+  const isHospitalAdmin = userRole === 'hospital';
   
   // Get user ID based on role
   const userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || hospitalId;
@@ -114,14 +119,25 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
+  // ✅ Debug logging for image
+  useEffect(() => {
+    console.log('🔍 TopBar Debug:');
+    console.log('  userRole:', userRole);
+    console.log('  hospitalData:', hospitalData);
+    console.log('  doctorData:', doctorData);
+    console.log('  staffData:', staffData);
+  }, [userRole, hospitalData, doctorData, staffData]);
+  
   // Determine which data source to use based on role
   const getProfileData = () => {
     if (userRole === 'doctor' && doctorData) {
       const doctor = doctorData.data || doctorData;
+      const profileImage = doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null;
+      console.log('🔍 Doctor Profile Image:', profileImage);
       return {
         name: doctor?.name || doctor?.firstName + ' ' + doctor?.lastName || user?.name || storedUser?.name || 'Doctor',
         email: doctor?.email || user?.email || storedUser?.email || '',
-        profileImage: doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null,
+        profileImage: profileImage,
         role: 'doctor',
         roleLabel: 'Doctor'
       };
@@ -129,10 +145,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     
     if (userRole === 'staff' && staffData) {
       const staff = staffData.data || staffData;
+      const profileImage = staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null;
+      console.log('🔍 Staff Profile Image:', profileImage);
       return {
         name: staff?.name || user?.name || storedUser?.name || 'Staff',
         email: staff?.email || user?.email || storedUser?.email || '',
-        profileImage: staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null,
+        profileImage: profileImage,
         role: 'staff',
         roleLabel: 'Staff'
       };
@@ -140,10 +158,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     
     // Default: Hospital
     const hospital = hospitalData?.data || hospitalData;
+    const profileImage = hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null;
+    console.log('🔍 Hospital Profile Image:', profileImage);
     return {
       name: user?.name || user?.hospitalName || hospital?.name || storedUser?.name || storedUser?.hospitalName || 'Hospital',
       email: user?.email || hospital?.email || storedUser?.email || '',
-      profileImage: hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null,
+      profileImage: profileImage,
       role: 'hospital',
       roleLabel: 'Hospital Admin'
     };
@@ -152,7 +172,15 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileData = getProfileData();
   const isLoading = isHospitalLoading || isDoctorLoading || isStaffLoading;
   
-  const profileImageUrl = profileData.profileImage ? getImageUrlWithCache(profileData.profileImage) : null;
+  // ✅ Get profile image URL with proper handling
+  const getProfileImageUrl = () => {
+    if (!profileData.profileImage) return null;
+    const url = getImageUrlWithCache(profileData.profileImage);
+    console.log('🔍 Final Profile Image URL:', url);
+    return url;
+  };
+  
+  const profileImageUrl = getProfileImageUrl();
   const initials = getInitials(profileData.name);
   const gradientColor = getColorFromName(profileData.name);
   
@@ -171,16 +199,58 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     }
   };
 
-  // ✅ FIXED: Updated logout handler
+  // ✅ Updated logout handler
   const handleLogout = async () => {
     try {
-      // Call the API logout
-      await logoutApi().unwrap();
+      // ✅ Get deviceId from IndexedDB
+      let deviceId = null;
+      try {
+        const tokens = await tokenManager.getDeviceTokens();
+        if (tokens && tokens.length > 0) {
+          deviceId = tokens[0].deviceId;
+          console.log('🔍 Logout - Device ID from IndexedDB:', deviceId);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
+      }
+      
+      // ✅ Fallback to localStorage
+      if (!deviceId) {
+        deviceId = getDeviceId();
+        console.log('🔍 Logout - Device ID from localStorage (fallback):', deviceId);
+      }
+      
+      // ✅ Call logout API
+      await logoutApi(deviceId).unwrap();
+      console.log('✅ Backend logout successful');
+      
     } catch (error) {
-      console.error('Logout API error:', error);
+      console.error('❌ Logout API error:', error);
     } finally {
-      // Always clear local state and redirect
-      logout(); // Auth context logout (clears localStorage and state)
+      // ✅ Clear IndexedDB
+      try {
+        await tokenManager.deleteDatabase();
+        console.log('✅ IndexedDB database deleted');
+      } catch (dbError) {
+        console.warn('⚠️ Could not delete database:', dbError);
+      }
+      
+      // ✅ Clear localStorage
+      const localStorageItems = [
+        'accessToken', 'refreshToken', 'roleId', 'userRole',
+        'userData', 'authData', 'permissions', 'deviceId',
+        'hospitalId', 'hospitalInfo', 'superAdminId', 'doctorId',
+        'staffId', 'staffNumericId', 'user', 'token', 'refresh_token'
+      ];
+      localStorageItems.forEach(key => localStorage.removeItem(key));
+      
+      // ✅ Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Auth context logout
+      logout();
+      
+      // Redirect to login
       navigate("/sign-in");
     }
   };
@@ -284,6 +354,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                   alt={profileData.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
+                    console.warn('⚠️ Image failed to load:', profileImageUrl);
                     e.target.onerror = null;
                     e.target.style.display = 'none';
                     const parent = e.target.parentElement;
@@ -327,6 +398,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                       alt={profileData.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
+                        console.warn('⚠️ Image failed to load in menu:', profileImageUrl);
                         e.target.onerror = null;
                         e.target.style.display = 'none';
                         const parent = e.target.parentElement;
@@ -365,13 +437,18 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                   <UserCheck size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>My Profile</span>
                 </button>
-                <button 
-                  onClick={handleSettings}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
-                >
-                  <Settings size={16} className="text-gray-500 dark:text-gray-400" />
-                  <span>Settings</span>
-                </button>
+                
+                {/* ✅ Show Settings ONLY for Hospital Admin */}
+                {isHospitalAdmin && (
+                  <button 
+                    onClick={handleSettings}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
+                  >
+                    <Settings size={16} className="text-gray-500 dark:text-gray-400" />
+                    <span>Settings</span>
+                  </button>
+                )}
+                
                 <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                 <button 
                   onClick={handleLogout} 

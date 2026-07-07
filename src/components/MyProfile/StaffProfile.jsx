@@ -1,3 +1,4 @@
+// src/components/MyProfile/StaffProfile.jsx - USING USER DATA (NO API CALL)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -5,7 +6,7 @@ import {
   User, Briefcase, Award, Building, Info, Calendar, Users, IdCard
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useGetStaffByIdQuery, useUpdateStaffMutation } from '../../../app/service/staffApi';
+import { useUpdateStaffMutation } from '../../../app/service/staffApi';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 import { formatDate } from "../../utils/dateFormatter";
 
@@ -84,10 +85,11 @@ const StaffProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  const staffId = user?.staffId || user?.id;
-  const { data: staffData, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
-    skip: !staffId,
-  });
+  // ✅ Use data directly from user object (no API call needed!)
+  const staffData = user;
+  
+  console.log('📱 StaffProfile - Using user data:', staffData);
+  
   const [updateStaff] = useUpdateStaffMutation();
 
   const [formData, setFormData] = useState({
@@ -104,7 +106,11 @@ const StaffProfile = () => {
     department: '',
     bio: '',
     joiningDate: '',
-    staffId: ''
+    staffId: '',
+    gender: '',
+    dob: '',
+    jobType: '',
+    address: {}
   });
   
   const [editForm, setEditForm] = useState({});
@@ -113,57 +119,49 @@ const StaffProfile = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (fetchError?.status === 401) {
-      setTimeout(() => {
-        logout();
-        navigate('/sign-in');
-      }, 2000);
-    }
-  }, [fetchError, logout, navigate]);
-
+  // ✅ Populate form data from user object
   useEffect(() => {
     if (staffData) {
-      const staff = staffData.data || staffData;
-      const imageKey = staff?.profilePicture || staff?.imageUrl || staff?.image || null;
+      console.log('📥 Populating form from user data:', staffData);
       
-      setFormData({
-        name: staff?.name || '',
-        email: staff?.email || '',
-        phone: staff?.phone || '',
+      const imageKey = staffData?.profilePicture || staffData?.imageUrl || staffData?.image || null;
+      
+      // Format address for display
+      const address = staffData?.address || {};
+      const addressString = address.place ? 
+        `${address.place}, ${address.district || ''}, ${address.state || ''}, ${address.country || ''} - ${address.pincode || ''}`.trim() : 
+        '';
+      
+      const staffInfo = {
+        name: staffData?.name || '',
+        email: staffData?.email || '',
+        phone: staffData?.phone || '',
         profileImage: imageKey,
         imageUrl: imageKey,
         imageKey: imageKey,
-        designation: staff?.designation || '',
-        staffType: staff?.staffType || '',
-        qualification: staff?.qualification || '',
-        hospitalName: staff?.hospitalName || '',
-        department: staff?.department || '',
-        bio: staff?.bio || '',
-        joiningDate: staff?.joiningDate || '',
-        staffId: staff?.staffId || staff?.id || staffId
-      });
+        designation: staffData?.designation || '',
+        staffType: staffData?.staffType || '',
+        qualification: staffData?.qualification || '',
+        hospitalName: staffData?.hospitalName || '',
+        department: staffData?.department || '',
+        bio: staffData?.bio || '',
+        joiningDate: staffData?.joiningDate || '',
+        staffId: staffData?.staffId || staffData?.id || '',
+        gender: staffData?.gender || '',
+        dob: staffData?.dob || '',
+        jobType: staffData?.jobType || '',
+        address: address,
+        addressString: addressString
+      };
       
-      setEditForm({
-        name: staff?.name || '',
-        email: staff?.email || '',
-        phone: staff?.phone || '',
-        profileImage: imageKey,
-        imageUrl: imageKey,
-        imageKey: imageKey,
-        designation: staff?.designation || '',
-        staffType: staff?.staffType || '',
-        qualification: staff?.qualification || '',
-        hospitalName: staff?.hospitalName || '',
-        department: staff?.department || '',
-        bio: staff?.bio || '',
-        joiningDate: staff?.joiningDate || '',
-        staffId: staff?.staffId || staff?.id || staffId
-      });
+      console.log('📥 Staff info populated:', staffInfo);
+      
+      setFormData(staffInfo);
+      setEditForm(staffInfo);
       
       if (imageKey) setPreviewImage(getFullImageUrl(imageKey));
     }
-  }, [staffData, staffId]);
+  }, [staffData]);
 
   const updateEditForm = (field, value) => {
     setEditForm(prev => ({ ...prev, [field]: value }));
@@ -187,7 +185,7 @@ const StaffProfile = () => {
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, staffId);
+      const uploaded = await uploadToS3(file, formData.imageKey || null, formData.staffId || formData.id);
       setUploadProgress(100);
       setEditForm(prev => ({ ...prev, imageUrl: uploaded.key, profileImage: uploaded.key, imageKey: uploaded.key }));
       setTimeout(() => setUploadProgress(0), 1000);
@@ -217,8 +215,9 @@ const StaffProfile = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const staffId = formData.staffId || formData.id;
+      
       const updateData = {
-        staffId: staffId,
         name: editForm.name,
         email: editForm.email,
         phone: editForm.phone,
@@ -229,7 +228,9 @@ const StaffProfile = () => {
         department: editForm.department,
         bio: editForm.bio,
         joiningDate: editForm.joiningDate,
-        staffId: editForm.staffId,
+        gender: editForm.gender,
+        dob: editForm.dob,
+        jobType: editForm.jobType,
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
       
@@ -248,6 +249,7 @@ const StaffProfile = () => {
       
       setIsEditing(false);
       
+      // ✅ Update localStorage with new staff data
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { 
         ...storedUser, 
@@ -259,7 +261,15 @@ const StaffProfile = () => {
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
-      refetch();
+      const authData = JSON.parse(localStorage.getItem('authData') || '{}');
+      localStorage.setItem('authData', JSON.stringify({
+        ...authData,
+        name: updateData.name,
+        email: updateData.email,
+        phone: updateData.phone,
+        profilePicture: newProfilePicture
+      }));
+      
     } catch {
       // Silently handle save error
     } finally {
@@ -280,10 +290,8 @@ const StaffProfile = () => {
       const url = getFullImageUrl(imageValue);
       if (url) return url;
     }
-    return `https://ui-avatars.com/api/?name=${formData.name}&background=1C62A0&color=fff&length=2`;
+    return `https://ui-avatars.com/api/?name=${formData.name || 'Staff'}&background=1C62A0&color=fff&length=2`;
   };
-
-  if (isLoading) return <ProfileSkeleton />;
 
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
@@ -347,10 +355,10 @@ const StaffProfile = () => {
                 </div>
                 
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
-                  {isEditing ? editForm.name : formData.name}
+                  {isEditing ? editForm.name : formData.name || 'Staff'}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {isEditing ? editForm.designation : formData.designation}
+                  {isEditing ? editForm.designation : formData.designation || 'No designation'}
                 </p>
                 <div className="flex items-center space-x-2 mt-2">
                   <div className="flex items-center text-sm text-green-600">
@@ -359,7 +367,7 @@ const StaffProfile = () => {
                   </div>
                   <div className="flex items-center text-sm text-gray-500">
                     <IdCard className="w-4 h-4 mr-1" />
-                    Staff ID: {staffId}
+                    Staff ID: {formData.staffId || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -411,6 +419,7 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('name', e.target.value)}
                   icon={User}
+                  placeholder="Enter full name"
                 />
                 <ProfileField
                   label="Email Address"
@@ -419,6 +428,7 @@ const StaffProfile = () => {
                   onChange={(e) => updateEditForm('email', e.target.value)}
                   type="email"
                   icon={Mail}
+                  placeholder="Enter email"
                 />
                 <ProfileField
                   label="Phone Number"
@@ -426,6 +436,7 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('phone', e.target.value)}
                   icon={Phone}
+                  placeholder="Enter phone number"
                 />
                 <ProfileField
                   label="Staff ID"
@@ -475,6 +486,7 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('hospitalName', e.target.value)}
                   icon={Building}
+                  placeholder="Enter hospital name"
                 />
                 <ProfileField
                   label="Joining Date"
@@ -487,6 +499,52 @@ const StaffProfile = () => {
                   onChange={(e) => updateEditForm("joiningDate", e.target.value)}
                   type="date"
                   icon={Calendar}
+                />
+                <ProfileField
+                  label="Job Type"
+                  value={isEditing ? editForm.jobType : formData.jobType}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('jobType', e.target.value)}
+                  icon={Briefcase}
+                  placeholder="e.g., Full Time, Part Time"
+                />
+              </div>
+            </div>
+
+            {/* Personal Information */}
+            <div className={CARD_CLASS}>
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <Info className="w-5 h-5 mr-2 text-[#1C62A0]" />
+                Personal Information
+              </h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <ProfileField
+                  label="Gender"
+                  value={isEditing ? editForm.gender : formData.gender}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('gender', e.target.value)}
+                  icon={User}
+                  placeholder="e.g., Male, Female"
+                />
+                <ProfileField
+                  label="Date of Birth"
+                  value={
+                    isEditing
+                      ? editForm.dob
+                      : formatDate(formData.dob)
+                  }
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm("dob", e.target.value)}
+                  type="date"
+                  icon={Calendar}
+                />
+                <ProfileField
+                  label="Address"
+                  value={isEditing ? editForm.addressString : formData.addressString}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('addressString', e.target.value)}
+                  icon={Building}
+                  placeholder="e.g., City, State, Country"
                 />
               </div>
             </div>

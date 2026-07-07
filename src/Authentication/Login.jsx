@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
+// src/Authentication/Login.jsx - COMPLETE FIXED VERSION WITH STAFF HANDLING
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -242,10 +242,13 @@ const Login = () => {
       }
       
     } else if (role === 'staff') {
+      // ✅ Get staffId from response - it could be in different places
+      const staffIdValue = userData?.staffId || userData?.id || response.id;
+      
       authData = {
         ...authData,
-        id: userData?.id,
-        staffId: userData?.id,
+        id: userData?.id || response.id,
+        staffId: staffIdValue,  // ✅ Store the staffId (could be "STF00011")
         roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName,
@@ -255,10 +258,23 @@ const Login = () => {
         designation: userData?.designation,
         staffType: userData?.staffType,
         role: role,
+        // ✅ Store additional staff fields
+        gender: userData?.gender,
+        dob: userData?.dob,
+        address: userData?.address,
+        jobType: userData?.jobType,
+        joiningDate: userData?.joiningDate,
+        qualification: userData?.qualification,
       };
       
-      if (userData?.id) {
-        localStorage.setItem("staffId", userData.id.toString());
+      // ✅ Store staffId in localStorage (preserve the exact value)
+      if (staffIdValue) {
+        localStorage.setItem("staffId", staffIdValue);
+      }
+      
+      // ✅ Also store the numeric ID if needed
+      if (userData?.id || response.id) {
+        localStorage.setItem("staffNumericId", (userData?.id || response.id).toString());
       }
       
     } else {
