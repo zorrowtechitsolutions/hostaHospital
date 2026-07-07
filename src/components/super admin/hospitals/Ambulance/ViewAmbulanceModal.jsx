@@ -1,6 +1,6 @@
 // src/components/Ambulance/ViewAmbulanceModal.jsx
 import React from 'react';
-import { Modal, Badge, Button } from '../ui';
+import { Modal, Badge, Button } from '../../../ui';
 import { Phone, MapPin, Truck, Calendar, Hash, Building, Clock, Edit } from 'lucide-react';
 
 const ViewAmbulanceModal = ({ isOpen, onClose, ambulance, onEdit }) => {

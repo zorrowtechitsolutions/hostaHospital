@@ -1,6 +1,6 @@
-// src/components/patients/AddPatient.jsx
+// src/components/super-admin/hospitals/patients/AddPatients.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
   ArrowLeft, Heart, Users, 
@@ -29,16 +29,19 @@ const SearchableDropdown = ({
   required = false,
   getOptionLabel = (option) => option.name || option,
   getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index
+  optionKey = (option, index) => option.isoCode || index,
+  isLoading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => {
-    const label = getOptionLabel(option).toLowerCase();
-    return label.includes(searchTerm.toLowerCase());
-  });
+  const filteredOptions = React.useMemo(() => {
+    return options.filter(option => {
+      const label = getOptionLabel(option).toLowerCase();
+      return label.includes(searchTerm.toLowerCase());
+    });
+  }, [options, searchTerm, getOptionLabel]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -81,21 +84,21 @@ const SearchableDropdown = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={placeholder}
-          disabled={disabled}
+          placeholder={isLoading ? "Loading..." : placeholder}
+          disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+            (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
         <ChevronDown 
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
       
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
             <div
@@ -110,9 +113,18 @@ const SearchableDropdown = ({
         </div>
       )}
       
-      {isOpen && filteredOptions.length === 0 && (
+      {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No results found
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <span>Loading...</span>
+          </div>
         </div>
       )}
     </div>
@@ -121,12 +133,24 @@ const SearchableDropdown = ({
 
 const AddPatient = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   
-  // Get user data from auth utility
+  // ✅ FIXED: Get hospitalId from route params and location state
+  // Route: /super-admin/hospitals/:id/patients/add
+  const { id: hospitalIdFromRoute } = useParams();
+  const hospitalIdFromState = location.state?.hospitalId;
+  
+  // Get user data from auth utility as fallback
   const authUser = getAuthUser();
+  const hospitalIdFromAuth = authUser?.id;
   
-  // Only get hospitalId from JWT payload
-  const hospitalId = authUser?.id;        // hospitals.id
+  // ✅ FIXED: Use hospitalId from route first, then state, then auth
+  const hospitalId = hospitalIdFromRoute || hospitalIdFromState || hospitalIdFromAuth;
+  
+  console.log("🏥 Hospital ID from route:", hospitalIdFromRoute);
+  console.log("🏥 Hospital ID from state:", hospitalIdFromState);
+  console.log("🏥 Hospital ID from auth:", hospitalIdFromAuth);
+  console.log("🏥 Final Hospital ID:", hospitalId);
   
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
@@ -346,6 +370,8 @@ const AddPatient = () => {
       try {
         const patientData = preparePatientData();
         
+        console.log("📤 Creating patient with data:", patientData);
+        
         const result = await createPatient(patientData).unwrap();
         
         showSuccessToast(
@@ -354,8 +380,9 @@ const AddPatient = () => {
         
         setIsSubmitting(false);
         
+        // ✅ Navigate back to hospital patients list
         setTimeout(() => {
-          navigate('/patients');
+          navigate(`/super-admin/hospitals/${hospitalId}/patients`);
         }, 2000);
         
       } catch (error) {
@@ -383,8 +410,15 @@ const AddPatient = () => {
     }
   };
 
+  // ✅ FIXED: Navigate back to hospital patients list using route param
   const handleGoBack = () => {
-    navigate('/patients');
+    if (hospitalIdFromRoute) {
+      navigate(`/super-admin/hospitals/${hospitalIdFromRoute}/patients`);
+    } else if (hospitalId) {
+      navigate(`/super-admin/hospitals/${hospitalId}/patients`);
+    } else {
+      navigate('/super-admin/patients');
+    }
   };
 
   return (
@@ -398,6 +432,9 @@ const AddPatient = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Add New Patient</h1>
               <p className="text-sm text-gray-500 mt-1">Create a new patient profile in the system</p>
+              {hospitalId && (
+                <p className="text-xs text-blue-600 mt-0.5">Hospital ID: {hospitalId}</p>
+              )}
             </div>
           </div>
         </div>

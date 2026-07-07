@@ -1,3 +1,4 @@
+// src/components/layout/TopBar.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -8,6 +9,8 @@ import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
 import { useLogoutHospitalMutation } from '../../app/service/hospitalApi';
 import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
+import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
+import { useGetStaffByIdQuery } from '../../app/service/staffApi';
 import {
   useGetNotificationsByHospitalQuery
 } from "../../app/service/notification";
@@ -27,7 +30,7 @@ const getImageUrlWithCache = (imageUrl) => {
 
 // Get initials from name
 const getInitials = (name) => {
-  if (!name) return 'H';
+  if (!name) return 'U';
   return name
     .split(' ')
     .map((word) => word[0])
@@ -60,6 +63,16 @@ const getColorFromName = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+// Get user role label
+const getRoleLabel = (role) => {
+  const roleMap = {
+    'hospital': 'Hospital Admin',
+    'doctor': 'Doctor',
+    'staff': 'Staff'
+  };
+  return roleMap[role] || role || 'User';
+};
+
 const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
@@ -72,62 +85,77 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [logoutHospital, { isLoading: isLoggingOut }] = useLogoutHospitalMutation();
   
   const hospitalId = getHospitalId();
+  const userRole = user?.role || 'hospital';
   
-  // Fetch hospital data to get the profile image
+  // Get user ID based on role
+  const userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || hospitalId;
+  
+  // Fetch data based on user role
   const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
-    hospitalId,
-    {
-      skip: !hospitalId,
-    }
+    userId,
+    { skip: userRole !== 'hospital' || !userId }
+  );
+  
+  const { data: doctorData, isLoading: isDoctorLoading } = useGetDoctorByIdQuery(
+    userId,
+    { skip: userRole !== 'doctor' || !userId }
+  );
+  
+  const { data: staffData, isLoading: isStaffLoading } = useGetStaffByIdQuery(
+    userId,
+    { skip: userRole !== 'staff' || !userId }
   );
   
   const { data: notificationsData } = useGetNotificationsByHospitalQuery(
     { hospitalId },
-    {
-      skip: !hospitalId,
-      pollingInterval: 10000,
-    }
+    { skip: !hospitalId, pollingInterval: 10000 }
   );
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
-  // Get hospital name from various sources
-  const hospitalName = user?.name || 
-                       user?.hospitalName || 
-                       hospitalData?.data?.name || 
-                       hospitalData?.name || 
-                       storedUser?.name || 
-                       storedUser?.hospitalName || 
-                       "Hospital";
+  // Determine which data source to use based on role
+  const getProfileData = () => {
+    if (userRole === 'doctor' && doctorData) {
+      const doctor = doctorData.data || doctorData;
+      return {
+        name: doctor?.name || doctor?.firstName + ' ' + doctor?.lastName || user?.name || storedUser?.name || 'Doctor',
+        email: doctor?.email || user?.email || storedUser?.email || '',
+        profileImage: doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null,
+        role: 'doctor',
+        roleLabel: 'Doctor'
+      };
+    }
+    
+    if (userRole === 'staff' && staffData) {
+      const staff = staffData.data || staffData;
+      return {
+        name: staff?.name || user?.name || storedUser?.name || 'Staff',
+        email: staff?.email || user?.email || storedUser?.email || '',
+        profileImage: staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null,
+        role: 'staff',
+        roleLabel: 'Staff'
+      };
+    }
+    
+    // Default: Hospital
+    const hospital = hospitalData?.data || hospitalData;
+    return {
+      name: user?.name || user?.hospitalName || hospital?.name || storedUser?.name || storedUser?.hospitalName || 'Hospital',
+      email: user?.email || hospital?.email || storedUser?.email || '',
+      profileImage: hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null,
+      role: 'hospital',
+      roleLabel: 'Hospital Admin'
+    };
+  };
   
-  const hospitalEmail = user?.email || 
-                        hospitalData?.data?.email || 
-                        hospitalData?.email || 
-                        storedUser?.email || 
-                        "";
+  const profileData = getProfileData();
+  const isLoading = isHospitalLoading || isDoctorLoading || isStaffLoading;
   
-  // Get profile image from hospital data (the source of truth)
-  const hospital = hospitalData?.data || hospitalData;
-  const profileImage = hospital?.profilePicture || 
-                       hospital?.profileImage || 
-                       hospital?.imageUrl || 
-                       hospital?.image ||
-                       user?.profilePicture || 
-                       user?.profileImage || 
-                       user?.imageUrl || 
-                       user?.image || 
-                       storedUser?.profilePicture || 
-                       storedUser?.profileImage || 
-                       storedUser?.imageUrl || 
-                       storedUser?.image || 
-                       null;
-  
-  const profileImageUrl = profileImage ? getImageUrlWithCache(profileImage) : null;
-  const initials = getInitials(hospitalName);
-  const gradientColor = getColorFromName(hospitalName);
+  const profileImageUrl = profileData.profileImage ? getImageUrlWithCache(profileData.profileImage) : null;
+  const initials = getInitials(profileData.name);
+  const gradientColor = getColorFromName(profileData.name);
   
   const notifications = notificationsData?.data || [];
-  
   const unreadCount = notifications.filter(
     (n) => !n.hospitalReadStatus?.[hospitalId]
   ).length;
@@ -244,12 +272,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           >
             {/* Profile Image or Initials */}
             <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-[#1a2332] border border-slate-600">
-              {isHospitalLoading ? (
+              {isLoading ? (
                 <div className="w-full h-full animate-pulse bg-slate-700"></div>
               ) : profileImageUrl ? (
                 <img 
                   src={profileImageUrl}
-                  alt={hospitalName}
+                  alt={profileData.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.onerror = null;
@@ -273,7 +301,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             
             <div className="hidden lg:block text-left">
               <p className="text-sm font-medium text-white truncate max-w-[160px]">
-                {hospitalName}
+                {profileData.name}
+              </p>
+              <p className="text-xs text-slate-400 truncate max-w-[160px]">
+                {profileData.roleLabel}
               </p>
             </div>
             <ChevronDown size={16} className="!text-white hidden lg:block" stroke="white" />
@@ -284,12 +315,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
               {/* Profile Header with Image or Initials */}
               <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-700">
-                  {isHospitalLoading ? (
+                  {isLoading ? (
                     <div className="w-full h-full animate-pulse bg-gray-300 dark:bg-gray-600"></div>
                   ) : profileImageUrl ? (
                     <img 
                       src={profileImageUrl}
-                      alt={hospitalName}
+                      alt={profileData.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         e.target.onerror = null;
@@ -312,10 +343,13 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
-                    {hospitalName}
+                    {profileData.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {hospitalEmail}
+                    {profileData.roleLabel}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                    {profileData.email}
                   </p>
                 </div>
               </div>

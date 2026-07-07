@@ -1,7 +1,7 @@
 // app/service/staffApi.ts
 
 import { api } from "./api";
-import { getHospitalId } from "../../src/utils/auth";
+import { getHospitalId, getAuthUser } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -68,6 +68,7 @@ export interface GetStaffParams {
   staffId?: string;
   search_query?: string;
   includeDeleted?: boolean;
+  skipHospitalFilter?: boolean;
 }
 
 // Password Reset Request Types
@@ -104,6 +105,29 @@ export interface VerifyOtpRequest {
   otp: string;
 }
 
+// Create Staff Data Type
+export interface CreateStaffData {
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  designation: string;
+  hospitalId?: number;
+  roleId?: number;
+  joiningDate?: string;
+  jobType?: string;
+  staffType?: string;
+  dob?: string;
+  gender?: string;
+  hospitalName?: string;
+  knowLanguages?: string[];
+  qualification?: string;
+  address?: StaffAddress;
+  profileImage?: string;
+  imageKey?: string;
+  status?: string;
+}
+
 // ================= API =================
 
 export const staffApi = api.injectEndpoints({
@@ -116,16 +140,20 @@ export const staffApi = api.injectEndpoints({
     >({
       query: (params) => {
         const queryParams = new URLSearchParams();
-        const hospitalId = getHospitalId(); // ✅ Get hospital ID from auth
+        const auth = getAuthUser();
+        const isSuperAdmin = auth?.role === 'super-admin';
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const shouldSkipFilter = params?.skipHospitalFilter === true;
 
-        // ✅ Always include hospitalId if available
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
-        
-        // Allow override if explicitly passed in params
-        if (params?.hospitalId) {
-          queryParams.set("hospitalId", String(params.hospitalId));
+        if (isSuperAdmin && params?.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
+        } else if (isHospitalAdmin && !shouldSkipFilter) {
+          const hospitalId = getHospitalId();
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+          }
+        } else if (params?.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
         // Filters
@@ -145,7 +173,7 @@ export const staffApi = api.injectEndpoints({
         if (params?.limit) queryParams.append("limit", String(params.limit));
 
         const url = `/staff?${queryParams.toString()}`;
-        console.log('📡 Fetching staff with URL:', url); // Debug log
+        console.log('📡 Fetching staff with URL:', url);
         return url;
       },
       providesTags: ["Staff"],
@@ -167,15 +195,21 @@ export const staffApi = api.injectEndpoints({
     // ================= CREATE STAFF =================
     createStaff: builder.mutation<
       StaffResponse,
-      Omit<Staff, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
+      CreateStaffData
     >({
       query: (data) => {
-        const hospitalId = getHospitalId();
+        const auth = getAuthUser();
+        const isSuperAdmin = auth?.role === 'super-admin';
         
-        // ✅ Ensure hospitalId is included
-        if (!hospitalId) {
-          console.warn('⚠️ No hospitalId found when creating staff');
+        // ✅ FIXED: For Super Admin, use hospitalId from the request body
+        // For Hospital Admin, use their own hospital ID if not provided
+        let hospitalId = data.hospitalId;
+        
+        if (!hospitalId && !isSuperAdmin) {
+          hospitalId = Number(getHospitalId());
         }
+        
+        console.log("📤 Creating staff with hospitalId:", hospitalId);
         
         return {
           url: "/staff",

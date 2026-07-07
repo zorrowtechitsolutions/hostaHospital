@@ -143,7 +143,9 @@ const HospitalBloodBanksList = () => {
   };
 
   const handleEditBloodBank = (bloodBank) => {
-    navigate(`/super-admin/blood-bank/edit/${bloodBank.id}`, { state: { bloodBank, hospitalId: id } });
+    navigate(`/super-admin/blood-bank/edit/${bloodBank.id}`, { 
+      state: { bloodBank, hospitalId: id } 
+    });
   };
 
   const handleDeleteClick = (bloodBank) => {

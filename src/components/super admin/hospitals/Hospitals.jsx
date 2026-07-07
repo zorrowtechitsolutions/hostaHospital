@@ -32,13 +32,46 @@ import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../../app/service
 
 // ================= HELPER FUNCTIONS =================
 
-// Get S3 image URL with cache busting
+// Get S3 image URL without cache busting to allow browser caching
 const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) return null;
-  const url = getS3ImageUrl(imageUrl);
-  if (!url) return null;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+  return getS3ImageUrl(imageUrl);
+};
+
+// ================= CUSTOM HOSPITAL AVATAR =================
+
+const HospitalAvatar = ({ imageUrl, hospitalName, isBlacklisted, size = 'w-14 h-14' }) => {
+  const [imgError, setImgError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  
+  const firstLetter = hospitalName?.charAt(0)?.toUpperCase() || "H";
+
+  return (
+    <div className={`flex-shrink-0 rounded-xl overflow-hidden ${size}`}>
+      {/* Image - shown when loaded */}
+      {imageUrl && !imgError && (
+        <img
+          src={imageUrl}
+          alt={hospitalName}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          } ${isBlacklisted ? 'opacity-60' : ''}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImgError(true)}
+          loading="eager"
+        />
+      )}
+      
+      {/* Fallback - neutral gray, only shown until image loads */}
+      <div 
+        className={`w-full h-full flex items-center justify-center text-white text-2xl transition-opacity duration-300 ${
+          imageLoaded ? "opacity-0 pointer-events-none" : "opacity-100"
+        } ${isBlacklisted ? 'bg-gray-300' : 'bg-gray-200'}`}
+      >
+        {(!imageUrl || !imageLoaded) && firstLetter}
+      </div>
+    </div>
+  );
 };
 
 // ================= IMAGE UPLOAD MODAL =================
@@ -496,16 +529,6 @@ const Hospitals = () => {
           <p className="text-sm text-gray-500 mt-1">Click on any hospital to view details</p>
         </div>
         <div className="flex gap-2">
-          {/* <Button
-            variant={showDeleted ? "primary" : "outline"}
-            size="sm"
-            onClick={() => setShowDeleted(!showDeleted)}
-            className="flex items-center gap-1"
-          >
-            <Trash2 size={14} />
-            {showDeleted ? "Hide Deleted" : "Show Deleted"}
-          </Button> */}
-
           <Button
             variant="primary"
             onClick={() => navigate('/super-admin/hospitals/add')}
@@ -531,6 +554,20 @@ const Hospitals = () => {
         </div>
       </div>
 
+      {/* Toggle Deleted */}
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          onClick={() => setShowDeleted(!showDeleted)}
+          className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+            showDeleted 
+              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          {showDeleted ? 'Showing Deleted' : 'Show Deleted'}
+        </button>
+      </div>
+
       {/* Hospitals Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {paginatedHospitals.map((hospital) => {
@@ -550,35 +587,12 @@ const Hospitals = () => {
                 <div>
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      {/* Hospital Image */}
-                      <div 
-                        className={`w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 ${
-                          isBlacklisted ? 'bg-gray-400' : 'bg-gradient-to-r from-blue-500 to-indigo-600'
-                        }`}
-                      >
-                        {imageUrl ? (
-                          <img 
-                            src={imageUrl} 
-                            alt={hospital.name} 
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.style.display = 'none';
-                              e.target.parentElement.className = `w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                                isBlacklisted ? 'bg-gray-400' : 'bg-gradient-to-r from-blue-500 to-indigo-600'
-                              }`;
-                              const icon = document.createElement('span');
-                              icon.innerHTML = '🏥';
-                              icon.className = 'text-2xl';
-                              e.target.parentElement.appendChild(icon);
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white text-2xl">
-                            🏥
-                          </div>
-                        )}
-                      </div>
+                      <HospitalAvatar 
+                        imageUrl={imageUrl}
+                        hospitalName={hospital.name}
+                        isBlacklisted={isBlacklisted}
+                        size="w-14 h-14"
+                      />
                       <div className="flex-1 min-w-0">
                         <h3 className={`font-semibold text-lg truncate ${
                           isBlacklisted ? 'text-gray-500' : 'text-gray-900'
@@ -645,15 +659,6 @@ const Hospitals = () => {
                   ) : (
                     <>
                       <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => handleImageClick(hospital, e)}
-                          className="flex items-center gap-1"
-                        >
-                          <ImageIcon size={14} />
-                          Image
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"

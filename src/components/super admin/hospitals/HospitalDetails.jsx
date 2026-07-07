@@ -43,13 +43,44 @@ import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../../app/service
 
 // ================= HELPER FUNCTIONS =================
 
-// Get S3 image URL with cache busting
+// Get S3 image URL without cache busting to allow browser caching
 const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) return null;
-  const url = getS3ImageUrl(imageUrl);
-  if (!url) return null;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+  return getS3ImageUrl(imageUrl);
+};
+
+// ================= CUSTOM AVATAR COMPONENT =================
+
+const HospitalAvatar = ({ imageUrl, hospitalName, size = 'w-16 h-16' }) => {
+  const [imgError, setImgError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  return (
+    <div className={`flex-shrink-0 rounded-2xl overflow-hidden ${size}`}>
+      {/* Image - shown when loaded */}
+      {imageUrl && !imgError && (
+        <img
+          src={imageUrl}
+          alt={hospitalName}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImgError(true)}
+          loading="eager"
+        />
+      )}
+      
+      {/* Fallback - neutral gray, only shown until image loads */}
+      <div 
+        className={`w-full h-full flex items-center justify-center text-white text-2xl transition-opacity duration-300 ${
+          imageLoaded ? "opacity-0 pointer-events-none" : "opacity-100"
+        } bg-gray-200`}
+      >
+        {(!imageUrl || !imageLoaded) && hospitalName?.charAt(0)?.toUpperCase() || "H"}
+      </div>
+    </div>
+  );
 };
 
 // ================= IMAGE UPLOAD COMPONENT =================
@@ -780,23 +811,11 @@ const HospitalDetails = () => {
         
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            {profileImageUrl ? (
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-blue-200">
-                <img 
-                  src={profileImageUrl} 
-                  alt={hospital.name} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(hospital.name)}&background=1C62A0&color=fff&length=2`;
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-                <Building2 size={32} className="text-white" />
-              </div>
-            )}
+            <HospitalAvatar 
+              imageUrl={profileImageUrl}
+              hospitalName={hospital.name}
+              size="w-16 h-16"
+            />
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{hospital.name}</h1>
               <p className="text-sm text-gray-500 mt-1">ID: {hospital.id}</p>

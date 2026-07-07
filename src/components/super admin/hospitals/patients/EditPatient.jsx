@@ -1,14 +1,14 @@
-// src/components/patients/EditPatient.jsx
-import React, { useState, useEffect } from 'react';
+// src/components/patients/EditPatient.jsx - FIXED ADDRESS POPULATION
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
-  ArrowLeft, Heart, Users, 
+  ArrowLeft, Users, 
   Briefcase, Clock, AlertTriangle,
   ChevronDown, Activity
 } from 'lucide-react';
 import { 
-  Button, Input, Select, Card, Alert, Loader 
+  Button, Input, Select, Card, Loader 
 } from '../../../ui';
 import { 
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast 
@@ -29,18 +29,21 @@ const SearchableDropdown = ({
   required = false,
   getOptionLabel = (option) => option.name || option,
   getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index
+  optionKey = (option, index) => option.isoCode || index,
+  isLoading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const dropdownRef = React.useRef(null);
+  const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => {
-    const label = getOptionLabel(option).toLowerCase();
-    return label.includes(searchTerm.toLowerCase());
-  });
+  const filteredOptions = React.useMemo(() => {
+    return options.filter(option => {
+      const label = getOptionLabel(option).toLowerCase();
+      return label.includes(searchTerm.toLowerCase());
+    });
+  }, [options, searchTerm, getOptionLabel]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -81,21 +84,21 @@ const SearchableDropdown = ({
             setIsOpen(true);
             setSearchTerm("");
           }}
-          placeholder={placeholder}
-          disabled={disabled}
+          placeholder={isLoading ? "Loading..." : placeholder}
+          disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+            (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
         <ChevronDown 
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
       
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
             <div
@@ -110,9 +113,18 @@ const SearchableDropdown = ({
         </div>
       )}
       
-      {isOpen && filteredOptions.length === 0 && (
+      {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No results found
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <span>Loading...</span>
+          </div>
         </div>
       )}
     </div>
@@ -121,28 +133,30 @@ const SearchableDropdown = ({
 
 const EditPatient = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
-  
-  // Convert id to number for API call
-  const numericId = id ? Number(id) : null;
-  
-  // Get user data from auth utility
+  const { id: hospitalIdFromRoute, patientId } = useParams();
+
+  const numericPatientId = patientId ? Number(patientId) : null;
+
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id;
-  
-  // Fetch patient data
+
+  const hospitalId = hospitalIdFromRoute
+    ? Number(hospitalIdFromRoute)
+    : authUser?.id;
+
+  console.log("🔍 Route params:", { hospitalIdFromRoute, patientId });
+  console.log("🔍 Numeric Patient ID:", numericPatientId);
+  console.log("🔍 Hospital ID:", hospitalId);
+
   const { 
     data: patientResponse, 
     isLoading: isLoadingPatient, 
-    refetch,
-    error: fetchError
-  } = useGetPatientByIdQuery(numericId, {
-    skip: !numericId
+    refetch
+  } = useGetPatientByIdQuery(numericPatientId, {
+    skip: !numericPatientId
   });
   
   const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
   
-  // Handle both response formats
   const patient = patientResponse?.data || patientResponse || null;
   
   const [formData, setFormData] = useState({
@@ -175,19 +189,54 @@ const EditPatient = () => {
   const [originalPatientId, setOriginalPatientId] = useState(null);
 
   const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  const [availableStates, setAvailableStates] = useState([]);
+  const [availableCities, setAvailableCities] = useState([]);
 
   const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
   const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed'];
   const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
   const patientTypeOptions = ['Outpatient', 'Inpatient'];
 
-  // Load patient data into form
+  // ✅ Load patient data with proper address fields and populate dropdowns
   useEffect(() => {
-    if (patient) {
-      // Find country code from country name
-      const country = countries.find(c => c.name === patient.location?.country);
+    if (patient && patient.id && !formData.fullName) {
+      console.log("📋 Loading patient data:", patient);
+      console.log("📋 Patient location:", patient.location);
+      
+      // Find country and state - same pattern as EditDoctor
+      const country = countries.find(c => 
+        c.name?.toLowerCase() === patient.location?.country?.toLowerCase()
+      );
+      
+      const countryCode = country?.isoCode || '';
+      let stateCode = '';
+      let stateList = [];
+      
+      if (countryCode) {
+        stateList = State.getStatesOfCountry(countryCode);
+        const state = stateList.find(s => 
+          s.name?.toLowerCase() === patient.location?.state?.toLowerCase()
+        );
+        stateCode = state?.isoCode || '';
+      }
+      
+      console.log("🔍 Found Country:", { 
+        countryName: patient.location?.country, 
+        countryCode: countryCode 
+      });
+      console.log("🔍 Found State:", { 
+        stateName: patient.location?.state, 
+        stateCode: stateCode 
+      });
+      console.log("🔍 District:", patient.location?.district);
+      
+      // ✅ Set available states and cities for dropdowns
+      setAvailableStates(stateList);
+      
+      if (countryCode && stateCode) {
+        const cities = City.getCitiesOfState(countryCode, stateCode);
+        setAvailableCities(cities);
+      }
       
       setFormData({
         fullName: patient.name || '',
@@ -202,10 +251,10 @@ const EditPatient = () => {
         guardianName: patient.guardianName || '',
         guardianRelation: patient.guardianRelation || '',
         addressLine: patient.addressLine || '',
-        countryCode: country?.isoCode || '',
-        countryName: patient.location?.country || '',
-        stateCode: '',
-        stateName: patient.location?.state || '',
+        countryCode: countryCode,
+        countryName: patient.location?.country || "",
+        stateCode: stateCode,
+        stateName: patient.location?.state || "",
         district: patient.location?.district || '',
         place: patient.location?.place || '',
         pincode: patient.location?.pincode?.toString() || '',
@@ -218,29 +267,43 @@ const EditPatient = () => {
   }, [patient, countries]);
 
   const handleCountryChange = (code, name) => {
+    console.log("🌍 Country changed:", { code, name });
     setFormData(prev => ({
       ...prev,
-      countryCode: code,
-      countryName: name,
+      countryCode: String(code),
+      countryName: String(name),
       stateCode: '',
       stateName: '',
       district: ''
     }));
+    
+    // ✅ Update states when country changes
+    const states = State.getStatesOfCountry(code);
+    setAvailableStates(states);
+    setAvailableCities([]);
   };
 
   const handleStateChange = (code, name) => {
+    console.log("📍 State changed:", { code, name });
     setFormData(prev => ({
       ...prev,
-      stateCode: code,
-      stateName: name,
+      stateCode: String(code),
+      stateName: String(name),
       district: ''
     }));
+    
+    // ✅ Update cities when state changes
+    if (formData.countryCode && code) {
+      const cities = City.getCitiesOfState(formData.countryCode, code);
+      setAvailableCities(cities);
+    }
   };
 
   const handleCityChange = (name) => {
+    console.log("🏙️ District changed:", name);
     setFormData(prev => ({
       ...prev,
-      district: name
+      district: String(name)
     }));
   };
 
@@ -356,7 +419,6 @@ const EditPatient = () => {
       hospitalId: hospitalId,
     };
 
-    // Add optional fields only if they have values
     if (formData.bloodGroup) updateData.bloodGroup = formData.bloodGroup;
     if (formData.age) updateData.age = Number(formData.age);
     if (formData.dob) updateData.dob = formData.dob;
@@ -393,7 +455,9 @@ const EditPatient = () => {
       try {
         const updateData = prepareUpdateData();
         
-        const result = await updatePatient({ 
+        console.log("📤 Updating patient:", { id: originalPatientId, updateData });
+        
+        await updatePatient({ 
           id: originalPatientId, 
           updatePatient: updateData 
         }).unwrap();
@@ -412,14 +476,20 @@ const EditPatient = () => {
         
         setIsSubmitting(false);
         
-        // Refetch to get latest data
-        refetch();
+        if (refetch) {
+          try {
+            await refetch();
+          } catch (err) {
+            console.warn("⚠️ Could not refetch:", err);
+          }
+        }
         
         setTimeout(() => {
-          navigate('/patients');
+          navigate(`/super-admin/hospitals/${hospitalId}/patients`);
         }, 1500);
         
       } catch (error) {
+        console.error("❌ Update error:", error);
         if (error.status === 409) {
           showErrorToast('❌ Mobile number or email already exists!');
         } else if (error.data?.message) {
@@ -440,9 +510,10 @@ const EditPatient = () => {
     }
   };
 
-  const handleGoBack = () => navigate('/patients');
+  const handleGoBack = () => {
+    navigate(`/super-admin/hospitals/${hospitalId}/patients`);
+  };
 
-  // Loading state
   if (isLoadingPatient) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -451,7 +522,6 @@ const EditPatient = () => {
     );
   }
 
-  // Patient not found state - show proper message
   if (!patient && !isLoadingPatient) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -464,7 +534,7 @@ const EditPatient = () => {
             <p className="text-gray-500 mb-6">
               The patient you're trying to edit doesn't exist or has been removed.
               <br />
-              <span className="text-xs text-gray-400">Patient ID: {id}</span>
+              <span className="text-xs text-gray-400">Patient ID: {patientId}</span>
             </p>
             <Button onClick={handleGoBack} variant="primary">
               Back to Patients
@@ -485,7 +555,12 @@ const EditPatient = () => {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Edit Patient</h1>
-              <p className="text-sm text-gray-500 mt-1">Update patient profile information</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Update patient profile information for {patient?.name || ''}
+              </p>
+              {hospitalId && (
+                <p className="text-xs text-blue-600 mt-0.5">Hospital ID: {hospitalId}</p>
+              )}
             </div>
           </div>
         </div>
@@ -704,7 +779,7 @@ const EditPatient = () => {
                   />
                   <SearchableDropdown
                     label="State"
-                    options={states}
+                    options={availableStates}
                     value={formData.stateCode}
                     onChange={handleStateChange}
                     placeholder="Search for a state..."
@@ -717,7 +792,7 @@ const EditPatient = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
                   <SearchableDropdown
                     label="District"
-                    options={cities}
+                    options={availableCities}
                     value={formData.district}
                     onChange={handleCityChange}
                     placeholder="Search for a district..."
@@ -751,7 +826,6 @@ const EditPatient = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>
                 Cancel

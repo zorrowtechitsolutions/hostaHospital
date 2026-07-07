@@ -28,8 +28,9 @@ export interface GetSpecialityParams {
   limit?: number;
 }
 
+// ✅ Fix: Change overrideExisting to true to prevent duplicate injection errors
 export const specialityApi = api.injectEndpoints({
-  overrideExisting: false,
+  overrideExisting: true, // Changed from false to true
   
   endpoints: (builder) => ({
 

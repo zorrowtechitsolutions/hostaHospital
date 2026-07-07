@@ -1,6 +1,6 @@
-// src/app/service/patients.ts - Add recover endpoint and includeDeleted parameter
-
+// app/service/patients.ts - Fixed with hospital ID handling
 import { api } from "./api";
+import { getAuthUser } from "../../src/utils/auth";
 
 // ==============================
 // TYPES
@@ -37,8 +37,9 @@ export interface Patient {
   occupation?: string | null;
   createdAt?: string;
   updatedAt?: string;
-  isDelete?: boolean; // ✅ Add isDelete field
-  deleteDate?: string | null; // ✅ Add deleteDate field
+  isDelete?: boolean;
+  deleteDate?: string | null;
+  isActive?: boolean;
 }
 
 export interface CreatePatientData {
@@ -86,6 +87,23 @@ export interface PatientAuthResponse {
   error?: string;
 }
 
+export interface GetPatientsParams {
+  hospitalId?: string | number;
+  name?: string;
+  phone?: string;
+  patientId?: string;
+  addressLine?: string;
+  email?: string;
+  guardianName?: string;
+  gender?: string;
+  patientType?: string;
+  includeDeleted?: boolean;
+  search_query?: string;
+  page?: number;
+  limit?: number;
+  skipHospitalFilter?: boolean;
+}
+
 // ==============================
 // PATIENTS API
 // ==============================
@@ -94,52 +112,77 @@ export const patientsApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ==============================
-    // GET ALL PATIENTS
+    // GET ALL PATIENTS - Server-side pagination and filtering
     // ==============================
 
     getPatients: builder.query({
-      query: (params = {}) => {
+      query: (params: GetPatientsParams = {}) => {
+        const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
-        if (params.name) {
-          queryParams.append("name", params.name);
-        }
-
-        if (params.phone) {
-          queryParams.append("phone", params.phone);
-        }
-
-        if (params.patientId) {
-          queryParams.append("patientId", params.patientId);
-        }
-
-        if (params.addressLine) {
-          queryParams.append("addressLine", params.addressLine);
-        }
-
-        if (params.email) {
-          queryParams.append("email", params.email);
-        }
-
-        if (params.guardianName) {
-          queryParams.append("guardianName", params.guardianName);
-        }
-
-        if (params.hospitalId) {
+        // ✅ FIXED: Hospital ID handling - same pattern as doctorApi
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const shouldSkipFilter = params.skipHospitalFilter === true;
+        
+        if (isHospitalAdmin && auth?.id && !params.hospitalId && !shouldSkipFilter) {
+          queryParams.append("hospitalId", String(auth.id));
+        } else if (params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        queryParams.append("page", String(params.page || 1));
-        queryParams.append("limit", String(params.limit || 10));
-
+        // Search query
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
-        // ✅ Add includeDeleted parameter
+        // Name filter
+        if (params.name) {
+          queryParams.append("name", params.name);
+        }
+
+        // Phone filter
+        if (params.phone) {
+          queryParams.append("phone", params.phone);
+        }
+
+        // Patient ID filter
+        if (params.patientId) {
+          queryParams.append("patientId", params.patientId);
+        }
+
+        // Address line filter
+        if (params.addressLine) {
+          queryParams.append("addressLine", params.addressLine);
+        }
+
+        // Email filter
+        if (params.email) {
+          queryParams.append("email", params.email);
+        }
+
+        // Guardian name filter
+        if (params.guardianName) {
+          queryParams.append("guardianName", params.guardianName);
+        }
+
+        // Gender filter
+        if (params.gender) {
+          queryParams.append("gender", params.gender);
+        }
+
+        // Patient Type filter
+        if (params.patientType) {
+          queryParams.append("patientType", params.patientType);
+        }
+
+        // Include deleted patients
         if (params.includeDeleted) {
           queryParams.append("includeDeleted", String(params.includeDeleted));
         }
+
+        // Pagination parameters
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
 
         return `/patients?${queryParams.toString()}`;
       },
@@ -161,11 +204,19 @@ export const patientsApi = api.injectEndpoints({
     // ==============================
 
     createPatient: builder.mutation<PatientResponse, CreatePatientData>({
-      query: (newPatient) => ({
-        url: "/patients",
-        method: "POST",
-        body: newPatient,
-      }),
+      query: (newPatient) => {
+        const auth = getAuthUser();
+        
+        return {
+          url: "/patients",
+          method: "POST",
+          body: {
+            ...newPatient,
+            // ✅ FIXED: If hospitalId is not provided, use auth user's ID
+            hospitalId: newPatient.hospitalId ?? auth?.id,
+          },
+        };
+      },
 
       invalidatesTags: ["Patient"],
     }),
@@ -175,11 +226,19 @@ export const patientsApi = api.injectEndpoints({
     // ==============================
 
     updatePatient: builder.mutation<PatientResponse, { id: string; updatePatient: Partial<CreatePatientData> }>({
-      query: ({ id, updatePatient }) => ({
-        url: `/patients/${id}`,
-        method: "PUT",
-        body: updatePatient,
-      }),
+      query: ({ id, updatePatient }) => {
+        const auth = getAuthUser();
+        
+        return {
+          url: `/patients/${id}`,
+          method: "PUT",
+          body: {
+            ...updatePatient,
+            // ✅ FIXED: If hospitalId is not provided, use auth user's ID
+            hospitalId: updatePatient.hospitalId ?? auth?.id,
+          },
+        };
+      },
 
       invalidatesTags: (result, error, { id }) => [{ type: "Patient", id }],
     }),
@@ -198,7 +257,7 @@ export const patientsApi = api.injectEndpoints({
     }),
 
     // ==============================
-    // ✅ RECOVER PATIENT (SOFT DELETE)
+    // RECOVER PATIENT (SOFT DELETE)
     // ==============================
 
     recoverPatient: builder.mutation<
@@ -228,5 +287,5 @@ export const {
   useCreatePatientMutation,
   useUpdatePatientMutation,
   useDeletePatientMutation,
-  useRecoverPatientMutation, // ✅ Export the new hook
+  useRecoverPatientMutation,
 } = patientsApi;

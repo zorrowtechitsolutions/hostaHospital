@@ -50,16 +50,13 @@ import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
 
 // FIX: Enhanced getS3ImageUrl with cache-busting
-// If your getS3ImageUrl from S3.js doesn't have cache-busting, use this version
 const getS3ImageUrlWithCache = (imageKey) => {
   if (!imageKey) return null;
   
-  // If it's already a full URL, add cache-busting
   if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return `${imageKey}?t=${Date.now()}`;
   }
   
-  // Otherwise, construct the S3 URL with cache-busting
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
@@ -81,16 +78,10 @@ const Staffs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Track if showing deleted staff
-  const [showDeleted, setShowDeleted] = useState(false);
-
-  // Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
-
-  // FIX: Add a state to force image refresh
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
 
-  // API Hooks with pagination parameters
+  // API Hooks with pagination parameters - removed includeDeleted
   const {
     data: staffApiResponse,
     isLoading: loading,
@@ -103,8 +94,8 @@ const Staffs = () => {
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date: dateFilter || undefined,
     page: currentPage,
-    limit: itemsPerPage,
-    includeDeleted: showDeleted
+    limit: itemsPerPage
+    // includeDeleted: false // Removed - not needed
   });
 
   const [deleteStaff] = useDeleteStaffMutation();
@@ -116,34 +107,27 @@ const Staffs = () => {
       onStaffRegistered: async () => {
         showSuccessToast(`New staff registered!`, 3000);
         await refetch();
-        // FIX: Force image refresh when staff is updated
         setImageRefreshKey(Date.now());
       },
-
       onStaffUpdated: async () => {
         showSuccessToast(`Staff updated!`, 3000);
         await refetch();
-        // FIX: Force image refresh when staff is updated
         setImageRefreshKey(Date.now());
       },
-
       onStaffDeleted: async () => {
         showSuccessToast(`Staff deleted!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
-
       onStaffRecovered: async () => {
         showSuccessToast(`Staff recovered successfully!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
-
       onStaffPasswordReset: async () => {
         showSuccessToast(`Staff password reset!`, 3000);
         await refetch();
       },
-
       onStaffPasswordChanged: async () => {
         showSuccessToast(`Staff password changed!`, 3000);
         await refetch();
@@ -222,28 +206,20 @@ const Staffs = () => {
     return `#SF${String(numericId).padStart(4, '0')}`;
   };
 
-  // FIX: Updated helper function to get image URL with cache-busting
   const getStaffImageUrl = (staff) => {
-    // Check all possible image fields
     const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
-    
     if (!imageKey) return null;
-    
-    // Use the cache-busting version
     return getS3ImageUrlWithCache(imageKey);
   };
 
-  // Transform API response to match the expected format
+  // Transform API response
   const transformStaffData = (staffList) => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
     return staffList.map((staff, index) => {
-      // Get the image key from all possible fields
       const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
       
-      // Modified status logic
       let staffStatus = 'Inactive';
-      
       if (staff.isDelete) {
         staffStatus = 'Blacklisted';
       } else if (staff.isActive) {
@@ -278,7 +254,7 @@ const Staffs = () => {
         isDelete: staff.isDelete || false,
         deleteDate: staff.deleteDate || null,
         originalStatus: staff.status,
-        updatedAt: staff.updatedAt || staff.updated_at || null // FIX: Include updatedAt for better cache-busting
+        updatedAt: staff.updatedAt || staff.updated_at || null
       };
     });
   };
@@ -290,7 +266,7 @@ const Staffs = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter, showDeleted]);
+  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
   const getAllDesignations = () => {
     const allData = staffApiResponse?.allData || staffsData;
@@ -310,7 +286,6 @@ const Staffs = () => {
   const handleRefresh = () => {
     clearAllFilters();
     refetch();
-    // FIX: Force image refresh
     setImageRefreshKey(Date.now());
     showSuccessToast("Refreshed staff list", 2000);
   };
@@ -348,7 +323,7 @@ const Staffs = () => {
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        showSuccessToast(`Successfully imported ${importedData.length} staff members! (Note: Import to API requires additional implementation)`, 3000);
+        showSuccessToast(`Successfully imported ${importedData.length} staff members!`, 3000);
         refetch();
         setImageRefreshKey(Date.now());
       } catch {
@@ -359,7 +334,6 @@ const Staffs = () => {
     event.target.value = '';
   };
 
-  // View Details - Only for Active/Inactive staff
   const handleViewDetails = (staff) => {
     if (staff.isDelete) {
       showErrorToast('Cannot view details of blacklisted staff', 3000);
@@ -369,7 +343,6 @@ const Staffs = () => {
     setShowDetailsModal(true);
   };
 
-  // Edit - Only for Active/Inactive staff
   const handleEditStaff = (staff) => {
     if (staff.isDelete) {
       showErrorToast('Cannot edit blacklisted staff', 3000);
@@ -399,7 +372,6 @@ const Staffs = () => {
     }
   };
 
-  // Recover handler
   const handleRecoverStaff = async (staff) => {
     try {
       await recoverStaff(staff.id).unwrap();
@@ -419,15 +391,13 @@ const Staffs = () => {
       genderFilter !== 'all',
       statusFilter !== 'all',
       !!dateFilter,
-      !!searchTerm,
-      showDeleted
+      !!searchTerm
     ].filter(Boolean).length;
 
-  // StaffDetailsModal - Only shown for Active/Inactive staff
+  // StaffDetailsModal
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
     
-    // Get the image URL for the modal with cache-busting
     const imageUrl = getStaffImageUrl(staff);
     
     return (
@@ -499,7 +469,6 @@ const Staffs = () => {
             <p className="text-sm text-gray-800">{staff.address || 'N/A'}</p>
           </div>
           
-          {/* Show Staff Type if available */}
           {staff.staffType && (
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500">Staff Type</label>
@@ -507,7 +476,6 @@ const Staffs = () => {
             </div>
           )}
           
-          {/* Show Job Type if available */}
           {staff.jobType && (
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500">Job Type</label>
@@ -526,7 +494,7 @@ const Staffs = () => {
     );
   };
 
-  // RowActionMenu - View & Edit only for Active/Inactive, Recover for Blacklisted
+  // RowActionMenu
   const RowActionMenu = ({ staff }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -546,43 +514,35 @@ const Staffs = () => {
         </Button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {/* View Details - Only for Active/Inactive staff */}
             {!staff.isDelete && (
-              <button 
-                onClick={() => { handleViewDetails(staff); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-              >
-                <Eye size={16} /> View Details
-              </button>
+              <>
+                <button 
+                  onClick={() => { handleViewDetails(staff); setShowMenu(false); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                >
+                  <Eye size={16} /> View Details
+                </button>
+                <button 
+                  onClick={() => { handleEditStaff(staff); setShowMenu(false); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Edit size={16} /> Edit
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button 
+                  onClick={() => { handleDeleteClick(staff); setShowMenu(false); }} 
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
+              </>
             )}
-            
-            {/* Edit - Only for Active/Inactive staff */}
-            {!staff.isDelete && (
-              <button 
-                onClick={() => { handleEditStaff(staff); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Edit size={16} /> Edit
-              </button>
-            )}
-            
-            {/* Show divider only if there are items above */}
-            {!staff.isDelete && <div className="border-t border-gray-100 my-1"></div>}
-            
-            {/* Show Delete or Recover based on isDelete status */}
-            {staff.isDelete ? (
+            {staff.isDelete && (
               <button 
                 onClick={() => { handleRecoverStaff(staff); setShowMenu(false); }} 
                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
               >
                 <RotateCcw size={16} /> Recover Staff
-              </button>
-            ) : (
-              <button 
-                onClick={() => { handleDeleteClick(staff); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-              >
-                <Trash2 size={16} /> Delete
               </button>
             )}
           </div>
@@ -692,17 +652,6 @@ const Staffs = () => {
             <Button variant="outline" size="sm" onClick={handleExport} title="Export">
               <Download size={16} />
             </Button>
-            
-            {/* Toggle to show deleted staff */}
-            <Button 
-              variant={showDeleted ? "primary" : "outline"} 
-              size="sm" 
-              onClick={() => setShowDeleted(!showDeleted)}
-              className="flex items-center gap-1"
-            >
-              <Trash2 size={14} />
-              {showDeleted ? "Hide Deleted" : "Show Deleted"}
-            </Button>
 
             <button
               onClick={() => setShowFilters(prev => !prev)}
@@ -718,17 +667,6 @@ const Staffs = () => {
                 </span>
               )}
             </button>
-            
-            {/* ✅ Toggle Deleted Staff Button */}
-            <Button
-              variant={showDeleted ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setShowDeleted(!showDeleted)}
-              className="flex items-center gap-2"
-            >
-              <Trash2 size={16} />
-              {showDeleted ? 'Show Active' : 'Show Deleted'}
-            </Button>
             
             <Button onClick={handleAddStaff} className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <Plus size={16} /> New Staff
@@ -805,18 +743,14 @@ const Staffs = () => {
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
-            <p className="text-sm text-gray-500">
-              {showDeleted ? "No deleted staff members found" : "Try adjusting your search or filters"}
-            </p>
+            <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
           </div>
         ) : (
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
-                {showDeleted ? "Deleted Staffs" : "Total Staffs"}
-                <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${
-                  showDeleted ? 'bg-gray-500' : 'bg-red-500'
-                }`}>
+                Total Staffs
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {totalItems}
                 </span>
               </h2>
@@ -839,7 +773,6 @@ const Staffs = () => {
                   </thead>
                   <tbody>
                     {staffsData.map((staff, index) => {
-                      // FIX: Get image URL with cache-busting
                       const imageUrl = getStaffImageUrl(staff);
                       
                       return (
@@ -924,7 +857,7 @@ const Staffs = () => {
         )}
       </div>
 
-      {/* Staff Details Modal - Only shown for Active/Inactive staff */}
+      {/* Staff Details Modal */}
       {showDetailsModal && selectedStaff && !selectedStaff.isDelete && (
         <StaffDetailsModal staff={selectedStaff} onClose={() => setShowDetailsModal(false)} />
       )}

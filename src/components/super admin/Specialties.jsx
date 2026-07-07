@@ -55,13 +55,10 @@ const toTitleCase = (text = "") => {
   );
 };
 
-// Get S3 image URL with cache busting
+// Get S3 image URL without cache busting to allow browser caching
 const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) return null;
-  const url = getS3ImageUrl(imageUrl);
-  if (!url) return null;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+  return getS3ImageUrl(imageUrl);
 };
 
 // ================= IMAGE UPLOAD COMPONENT =================
@@ -266,12 +263,11 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 
       // Upload image if selected
       if (imageFile) {
-        // ✅ For specialities, use role "speciality" and id null (new speciality)
         const uploadResult = await uploadToS3(
           imageFile,
           null,
-          null,        // ✅ Pass null for new speciality
-          "speciality" // ✅ Role for speciality
+          null,
+          "speciality"
         );
         imageKey = uploadResult.key;
       }
@@ -284,7 +280,6 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 
       await onSave(specialityData);
       
-      // Clean up
       setImageFile(null);
       setImagePreview(null);
       
@@ -397,26 +392,21 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       let finalImageUrl = formData.imageUrl;
       const specialityId = speciality?.id;
 
-      // Handle image removal
       if (removeExistingImage && formData.imageUrl) {
-        // ✅ Delete from S3 with correct role
         await deleteFromS3(formData.imageUrl, specialityId, "speciality");
         finalImageUrl = null;
       }
 
-      // Upload new image if selected
       if (imageFile) {
-        // Delete existing image if it exists (and not already removed)
         if (formData.imageUrl && !removeExistingImage) {
           await deleteFromS3(formData.imageUrl, specialityId, "speciality");
         }
         
-        // ✅ Upload new image with correct parameters
         const uploadResult = await uploadToS3(
           imageFile,
           null,
-          specialityId,   // ✅ Pass speciality ID
-          "speciality"    // ✅ Role for speciality
+          specialityId,
+          "speciality"
         );
         finalImageUrl = uploadResult.key;
       }
@@ -429,7 +419,6 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
 
       await onSave({ ...speciality, ...updatedData });
       
-      // Reset state
       setImageFile(null);
       setImagePreview(null);
       setRemoveExistingImage(false);
@@ -591,6 +580,7 @@ const Specialties = () => {
   const navigate = useNavigate(); 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const itemsPerPage = 12;
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -601,13 +591,22 @@ const Specialties = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const {
     data: specialitiesResponse,
     isLoading: loading,
     refetch,
     isFetching
   } = useGetSpecialitiesQuery({
-    search_query: searchTerm || undefined
+name: debouncedSearchTerm || undefined
   });
 
   const [registerSpeciality, { isLoading: isAdding }] = useRegisterSpecialityMutation();
@@ -673,7 +672,7 @@ const Specialties = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
 
   const handleSpecialtyClick = (speciality) => {
     navigate(`/super-admin/specialities/${speciality.id}/hospitals`, {
@@ -763,7 +762,6 @@ const Specialties = () => {
   const handleDeleteSpeciality = async () => {
     if (selectedSpeciality) {
       try {
-        // ✅ Delete image from S3 if exists
         if (selectedSpeciality.imageUrl) {
           await deleteFromS3(selectedSpeciality.imageUrl, selectedSpeciality.id, "speciality");
         }
@@ -791,6 +789,7 @@ const Specialties = () => {
 
   const handleRefresh = () => {
     setSearchTerm("");
+    setDebouncedSearchTerm("");
     setCurrentPage(1);
     refetch();
     showSuccessToast("Specialities refreshed", 2000);
@@ -815,6 +814,25 @@ const Specialties = () => {
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
     showSuccessToast(`Exported ${exportData.length} speciality records`, 2000);
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Handle search button click
+  const handleSearchClick = () => {
+    setDebouncedSearchTerm(searchTerm);
+    setCurrentPage(1);
+  };
+
+  // Handle Enter key press
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }
   };
 
   const paginatedSpecialities = specialities.slice(
@@ -842,18 +860,26 @@ const Specialties = () => {
             type="text"
             placeholder="Search specialities by name..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            className="w-full pl-4 pr-12 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
           />
           {searchTerm && (
             <button
-              onClick={() => setSearchTerm('')}
+              onClick={() => {
+                setSearchTerm('');
+                setDebouncedSearchTerm('');
+                setCurrentPage(1);
+              }}
               className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
               ✕
             </button>
           )}
-          <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
+          <button 
+            onClick={handleSearchClick}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gradient-to-r from-green-600 to-emerald-600 p-1.5 rounded hover:from-green-700 hover:to-emerald-700 transition-colors"
+          >
             <Search className="w-4 h-4 text-white" />
           </button>
         </div>
@@ -958,7 +984,9 @@ const Specialties = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No specialities found</h3>
-          <p className="text-gray-500">Click "Add Speciality" to create your first speciality</p>
+          <p className="text-gray-500">
+            {searchTerm ? `No results found for "${searchTerm}"` : 'Click "Add Speciality" to create your first speciality'}
+          </p>
         </div>
       )}
 

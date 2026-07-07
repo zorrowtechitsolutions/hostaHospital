@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - With Deleted/Blacklisted Support and Recover Functionality
+// src/components/patients/Patients.jsx - With Deleted/Blacklisted Support and Recover Functionality (No Show Deleted Button)
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -61,9 +61,6 @@ const Patients = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
   
-  // Track if showing deleted patients
-  const [showDeleted, setShowDeleted] = useState(false);
-  
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
@@ -101,11 +98,11 @@ const Patients = () => {
     page: currentPage,
     limit: itemsPerPage,
     ...(genderFilter && { gender: genderFilter }),
-    includeDeleted: showDeleted // ✅ Include deleted patients when showDeleted is true
+    // includeDeleted: false // Always false - only show active patients (removed)
   });
 
   const [deletePatient] = useDeletePatientMutation();
-  const [recoverPatient] = useRecoverPatientMutation(); // ✅ Add recover mutation
+  const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
   // ✅ Register socket event listeners
@@ -136,7 +133,6 @@ const Patients = () => {
         console.log("📊 NEW DATA:", result?.data);
       },
 
-      // ✅ Handle PATIENT_RECOVERED event
       onPatientRecovered: async (data) => {
         console.log("♻️ PATIENT RECOVERED:", data);
         showSuccessToast(`Patient recovered successfully!`, 3000);
@@ -147,19 +143,17 @@ const Patients = () => {
 
     setEventsRegistered(true);
 
-    // ✅ Cleanup: Unregister events when component unmounts
     return () => {
       console.log("🧹 Unregistering patient events...");
       unregisterPatientEvents();
       setEventsRegistered(false);
     };
-  }, []); // ✅ Run once on mount
+  }, []);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       console.log("✅ Socket CONNECTED - Patient events will work!");
-      // Re-register events on reconnect if not registered
       if (!eventsRegistered) {
         registerPatientEvents({
           onPatientRegistered: async (data) => {
@@ -177,7 +171,6 @@ const Patients = () => {
             showSuccessToast(`Patient deleted!`, 3000);
             await refetchPatients();
           },
-          // ✅ Handle PATIENT_RECOVERED on reconnect
           onPatientRecovered: async (data) => {
             console.log("♻️ PATIENT RECOVERED (reconnect):", data);
             showSuccessToast(`Patient recovered successfully!`, 3000);
@@ -225,7 +218,6 @@ const Patients = () => {
     if (!patients || !Array.isArray(patients)) return [];
     
     return patients.map((patient) => {
-      // Determine status based on isDelete flag
       let status = 'Active';
       if (patient.isDelete) {
         status = 'Blacklisted';
@@ -235,7 +227,6 @@ const Patients = () => {
       
       return {
         ...patient,
-        // Ensure these flags exist
         isDelete: patient.isDelete || false,
         isActive: patient.isActive !== undefined ? patient.isActive : true,
         displayStatus: status
@@ -249,7 +240,7 @@ const Patients = () => {
   const outpatientPatients = transformedPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
   const inpatientPatients = transformedPatients.filter(p => p.patientType === 'Inpatient');
 
-  // Get active patients based on tab (client-side filtering for tabs)
+  // Get active patients based on tab
   const getActivePatients = () => {
     if (activeTab === 'outpatient') return outpatientPatients;
     if (activeTab === 'inpatient') return inpatientPatients;
@@ -258,7 +249,7 @@ const Patients = () => {
 
   const activePatients = getActivePatients();
 
-  // Apply local filters for gender and department (client-side filtering)
+  // Apply local filters for gender and department
   const filteredPatients = activePatients.filter(p => {
     if (genderFilter && p.gender !== genderFilter) return false;
     if (departmentFilter && p.department !== departmentFilter) return false;
@@ -272,11 +263,10 @@ const Patients = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, genderFilter, departmentFilter, activeTab, showDeleted]);
+  }, [searchTerm, genderFilter, departmentFilter, activeTab]);
 
   // Navigation handlers
   const handleViewDetails = (patient) => {
-    // ✅ Don't allow viewing details of blacklisted patients
     if (patient.isDelete) {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
@@ -289,7 +279,6 @@ const Patients = () => {
   };
 
   const handleEditPatient = (patient) => {
-    // ✅ Don't allow editing of blacklisted patients
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
@@ -385,7 +374,6 @@ const Patients = () => {
   };
 
   const handleAddAppointmentModal = (patient) => {
-    // ✅ Don't allow appointments for blacklisted patients
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for blacklisted patient', 3000);
       return;
@@ -493,7 +481,6 @@ const Patients = () => {
     if (genderFilter) count++;
     if (searchTerm) count++;
     if (activeTab !== 'all') count++;
-    if (showDeleted) count++;
     return count;
   };
 
@@ -726,16 +713,7 @@ const Patients = () => {
             <Download size={16} />
           </button>
 
-          {/* Toggle to show deleted patients */}
-          <Button 
-            variant={showDeleted ? "primary" : "outline"} 
-            size="sm" 
-            onClick={() => setShowDeleted(!showDeleted)}
-            className="flex items-center gap-1"
-          >
-            <Trash2 size={14} />
-            {showDeleted ? "Hide Deleted" : "Show Deleted"}
-          </Button>
+          {/* ❌ REMOVED: Show Deleted Button */}
 
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -820,9 +798,7 @@ const Patients = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
-          <p className="text-sm text-gray-500">
-            {showDeleted ? "No deleted patients found" : "Try adjusting your search or filters"}
-          </p>
+          <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
@@ -961,22 +937,18 @@ const Patients = () => {
           )}
         </>
       ) : (
-        /* LIST VIEW - WITH STICKY PAGINATION using server-side totalPages */
+        /* LIST VIEW */
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
-              {showDeleted ? "Deleted Patients" : "Total Patients"}
-              <span className={`text-white text-xs px-2 py-0.5 rounded ml-2 ${
-                showDeleted ? 'bg-gray-500' : 'bg-red-500'
-              }`}>
+              Total Patients
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                 {totalFilteredItems}
               </span>
             </h2>
           </div>
 
-          {/* Flex container that expands to fill available space */}
           <div className="flex flex-col min-h-[500px]">
-            {/* Table area - grows to take available space */}
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">

@@ -55,6 +55,10 @@ export interface GetDoctorsParams {
   skipHospitalFilter?: boolean;
 }
 
+type AddDoctorPayload = Omit<Doctor, "hospitalId"> & {
+  hospitalId?: number | string;
+};
+
 export interface Department {
   id: string;
   name: string;
@@ -191,22 +195,22 @@ export const doctorApi = api.injectEndpoints({
       invalidatesTags: ["Doctor"],
     }),
 
-    addNewDoctor: builder.mutation<DoctorAuthResponse, Omit<Doctor, 'hospitalId'>>({
-      query: (newDoctor) => {
-        const auth = getAuthUser();
-        
-        return {
-          url: "/doctor",
-          method: "POST",
-          body: {
-            ...newDoctor,
-            hospitalId: auth?.id,
-            hospitalName: auth?.name ?? "",
-          },
-        };
+    addNewDoctor: builder.mutation<DoctorAuthResponse, AddDoctorPayload>({
+  query: ({ hospitalId, ...newDoctor }) => {
+    const auth = getAuthUser();
+
+    return {
+      url: "/doctor",
+      method: "POST",
+      body: {
+        ...newDoctor,
+        hospitalId: hospitalId ?? auth?.id,
+        hospitalName: newDoctor.hospitalName ?? auth?.name ?? "",
       },
-      invalidatesTags: ["Doctor"],
-    }),
+    };
+  },
+  invalidatesTags: ["Doctor"],
+}),
 
     updateDoctor: builder.mutation<Doctor, { id: string; updateDoctor: Partial<Doctor> }>({
       query: ({ id, updateDoctor }) => ({

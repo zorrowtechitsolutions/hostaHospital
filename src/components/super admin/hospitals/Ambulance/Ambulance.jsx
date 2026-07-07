@@ -13,25 +13,25 @@ import {
   MapPin,
   Truck
 } from 'lucide-react';
-import DeleteModal from '../patients/DeleteModel';
-import AddAmbulanceModal from './AddAmbulanceModal';
-import EditAmbulanceModal from './EditAmbulanceModal';
+import DeleteModal from '../../../patients/DeleteModel';
+import AddAmbulanceModal from './AddAmbulance';
+import EditAmbulanceModal from './EditAmbulance';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
 import { 
   Badge, 
   Pagination
-} from '../ui';
+} from '../../../ui';
 import { 
   useGetAmbulanceQuery,
   useCreateAmbulanceMutation,
   useUpdateAmbulanceMutation,
   useDeleteAmbulanceMutation
-} from '../../../app/service/ambulance';
-import { showSuccessToast, showErrorToast } from '../ui/Toast';
+} from '../../../../../app/service/ambulance';
+import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
 
 // Import socket
-import { socket } from '../../socket/socket';
-import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../socket/ambulanceEvents';
+import { socket } from '../../../../socket/socket';
+import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../../../socket/ambulanceEvents';
 
 const ambulanceTypes = [
   "Basic Life Support (BLS)",

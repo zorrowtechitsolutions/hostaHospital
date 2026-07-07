@@ -1,4 +1,3 @@
-// src/components/super admin/SuperAdminLayout.jsx
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -17,6 +16,28 @@ import HospitalAmbulancesList from './hospitals/HospitalAmbulancesList';
 import HospitalBloodBanksList from './hospitals/HospitalBloodBanksList';
 import AddHospital from './hospitals/AddHospital';
 import EditHospital from './hospitals/EditHospital';
+
+// ✅ Doctor Details import
+import DoctorDetails from './hospitals/Doctors/DoctorDetails';
+
+// ✅ Staff imports
+import StaffDetails from './hospitals/Staff/StaffDetails';
+import AddStaff from './hospitals/Staff/AddStaff';
+import EditStaff from './hospitals/Staff/EditStaff';
+
+// Ambulance imports
+import AddAmbulance from '../Ambulance/AddAmbulanceModal';
+import EditAmbulance from '../Ambulance/EditAmbulanceModal';
+
+// ✅ Blood Bank imports
+import AddBloodBank from './hospitals/bloodbank/AddBloodBank';
+import EditBloodBank from './hospitals/bloodbank/EditBloodBank';
+import BloodBankDetails from './hospitals/bloodbank/BloodBankDetails';
+
+// ✅ Patient imports
+import AddPatient from './hospitals/patients/AddPatients';
+import EditPatient from './hospitals/patients/EditPatient';
+import PatientDetails from './hospitals/patients/PatientsDetails';
 
 // Specialty imports
 import HospitalsBySpeciality from './speciality/HospitalsBySpeciality';
@@ -43,13 +64,10 @@ import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
 import HospitalRoles from './permission/HospitalRoles';
 import HospitalNotificationList from './hospitals/notification/HospitalNotificationList';
 
-// Patient imports
-import AddPatient from './hospitals/patients/AddPatients';
-import EditPatient from './hospitals/patients/EditPatients';
-import PatientDetails from './hospitals/patients/PatientsDetails';
-
 // User Management (RTK Query)
 import UsersList from './users/userslist';
+import EditDoctor from './hospitals/Doctors/EditDoctor';
+import AddDoctor from './hospitals/Doctors/AddDoctor';
 
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -80,6 +98,8 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id" element={<HospitalDetails />} />
               <Route path="hospitals/add" element={<AddHospital />} />
               <Route path="hospitals/edit/:id" element={<EditHospital />} />
+              
+              {/* Hospital List Routes - Nested under hospital */}
               <Route path="hospitals/:id/patients" element={<HospitalPatientsList />} />
               <Route path="hospitals/:id/doctors" element={<HospitalDoctorsList />} />
               <Route path="hospitals/:id/staff" element={<HospitalStaffList />} />
@@ -89,10 +109,29 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/blood-banks" element={<HospitalBloodBanksList />} />
               <Route path="hospitals/:id/notifications" element={<HospitalNotificationList />} />
               
-              {/* Patient Routes */}
-              <Route path="patients/add" element={<AddPatient/>} />
-              <Route path="patients/edit/:id" element={<EditPatient />} />
-              <Route path="patients/:id" element={<PatientDetails />} />
+              {/* ✅ Patient CRUD Routes - Nested under hospital */}
+              <Route path="hospitals/:id/patients/add" element={<AddPatient />} />
+              <Route path="hospitals/:id/patients/edit/:patientId" element={<EditPatient />} />
+              <Route path="hospitals/:id/patients/:patientId" element={<PatientDetails />} />
+              
+              {/* ✅ Blood Bank Routes */}
+              <Route path="blood-bank/add" element={<AddBloodBank />} />
+              <Route path="blood-bank/edit/:id" element={<EditBloodBank />} />
+              <Route path="blood-bank/:id" element={<BloodBankDetails />} />
+              
+              {/* ✅ Doctor Routes */}
+              <Route path="hospitals/:id/doctors/edit/:doctorId" element={<EditDoctor />} />
+              <Route path="hospitals/:id/doctors/add" element={<AddDoctor />} />
+              <Route path="/doctors/:id" element={<DoctorDetails />} />
+              
+              {/* ✅ Staff Routes */}
+              <Route path="staff/:id" element={<StaffDetails />} />
+              <Route path="staff/add" element={<AddStaff />} />
+              <Route path="staff/edit/:id" element={<EditStaff />} />
+              
+              {/* Ambulance Routes */}
+              <Route path="ambulance/add" element={<AddAmbulance />} />
+              <Route path="ambulance/edit/:id" element={<EditAmbulance />} />
               
               {/* Category & Specialty Routes */}
               <Route path="categories" element={<Categories />} />
@@ -127,10 +166,9 @@ const SuperAdminLayout = () => {
               <Route path="hospital-users/:hospitalId/permissions/:roleId" element={<HospitalPermissionList />} />
 
               {/* ===== SUPER ADMIN USER MANAGEMENT (RTK QUERY) ===== */}
-              {/* Main Users List - Super Admin sees ALL users */}
               <Route path="users" element={<UsersList />} />
               
-              {/* Legacy User Management Routes (keep for backward compatibility) */}
+              {/* Legacy User Management Routes */}
               <Route path="users/add" element={<SuperAddNewUser />} />
               <Route path="users/edit/:userType" element={<SuperEditUser />} />
               <Route path="users/view-roles" element={<SuperViewAssignedRoles />} />

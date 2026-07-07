@@ -54,7 +54,7 @@ export interface GetAmbulanceParams {
   search_query?: string;
   page?: number;
   limit?: number;
-  skipHospitalFilter?: boolean; // ✅ ADDED: Allow skipping hospital filter for Super Admin
+  skipHospitalFilter?: boolean;
 }
 
 // ================= API =================
@@ -70,19 +70,18 @@ export const ambulanceApi = api.injectEndpoints({
       query: (params: GetAmbulanceParams = {}) => {
         const queryParams = new URLSearchParams();
 
-        // ✅ Only auto-inject hospitalId if skipHospitalFilter is false
+        // ✅ Use provided hospitalId or fallback to auth user's ID
         const skipHospitalFilter = params.skipHospitalFilter === true;
         
         if (!skipHospitalFilter) {
           const auth = getAuthUser();
-          if (auth?.id) {
-            queryParams.append("hospitalId", String(auth.id));
+          // ✅ Priority: params.hospitalId > auth.id
+          const hospitalId = params.hospitalId ?? auth?.id;
+          
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+            console.log("🚑 GET AMBULANCES - Using hospitalId:", hospitalId);
           }
-        }
-
-        // Override hospitalId if provided in params (takes precedence)
-        if (params.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
         }
 
         // User ID filter
@@ -155,10 +154,17 @@ export const ambulanceApi = api.injectEndpoints({
     // ================= CREATE AMBULANCE =================
     createAmbulance: builder.mutation<
       AmbulanceResponse,
-      Omit<Ambulance, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt'>
+      Omit<Ambulance, 'id' | 'createdAt' | 'updatedAt'>
     >({
       query: (data) => {
         const auth = getAuthUser();
+        
+        // ✅ Use provided hospitalId or fallback to auth user's ID
+        const hospitalId = data.hospitalId || auth?.id;
+        
+        console.log("🚑 CREATE AMBULANCE - Auth ID:", auth?.id);
+        console.log("🚑 CREATE AMBULANCE - Provided hospitalId:", data.hospitalId);
+        console.log("🚑 CREATE AMBULANCE - Final hospitalId:", hospitalId);
         
         return {
           url: "/ambulance",
@@ -168,8 +174,8 @@ export const ambulanceApi = api.injectEndpoints({
             phone: data.phone,
             vehicleType: data.vehicleType,
             address: data.address,
-            hospitalId: auth?.id,
-            userId: data.userId,
+            hospitalId: hospitalId,
+            userId: data.userId || auth?.id,
             name: data.name,
           },
         };
@@ -178,25 +184,39 @@ export const ambulanceApi = api.injectEndpoints({
       invalidatesTags: ["Ambulance"],
     }),
 
+    // ================= UPDATE AMBULANCE =================
     updateAmbulance: builder.mutation<
       AmbulanceResponse,
       {
         id: string | number;
-        data: Partial<Omit<Ambulance, 'id' | 'hospitalId'>>;
+        data: Partial<Omit<Ambulance, 'id' | 'createdAt' | 'updatedAt'>>;
       }
     >({
-      query: ({ id, data }) => ({
-        url: `/ambulance/${id}`,
-        method: "PUT",
-        body: {
-          serviceName: data.serviceName,
-          phone: data.phone,
-          vehicleType: data.vehicleType,
-          address: data.address,
-          userId: data.userId,
-          name: data.name,
-        },
-      }),
+      query: ({ id, data }) => {
+        const auth = getAuthUser();
+        
+        // ✅ Use provided hospitalId or fallback to auth user's ID
+        const hospitalId = data.hospitalId || auth?.id;
+        
+        console.log("🚑 UPDATE AMBULANCE - ID:", id);
+        console.log("🚑 UPDATE AMBULANCE - Auth ID:", auth?.id);
+        console.log("🚑 UPDATE AMBULANCE - Provided hospitalId:", data.hospitalId);
+        console.log("🚑 UPDATE AMBULANCE - Final hospitalId:", hospitalId);
+        
+        return {
+          url: `/ambulance/${id}`,
+          method: "PUT",
+          body: {
+            serviceName: data.serviceName,
+            phone: data.phone,
+            vehicleType: data.vehicleType,
+            address: data.address,
+            hospitalId: hospitalId,
+            userId: data.userId || auth?.id,
+            name: data.name,
+          },
+        };
+      },
 
       invalidatesTags: (result, error, { id }) => [
         { type: "Ambulance", id },
@@ -204,14 +224,18 @@ export const ambulanceApi = api.injectEndpoints({
       ],
     }),
 
+    // ================= DELETE AMBULANCE =================
     deleteAmbulance: builder.mutation<
       { message: string },
       string | number
     >({
-      query: (id) => ({
-        url: `/ambulance/${id}`,
-        method: "DELETE",
-      }),
+      query: (id) => {
+        console.log("🚑 DELETE AMBULANCE - ID:", id);
+        return {
+          url: `/ambulance/${id}`,
+          method: "DELETE",
+        };
+      },
 
       invalidatesTags: (result, error, id) => [
         { type: "Ambulance", id },

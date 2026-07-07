@@ -4,7 +4,27 @@ import { Modal, Input, Button } from '../ui';
 import { Country, State, City } from 'country-state-city';
 import { showErrorToast } from '../ui/Toast';
 
-const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
+// ✅ Default ambulance types as fallback
+const DEFAULT_AMBULANCE_TYPES = [
+  "Basic Life Support (BLS)",
+  "Advanced Life Support (ALS)",
+  "Patient Transport Ambulance",
+  "ICU Ambulance",
+  "Neonatal Ambulance",
+  "Air Ambulance",
+  "Mortuary Ambulance",
+  "Motorcycle Ambulance",
+  "Boat Ambulance",
+  "Emergency Response Vehicle"
+];
+
+// ✅ Add default value for ambulanceTypes
+const AddAmbulanceModal = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  ambulanceTypes = DEFAULT_AMBULANCE_TYPES 
+}) => {
   const [formData, setFormData] = useState({
     serviceName: '',
     address: {
@@ -240,7 +260,8 @@ const AddAmbulanceModal = ({ isOpen, onClose, onSave, ambulanceTypes }) => {
             }`}
           >
             <option value="">Select vehicle type</option>
-            {ambulanceTypes.map(type => (
+            {/* ✅ Safe map with fallback */}
+            {(ambulanceTypes || []).map(type => (
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
