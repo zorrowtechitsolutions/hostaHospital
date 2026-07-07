@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE WITH PLATFORM
+// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -189,7 +189,7 @@ const Login = () => {
     let authData = {
       deviceId: deviceId,
       fcmToken: fcmToken,
-      platform: 'web',  // ✅ Store platform in auth data
+      platform: 'web',
     };
     
     if (role === 'super_admin') {
@@ -305,7 +305,7 @@ const Login = () => {
     }
   };
 
-  // ✅ MAIN LOGIN HANDLER WITH PLATFORM
+  // ✅ MAIN LOGIN HANDLER - FIXED
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -317,32 +317,45 @@ const Login = () => {
         const deviceId = getDeviceId();
         console.log('📱 Device ID for login:', deviceId);
         
-        // Get FCM token
+        // ✅ Get FCM token
         let fcmToken = null;
+        
         if (isFCMAvailable()) {
+          console.log('🔔 FCM available, getting token...');
           try {
             fcmToken = await generateTokenWithTimeout(10000);
+            if (fcmToken) {
+              console.log('✅ FCM token generated');
+            } else {
+              console.log('ℹ️ No FCM token received');
+            }
           } catch (tokenError) {
             console.warn('⚠️ FCM token generation failed:', tokenError.message);
           }
+        } else {
+          console.log('ℹ️ FCM not available, skipping token generation');
         }
         
-        // ✅ Build login payload with platform
+        // ✅ CORRECT: Build login payload with nested fcmToken object
         const loginPayload = {
           email: formData.email,
           password: formData.password,
-          deviceId: deviceId,
-          platform: 'web',  // ✅ SEND PLATFORM TO BACKEND
+          fcmToken: fcmToken ? {
+            deviceId: deviceId,
+            platform: 'web',
+            fcmToken: fcmToken
+          } : undefined
         };
-        
-        if (fcmToken) {
-          loginPayload.fcmToken = fcmToken;
-        }
-        
-        console.log('📤 Sending login request with platform:', loginPayload.platform);
+
+        console.log('📤 Sending login request with nested fcmToken...');
         console.log('📤 Payload:', JSON.stringify({
-          ...loginPayload,
-          password: '******'
+          email: loginPayload.email,
+          password: '******',
+          fcmToken: loginPayload.fcmToken ? {
+            deviceId: loginPayload.fcmToken.deviceId,
+            platform: loginPayload.fcmToken.platform,
+            fcmToken: loginPayload.fcmToken.fcmToken ? '✅ Present' : '❌ Missing'
+          } : '❌ Not provided'
         }, null, 2));
         
         // ✅ ONE API call
@@ -357,7 +370,7 @@ const Login = () => {
             await tokenManager.addFCMToken(fcmToken);
             console.log('✅ FCM token saved to IndexedDB');
           } catch (dbError) {
-            console.error('❌ Failed to save token:', dbError);
+            console.error('❌ Failed to save token to IndexedDB:', dbError);
           }
         }
         
@@ -386,6 +399,7 @@ const Login = () => {
         processSuccessfulLogin(response, fcmToken, singleHospital);
         
       } catch (error) {
+        console.error('❌ Login error:', error);
         let errorMessage = "Invalid email or password. Please try again.";
         
         if (error.data?.message) {

@@ -28,12 +28,17 @@ export interface Hospital {
   deleteDate?: string | null;
 }
 
+
+export interface FCMTokenData {
+  deviceId: string;
+  platform: string;
+  fcmToken: string;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
-  fcmToken?: string;
-  deviceId?: string;
-  platform?: string;
+  fcmToken?: FCMTokenData;  // ✅ Nested object
 }
 
 export interface PhoneLoginData {
