@@ -50,9 +50,9 @@ export const rolePermissionApi = api.injectEndpoints({
 
     getRolePermissions: builder.query<
       RolePermissionResponse,
-      { roleId?: string | number }
+      { roleId?: string | number; limit?: number }  // ✅ Added limit
     >({
-      query: ({ roleId }) => {
+      query: ({ roleId, limit }) => {
         const queryParams = new URLSearchParams();
         
         const hospitalId = getHospitalId();
@@ -62,6 +62,11 @@ export const rolePermissionApi = api.injectEndpoints({
 
         if (roleId) {
           queryParams.append("roleId", String(roleId));
+        }
+
+        // ✅ Add limit if provided
+        if (limit) {
+          queryParams.append("limit", String(limit));
         }
 
         const queryString = queryParams.toString();

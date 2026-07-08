@@ -1,4 +1,4 @@
-// utils/fcmTokenManager.js
+// src/utils/fcmTokenManager.js
 import { getDeviceId } from './deviceManager.js';
 
 export class FCMTokenManager {
@@ -207,19 +207,45 @@ export class FCMTokenManager {
         });
     }
 
-    // Delete database (for testing)
+    // ✅ FORCE DELETE THE ENTIRE DATABASE (Enhanced version)
     async deleteDatabase() {
         return new Promise((resolve, reject) => {
+            // Close any open connection
             if (this.db) {
                 this.db.close();
-            }
-            const request = indexedDB.deleteDatabase(this.dbName);
-            request.onsuccess = () => {
                 this.db = null;
-                console.log('🗑️ Database deleted');
+            }
+            
+            console.log('🗑️ Deleting database:', this.dbName);
+            
+            const request = indexedDB.deleteDatabase(this.dbName);
+            
+            request.onsuccess = () => {
+                console.log('✅ Database deleted successfully');
                 resolve();
             };
-            request.onerror = () => reject(request.error);
+            
+            request.onerror = (event) => {
+                console.error('❌ Failed to delete database:', event.target.error);
+                reject(event.target.error);
+            };
+            
+            request.onblocked = () => {
+                console.warn('⚠️ Database deletion blocked - closing connections...');
+                // Force close any connections and retry
+                try {
+                    const retryRequest = indexedDB.deleteDatabase(this.dbName);
+                    retryRequest.onsuccess = () => {
+                        console.log('✅ Database deleted on retry');
+                        resolve();
+                    };
+                    retryRequest.onerror = () => {
+                        reject(retryRequest.error);
+                    };
+                } catch (e) {
+                    reject(e);
+                }
+            };
         });
     }
 

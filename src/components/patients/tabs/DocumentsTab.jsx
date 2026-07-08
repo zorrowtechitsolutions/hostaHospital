@@ -1,4 +1,4 @@
-// src/components/patients/tabs/DocumentsTab.jsx - With Delete Confirmation Modal
+// src/components/patients/tabs/DocumentsTab.jsx - Complete with Table Numbers
 
 import React, { useState, useEffect } from "react";
 import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image, AlertTriangle } from "lucide-react";
@@ -14,7 +14,7 @@ import {
   useUpdateDocumentMutation,
   useCreateDocumentMutation
 } from "../../../../app/service/documentApi";
-import { getS3ImageUrl } from "../../../../app/service/S3";
+import { getS3ImageUrl, uploadToS3 } from "../../../../app/service/S3";
 import { getAuthUser } from "../../../utils/auth";
 
 const DocumentsTab = ({ patient }) => {
@@ -34,6 +34,7 @@ const DocumentsTab = ({ patient }) => {
   const [editDocumentDate, setEditDocumentDate] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   const itemsPerPage = 5;
 
   // Get auth user for userId and role
@@ -60,18 +61,9 @@ const DocumentsTab = ({ patient }) => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedDocuments = documentsList.slice(startIndex, startIndex + itemsPerPage);
 
-  useEffect(() => {
-    if (viewingDocument) {
-      setCurrentPage(1);
-    }
-  }, [viewingDocument]);
-
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  // ========================
+  // HELPER FUNCTIONS
+  // ========================
 
   const getFileExtension = (filename) => {
     if (!filename) return '';
@@ -98,9 +90,23 @@ const DocumentsTab = ({ patient }) => {
     return fileType === 'application/pdf' || getFileExtension(fileType) === 'PDF';
   };
 
-  const handleEditFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const getFileIcon = (item) => {
+    const fileType = item.fileType || item.type;
+    if (isImageFile(fileType)) {
+      return <Image size={16} className="text-green-500 flex-shrink-0" />;
+    } else if (isPDFFile(fileType)) {
+      return <FileText size={16} className="text-red-500 flex-shrink-0" />;
+    } else {
+      return <File size={16} className="text-blue-500 flex-shrink-0" />;
+    }
+  };
+
+  // ========================
+  // FILE VALIDATION
+  // ========================
+
+  const validateFile = (file) => {
+    if (!file) return { valid: false, error: "No file selected" };
 
     const allowedTypes = [
       "application/pdf",
@@ -111,23 +117,43 @@ const DocumentsTab = ({ patient }) => {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      showErrorToast("❌ Only Images (PNG, JPEG, WEBP) and PDF files are allowed.");
-      e.target.value = '';
-      return;
+      return { 
+        valid: false, 
+        error: "Only Images (PNG, JPEG, WEBP) and PDF files are allowed." 
+      };
     }
 
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      showErrorToast("❌ File size must be less than 10MB");
-      e.target.value = '';
-      return;
+      return { 
+        valid: false, 
+        error: "File size must be less than 10MB" 
+      };
     }
 
-    setEditFile(file);
+    return { valid: true, error: null };
   };
 
-  // ✅ FIXED: Create document with userId
+  // ========================
+  // CREATE DOCUMENT WITH S3 UPLOAD
+  // ========================
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      showErrorToast(`❌ ${validation.error}`);
+      e.target.value = '';
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
   const handleUpload = async () => {
+    // Validate form
     if (!documentName.trim()) {
       showWarningToast("Please enter a document name");
       return;
@@ -138,14 +164,21 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
+    if (!selectedFile) {
+      showWarningToast("Please select a file to upload");
+      return;
+    }
+
     if (!userId) {
       showErrorToast("❌ User ID not found. Please log in again.");
       return;
     }
 
     setUploading(true);
+    setUploadProgress(0);
 
     try {
+      // ✅ STEP 1: Create document in database (without file)
       const documentData = {
         patientId: patient.id,
         name: documentName.trim(),
@@ -156,28 +189,99 @@ const DocumentsTab = ({ patient }) => {
         role: userRole,
       };
 
-      console.log("📄 Creating Document with userId:", documentData);
+      console.log("📄 Creating Document with payload:", documentData);
 
-      const result = await createDocument(documentData).unwrap();
-      
-      console.log("✅ Create Response:", result);
+      const createResult = await createDocument(documentData).unwrap();
+      console.log("✅ Create Response FULL:", JSON.stringify(createResult, null, 2));
 
-      showSuccessToast(`✅ Document "${documentName}" created successfully!`);
+      // ✅ Extract ID from response.data
+      const documentId = 
+        createResult?.data?.id ||      
+        createResult?.id ||            
+        createResult?.data?._id ||     
+        createResult?._id ||           
+        createResult?.data?.documentId ||
+        createResult?.documentId;
       
+      console.log("📄 Extracted Document ID:", documentId);
+
+      if (!documentId) {
+        console.error("❌ Could not extract document ID. Response:", createResult);
+        throw new Error(`Document ID not found in response: ${JSON.stringify(createResult)}`);
+      }
+
+      setUploadProgress(30);
+
+      // ✅ STEP 2: Upload file to S3
+      console.log("📤 Uploading file to S3 for document:", documentId);
+
+      const timestamp = Date.now();
+      const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
+
+      console.log("📁 File Key:", fileKey);
+
+      const s3Result = await uploadToS3(
+        selectedFile,
+        fileKey,
+        documentId,
+        "documents"
+      );
+
+      console.log("✅ S3 Upload Result:", s3Result);
+
+      setUploadProgress(80);
+
+      // ✅ STEP 3: Update document with file info
+      const updateData = {
+        fileKey: s3Result.key,
+        fileUrl: s3Result.imageUrl,
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: formatFileSize(selectedFile.size),
+        type: getFileExtension(selectedFile.name),
+        contentType: selectedFile.type,
+      };
+
+      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
+
+      await updateDocument({
+        id: documentId,
+        updateData: updateData
+      }).unwrap();
+
+      setUploadProgress(100);
+
+      showSuccessToast(`✅ Document "${documentName}" uploaded successfully!`);
+      
+      // Reset form
       setDocumentName("");
       setDocumentDate("");
+      setSelectedFile(null);
       setShowUploadModal(false);
+      setUploadProgress(0);
       refetchDocuments();
       
     } catch (error) {
-      console.error("❌ Create failed:", error);
-      showErrorToast(`❌ Failed to create document: ${error.message || error.data?.message || "Unknown error"}`);
+      console.error("❌ Upload failed:", error);
+      
+      let errorMessage = "Unknown error";
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showErrorToast(`❌ Failed to upload document: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
   };
 
-  // ✅ FIXED: Edit document - set editing state
+  // ========================
+  // EDIT DOCUMENT WITH S3 UPLOAD
+  // ========================
+
   const handleEditDocument = (document) => {
     console.log("✏️ Editing Document:", document);
     setEditingDocument(document);
@@ -187,8 +291,22 @@ const DocumentsTab = ({ patient }) => {
     setShowEditModal(true);
   };
 
-  // ✅ FIXED: Update document with proper S3 upload
+  const handleEditFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      showErrorToast(`❌ ${validation.error}`);
+      e.target.value = '';
+      return;
+    }
+
+    setEditFile(file);
+  };
+
   const handleUpdateDocument = async () => {
+    // Validate form
     if (!editDocumentName.trim()) {
       showWarningToast("Please enter a document name");
       return;
@@ -204,7 +322,6 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
-    // Get the document ID
     const documentId = editingDocument.id || editingDocument._id;
     if (!documentId) {
       showErrorToast("❌ Document ID not found.");
@@ -215,6 +332,7 @@ const DocumentsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
+      // Build update data
       let updateData = {
         patientId: patient.id,
         name: editDocumentName.trim(),
@@ -225,53 +343,39 @@ const DocumentsTab = ({ patient }) => {
         role: userRole,
       };
 
-      // If a new file is selected, upload to S3
+      // ✅ If a new file is selected, upload to S3
       if (editFile) {
         console.log("📤 Uploading file to S3 for document:", documentId);
         
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => Math.min(prev + 10, 90));
-        }, 200);
-
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        
-        // File key for S3 storage
         const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
-        
-        console.log("📁 Document ID:", documentId);
+
         console.log("📁 File Key:", fileKey);
-        
-        const { uploadToS3 } = await import("../../../../app/service/S3");
-        
-        // ✅ CRITICAL FIX: Pass documentId as the entityId
-        // The backend needs the document ID to find the record and generate presign URL
+
+        setUploadProgress(20);
+
         const s3Result = await uploadToS3(
           editFile,
           fileKey,
-          documentId,    // ✅ entityId = document ID (NOT userId)
-          "documents"    // ✅ role = "documents"
+          documentId,
+          "documents"
         );
-        
+
         console.log("✅ S3 Upload Result:", s3Result);
-        
-        // Handle the S3 response properly
-        const uploadedKey = s3Result.key || s3Result.Key || fileKey;
-        const uploadedUrl = s3Result.imageUrl || s3Result.url || s3Result.Location || '';
-        
+
+        setUploadProgress(70);
+
         updateData = {
           ...updateData,
-          fileKey: uploadedKey,
-          fileUrl: uploadedUrl,
+          fileKey: s3Result.key,
+          fileUrl: s3Result.imageUrl,
           fileName: editFile.name,
           fileType: editFile.type,
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
           contentType: editFile.type,
         };
-
-        clearInterval(progressInterval);
-        setUploadProgress(100);
       }
 
       console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
@@ -280,6 +384,8 @@ const DocumentsTab = ({ patient }) => {
         id: documentId,
         updateData: updateData
       }).unwrap();
+
+      setUploadProgress(100);
 
       showSuccessToast(`✅ Document "${editDocumentName}" updated successfully!`);
       
@@ -307,7 +413,10 @@ const DocumentsTab = ({ patient }) => {
     }
   };
 
-  // ✅ NEW: Handle delete confirmation
+  // ========================
+  // DELETE DOCUMENT
+  // ========================
+
   const handleDeleteClick = (document) => {
     const docId = document.id || document._id;
     if (!docId) {
@@ -318,7 +427,6 @@ const DocumentsTab = ({ patient }) => {
     setShowDeleteModal(true);
   };
 
-  // ✅ FIXED: Delete document with confirmation
   const handleConfirmDelete = async () => {
     if (!deletingDocument) return;
 
@@ -334,7 +442,6 @@ const DocumentsTab = ({ patient }) => {
       setDeletingDocument(null);
       refetchDocuments();
       
-      // Reset pagination if needed
       const remainingItems = documentsList.length - 1;
       const maxPage = Math.ceil(remainingItems / itemsPerPage);
       if (currentPage > maxPage && maxPage > 0) {
@@ -354,6 +461,10 @@ const DocumentsTab = ({ patient }) => {
     setIsDeleting(false);
   };
 
+  // ========================
+  // VIEW & DOWNLOAD
+  // ========================
+
   const handleViewDocument = (document) => {
     setViewingDocument(document);
     setShowViewModal(true);
@@ -370,10 +481,16 @@ const DocumentsTab = ({ patient }) => {
     window.open(url, '_blank');
   };
 
+  // ========================
+  // RESET FUNCTIONS
+  // ========================
+
   const resetUploadForm = () => {
     setDocumentName("");
     setDocumentDate("");
+    setSelectedFile(null);
     setShowUploadModal(false);
+    setUploadProgress(0);
   };
 
   const resetEditForm = () => {
@@ -390,16 +507,26 @@ const DocumentsTab = ({ patient }) => {
     setViewingDocument(null);
   };
 
-  const getFileIcon = (item) => {
-    const fileType = item.fileType || item.type;
-    if (isImageFile(fileType)) {
-      return <Image size={16} className="text-green-500 flex-shrink-0" />;
-    } else if (isPDFFile(fileType)) {
-      return <FileText size={16} className="text-red-500 flex-shrink-0" />;
-    } else {
-      return <File size={16} className="text-blue-500 flex-shrink-0" />;
+  // ========================
+  // PAGINATION
+  // ========================
+
+  useEffect(() => {
+    if (viewingDocument) {
+      setCurrentPage(1);
+    }
+  }, [viewingDocument]);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  // ========================
+  // RENDER
+  // ========================
 
   if (isLoadingDocuments) {
     return (
@@ -414,6 +541,7 @@ const DocumentsTab = ({ patient }) => {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      {/* Header */}
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Documents
@@ -431,15 +559,18 @@ const DocumentsTab = ({ patient }) => {
         </button>
       </div>
 
-      {/* Upload Modal */}
+      {/* ======================== */}
+      {/* UPLOAD MODAL WITH FILE */}
+      {/* ======================== */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Create Document</h3>
+              <h3 className="text-lg font-semibold text-gray-800">Upload Document</h3>
               <button
                 onClick={resetUploadForm}
                 className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                disabled={uploading}
               >
                 <X size={20} className="text-gray-500" />
               </button>
@@ -473,6 +604,69 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  File <span className="text-red-500">*</span>
+                </label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload size={24} className="text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">
+                      {selectedFile ? selectedFile.name : "Click to select a file"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Images (PNG, JPEG, WEBP) or PDF (Max 10MB)
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.pdf"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+
+              {selectedFile && !uploading && (
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex items-center gap-3">
+                    {selectedFile.type.startsWith('image/') ? (
+                      <Image size={20} className="text-green-500" />
+                    ) : (
+                      <FileText size={20} className="text-red-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{selectedFile.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(selectedFile.size)} • {getFileExtension(selectedFile.name)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedFile(null)}
+                      className="p-1 hover:bg-gray-200 rounded-full"
+                    >
+                      <X size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {uploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="text-xs text-gray-400">
                 User ID: {userId || 'Not found'} • Role: {userRole || 'documents'}
               </div>
@@ -487,9 +681,9 @@ const DocumentsTab = ({ patient }) => {
                 </button>
                 <button
                   onClick={handleUpload}
-                  disabled={!documentName.trim() || !documentDate || uploading}
+                  disabled={!documentName.trim() || !documentDate || !selectedFile || uploading}
                   className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
-                    !documentName.trim() || !documentDate || uploading
+                    !documentName.trim() || !documentDate || !selectedFile || uploading
                       ? "bg-gray-400 cursor-not-allowed"
                       : "bg-[#1C62A0] hover:bg-[#154f7a]"
                   }`}
@@ -497,12 +691,12 @@ const DocumentsTab = ({ patient }) => {
                   {uploading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      Creating...
+                      Uploading...
                     </>
                   ) : (
                     <>
                       <Upload size={16} />
-                      Create Document
+                      Upload Document
                     </>
                   )}
                 </button>
@@ -512,7 +706,178 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* View Modal */}
+      {/* ======================== */}
+      {/* EDIT MODAL WITH FILE */}
+      {/* ======================== */}
+      {showEditModal && editingDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Edit Document</h3>
+              <button
+                onClick={resetEditForm}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                disabled={uploading}
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Document Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editDocumentName}
+                  onChange={(e) => setEditDocumentName(e.target.value)}
+                  placeholder="e.g., Medical Report, Prescription, Lab Results"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  disabled={uploading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={editDocumentDate}
+                  onChange={(e) => setEditDocumentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  disabled={uploading}
+                />
+              </div>
+
+              {editingDocument.fileKey && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    {isImageFile(editingDocument.fileType || editingDocument.type) ? (
+                      <img 
+                        src={getS3ImageUrl(editingDocument.fileKey)} 
+                        alt="Current" 
+                        className="h-12 w-12 object-cover rounded"
+                      />
+                    ) : (
+                      <File size={20} className="text-blue-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">Current File</p>
+                      <p className="text-xs text-gray-500">
+                        {editingDocument.fileName || "File"} • {editingDocument.fileSize || "N/A"}
+                      </p>
+                    </div>
+                    <a
+                      href={getS3ImageUrl(editingDocument.fileKey)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 text-xs underline"
+                    >
+                      View
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Replace File <span className="text-gray-400 text-xs">(Optional)</span>
+                </label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload size={24} className="text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">
+                      {editFile ? editFile.name : "Click to select a new file"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Images (PNG, JPEG, WEBP) or PDF (Max 10MB)
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.pdf"
+                    onChange={handleEditFileSelect}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+
+              {editFile && !uploading && (
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex items-center gap-3">
+                    <File size={20} className="text-green-500" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{editFile.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(editFile.size)} • {getFileExtension(editFile.name)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEditFile(null)}
+                      className="p-1 hover:bg-gray-200 rounded-full"
+                    >
+                      <X size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {uploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Updating...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetEditForm}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={uploading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateDocument}
+                  disabled={!editDocumentName.trim() || !editDocumentDate || uploading}
+                  className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
+                    !editDocumentName.trim() || !editDocumentDate || uploading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-[#1C62A0] hover:bg-[#154f7a]"
+                  }`}
+                >
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Update Document
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================== */}
+      {/* VIEW MODAL */}
+      {/* ======================== */}
       {showViewModal && viewingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden">
@@ -687,173 +1052,9 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Edit Modal */}
-      {showEditModal && editingDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Edit Document</h3>
-              <button
-                onClick={resetEditForm}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Document Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editDocumentName}
-                  onChange={(e) => setEditDocumentName(e.target.value)}
-                  placeholder="e.g., Medical Report, Prescription, Lab Results"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
-                  disabled={uploading}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={editDocumentDate}
-                  onChange={(e) => setEditDocumentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
-                  disabled={uploading}
-                />
-              </div>
-
-              {editingDocument.fileKey && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="flex items-center gap-3">
-                    {isImageFile(editingDocument.fileType || editingDocument.type) ? (
-                      <img 
-                        src={getS3ImageUrl(editingDocument.fileKey)} 
-                        alt="Current" 
-                        className="h-12 w-12 object-cover rounded"
-                      />
-                    ) : (
-                      <File size={20} className="text-blue-500" />
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">Current File</p>
-                      <p className="text-xs text-gray-500">
-                        {editingDocument.fileName || "File"} • {editingDocument.fileSize || "N/A"}
-                      </p>
-                    </div>
-                    <a
-                      href={getS3ImageUrl(editingDocument.fileKey)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 text-xs underline"
-                    >
-                      View
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Replace File <span className="text-gray-400 text-xs">(Optional)</span>
-                </label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload size={24} className="text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">
-                      {editFile ? editFile.name : "Click to select a new file"}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Images (PNG, JPEG, WEBP) or PDF (Max 10MB)
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*,.pdf"
-                    onChange={handleEditFileSelect}
-                    disabled={uploading}
-                  />
-                </label>
-              </div>
-
-              {editFile && !uploading && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="flex items-center gap-3">
-                    <File size={20} className="text-green-500" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">{editFile.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(editFile.size)} • {getFileExtension(editFile.name)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setEditFile(null)}
-                      className="p-1 hover:bg-gray-200 rounded-full"
-                    >
-                      <X size={16} className="text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {uploading && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Updating...</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={resetEditForm}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  disabled={uploading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateDocument}
-                  disabled={!editDocumentName.trim() || !editDocumentDate || uploading}
-                  className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
-                    !editDocumentName.trim() || !editDocumentDate || uploading
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-[#1C62A0] hover:bg-[#154f7a]"
-                  }`}
-                >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={16} />
-                      Update Document
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ NEW: Delete Confirmation Modal */}
+      {/* ======================== */}
+      {/* DELETE CONFIRMATION MODAL */}
+      {/* ======================== */}
       {showDeleteModal && deletingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -920,11 +1121,14 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Table */}
+      {/* ======================== */}
+      {/* TABLE WITH NUMBERS */}
+      {/* ======================== */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
             <tr>
+              <th className="px-4 py-3 font-medium">#</th>  {/* ✅ Added # column */}
               <th className="px-4 py-3 font-medium">Document Name</th>
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium text-right w-44">Actions</th>
@@ -934,12 +1138,21 @@ const DocumentsTab = ({ patient }) => {
             {paginatedDocuments.length > 0 ? (
               paginatedDocuments.map((item, index) => {
                 const hasFile = !!(item.fileKey || item.imageUrl || item.fileUrl);
+                // ✅ Calculate sequential number
+                const displayNumber = startIndex + index + 1;
 
                 return (
                   <tr
                     key={item.id || item._id || index}
                     className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
                   >
+                    {/* ✅ Number column */}
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-[#1C62A0]">
+                        {displayNumber}
+                      </span>
+                    </td>
+
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {getFileIcon(item)}
@@ -1017,7 +1230,7 @@ const DocumentsTab = ({ patient }) => {
               })
             ) : (
               <tr>
-                <td colSpan={3} className="text-center text-gray-500 py-12">
+                <td colSpan={4} className="text-center text-gray-500 py-12">  {/* ✅ Updated colSpan to 4 */}
                   <div className="flex flex-col items-center gap-2">
                     <File size={48} className="text-gray-300" />
                     <p>No documents found</p>
@@ -1030,6 +1243,7 @@ const DocumentsTab = ({ patient }) => {
         </table>
       </div>
 
+      {/* Pagination */}
       {totalItems > 0 && totalPages > 1 && (
         <div className="px-6 py-3 border-t bg-gray-50">
           <Pagination

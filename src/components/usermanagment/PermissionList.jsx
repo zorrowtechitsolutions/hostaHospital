@@ -1,4 +1,5 @@
-// src/components/Settings/PermissionList.jsx - With dynamic permissions and hidden modules filter
+// src/components/Settings/PermissionList.jsx - With limit 1000
+
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Input, Card, Checkbox, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SearchBar } from "../ui";
@@ -24,9 +25,15 @@ const PermissionList = () => {
 
   const [createRolePermission] = useCreateRolePermissionMutation();
 
-  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
+  // ✅ FIXED: Added limit: 1000 to get permissions
+  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery({
+    limit: 1000,
+  });
+  
+  // ✅ FIXED: Added limit: 1000 to get role permissions
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
     roleId,
+    limit: 1000,
   });
 
   // Register socket event listeners
