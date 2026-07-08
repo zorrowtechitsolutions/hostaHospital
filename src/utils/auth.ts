@@ -13,6 +13,7 @@ export interface JwtPayload {
   staffId?: number;
   iat: number;
   exp: number;
+  userId?: number;
 }
 
 // ================= TOKEN MANAGEMENT =================
