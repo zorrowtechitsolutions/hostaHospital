@@ -1,7 +1,7 @@
-// src/components/patients/tabs/LabResultsTab.jsx - Complete with required fields
+// src/components/patients/tabs/LabResultsTab.jsx - Complete with S3 Upload
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle } from "lucide-react";
+import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import { 
   showSuccessToast,
@@ -16,10 +16,13 @@ import {
 } from "../../../../app/service/labresults";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 import { getAuthUser } from "../../../utils/auth";
-import { getS3ImageUrl } from "../../../../app/service/S3";
+import { getS3ImageUrl, uploadToS3 } from "../../../../app/service/S3";
 import LaboratoryReportModal from "../modals/LaboratoryReportModal";
 
-// Searchable Doctor Dropdown Component
+// ========================
+// DOCTOR SEARCH DROPDOWN
+// ========================
+
 const DoctorSearchDropdown = ({ 
   value, 
   onChange, 
@@ -154,6 +157,10 @@ const DoctorSearchDropdown = ({
   );
 };
 
+// ========================
+// MAIN COMPONENT
+// ========================
+
 const LabResultsTab = ({ patient }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedLabResult, setSelectedLabResult] = useState(null);
@@ -207,7 +214,8 @@ const LabResultsTab = ({ patient }) => {
   const [department, setDepartment] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [doctorName, setDoctorName] = useState("");
-  const [labName, setLabName] = useState(""); // ✅ Optional lab name
+  const [labName, setLabName] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null); // ✅ For create modal
   
   // Edit form fields
   const [editTestName, setEditTestName] = useState("");
@@ -215,7 +223,7 @@ const LabResultsTab = ({ patient }) => {
   const [editDepartment, setEditDepartment] = useState("");
   const [editDoctorId, setEditDoctorId] = useState("");
   const [editDoctorName, setEditDoctorName] = useState("");
-  const [editLabName, setEditLabName] = useState(""); // ✅ Optional lab name
+  const [editLabName, setEditLabName] = useState("");
   const [editFile, setEditFile] = useState(null);
   const [editFilePreview, setEditFilePreview] = useState(null);
   
@@ -223,7 +231,7 @@ const LabResultsTab = ({ patient }) => {
 
   const authUser = getAuthUser();
   const hospitalId = authUser?.id || authUser?.hospitalId;
-  const hospitalName = authUser?.hospitalName || authUser?.name || authUser?.hospital || ''; // ✅ Required
+  const hospitalName = authUser?.hospitalName || authUser?.name || authUser?.hospital || '';
   const userId = authUser?.id;
 
   // RTK Query hooks
@@ -246,7 +254,10 @@ const LabResultsTab = ({ patient }) => {
   const [updateLabResult] = useUpdateLabResultMutation();
   const [deleteLabResult] = useDeleteLabResultMutation();
 
-  // Helper functions
+  // ========================
+  // HELPER FUNCTIONS
+  // ========================
+
   const getFileExtension = (filename) => {
     if (!filename) return '';
     return filename.split('.').pop().toUpperCase();
@@ -285,79 +296,12 @@ const LabResultsTab = ({ patient }) => {
     return fileType === 'application/pdf';
   };
 
-  // Get lab results and filter out deleted ones
-  const labResultsList = useMemo(() => {
-    const list = labResultsData?.data || [];
-    console.log("📊 Raw lab results from API:", list.length, "items");
-    console.log("📊 Deleted IDs from localStorage:", Array.from(deletedIds));
-    
-    // Filter out deleted IDs
-    const filteredList = list.filter(item => {
-      const id = String(item.id || item._id);
-      const isDeleted = deletedIds.has(id);
-      if (isDeleted) {
-        console.log(`🗑️ Filtering out deleted: ${id} - ${item.testName || item.name}`);
-      }
-      return !isDeleted;
-    });
-    
-    console.log("📊 Filtered lab results:", filteredList.length, "items");
-    return filteredList;
-  }, [labResultsData, deletedIds, refreshCounter]);
+  // ========================
+  // FILE VALIDATION
+  // ========================
 
-  // Force refresh function with cache busting
-  const forceRefresh = useCallback(async () => {
-    console.log("🔄 Force refreshing lab results...");
-    try {
-      setRefreshCounter(prev => prev + 1);
-      await refetchLabResults();
-      console.log("✅ Refetch completed");
-    } catch (error) {
-      console.error("❌ Refetch failed:", error);
-    }
-  }, [refetchLabResults]);
-
-  // Save deleted IDs whenever they change
-  useEffect(() => {
-    saveDeletedIds(deletedIds);
-    console.log("💾 Saved deleted IDs to localStorage:", Array.from(deletedIds));
-  }, [deletedIds, saveDeletedIds]);
-
-  // Refetch when patient changes
-  useEffect(() => {
-    if (patient?.id) {
-      console.log("🔄 Patient changed, loading deleted IDs for patient:", patient.id);
-      const loaded = loadDeletedIds();
-      setDeletedIds(loaded);
-      forceRefresh();
-    }
-  }, [patient?.id, loadDeletedIds, forceRefresh]);
-
-  const totalItems = labResultsList.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedLabResults = labResultsList.slice(startIndex, startIndex + itemsPerPage);
-
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const handleDoctorSelect = (id, name) => {
-    setDoctorId(id);
-    setDoctorName(name);
-  };
-
-  const handleEditDoctorSelect = (id, name) => {
-    setEditDoctorId(id);
-    setEditDoctorName(name);
-  };
-
-  const handleEditFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const validateFile = (file) => {
+    if (!file) return { valid: false, error: "No file selected" };
 
     const allowedTypes = [
       "application/pdf",
@@ -368,32 +312,41 @@ const LabResultsTab = ({ patient }) => {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      showErrorToast("❌ Only Images (PNG, JPEG, WEBP) and PDF files are allowed.");
-      e.target.value = '';
-      return;
-    }
-
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      showErrorToast("❌ File size must be less than 10MB");
-      e.target.value = '';
-      return;
-    }
-
-    setEditFile(file);
-    
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setEditFilePreview(reader.result);
+      return { 
+        valid: false, 
+        error: "Only Images (PNG, JPEG, WEBP) and PDF files are allowed." 
       };
-      reader.readAsDataURL(file);
-    } else {
-      setEditFilePreview(null);
     }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return { 
+        valid: false, 
+        error: "File size must be less than 10MB" 
+      };
+    }
+
+    return { valid: true, error: null };
   };
 
-  // ✅ CREATE - Updated with required fields
+  // ========================
+  // CREATE LAB RESULT WITH S3 UPLOAD
+  // ========================
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      showErrorToast(`❌ ${validation.error}`);
+      e.target.value = '';
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
   const handleAddLabResult = async () => {
     // Validate required fields
     if (!testName.trim()) {
@@ -411,41 +364,107 @@ const LabResultsTab = ({ patient }) => {
       return;
     }
 
+    if (!selectedFile) {
+      showWarningToast("Please select a file to upload");
+      return;
+    }
+
     if (!hospitalName) {
       showErrorToast("❌ Hospital name not found. Please log in again.");
       return;
     }
 
-    const userId = authUser?.id;
-    
     if (!userId) {
       showErrorToast("❌ User ID not found. Please log in again.");
       return;
     }
 
     setUploading(true);
+    setUploadProgress(0);
 
     try {
+      // ✅ STEP 1: Create lab result in database (without file)
       const labResultData = {
         patientId: patient.id,
-        patientName: patient.name || patient.displayName || '', // ✅ Required
+        patientName: patient.name || patient.displayName || '',
         userId: userId,
         hospitalId: hospitalId || null,
-        hospitalName: hospitalName, // ✅ Required
+        hospitalName: hospitalName,
         department: department.trim(),
         testName: testName.trim(),
         status: status,
         doctorId: doctorId || null,
-        doctorName: doctorName.trim(), // ✅ Required
-        labName: labName.trim() || null, // ✅ Optional
+        doctorName: doctorName.trim(),
+        labName: labName.trim() || null,
         name: testName.trim(),
         date: new Date().toLocaleDateString(),
       };
 
       console.log("📤 Creating lab result with data:", labResultData);
 
-      await createLabResult(labResultData).unwrap();
+      const createResult = await createLabResult(labResultData).unwrap();
+      console.log("✅ Create Response FULL:", JSON.stringify(createResult, null, 2));
+
+      // ✅ Extract ID from response.data
+      const labResultId = 
+        createResult?.data?.id ||      
+        createResult?.id ||            
+        createResult?.data?._id ||     
+        createResult?._id ||           
+        createResult?.data?.labResultId ||
+        createResult?.labResultId;
       
+      console.log("📄 Extracted Lab Result ID:", labResultId);
+
+      if (!labResultId) {
+        console.error("❌ Could not extract lab result ID. Response:", createResult);
+        throw new Error(`Lab Result ID not found in response: ${JSON.stringify(createResult)}`);
+      }
+
+      setUploadProgress(30);
+
+      // ✅ STEP 2: Upload file to S3
+      console.log("📤 Uploading file to S3 for lab result:", labResultId);
+
+      const timestamp = Date.now();
+      const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
+
+      console.log("📁 File Key:", fileKey);
+
+      const s3Result = await uploadToS3(
+        selectedFile,
+        fileKey,
+        labResultId,
+        "labresults"
+      );
+
+      console.log("✅ S3 Upload Result:", s3Result);
+
+      setUploadProgress(80);
+
+      // ✅ STEP 3: Update lab result with file info
+      const updateData = {
+        fileKey: s3Result.key,
+        fileUrl: s3Result.imageUrl,
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: formatFileSize(selectedFile.size),
+        type: getFileExtension(selectedFile.name),
+        contentType: selectedFile.type,
+        uploadedById: userId,
+        role: "labresults",
+      };
+
+      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
+
+      await updateLabResult({
+        id: labResultId,
+        updateData: updateData
+      }).unwrap();
+
+      setUploadProgress(100);
+
       showSuccessToast(`✅ Lab Result "${testName}" created successfully!`);
       
       // Reset form
@@ -455,19 +474,32 @@ const LabResultsTab = ({ patient }) => {
       setDoctorId("");
       setDoctorName("");
       setLabName("");
+      setSelectedFile(null);
       setShowAddModal(false);
+      setUploadProgress(0);
 
       await forceRefresh();
       
     } catch (error) {
       console.error("❌ Create failed:", error);
-      showErrorToast(`❌ Failed to create lab result: ${error.message || error.data?.message || "Unknown error"}`);
+      
+      let errorMessage = "Unknown error";
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showErrorToast(`❌ Failed to create lab result: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
   };
 
-  // EDIT
+  // ========================
+  // EDIT LAB RESULT WITH S3 UPLOAD
+  // ========================
+
   const handleEditLabResult = (labResult) => {
     setEditingLabResult(labResult);
     setEditTestName(labResult.testName || "");
@@ -481,7 +513,30 @@ const LabResultsTab = ({ patient }) => {
     setShowEditModal(true);
   };
 
-  // ✅ UPDATE - Updated with required fields
+  const handleEditFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      showErrorToast(`❌ ${validation.error}`);
+      e.target.value = '';
+      return;
+    }
+
+    setEditFile(file);
+    
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setEditFilePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setEditFilePreview(null);
+    }
+  };
+
   const handleUpdateLabResult = async () => {
     // Validate required fields
     if (!editTestName.trim()) {
@@ -504,8 +559,6 @@ const LabResultsTab = ({ patient }) => {
       return;
     }
 
-    const userId = authUser?.id;
-    
     if (!userId) {
       showErrorToast("❌ User ID not found. Please log in again.");
       return;
@@ -523,30 +576,45 @@ const LabResultsTab = ({ patient }) => {
     try {
       let updateData = {
         patientId: patient.id,
-        patientName: patient.name || patient.displayName || '', // ✅ Required
+        patientName: patient.name || patient.displayName || '',
         userId: userId,
         hospitalId: hospitalId || null,
-        hospitalName: hospitalName, // ✅ Required
+        hospitalName: hospitalName,
         department: editDepartment.trim(),
         testName: editTestName.trim(),
         status: editStatus,
         doctorId: editDoctorId || null,
-        doctorName: editDoctorName.trim(), // ✅ Required
-        labName: editLabName.trim() || null, // ✅ Optional
+        doctorName: editDoctorName.trim(),
+        labName: editLabName.trim() || null,
         name: editTestName.trim(),
         date: new Date().toLocaleDateString(),
       };
 
       console.log("📤 Updating lab result with data:", updateData);
 
+      // ✅ If a new file is selected, upload to S3
       if (editFile) {
-        const { uploadToS3 } = await import("../../../../app/service/S3");
+        console.log("📤 Uploading file to S3 for lab result:", labResultId);
+        
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileKey = `lab-results/${userId}/${labResultId}/${timestamp}_${safeFileName}`;
-        
-        const s3Result = await uploadToS3(editFile, fileKey, labResultId, "labresults");
-        
+        const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
+
+        console.log("📁 File Key:", fileKey);
+
+        setUploadProgress(20);
+
+        const s3Result = await uploadToS3(
+          editFile,
+          fileKey,
+          labResultId,
+          "labresults"
+        );
+
+        console.log("✅ S3 Upload Result:", s3Result);
+
+        setUploadProgress(70);
+
         updateData = {
           ...updateData,
           fileKey: s3Result.key,
@@ -561,10 +629,14 @@ const LabResultsTab = ({ patient }) => {
         };
       }
 
+      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
+
       await updateLabResult({
         id: labResultId,
         updateData: updateData
       }).unwrap();
+
+      setUploadProgress(100);
 
       showSuccessToast(`✅ Lab Result "${editTestName}" updated successfully!`);
       
@@ -584,20 +656,30 @@ const LabResultsTab = ({ patient }) => {
       
     } catch (error) {
       console.error("❌ Update failed:", error);
-      showErrorToast(`❌ Failed to update lab result: ${error.message || error.data?.message || "Unknown error"}`);
+      
+      let errorMessage = "Unknown error";
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showErrorToast(`❌ Failed to update lab result: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
   };
 
-  // DELETE - Show confirmation
+  // ========================
+  // DELETE LAB RESULT
+  // ========================
+
   const handleDeleteClick = (id, name) => {
     console.log(`🗑️ Delete requested for: ${id} - ${name}`);
     setDeletingLabResult({ id: String(id), name });
     setShowDeleteModal(true);
   };
 
-  // DELETE - Confirm and delete with localStorage persistence
   const handleConfirmDelete = async () => {
     if (!deletingLabResult) return;
 
@@ -648,16 +730,67 @@ const LabResultsTab = ({ patient }) => {
     }
   };
 
-  // DELETE - Cancel
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
     setDeletingLabResult(null);
   };
 
+  // ========================
+  // VIEW & DOWNLOAD
+  // ========================
+
   const handleViewReport = (labResult) => {
     setSelectedLabResult(labResult);
     setShowLabModal(true);
   };
+
+  const handleDownloadFile = (item) => {
+    const url = getS3ImageUrl(item.fileKey || item.imageUrl);
+    if (!url) {
+      showWarningToast("No file attached to download");
+      return;
+    }
+    window.open(url, '_blank');
+  };
+
+  // ========================
+  // FORCE REFRESH
+  // ========================
+
+  const forceRefresh = useCallback(async () => {
+    console.log("🔄 Force refreshing lab results...");
+    try {
+      setRefreshCounter(prev => prev + 1);
+      await refetchLabResults();
+      console.log("✅ Refetch completed");
+    } catch (error) {
+      console.error("❌ Refetch failed:", error);
+    }
+  }, [refetchLabResults]);
+
+  // ========================
+  // EFFECTS
+  // ========================
+
+  // Save deleted IDs whenever they change
+  useEffect(() => {
+    saveDeletedIds(deletedIds);
+    console.log("💾 Saved deleted IDs to localStorage:", Array.from(deletedIds));
+  }, [deletedIds, saveDeletedIds]);
+
+  // Refetch when patient changes
+  useEffect(() => {
+    if (patient?.id) {
+      console.log("🔄 Patient changed, loading deleted IDs for patient:", patient.id);
+      const loaded = loadDeletedIds();
+      setDeletedIds(loaded);
+      forceRefresh();
+    }
+  }, [patient?.id, loadDeletedIds, forceRefresh]);
+
+  // ========================
+  // RESET FUNCTIONS
+  // ========================
 
   const resetAddForm = () => {
     setTestName("");
@@ -666,7 +799,9 @@ const LabResultsTab = ({ patient }) => {
     setDoctorId("");
     setDoctorName("");
     setLabName("");
+    setSelectedFile(null);
     setShowAddModal(false);
+    setUploadProgress(0);
   };
 
   const resetEditForm = () => {
@@ -682,6 +817,54 @@ const LabResultsTab = ({ patient }) => {
     setEditFilePreview(null);
     setUploadProgress(0);
   };
+
+  // ========================
+  // PAGINATION
+  // ========================
+
+  const labResultsList = useMemo(() => {
+    const list = labResultsData?.data || [];
+    console.log("📊 Raw lab results from API:", list.length, "items");
+    console.log("📊 Deleted IDs from localStorage:", Array.from(deletedIds));
+    
+    const filteredList = list.filter(item => {
+      const id = String(item.id || item._id);
+      const isDeleted = deletedIds.has(id);
+      if (isDeleted) {
+        console.log(`🗑️ Filtering out deleted: ${id} - ${item.testName || item.name}`);
+      }
+      return !isDeleted;
+    });
+    
+    console.log("📊 Filtered lab results:", filteredList.length, "items");
+    return filteredList;
+  }, [labResultsData, deletedIds, refreshCounter]);
+
+  const totalItems = labResultsList.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedLabResults = labResultsList.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleDoctorSelect = (id, name) => {
+    setDoctorId(id);
+    setDoctorName(name);
+  };
+
+  const handleEditDoctorSelect = (id, name) => {
+    setEditDoctorId(id);
+    setEditDoctorName(name);
+  };
+
+  // ========================
+  // RENDER
+  // ========================
 
   if (isLoadingLabResults) {
     return (
@@ -717,19 +900,22 @@ const LabResultsTab = ({ patient }) => {
         </button>
       </div>
 
-      {/* Add Lab Result Modal */}
+      {/* ======================== */}
+      {/* ADD LAB RESULT MODAL WITH FILE */}
+      {/* ======================== */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-200 flex-shrink-0">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-800">Add Lab Result</h3>
-                <button onClick={resetAddForm} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                <button onClick={resetAddForm} className="p-1 hover:bg-gray-100 rounded-full transition-colors" disabled={uploading}>
                   <X size={20} className="text-gray-500" />
                 </button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {/* Test Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Test Name <span className="text-red-500">*</span>
@@ -743,6 +929,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Department */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Department <span className="text-red-500">*</span>
@@ -756,6 +944,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Doctor Search */}
               <DoctorSearchDropdown
                 value={doctorId}
                 onChange={setDoctorId}
@@ -765,6 +955,8 @@ const LabResultsTab = ({ patient }) => {
                 required={true}
                 label="Doctor"
               />
+
+              {/* Lab Name (Optional) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Lab Name <span className="text-gray-400 text-xs">(Optional)</span>
@@ -778,6 +970,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Status */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
@@ -795,6 +989,74 @@ const LabResultsTab = ({ patient }) => {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+
+              {/* ✅ File Upload - NEW */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  File <span className="text-red-500">*</span>
+                </label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload size={24} className="text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">
+                      {selectedFile ? selectedFile.name : "Click to select a file"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Images (PNG, JPEG, WEBP) or PDF (Max 10MB)
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.pdf"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+
+              {/* File Preview */}
+              {selectedFile && !uploading && (
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex items-center gap-3">
+                    {selectedFile.type.startsWith('image/') ? (
+                      <ImageIcon size={20} className="text-green-500" />
+                    ) : (
+                      <FileText size={20} className="text-red-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{selectedFile.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(selectedFile.size)} • {getFileExtension(selectedFile.name)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedFile(null)}
+                      className="p-1 hover:bg-gray-200 rounded-full"
+                    >
+                      <X size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Info Box */}
               <div className="bg-blue-50 p-3 rounded-lg text-xs text-gray-600">
                 <p className="font-medium mb-1">📋 Information to be saved:</p>
                 <ul className="space-y-1">
@@ -815,9 +1077,9 @@ const LabResultsTab = ({ patient }) => {
                 </button>
                 <button
                   onClick={handleAddLabResult}
-                  disabled={!testName.trim() || !department.trim() || !doctorName.trim() || uploading}
+                  disabled={!testName.trim() || !department.trim() || !doctorName.trim() || !selectedFile || uploading}
                   className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
-                    !testName.trim() || !department.trim() || !doctorName.trim() || uploading
+                    !testName.trim() || !department.trim() || !doctorName.trim() || !selectedFile || uploading
                       ? "bg-gray-400 cursor-not-allowed"
                       : "bg-[#1C62A0] hover:bg-[#154f7a]"
                   }`}
@@ -840,19 +1102,22 @@ const LabResultsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Edit Lab Result Modal */}
+      {/* ======================== */}
+      {/* EDIT LAB RESULT MODAL WITH FILE */}
+      {/* ======================== */}
       {showEditModal && editingLabResult && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="px-6 py-5 border-b border-gray-200 flex-shrink-0">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-800">Edit Lab Result</h3>
-                <button onClick={resetEditForm} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                <button onClick={resetEditForm} className="p-1 hover:bg-gray-100 rounded-full transition-colors" disabled={uploading}>
                   <X size={20} className="text-gray-500" />
                 </button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {/* Test Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Test Name <span className="text-red-500">*</span>
@@ -865,6 +1130,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Department */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Department <span className="text-red-500">*</span>
@@ -877,6 +1144,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Doctor Search */}
               <DoctorSearchDropdown
                 value={editDoctorId}
                 onChange={setEditDoctorId}
@@ -886,6 +1155,8 @@ const LabResultsTab = ({ patient }) => {
                 required={true}
                 label="Doctor"
               />
+
+              {/* Lab Name (Optional) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Lab Name <span className="text-gray-400 text-xs">(Optional)</span>
@@ -899,6 +1170,8 @@ const LabResultsTab = ({ patient }) => {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Status */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
@@ -916,6 +1189,8 @@ const LabResultsTab = ({ patient }) => {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+
+              {/* Current File Display */}
               {editingLabResult.fileKey && (
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
@@ -947,6 +1222,8 @@ const LabResultsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
+
+              {/* Replace File */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Replace File <span className="text-gray-400 text-xs">(Optional)</span>
@@ -970,8 +1247,10 @@ const LabResultsTab = ({ patient }) => {
                   />
                 </label>
               </div>
+
+              {/* New File Preview */}
               {editFile && !uploading && (
-                <div className="bg-gray-50 rounded-lg p-3">
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                   <div className="flex items-center gap-3">
                     {editFile.type.startsWith('image/') ? (
                       <img 
@@ -1002,6 +1281,8 @@ const LabResultsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
+
+              {/* Upload Progress */}
               {uploading && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-gray-600">
@@ -1016,6 +1297,8 @@ const LabResultsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
+
+              {/* Info Box */}
               <div className="bg-blue-50 p-3 rounded-lg text-xs text-gray-600">
                 <p className="font-medium mb-1">📋 Information to be saved:</p>
                 <ul className="space-y-1">
@@ -1061,7 +1344,9 @@ const LabResultsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ======================== */}
+      {/* DELETE CONFIRMATION MODAL */}
+      {/* ======================== */}
       {showDeleteModal && deletingLabResult && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
           <div className="bg-white rounded-xl max-w-md w-full shadow-2xl">
@@ -1111,7 +1396,9 @@ const LabResultsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* Table */}
+      {/* ======================== */}
+      {/* TABLE */}
+      {/* ======================== */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
@@ -1136,13 +1423,13 @@ const LabResultsTab = ({ patient }) => {
                     className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Beaker size={16} className="text-blue-500 flex-shrink-0" />
-                        <span className="font-medium text-[#1C62A0]">
-                          {itemId || `#LR${String(index + 1).padStart(4, '0')}`}
-                        </span>
-                      </div>
-                    </td>
+  <div className="flex items-center gap-2">
+    <Beaker size={16} className="text-blue-500 flex-shrink-0" />
+    <span className="font-medium text-[#1C62A0]">
+      {String(startIndex + index + 1)}
+    </span>
+  </div>
+</td>
                     <td className="px-4 py-3">
                       <span className="font-medium text-gray-800">
                         {item.testName || item.name}
@@ -1174,10 +1461,7 @@ const LabResultsTab = ({ patient }) => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              const url = getS3ImageUrl(item.fileKey || item.imageUrl);
-                              if (url) window.open(url, '_blank');
-                            }}
+                            onClick={() => handleDownloadFile(item)}
                             className="p-2 hover:text-blue-600"
                             title="Download Report"
                           >
@@ -1222,6 +1506,7 @@ const LabResultsTab = ({ patient }) => {
         </table>
       </div>
 
+      {/* Pagination */}
       {totalItems > 0 && totalPages > 1 && (
         <div className="px-6 py-3 border-t bg-gray-50">
           <Pagination
@@ -1235,6 +1520,7 @@ const LabResultsTab = ({ patient }) => {
         </div>
       )}
 
+      {/* Laboratory Report Modal */}
       <LaboratoryReportModal
         isOpen={showLabModal}
         onClose={() => {

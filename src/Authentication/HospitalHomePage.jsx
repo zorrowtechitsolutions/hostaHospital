@@ -16,13 +16,15 @@ import {
   Mail,
   MapPin,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/cards";
 import { Badge } from "../components/ui/Badge";
 import logo from "../assets/logo.jpeg";
 
 const HospitalHomePage = () => {
+  const navigate = useNavigate();
+
   const features = [
     {
       icon: <Search className="h-5 w-5" />,
@@ -80,6 +82,15 @@ const HospitalHomePage = () => {
     { value: "98%", label: "Satisfaction Rate" },
   ];
 
+  // ✅ Navigation handlers
+  const handleLogin = () => {
+    navigate("/sign-in");
+  };
+
+  const handleSignUp = () => {
+    navigate("/register");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
       {/* Navigation */}
@@ -100,16 +111,19 @@ const HospitalHomePage = () => {
             </div>
             
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild className="hover:bg-green-50">
-                <Link to="/sign-in" className="text-green-700 hover:text-green-800">
-                  Login
-                </Link>
+              <Button 
+                variant="ghost" 
+                onClick={handleLogin}
+                className="hover:bg-green-50 text-green-700 hover:text-green-800"
+              >
+                Login
               </Button>
-              <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
-                <Link to="/register" className="flex items-center space-x-1">
-                  <span>Sign Up</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+              <Button 
+                onClick={handleSignUp}
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center space-x-1"
+              >
+                <span>Sign Up</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -137,24 +151,20 @@ const HospitalHomePage = () => {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Button 
-              asChild 
+              onClick={handleSignUp}
               size="lg"
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-6 text-base"
+              className="bg-green-600 hover:bg-green-700 text-white px-8 py-6 text-base flex items-center space-x-2"
             >
-              <Link to="/register" className="flex items-center space-x-2">
-                <span>Get Started</span>
-                <ArrowRight className="h-5 w-5" />
-              </Link>
+              <span>Get Started</span>
+              <ArrowRight className="h-5 w-5" />
             </Button>
             <Button 
-              asChild 
               variant="outline"
               size="lg"
+              onClick={handleLogin}
               className="border-green-600 text-green-600 hover:bg-green-50 px-8 py-6 text-base"
             >
-              <Link to="/sign-in">
-                Login
-              </Link>
+              Login
             </Button>
           </div>
         </div>
@@ -230,24 +240,20 @@ const HospitalHomePage = () => {
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Button 
-                asChild 
                 size="lg"
-                className="bg-white text-green-700 hover:bg-green-50 font-semibold px-8 py-6 text-base"
+                onClick={handleSignUp}
+                className="bg-white text-green-700 hover:bg-green-50 font-semibold px-8 py-6 text-base flex items-center space-x-2"
               >
-                <Link to="/register" className="flex items-center space-x-2">
-                  <span>Sign Up Now</span>
-                  <Hospital className="h-5 w-5" />
-                </Link>
+                <span>Sign Up Now</span>
+                <Hospital className="h-5 w-5" />
               </Button>
               <Button 
-                asChild 
                 variant="outline"
                 size="lg"
+                onClick={handleLogin}
                 className="border-white text-white hover:bg-white/10 px-8 py-6 text-base"
               >
-                <Link to="/sign-in">
-                  Login
-                </Link>
+                Login
               </Button>
             </div>
           </CardContent>
@@ -333,8 +339,16 @@ const HospitalHomePage = () => {
             <div>
               <h4 className="font-semibold mb-3">Quick Links</h4>
               <ul className="space-y-2 text-sm text-green-200">
-                <li><Link to="/sign-in" className="hover:text-white transition-colors">Login</Link></li>
-                <li><Link to="/register" className="hover:text-white transition-colors">Sign Up</Link></li>
+                <li>
+                  <button onClick={handleLogin} className="hover:text-white transition-colors">
+                    Login
+                  </button>
+                </li>
+                <li>
+                  <button onClick={handleSignUp} className="hover:text-white transition-colors">
+                    Sign Up
+                  </button>
+                </li>
               </ul>
             </div>
             <div>

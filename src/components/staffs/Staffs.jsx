@@ -1,5 +1,5 @@
-// Staffs.jsx - Complete file with Deleted/Blacklisted Support and Recover Functionality
-import React, { useState, useRef, useEffect } from 'react';
+// Staffs.jsx - Complete file with Frontend Search AND Filter Functionality
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -63,6 +63,7 @@ const getS3ImageUrlWithCache = (imageKey) => {
 const Staffs = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -81,21 +82,34 @@ const Staffs = () => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
 
-  // API Hooks with pagination parameters - removed includeDeleted
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+
+  // API Hooks with pagination parameters
   const {
     data: staffApiResponse,
     isLoading: loading,
     refetch,
     isFetching
   } = useGetStaffQuery({
-    search_query: searchTerm?.trim() || undefined,
+    search_query: debouncedSearchTerm?.trim() || undefined,
     designation: designationFilter !== 'all' ? designationFilter : undefined,
     gender: genderFilter !== 'all' ? genderFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date: dateFilter || undefined,
     page: currentPage,
     limit: itemsPerPage
-    // includeDeleted: false // Removed - not needed
   });
 
   const [deleteStaff] = useDeleteStaffMutation();
@@ -259,17 +273,88 @@ const Staffs = () => {
     });
   };
 
-  const staffsData = transformStaffData(staffApiResponse?.data || []);
-  const totalItems = staffApiResponse?.pagination?.totalItems || 0;
-  const totalPages = staffApiResponse?.pagination?.totalPages || 1;
+  const allStaffsData = transformStaffData(staffApiResponse?.data || []);
+  const totalItemsFromApi = staffApiResponse?.pagination?.totalItems || 0;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+  // ✅ FIX: Apply frontend search AND filter filtering
+  const filteredStaffsData = useMemo(() => {
+    let filtered = allStaffsData;
+
+    // 1. Apply search filter
+    const searchLower = debouncedSearchTerm?.trim().toLowerCase();
+    if (searchLower && searchLower.length >= 2) {
+      filtered = filtered.filter(staff => {
+        const searchFields = [
+          staff.name?.toLowerCase() || '',
+          staff.formattedId?.toLowerCase() || '',
+          staff.designation?.toLowerCase() || '',
+          staff.phone?.toLowerCase() || '',
+          staff.email?.toLowerCase() || '',
+          staff.gender?.toLowerCase() || '',
+          staff.department?.toLowerCase() || '',
+          staff.staffType?.toLowerCase() || '',
+          staff.jobType?.toLowerCase() || '',
+          staff.address?.toLowerCase() || ''
+        ];
+
+        return searchFields.some(field => field.includes(searchLower));
+      });
+    }
+
+    // 2. Apply designation filter
+    if (designationFilter !== 'all') {
+      filtered = filtered.filter(staff => 
+        staff.designation?.toLowerCase() === designationFilter.toLowerCase()
+      );
+    }
+
+    // 3. Apply gender filter
+    if (genderFilter !== 'all') {
+      filtered = filtered.filter(staff => 
+        staff.gender?.toLowerCase() === genderFilter.toLowerCase()
+      );
+    }
+
+    // 4. Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(staff => {
+        if (statusFilter === 'Active') {
+          return staff.isActive && !staff.isDelete;
+        } else if (statusFilter === 'Inactive') {
+          return !staff.isActive && !staff.isDelete;
+        } else if (statusFilter === 'Blacklisted') {
+          return staff.isDelete;
+        }
+        return true;
+      });
+    }
+
+    // 5. Apply date filter (if implemented)
+    if (dateFilter) {
+      filtered = filtered.filter(staff => {
+        if (!staff.appointmentDate) return false;
+        return staff.appointmentDate === dateFilter;
+      });
+    }
+
+    return filtered;
+  }, [allStaffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+
+  // ✅ Use filtered data for display
+  const staffsData = filteredStaffsData;
+  const totalItems = staffsData.length;
+
+  // ✅ Pagination for filtered data
+  const paginatedStaffsData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return staffsData.slice(startIndex, endIndex);
+  }, [staffsData, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(staffsData.length / itemsPerPage);
 
   const getAllDesignations = () => {
-    const allData = staffApiResponse?.allData || staffsData;
+    const allData = staffApiResponse?.allData || allStaffsData;
     const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
   };
@@ -280,6 +365,7 @@ const Staffs = () => {
     setStatusFilter('all');
     setDateFilter('');
     setSearchTerm('');
+    setDebouncedSearchTerm('');
     setCurrentPage(1);
   };
 
@@ -553,6 +639,12 @@ const Staffs = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
+  // Check if we should show the "No results" message
+  const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
+  const hasResults = staffsData.length > 0;
+  const isSearchActive = debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
+  const hasActiveFilters = designationFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all' || !!dateFilter;
+
   // Skeleton Loading State
   if (loading) {
     return (
@@ -638,8 +730,17 @@ const Staffs = () => {
               placeholder="Search by name, staff ID, designation or phone..." 
               value={searchTerm} 
               onChange={setSearchTerm} 
-              onClear={() => setSearchTerm('')} 
+              onClear={() => {
+                setSearchTerm('');
+                setDebouncedSearchTerm('');
+              }} 
             />
+            {searchTerm && searchTerm !== debouncedSearchTerm && (
+              <span className="text-xs text-blue-500 ml-2">Searching...</span>
+            )}
+            {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
+              <span className="text-xs text-yellow-500 ml-2">Type at least 2 characters</span>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
@@ -726,6 +827,7 @@ const Staffs = () => {
                 <option value="all">All Status</option>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
+                <option value="Blacklisted">Blacklisted</option>
               </select>
 
               <input
@@ -739,11 +841,19 @@ const Staffs = () => {
         )}
 
         {/* Staff Table */}
-        {staffsData.length === 0 ? (
+        {!hasResults ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No staff found</h3>
-            <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {isSearchActive || hasActiveFilters ? 'No staff found' : 'No staff available'}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {isSearchActive 
+                ? `No results found for "${searchTerm}". Try adjusting your search.`
+                : hasActiveFilters
+                ? 'No staff match the selected filters. Try adjusting your filters.'
+                : 'Start by adding a new staff member.'}
+            </p>
           </div>
         ) : (
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
@@ -753,6 +863,11 @@ const Staffs = () => {
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {totalItems}
                 </span>
+                {(isSearchActive || hasActiveFilters) && totalItems > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">
+                    (Filtered)
+                  </span>
+                )}
               </h2>
             </div>
             
@@ -772,7 +887,7 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {staffsData.map((staff, index) => {
+                    {paginatedStaffsData.map((staff, index) => {
                       const imageUrl = getStaffImageUrl(staff);
                       
                       return (
@@ -842,16 +957,18 @@ const Staffs = () => {
               </div>
               
               {/* Pagination */}
-              <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={Math.max(1, totalPages)}
-                  onPageChange={setCurrentPage}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="staffs"
-                />
-              </div>
+              {totalPages > 1 && (
+                <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    itemLabel="staffs"
+                  />
+                </div>
+              )}
             </div>
           </Card>
         )}

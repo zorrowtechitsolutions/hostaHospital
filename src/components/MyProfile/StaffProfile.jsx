@@ -1,29 +1,60 @@
-// src/components/MyProfile/StaffProfile.jsx - USING USER DATA (NO API CALL)
+// src/components/MyProfile/StaffProfile.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, Phone, Edit, Save, X, Upload, CheckCircle,
-  User, Briefcase, Award, Building, Info, Calendar, Users, IdCard
+  User, Briefcase, Award, Building, Info, Calendar, Users, IdCard,
+  MapPin, CalendarDays, Clock, GraduationCap, Home, AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useUpdateStaffMutation } from '../../../app/service/staffApi';
-import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+import { useGetStaffByIdQuery, useUpdateStaffMutation } from '../../../app/service/staffApi';
+import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 import { formatDate } from "../../utils/dateFormatter";
 
-// Constants
+// ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const VALID_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const FALLBACK_IMAGE = 'https://ui-avatars.com/api/?name=Staff&background=1C62A0&color=fff&length=2';
+
 const INPUT_CLASS = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 const CARD_CLASS = 'bg-white rounded-2xl shadow-sm border border-gray-100 p-6';
+const SECTION_TITLE_CLASS = 'text-lg font-semibold text-gray-900 mb-4 flex items-center';
+const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
+const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
+
+// ==================== HELPER FUNCTIONS ====================
 
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  if (imageKey.startsWith("http")) return imageKey;
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    const separator = imageKey.includes('?') ? '&' : '?';
+    return `${imageKey}${separator}_t=${Date.now()}`;
+  }
+  
+  const url = getS3ImageUrl(imageKey);
+  if (!url) return null;
+  
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
 };
 
+// ==================== TOAST FUNCTIONS ====================
+const showSuccessToast = (message) => {
+  console.log('✅ Success:', message);
+};
+
+const showErrorToast = (message) => {
+  console.error('❌ Error:', message);
+};
+
+const showWarningToast = (message) => {
+  console.warn('⚠️ Warning:', message);
+};
+
+// ==================== SKELETON LOADER ====================
 const ProfileSkeleton = () => (
-  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+  <div className="min-h-screen bg-gray-50 p-4">
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="mb-8">
         <div className="h-9 w-48 bg-gray-200 rounded animate-pulse mb-2"></div>
@@ -43,6 +74,8 @@ const ProfileSkeleton = () => (
     </div>
   </div>
 );
+
+// ==================== PROFILE FIELD COMPONENTS ====================
 
 const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon, placeholder = '' }) => (
   <div>
@@ -81,18 +114,32 @@ const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
   </div>
 );
 
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className={SECTION_TITLE_CLASS}>
+    <Icon className={SECTION_ICON_CLASS} />
+    {title}
+  </h3>
+);
+
+// ==================== MAIN PROFILE COMPONENT ====================
+
 const StaffProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  // ✅ Use data directly from user object (no API call needed!)
-  const staffData = user;
+  const staffId = user?.staffId || user?.id;
   
-  console.log('📱 StaffProfile - Using user data:', staffData);
+  console.log('📱 StaffProfile - Staff ID:', staffId);
+  console.log('📱 User object:', user);
   
-  const [updateStaff] = useUpdateStaffMutation();
+  const { data: staffResponse, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
+    skip: !staffId,
+  });
+  
+  const [updateStaff, { isLoading: isUpdating }] = useUpdateStaffMutation();
 
   const [formData, setFormData] = useState({
+    id: '', // ✅ Add numeric ID field
     name: '',
     email: '',
     phone: '',
@@ -110,7 +157,17 @@ const StaffProfile = () => {
     gender: '',
     dob: '',
     jobType: '',
-    address: {}
+    place: '',
+    district: '',
+    state: '',
+    country: '',
+    pincode: '',
+    addressString: '',
+    knowLanguages: [],
+    roleId: '',
+    isActive: true,
+    createdAt: '',
+    updatedAt: ''
   });
   
   const [editForm, setEditForm] = useState({});
@@ -118,81 +175,174 @@ const StaffProfile = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  // ✅ Populate form data from user object
+  // Handle fetch error (401 unauthorized)
   useEffect(() => {
-    if (staffData) {
-      console.log('📥 Populating form from user data:', staffData);
-      
-      const imageKey = staffData?.profilePicture || staffData?.imageUrl || staffData?.image || null;
-      
-      // Format address for display
-      const address = staffData?.address || {};
-      const addressString = address.place ? 
-        `${address.place}, ${address.district || ''}, ${address.state || ''}, ${address.country || ''} - ${address.pincode || ''}`.trim() : 
-        '';
-      
-      const staffInfo = {
-        name: staffData?.name || '',
-        email: staffData?.email || '',
-        phone: staffData?.phone || '',
-        profileImage: imageKey,
-        imageUrl: imageKey,
-        imageKey: imageKey,
-        designation: staffData?.designation || '',
-        staffType: staffData?.staffType || '',
-        qualification: staffData?.qualification || '',
-        hospitalName: staffData?.hospitalName || '',
-        department: staffData?.department || '',
-        bio: staffData?.bio || '',
-        joiningDate: staffData?.joiningDate || '',
-        staffId: staffData?.staffId || staffData?.id || '',
-        gender: staffData?.gender || '',
-        dob: staffData?.dob || '',
-        jobType: staffData?.jobType || '',
-        address: address,
-        addressString: addressString
-      };
-      
-      console.log('📥 Staff info populated:', staffInfo);
-      
-      setFormData(staffInfo);
-      setEditForm(staffInfo);
-      
-      if (imageKey) setPreviewImage(getFullImageUrl(imageKey));
+    if (fetchError?.status === 401) {
+      showErrorToast('Session expired. Redirecting to login...');
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 2000);
     }
-  }, [staffData]);
+  }, [fetchError, logout, navigate]);
 
-  const updateEditForm = (field, value) => {
-    setEditForm(prev => ({ ...prev, [field]: value }));
+  // ✅ Populate profile from API data
+  useEffect(() => {
+    console.log('📥 staffResponse changed:', staffResponse);
+    
+    if (staffResponse) {
+      const staff = staffResponse.data;
+      console.log('📥 Staff object:', staff);
+      
+      if (staff) {
+        const imageKey = 
+          staff?.profilePicture ||
+          staff?.imageUrl ||
+          staff?.image ||
+          null;
+        
+        // Get address fields
+        const address = staff?.address || {};
+        const place = address?.place || '';
+        const district = address?.district || '';
+        const state = address?.state || '';
+        const country = address?.country || '';
+        const pincode = address?.pincode || '';
+        
+        // Format address for display
+        const addressParts = [place, district, state, country].filter(Boolean);
+        const addressString = addressParts.length > 0 ? 
+          `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` : 
+          '';
+        
+        // Format joining date
+        const joiningDate = staff?.joiningDate ? 
+          staff.joiningDate.split('T')[0] : 
+          '';
+        
+        // Format date of birth
+        const dob = staff?.dob ? 
+          staff.dob.split('T')[0] : 
+          '';
+        
+        const staffInfo = {
+          id: staff?.id || '', // ✅ Store numeric ID
+          name: staff?.name || '',
+          email: staff?.email || '',
+          phone: staff?.phone || '',
+          profileImage: imageKey,
+          imageUrl: imageKey,
+          imageKey: imageKey,
+          designation: staff?.designation || '',
+          staffType: staff?.staffType || '',
+          qualification: staff?.qualification || '',
+          hospitalName: staff?.hospitalName || '',
+          department: staff?.department || '',
+          bio: staff?.bio || '',
+          joiningDate: joiningDate,
+          staffId: staff?.staffId || staff?.id || '',
+          gender: staff?.gender || '',
+          dob: dob,
+          jobType: staff?.jobType || '',
+          place: place,
+          district: district,
+          state: state,
+          country: country,
+          pincode: pincode,
+          addressString: addressString,
+          knowLanguages: staff?.knowLanguages || [],
+          roleId: staff?.roleId || '',
+          isActive: staff?.isActive ?? true,
+          createdAt: staff?.createdAt || '',
+          updatedAt: staff?.updatedAt || ''
+        };
+        
+        console.log('📥 Staff info populated:', staffInfo);
+        
+        setFormData(staffInfo);
+        setEditForm(staffInfo);
+        
+        if (imageKey) {
+          const fullUrl = getFullImageUrl(imageKey);
+          setPreviewImage(fullUrl);
+          setImageError(false);
+        }
+      }
+    }
+  }, [staffResponse]);
+
+  const resetUploadState = () => {
+    setUploadProgress(0);
   };
 
+  const updateEditForm = (field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // ✅ FIXED: Image upload with proper numeric ID
   const handleImageUpload = async (file) => {
     if (!file) return;
+    
     if (file.size > MAX_FILE_SIZE) {
-      alert('File size must be less than 5MB');
+      showErrorToast('File size must be less than 5MB');
       return;
     }
+    
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
-      alert('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
+      showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
       return;
     }
     
     setUploadProgress(10);
+    
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, formData.staffId || formData.id);
+      
+      // ✅ Get the numeric ID from formData
+      // staffId is "STF00011" (formatted) - ❌ DON'T use this
+      // id is the numeric ID (e.g., 11) - ✅ USE THIS
+      const numericId = formData.id || formData.staffNumericId || parseInt(formData.staffId?.replace(/\D/g, '') || '0');
+      
+      console.log('📤 Uploading with numeric ID:', numericId);
+      console.log('📤 Staff ID (formatted):', formData.staffId);
+      
+      const uploaded = await uploadToS3(
+        file, 
+        formData.imageKey || null, 
+        numericId,  // ✅ Pass numeric ID
+        'staff'
+      );
+      
       setUploadProgress(100);
-      setEditForm(prev => ({ ...prev, imageUrl: uploaded.key, profileImage: uploaded.key, imageKey: uploaded.key }));
+      
+      setEditForm(prev => ({
+        ...prev,
+        imageUrl: uploaded.key,
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      
+      setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
-    } catch {
+      showSuccessToast('Image uploaded successfully! Click Save to apply.');
+    } catch (error) {
+      console.error('Upload error:', error);
       setUploadProgress(0);
-      if (formData.profileImage) setPreviewImage(getFullImageUrl(formData.profileImage));
-      else setPreviewImage(null);
+      showErrorToast('Failed to upload image. Please try again.');
+      if (formData.profileImage) {
+        setPreviewImage(getFullImageUrl(formData.profileImage));
+      } else {
+        setPreviewImage(null);
+      }
     }
   };
 
@@ -205,17 +355,22 @@ const StaffProfile = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setEditForm(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
+    setImageError(false);
+    showSuccessToast('Image removed');
   };
 
   const handleEdit = () => {
     setIsEditing(true);
     setEditForm({ ...formData });
+    resetUploadState();
   };
 
+  // ✅ Save with proper update data
   const handleSave = async () => {
     setIsSaving(true);
+    
     try {
-      const staffId = formData.staffId || formData.id;
+      const staffIdValue = formData.id || formData.staffNumericId || formData.staffId;
       
       const updateData = {
         name: editForm.name,
@@ -232,28 +387,51 @@ const StaffProfile = () => {
         dob: editForm.dob,
         jobType: editForm.jobType,
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
+        address: {
+          place: editForm.place,
+          district: editForm.district,
+          state: editForm.state,
+          country: editForm.country,
+          pincode: editForm.pincode
+        }
       };
       
       const response = await updateStaff({ 
-        id: staffId, 
-        updateStaff: updateData 
+        id: staffIdValue, 
+        data: updateData 
       }).unwrap();
       
-      const updatedStaff = response.data || response;
-      let newProfilePicture = updatedStaff.profilePicture || updatedStaff.profileImage || updateData.profilePicture;
+      const updatedStaff = response.data;
+      
+      let newProfilePicture = updatedStaff?.profilePicture || 
+                              updatedStaff?.profileImage || 
+                              updatedStaff?.imageUrl ||
+                              updateData.profilePicture;
+      
       const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
       
-      const updatedFormData = { ...editForm, profileImage: newProfilePicture, imageUrl: newProfilePicture, imageKey: newProfilePicture };
+      const updatedFormData = {
+        ...editForm,
+        profileImage: newProfilePicture,
+        imageUrl: newProfilePicture,
+        imageKey: newProfilePicture,
+      };
+      
       setFormData(updatedFormData);
-      if (newImageUrl) setPreviewImage(newImageUrl);
+      
+      if (newImageUrl) {
+        setPreviewImage(newImageUrl);
+        setImageError(false);
+      }
       
       setIsEditing(false);
+      resetUploadState();
       
-      // ✅ Update localStorage with new staff data
+      // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { 
         ...storedUser, 
-        staffId: staffId,
+        staffId: staffIdValue,
         name: updateData.name, 
         email: updateData.email, 
         phone: updateData.phone, 
@@ -261,6 +439,7 @@ const StaffProfile = () => {
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
+      // Update authData
       const authData = JSON.parse(localStorage.getItem('authData') || '{}');
       localStorage.setItem('authData', JSON.stringify({
         ...authData,
@@ -270,8 +449,20 @@ const StaffProfile = () => {
         profilePicture: newProfilePicture
       }));
       
-    } catch {
-      // Silently handle save error
+      showSuccessToast('Profile updated successfully!');
+      
+      refetch();
+      
+    } catch (error) {
+      if (error?.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...');
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(error?.data?.message || 'Failed to update profile');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -280,18 +471,60 @@ const StaffProfile = () => {
   const handleCancel = () => {
     setEditForm({ ...formData });
     setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
+    setUploadProgress(0);
     setIsEditing(false);
+    setImageError(false);
+    showWarningToast('Changes discarded');
   };
 
   const getProfileImage = () => {
-    if (previewImage) return previewImage;
+    if (previewImage && !imageError) {
+      return previewImage;
+    }
+
     if (formData.profileImage || formData.imageUrl || formData.imageKey) {
       const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
       const url = getFullImageUrl(imageValue);
       if (url) return url;
     }
-    return `https://ui-avatars.com/api/?name=${formData.name || 'Staff'}&background=1C62A0&color=fff&length=2`;
+
+    const name = formData.name || 'Staff';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1C62A0&color=fff&length=2`;
   };
+
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    setImageError(true);
+    e.target.src = FALLBACK_IMAGE;
+  };
+
+  // ✅ Get the staff object from response
+  const staff = staffResponse?.data || {};
+  const address = staff?.address || {};
+
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
+
+  if (!staffResponse && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="bg-yellow-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-8 w-8 text-yellow-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mt-4">Staff Not Found</h2>
+          <p className="text-gray-600 mt-2">No staff found with ID: {staffId}</p>
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a]"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
@@ -314,11 +547,13 @@ const StaffProfile = () => {
                       src={getProfileImage()}
                       alt="Staff Profile"
                       className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-100"
+                      onError={handleImageError}
+                      loading="lazy"
                     />
                     {isEditing && (
                       <>
                         <input
-                          id="staffImageInput"
+                          id="profileImageInput"
                           type="file"
                           accept="image/jpeg,image/png,image/gif,image/webp"
                           onChange={handleFileSelect}
@@ -326,7 +561,7 @@ const StaffProfile = () => {
                         />
                         <button
                           type="button"
-                          onClick={() => document.getElementById('staffImageInput')?.click()}
+                          onClick={() => document.getElementById('profileImageInput')?.click()}
                           className="absolute bottom-0 right-0 bg-[#1C62A0] rounded-full p-2 shadow-lg hover:bg-[#4c6c88] transition-colors"
                         >
                           <Upload className="w-4 h-4 text-white" />
@@ -347,7 +582,10 @@ const StaffProfile = () => {
                   {isEditing && isUploading && (
                     <div className="mt-4 w-full">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-center">Uploading... {uploadProgress}%</p>
                     </div>
@@ -355,19 +593,19 @@ const StaffProfile = () => {
                 </div>
                 
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
-                  {isEditing ? editForm.name : formData.name || 'Staff'}
+                  {staff?.name || formData.name || 'Staff'}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {isEditing ? editForm.designation : formData.designation || 'No designation'}
+                  {staff?.designation || formData.designation || 'No designation'}
                 </p>
                 <div className="flex items-center space-x-2 mt-2">
                   <div className="flex items-center text-sm text-green-600">
                     <CheckCircle className="w-4 h-4 mr-1" />
-                    Active Staff
+                    {staff?.isActive ? 'Active Staff' : 'Inactive'}
                   </div>
                   <div className="flex items-center text-sm text-gray-500">
                     <IdCard className="w-4 h-4 mr-1" />
-                    Staff ID: {formData.staffId || 'N/A'}
+                    ID: {staff?.staffId || formData.staffId || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -376,9 +614,9 @@ const StaffProfile = () => {
                 {!isEditing ? (
                   <button
                     onClick={handleEdit}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a] transition-colors"
+                    className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88]`}
                   >
-                    <Edit size={18} />
+                    <Edit className="w-4 h-4" />
                     <span>Edit Profile</span>
                   </button>
                 ) : (
@@ -386,16 +624,15 @@ const StaffProfile = () => {
                     <button
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88] disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <Save size={18} />
+                      <Save className="w-4 h-4" />
                       <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-gray-200 text-gray-700 hover:bg-gray-300`}
                     >
-                      <X size={18} />
                       <span>Cancel</span>
                     </button>
                   </>
@@ -408,10 +645,7 @@ const StaffProfile = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* Basic Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <User className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Basic Information
-              </h3>
+              <SectionTitle icon={User} title="Basic Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
                   label="Full Name"
@@ -419,24 +653,7 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('name', e.target.value)}
                   icon={User}
-                  placeholder="Enter full name"
-                />
-                <ProfileField
-                  label="Email Address"
-                  value={isEditing ? editForm.email : formData.email}
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm('email', e.target.value)}
-                  type="email"
-                  icon={Mail}
-                  placeholder="Enter email"
-                />
-                <ProfileField
-                  label="Phone Number"
-                  value={isEditing ? editForm.phone : formData.phone}
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm('phone', e.target.value)}
-                  icon={Phone}
-                  placeholder="Enter phone number"
+                  placeholder="Full name"
                 />
                 <ProfileField
                   label="Staff ID"
@@ -444,17 +661,47 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('staffId', e.target.value)}
                   icon={IdCard}
-                  placeholder="e.g., STF001"
+                  placeholder="Staff ID"
+                />
+                <ProfileField
+                  label="Email"
+                  value={isEditing ? editForm.email : formData.email}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('email', e.target.value)}
+                  type="email"
+                  icon={Mail}
+                  placeholder="Email"
+                />
+                <ProfileField
+                  label="Phone"
+                  value={isEditing ? editForm.phone : formData.phone}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('phone', e.target.value)}
+                  icon={Phone}
+                  placeholder="Phone"
+                />
+                <ProfileField
+                  label="Gender"
+                  value={isEditing ? editForm.gender : formData.gender}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('gender', e.target.value)}
+                  icon={User}
+                  placeholder="Gender"
+                />
+                <ProfileField
+                  label="Date of Birth"
+                  value={isEditing ? editForm.dob : (formData.dob ? new Date(formData.dob).toLocaleDateString() : 'Not specified')}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('dob', e.target.value)}
+                  type="date"
+                  icon={Calendar}
                 />
               </div>
             </div>
 
             {/* Professional Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Briefcase className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Professional Information
-              </h3>
+              <SectionTitle icon={Briefcase} title="Professional Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
                   label="Designation"
@@ -462,7 +709,7 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('designation', e.target.value)}
                   icon={Briefcase}
-                  placeholder="e.g., Senior Nurse"
+                  placeholder="Designation"
                 />
                 <ProfileField
                   label="Staff Type"
@@ -470,15 +717,15 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('staffType', e.target.value)}
                   icon={Users}
-                  placeholder="e.g., Nursing, Administrative"
+                  placeholder="Staff type"
                 />
                 <ProfileField
                   label="Qualification"
                   value={isEditing ? editForm.qualification : formData.qualification}
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('qualification', e.target.value)}
-                  icon={Award}
-                  placeholder="e.g., B.Sc Nursing"
+                  icon={GraduationCap}
+                  placeholder="Qualification"
                 />
                 <ProfileField
                   label="Hospital/Clinic"
@@ -486,81 +733,95 @@ const StaffProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('hospitalName', e.target.value)}
                   icon={Building}
-                  placeholder="Enter hospital name"
-                />
-                <ProfileField
-                  label="Joining Date"
-                  value={
-                    isEditing
-                      ? editForm.joiningDate
-                      : formatDate(formData.joiningDate)
-                  }
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm("joiningDate", e.target.value)}
-                  type="date"
-                  icon={Calendar}
+                  placeholder="Hospital"
                 />
                 <ProfileField
                   label="Job Type"
                   value={isEditing ? editForm.jobType : formData.jobType}
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('jobType', e.target.value)}
-                  icon={Briefcase}
-                  placeholder="e.g., Full Time, Part Time"
+                  icon={Clock}
+                  placeholder="Job type"
+                />
+                <ProfileField
+                  label="Joining Date"
+                  value={isEditing ? editForm.joiningDate : (formData.joiningDate ? new Date(formData.joiningDate).toLocaleDateString() : 'Not specified')}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('joiningDate', e.target.value)}
+                  type="date"
+                  icon={CalendarDays}
                 />
               </div>
             </div>
 
-            {/* Personal Information */}
+            {/* Address Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Info className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Personal Information
-              </h3>
+              <SectionTitle icon={MapPin} title="Address Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
-                  label="Gender"
-                  value={isEditing ? editForm.gender : formData.gender}
+                  label="Place"
+                  value={isEditing ? editForm.place : formData.place}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('gender', e.target.value)}
-                  icon={User}
-                  placeholder="e.g., Male, Female"
+                  onChange={(e) => updateEditForm('place', e.target.value)}
+                  icon={Home}
+                  placeholder="Place"
                 />
                 <ProfileField
-                  label="Date of Birth"
-                  value={
-                    isEditing
-                      ? editForm.dob
-                      : formatDate(formData.dob)
-                  }
+                  label="District"
+                  value={isEditing ? editForm.district : formData.district}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm("dob", e.target.value)}
-                  type="date"
-                  icon={Calendar}
+                  onChange={(e) => updateEditForm('district', e.target.value)}
+                  icon={MapPin}
+                  placeholder="District"
                 />
                 <ProfileField
-                  label="Address"
-                  value={isEditing ? editForm.addressString : formData.addressString}
+                  label="State"
+                  value={isEditing ? editForm.state : formData.state}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('addressString', e.target.value)}
-                  icon={Building}
-                  placeholder="e.g., City, State, Country"
+                  onChange={(e) => updateEditForm('state', e.target.value)}
+                  icon={MapPin}
+                  placeholder="State"
                 />
+                <ProfileField
+                  label="Country"
+                  value={isEditing ? editForm.country : formData.country}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('country', e.target.value)}
+                  icon={MapPin}
+                  placeholder="Country"
+                />
+                <ProfileField
+                  label="Pincode"
+                  value={isEditing ? editForm.pincode : formData.pincode}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('pincode', e.target.value)}
+                  icon={MapPin}
+                  placeholder="Pincode"
+                />
+                <div className="md:col-span-2">
+                  <ProfileField
+                    label="Full Address"
+                    value={isEditing ? editForm.addressString : formData.addressString}
+                    isEditing={isEditing}
+                    onChange={(e) => updateEditForm('addressString', e.target.value)}
+                    icon={MapPin}
+                    placeholder="Full address"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Additional Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Info className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Additional Information
-              </h3>
-              <ProfileTextarea
-                label="Bio"
-                value={isEditing ? editForm.bio : formData.bio}
-                isEditing={isEditing}
-                onChange={(e) => updateEditForm('bio', e.target.value)}
-              />
+              <SectionTitle icon={Info} title="Additional Information" />
+              <div className="space-y-4">
+                <ProfileTextarea
+                  label="Bio"
+                  value={isEditing ? editForm.bio : formData.bio}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('bio', e.target.value)}
+                />
+              </div>
             </div>
           </div>
         </div>

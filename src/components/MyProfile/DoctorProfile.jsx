@@ -1,26 +1,58 @@
+// src/components/MyProfile/DoctorProfile.jsx - COMPLETE WITH ALL DATA FETCH
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, Phone, Edit, Save, X, Upload, CheckCircle,
   User, Stethoscope, Award, Calendar, FileText, Building,
-  Heart, Briefcase, Clock, DollarSign, Info
+  Heart, Briefcase, Clock, DollarSign, Info, AlertCircle,
+  MapPin, Home, CalendarDays, GraduationCap, Users
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useGetDoctorByIdQuery, useUpdateDoctorMutation } from '../../../app/service/doctorApi';
-import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 
-// Constants
+// ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const VALID_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const FALLBACK_IMAGE = 'https://ui-avatars.com/api/?name=Doctor&background=1C62A0&color=fff&length=2';
+
 const INPUT_CLASS = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 const CARD_CLASS = 'bg-white rounded-2xl shadow-sm border border-gray-100 p-6';
+const SECTION_TITLE_CLASS = 'text-lg font-semibold text-gray-900 mb-4 flex items-center';
+const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
+const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
+
+// ==================== HELPER FUNCTIONS ====================
 
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  if (imageKey.startsWith("http")) return imageKey;
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    const separator = imageKey.includes('?') ? '&' : '?';
+    return `${imageKey}${separator}_t=${Date.now()}`;
+  }
+  
+  const url = getS3ImageUrl(imageKey);
+  if (!url) return null;
+  
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
 };
 
+// ==================== TOAST FUNCTIONS ====================
+const showSuccessToast = (message) => {
+  console.log('✅ Success:', message);
+};
+
+const showErrorToast = (message) => {
+  console.error('❌ Error:', message);
+};
+
+const showWarningToast = (message) => {
+  console.warn('⚠️ Warning:', message);
+};
+
+// ==================== SKELETON LOADER ====================
 const ProfileSkeleton = () => (
   <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -42,6 +74,8 @@ const ProfileSkeleton = () => (
     </div>
   </div>
 );
+
+// ==================== PROFILE FIELD COMPONENTS ====================
 
 const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon, placeholder = '' }) => (
   <div>
@@ -80,14 +114,29 @@ const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
   </div>
 );
 
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className={SECTION_TITLE_CLASS}>
+    <Icon className={SECTION_ICON_CLASS} />
+    {title}
+  </h3>
+);
+
+// ==================== MAIN PROFILE COMPONENT ====================
+
 const DoctorProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
   const doctorId = user?.doctorId || user?.id;
-  const { data: doctorData, isLoading, error: fetchError, refetch } = useGetDoctorByIdQuery(doctorId, {
+  
+  console.log('📱 DoctorProfile - Doctor ID:', doctorId);
+  console.log('📱 User object:', user);
+  
+  // ✅ Fetch doctor data from API
+  const { data: doctorResponse, isLoading, error: fetchError, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId,
   });
+  
   const [updateDoctor, { isLoading: isUpdating }] = useUpdateDoctorMutation();
 
   const [formData, setFormData] = useState({
@@ -104,9 +153,23 @@ const DoctorProfile = () => {
     experience: '',
     regNo: '',
     hospitalName: '',
+    hospitalId: '',
     bio: '',
     consultationFee: '',
-    availability: ''
+    availability: '',
+    gender: '',
+    dob: '',
+    address: {},
+    place: '',
+    district: '',
+    state: '',
+    country: '',
+    pincode: '',
+    addressString: '',
+    roleId: '',
+    isActive: true,
+    createdAt: '',
+    updatedAt: ''
   });
   
   const [editForm, setEditForm] = useState({});
@@ -114,9 +177,12 @@ const DoctorProfile = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
+  // Handle fetch error (401 unauthorized)
   useEffect(() => {
     if (fetchError?.status === 401) {
+      showErrorToast('Session expired. Redirecting to login...');
       setTimeout(() => {
         logout();
         navigate('/sign-in');
@@ -124,83 +190,148 @@ const DoctorProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
+  // ✅ Populate profile from API data
   useEffect(() => {
-    if (doctorData) {
-      const doctor = doctorData.data || doctorData;
-      const imageKey = doctor?.profilePicture || doctor?.imageUrl || doctor?.image || null;
+    console.log('📥 doctorResponse changed:', doctorResponse);
+    
+    if (doctorResponse) {
+      // ✅ The doctor data is in doctorResponse.data
+      const doctor = doctorResponse.data || doctorResponse;
+      console.log('📥 Doctor object:', doctor);
       
-      setFormData({
-        firstName: doctor?.firstName || doctor?.name?.split(' ')[0] || '',
-        lastName: doctor?.lastName || doctor?.name?.split(' ')[1] || '',
-        email: doctor?.email || '',
-        phone: doctor?.phone || '',
-        profileImage: imageKey,
-        imageUrl: imageKey,
-        imageKey: imageKey,
-        department: doctor?.department || '',
-        specialist: doctor?.specialist || doctor?.specialization || '',
-        qualification: doctor?.qualification || '',
-        experience: doctor?.experience || '',
-        regNo: doctor?.regNo || doctor?.registrationNumber || '',
-        hospitalName: doctor?.hospitalName || doctor?.hospital || '',
-        bio: doctor?.bio || doctor?.about || '',
-        consultationFee: doctor?.consultationFee || '',
-        availability: doctor?.availability || ''
-      });
-      
-      setEditForm({
-        firstName: doctor?.firstName || doctor?.name?.split(' ')[0] || '',
-        lastName: doctor?.lastName || doctor?.name?.split(' ')[1] || '',
-        email: doctor?.email || '',
-        phone: doctor?.phone || '',
-        profileImage: imageKey,
-        imageUrl: imageKey,
-        imageKey: imageKey,
-        department: doctor?.department || '',
-        specialist: doctor?.specialist || doctor?.specialization || '',
-        qualification: doctor?.qualification || '',
-        experience: doctor?.experience || '',
-        regNo: doctor?.regNo || doctor?.registrationNumber || '',
-        hospitalName: doctor?.hospitalName || doctor?.hospital || '',
-        bio: doctor?.bio || doctor?.about || '',
-        consultationFee: doctor?.consultationFee || '',
-        availability: doctor?.availability || ''
-      });
-      
-      if (imageKey) setPreviewImage(getFullImageUrl(imageKey));
+      if (doctor) {
+        const imageKey = 
+          doctor?.profilePicture ||
+          doctor?.imageUrl ||
+          doctor?.image ||
+          null;
+        
+        // Get address fields
+        const address = doctor?.address || {};
+        const place = address?.place || '';
+        const district = address?.district || '';
+        const state = address?.state || '';
+        const country = address?.country || '';
+        const pincode = address?.pincode || '';
+        
+        // Format address for display
+        const addressParts = [place, district, state, country].filter(Boolean);
+        const addressString = addressParts.length > 0 ? 
+          `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` : 
+          '';
+        
+        // Format date of birth
+        const dob = doctor?.dob ? 
+          doctor.dob.split('T')[0] : 
+          '';
+        
+        const newFormData = {
+          firstName: doctor?.firstName || doctor?.name?.split(' ')[0] || '',
+          lastName: doctor?.lastName || doctor?.name?.split(' ')[1] || '',
+          email: doctor?.email || '',
+          phone: doctor?.phone || '',
+          profileImage: imageKey,
+          imageUrl: imageKey,
+          imageKey: imageKey,
+          department: doctor?.department || '',
+          specialist: doctor?.specialist || doctor?.specialization || '',
+          qualification: doctor?.qualification || '',
+          experience: doctor?.experience || '',
+          regNo: doctor?.regNo || doctor?.registrationNumber || '',
+          hospitalName: doctor?.hospitalName || doctor?.hospital || '',
+          hospitalId: doctor?.hospitalId || '',
+          bio: doctor?.bio || doctor?.about || '',
+          consultationFee: doctor?.consultationFee || '',
+          availability: doctor?.availability || '',
+          gender: doctor?.gender || '',
+          dob: dob,
+          address: address,
+          place: place,
+          district: district,
+          state: state,
+          country: country,
+          pincode: pincode,
+          addressString: addressString,
+          roleId: doctor?.roleId || '',
+          isActive: doctor?.isActive ?? true,
+          createdAt: doctor?.createdAt || '',
+          updatedAt: doctor?.updatedAt || ''
+        };
+        
+        console.log('📥 Doctor info populated:', newFormData);
+        
+        setFormData(newFormData);
+        setEditForm(newFormData);
+        
+        if (imageKey) {
+          const fullUrl = getFullImageUrl(imageKey);
+          setPreviewImage(fullUrl);
+          setImageError(false);
+        }
+      }
     }
-  }, [doctorData]);
+  }, [doctorResponse]);
 
-  const updateEditForm = (field, value) => {
-    setEditForm(prev => ({ ...prev, [field]: value }));
+  const resetUploadState = () => {
+    setUploadProgress(0);
   };
 
+  const updateEditForm = (field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // ✅ Image upload with proper params
   const handleImageUpload = async (file) => {
     if (!file) return;
+    
     if (file.size > MAX_FILE_SIZE) {
-      alert('File size must be less than 5MB');
+      showErrorToast('File size must be less than 5MB');
       return;
     }
+    
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
-      alert('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
+      showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
       return;
     }
     
     setUploadProgress(10);
+    
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, doctorId);
+      const uploaded = await uploadToS3(
+        file, 
+        formData.imageKey || null, 
+        doctorId,
+        'doctor'
+      );
       setUploadProgress(100);
-      setEditForm(prev => ({ ...prev, imageUrl: uploaded.key, profileImage: uploaded.key, imageKey: uploaded.key }));
+      
+      setEditForm(prev => ({
+        ...prev,
+        imageUrl: uploaded.key,
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      
+      setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
-    } catch {
+      showSuccessToast('Image uploaded successfully! Click Save to apply.');
+    } catch (error) {
+      console.error('Upload error:', error);
       setUploadProgress(0);
-      if (formData.profileImage) setPreviewImage(getFullImageUrl(formData.profileImage));
-      else setPreviewImage(null);
+      showErrorToast('Failed to upload image. Please try again.');
+      if (formData.profileImage) {
+        setPreviewImage(getFullImageUrl(formData.profileImage));
+      } else {
+        setPreviewImage(null);
+      }
     }
   };
 
@@ -213,15 +344,20 @@ const DoctorProfile = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setEditForm(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
+    setImageError(false);
+    showSuccessToast('Image removed');
   };
 
   const handleEdit = () => {
     setIsEditing(true);
     setEditForm({ ...formData });
+    resetUploadState();
   };
 
+  // ✅ Save with proper update data
   const handleSave = async () => {
     setIsSaving(true);
+    
     try {
       const updateData = {
         firstName: editForm.firstName,
@@ -237,27 +373,85 @@ const DoctorProfile = () => {
         bio: editForm.bio,
         consultationFee: editForm.consultationFee,
         availability: editForm.availability,
+        gender: editForm.gender,
+        dob: editForm.dob,
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
+        address: {
+          place: editForm.place,
+          district: editForm.district,
+          state: editForm.state,
+          country: editForm.country,
+          pincode: editForm.pincode
+        }
       };
       
-      const response = await updateDoctor({ id: doctorId, updateDoctor: updateData }).unwrap();
+      const response = await updateDoctor({ 
+        id: doctorId, 
+        updateDoctor: updateData 
+      }).unwrap();
+      
       const updatedDoctor = response.data || response;
-      let newProfilePicture = updatedDoctor.profilePicture || updatedDoctor.profileImage || updateData.profilePicture;
+      
+      let newProfilePicture = updatedDoctor.profilePicture || 
+                              updatedDoctor.profileImage || 
+                              updatedDoctor.imageUrl ||
+                              updateData.profilePicture;
+      
       const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
       
-      const updatedFormData = { ...editForm, profileImage: newProfilePicture, imageUrl: newProfilePicture, imageKey: newProfilePicture };
+      const updatedFormData = {
+        ...editForm,
+        profileImage: newProfilePicture,
+        imageUrl: newProfilePicture,
+        imageKey: newProfilePicture,
+      };
+      
       setFormData(updatedFormData);
-      if (newImageUrl) setPreviewImage(newImageUrl);
+      
+      if (newImageUrl) {
+        setPreviewImage(newImageUrl);
+        setImageError(false);
+      }
       
       setIsEditing(false);
+      resetUploadState();
       
+      // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = { ...storedUser, firstName: updateData.firstName, lastName: updateData.lastName, email: updateData.email, phone: updateData.phone, profilePicture: newProfilePicture };
+      const updatedUser = { 
+        ...storedUser, 
+        firstName: updateData.firstName,
+        lastName: updateData.lastName,
+        email: updateData.email,
+        phone: updateData.phone,
+        profilePicture: newProfilePicture
+      };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
+      // Update authData
+      const authData = JSON.parse(localStorage.getItem('authData') || '{}');
+      localStorage.setItem('authData', JSON.stringify({
+        ...authData,
+        name: `${updateData.firstName} ${updateData.lastName}`,
+        email: updateData.email,
+        phone: updateData.phone,
+        profilePicture: newProfilePicture
+      }));
+      
+      showSuccessToast('Profile updated successfully!');
+      
       refetch();
-    } catch {
-      // Silently handle save error
+      
+    } catch (error) {
+      if (error?.status === 401) {
+        showErrorToast('Session expired. Redirecting to login...');
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        showErrorToast(error?.data?.message || 'Failed to update profile');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -266,20 +460,60 @@ const DoctorProfile = () => {
   const handleCancel = () => {
     setEditForm({ ...formData });
     setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
+    setUploadProgress(0);
     setIsEditing(false);
+    setImageError(false);
+    showWarningToast('Changes discarded');
   };
 
   const getProfileImage = () => {
-    if (previewImage) return previewImage;
+    if (previewImage && !imageError) {
+      return previewImage;
+    }
+
     if (formData.profileImage || formData.imageUrl || formData.imageKey) {
       const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
       const url = getFullImageUrl(imageValue);
       if (url) return url;
     }
-    return `https://ui-avatars.com/api/?name=${formData.firstName}+${formData.lastName}&background=1C62A0&color=fff&length=2`;
+
+    const name = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Doctor')}&background=1C62A0&color=fff&length=2`;
   };
 
-  if (isLoading) return <ProfileSkeleton />;
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    setImageError(true);
+    e.target.src = FALLBACK_IMAGE;
+  };
+
+  // ✅ Get the doctor object from response
+  const doctor = doctorResponse?.data || doctorResponse || {};
+  const address = doctor?.address || {};
+
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
+
+  if (!doctorResponse && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="bg-yellow-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-8 w-8 text-yellow-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mt-4">Doctor Not Found</h2>
+          <p className="text-gray-600 mt-2">No doctor found with ID: {doctorId}</p>
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a]"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
@@ -302,11 +536,13 @@ const DoctorProfile = () => {
                       src={getProfileImage()}
                       alt="Doctor Profile"
                       className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-100"
+                      onError={handleImageError}
+                      loading="lazy"
                     />
                     {isEditing && (
                       <>
                         <input
-                          id="doctorImageInput"
+                          id="profileImageInput"
                           type="file"
                           accept="image/jpeg,image/png,image/gif,image/webp"
                           onChange={handleFileSelect}
@@ -314,7 +550,7 @@ const DoctorProfile = () => {
                         />
                         <button
                           type="button"
-                          onClick={() => document.getElementById('doctorImageInput')?.click()}
+                          onClick={() => document.getElementById('profileImageInput')?.click()}
                           className="absolute bottom-0 right-0 bg-[#1C62A0] rounded-full p-2 shadow-lg hover:bg-[#4c6c88] transition-colors"
                         >
                           <Upload className="w-4 h-4 text-white" />
@@ -335,7 +571,10 @@ const DoctorProfile = () => {
                   {isEditing && isUploading && (
                     <div className="mt-4 w-full">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
+                        <div 
+                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
                       </div>
                       <p className="text-xs text-gray-500 mt-1 text-center">Uploading... {uploadProgress}%</p>
                     </div>
@@ -343,16 +582,22 @@ const DoctorProfile = () => {
                 </div>
                 
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
-                  Dr. {isEditing ? editForm.firstName : formData.firstName} {isEditing ? editForm.lastName : formData.lastName}
+                  Dr. {doctor?.firstName || formData.firstName || ''} {doctor?.lastName || formData.lastName || ''}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {isEditing ? editForm.specialist : formData.specialist}
+                  {doctor?.specialist || doctor?.specialization || formData.specialist || 'Specialist'}
                 </p>
                 <div className="flex items-center space-x-2 mt-2">
                   <div className="flex items-center text-sm text-green-600">
                     <CheckCircle className="w-4 h-4 mr-1" />
                     Verified Doctor
                   </div>
+                  {doctor?.staffId && (
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Users className="w-4 h-4 mr-1" />
+                      ID: {doctor?.staffId}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -360,9 +605,9 @@ const DoctorProfile = () => {
                 {!isEditing ? (
                   <button
                     onClick={handleEdit}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a] transition-colors"
+                    className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88]`}
                   >
-                    <Edit size={18} />
+                    <Edit className="w-4 h-4" />
                     <span>Edit Profile</span>
                   </button>
                 ) : (
@@ -370,16 +615,15 @@ const DoctorProfile = () => {
                     <button
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88] disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <Save size={18} />
+                      <Save className="w-4 h-4" />
                       <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      className={`${ACTION_BUTTON_CLASS} bg-gray-200 text-gray-700 hover:bg-gray-300`}
                     >
-                      <X size={18} />
                       <span>Cancel</span>
                     </button>
                   </>
@@ -392,10 +636,7 @@ const DoctorProfile = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* Basic Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <User className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Basic Information
-              </h3>
+              <SectionTitle icon={User} title="Basic Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
                   label="First Name"
@@ -424,15 +665,28 @@ const DoctorProfile = () => {
                   onChange={(e) => updateEditForm('phone', e.target.value)}
                   icon={Phone}
                 />
+                <ProfileField
+                  label="Gender"
+                  value={isEditing ? editForm.gender : formData.gender}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('gender', e.target.value)}
+                  icon={User}
+                  placeholder="e.g., Male, Female"
+                />
+                <ProfileField
+                  label="Date of Birth"
+                  value={isEditing ? editForm.dob : (formData.dob ? new Date(formData.dob).toLocaleDateString() : 'Not specified')}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('dob', e.target.value)}
+                  type="date"
+                  icon={Calendar}
+                />
               </div>
             </div>
 
             {/* Professional Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Stethoscope className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Professional Information
-              </h3>
+              <SectionTitle icon={Stethoscope} title="Professional Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
                   label="Department"
@@ -453,7 +707,7 @@ const DoctorProfile = () => {
                   value={isEditing ? editForm.qualification : formData.qualification}
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('qualification', e.target.value)}
-                  icon={Award}
+                  icon={GraduationCap}
                 />
                 <ProfileField
                   label="Experience"
@@ -477,15 +731,74 @@ const DoctorProfile = () => {
                   onChange={(e) => updateEditForm('hospitalName', e.target.value)}
                   icon={Building}
                 />
+                <ProfileField
+                  label="Hospital ID"
+                  value={formData.hospitalId}
+                  isEditing={false}
+                  icon={Building}
+                />
+              </div>
+            </div>
+
+            {/* Address Information */}
+            <div className={CARD_CLASS}>
+              <SectionTitle icon={MapPin} title="Address Information" />
+              <div className="grid md:grid-cols-2 gap-4">
+                <ProfileField
+                  label="Place"
+                  value={isEditing ? editForm.place : formData.place}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('place', e.target.value)}
+                  icon={Home}
+                  placeholder="Place"
+                />
+                <ProfileField
+                  label="District"
+                  value={isEditing ? editForm.district : formData.district}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('district', e.target.value)}
+                  icon={MapPin}
+                  placeholder="District"
+                />
+                <ProfileField
+                  label="State"
+                  value={isEditing ? editForm.state : formData.state}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('state', e.target.value)}
+                  icon={MapPin}
+                  placeholder="State"
+                />
+                <ProfileField
+                  label="Country"
+                  value={isEditing ? editForm.country : formData.country}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('country', e.target.value)}
+                  icon={MapPin}
+                  placeholder="Country"
+                />
+                <ProfileField
+                  label="Pincode"
+                  value={isEditing ? editForm.pincode : formData.pincode}
+                  isEditing={isEditing}
+                  onChange={(e) => updateEditForm('pincode', e.target.value)}
+                  icon={MapPin}
+                  placeholder="Pincode"
+                />
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Full Address</label>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">
+                      {formData.addressString || 'Not specified'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Additional Information */}
             <div className={CARD_CLASS}>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Info className="w-5 h-5 mr-2 text-[#1C62A0]" />
-                Additional Information
-              </h3>
+              <SectionTitle icon={Info} title="Additional Information" />
               <div className="space-y-4">
                 <ProfileTextarea
                   label="Bio"
@@ -493,24 +806,6 @@ const DoctorProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('bio', e.target.value)}
                 />
-                <div className="grid md:grid-cols-2 gap-4">
-                  <ProfileField
-                    label="Consultation Fee"
-                    value={isEditing ? editForm.consultationFee : formData.consultationFee}
-                    isEditing={isEditing}
-                    onChange={(e) => updateEditForm('consultationFee', e.target.value)}
-                    icon={DollarSign}
-                    placeholder="e.g., $100"
-                  />
-                  <ProfileField
-                    label="Availability"
-                    value={isEditing ? editForm.availability : formData.availability}
-                    isEditing={isEditing}
-                    onChange={(e) => updateEditForm('availability', e.target.value)}
-                    icon={Clock}
-                    placeholder="e.g., Mon-Fri, 9AM-5PM"
-                  />
-                </div>
               </div>
             </div>
           </div>

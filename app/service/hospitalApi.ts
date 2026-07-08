@@ -1,4 +1,5 @@
-// hospitalApi.ts - COMPLETE VERSION with Correct Logout Endpoint
+// hospitalApi.ts - COMPLETE VERSION with Super Admin FCM Token Handling
+
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
 
@@ -40,7 +41,7 @@ export interface FCMTokenData {
 export interface LoginCredentials {
   email: string;
   password: string;
-  fcmToken?: FCMTokenData;
+  fcmToken?: FCMTokenData | null;  // ✅ Allow null for Super Admin
 }
 
 export interface PhoneLoginData {
@@ -185,14 +186,39 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // ✅ SINGLE LOGIN ROUTE - Handles ALL users
+    // ✅ SINGLE LOGIN ROUTE - Handles ALL users including Super Admin
     // ============================================
     login: builder.mutation<AuthResponse, LoginCredentials>({
-      query: (loginData) => ({
-        url: `/hospital/g-login`,
-        method: "POST",
-        body: loginData,
-      }),
+      query: (loginData) => {
+        // ✅ For Super Admin, ensure fcmToken is null
+        // The Login component will determine if this is a Super Admin login
+        // and set fcmToken accordingly
+        
+        const payload: any = {
+          email: loginData.email,
+          password: loginData.password,
+        };
+
+        // ✅ Only include fcmToken if it exists and is not null
+        if (loginData.fcmToken !== undefined && loginData.fcmToken !== null) {
+          payload.fcmToken = loginData.fcmToken;
+        } else {
+          // ✅ Explicitly set fcmToken to null for Super Admin
+          payload.fcmToken = null;
+        }
+
+        console.log('📤 Login request payload:', {
+          email: payload.email,
+          password: '******',
+          fcmToken: payload.fcmToken === null ? 'null (Super Admin)' : 'present'
+        });
+
+        return {
+          url: `/hospital/g-login`,
+          method: "POST",
+          body: payload,
+        };
+      },
       transformResponse: (response: AuthResponse) => {
         const token = response.token || response.accessToken;
         if (token) {
@@ -261,8 +287,6 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // ✅ LOGOUT - Uses hospital ID in URL, deviceId in body
-    // POST /hospital/logout/{hospitalId}
-    // Body: { "deviceId": "..." }
     // ============================================
     logout: builder.mutation<{ message: string }, string | void>({
       query: (deviceId) => {
@@ -286,10 +310,10 @@ export const hospitalApi = api.injectEndpoints({
         console.log('  Body:', { deviceId: deviceIdValue });
         
         return {
-          url: `/hospital/logout/${hospitalId}`,  // ✅ hospital ID in URL
+          url: `/hospital/logout/${hospitalId}`,
           method: "POST",
           body: {
-            deviceId: deviceIdValue,  // ✅ device ID in body
+            deviceId: deviceIdValue,
           },
         };
       },

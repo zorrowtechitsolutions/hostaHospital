@@ -82,6 +82,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [menuImageError, setMenuImageError] = useState(false);
+  
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
@@ -119,21 +122,11 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
-  // ✅ Debug logging for image
-  useEffect(() => {
-    console.log('🔍 TopBar Debug:');
-    console.log('  userRole:', userRole);
-    console.log('  hospitalData:', hospitalData);
-    console.log('  doctorData:', doctorData);
-    console.log('  staffData:', staffData);
-  }, [userRole, hospitalData, doctorData, staffData]);
-  
   // Determine which data source to use based on role
   const getProfileData = () => {
     if (userRole === 'doctor' && doctorData) {
       const doctor = doctorData.data || doctorData;
       const profileImage = doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null;
-      console.log('🔍 Doctor Profile Image:', profileImage);
       return {
         name: doctor?.name || doctor?.firstName + ' ' + doctor?.lastName || user?.name || storedUser?.name || 'Doctor',
         email: doctor?.email || user?.email || storedUser?.email || '',
@@ -146,7 +139,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     if (userRole === 'staff' && staffData) {
       const staff = staffData.data || staffData;
       const profileImage = staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null;
-      console.log('🔍 Staff Profile Image:', profileImage);
       return {
         name: staff?.name || user?.name || storedUser?.name || 'Staff',
         email: staff?.email || user?.email || storedUser?.email || '',
@@ -159,7 +151,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     // Default: Hospital
     const hospital = hospitalData?.data || hospitalData;
     const profileImage = hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null;
-    console.log('🔍 Hospital Profile Image:', profileImage);
     return {
       name: user?.name || user?.hospitalName || hospital?.name || storedUser?.name || storedUser?.hospitalName || 'Hospital',
       email: user?.email || hospital?.email || storedUser?.email || '',
@@ -176,7 +167,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const getProfileImageUrl = () => {
     if (!profileData.profileImage) return null;
     const url = getImageUrlWithCache(profileData.profileImage);
-    console.log('🔍 Final Profile Image URL:', url);
     return url;
   };
   
@@ -188,6 +178,21 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const unreadCount = notifications.filter(
     (n) => !n.hospitalReadStatus?.[hospitalId]
   ).length;
+
+  // ✅ FIXED: Debug useEffect - moved AFTER all variables are defined
+  useEffect(() => {
+    console.log('🔍 TopBar Debug:');
+    console.log('  userRole:', userRole);
+    console.log('  userId:', userId);
+    console.log('  profileImageUrl:', profileImageUrl);
+    console.log('  imageError:', imageError);
+  }, [userRole, userId, profileImageUrl, imageError]);
+
+  // ✅ Reset image error when profileImageUrl changes
+  useEffect(() => {
+    setImageError(false);
+    setMenuImageError(false);
+  }, [profileImageUrl]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -208,7 +213,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         const tokens = await tokenManager.getDeviceTokens();
         if (tokens && tokens.length > 0) {
           deviceId = tokens[0].deviceId;
-          console.log('🔍 Logout - Device ID from IndexedDB:', deviceId);
         }
       } catch (error) {
         console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
@@ -217,12 +221,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       // ✅ Fallback to localStorage
       if (!deviceId) {
         deviceId = getDeviceId();
-        console.log('🔍 Logout - Device ID from localStorage (fallback):', deviceId);
       }
       
       // ✅ Call logout API
       await logoutApi(deviceId).unwrap();
-      console.log('✅ Backend logout successful');
       
     } catch (error) {
       console.error('❌ Logout API error:', error);
@@ -230,7 +232,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       // ✅ Clear IndexedDB
       try {
         await tokenManager.deleteDatabase();
-        console.log('✅ IndexedDB database deleted');
+        // console.log('✅ IndexedDB database deleted');
       } catch (dbError) {
         console.warn('⚠️ Could not delete database:', dbError);
       }
@@ -348,21 +350,14 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-[#1a2332] border border-slate-600">
               {isLoading ? (
                 <div className="w-full h-full animate-pulse bg-slate-700"></div>
-              ) : profileImageUrl ? (
+              ) : profileImageUrl && !imageError ? (
                 <img 
                   src={profileImageUrl}
                   alt={profileData.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
+                  onError={() => {
                     console.warn('⚠️ Image failed to load:', profileImageUrl);
-                    e.target.onerror = null;
-                    e.target.style.display = 'none';
-                    const parent = e.target.parentElement;
-                    parent.className = `w-8 h-8 rounded-full bg-gradient-to-r ${gradientColor} flex items-center justify-center flex-shrink-0`;
-                    const span = document.createElement('span');
-                    span.className = 'text-white font-medium text-xs';
-                    span.textContent = initials;
-                    parent.appendChild(span);
+                    setImageError(true);
                   }}
                 />
               ) : (
@@ -392,21 +387,14 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-700">
                   {isLoading ? (
                     <div className="w-full h-full animate-pulse bg-gray-300 dark:bg-gray-600"></div>
-                  ) : profileImageUrl ? (
+                  ) : profileImageUrl && !menuImageError ? (
                     <img 
                       src={profileImageUrl}
                       alt={profileData.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
+                      onError={() => {
                         console.warn('⚠️ Image failed to load in menu:', profileImageUrl);
-                        e.target.onerror = null;
-                        e.target.style.display = 'none';
-                        const parent = e.target.parentElement;
-                        parent.className = `w-10 h-10 rounded-full bg-gradient-to-r ${gradientColor} flex items-center justify-center flex-shrink-0`;
-                        const span = document.createElement('span');
-                        span.className = 'text-white font-medium text-sm';
-                        span.textContent = initials;
-                        parent.appendChild(span);
+                        setMenuImageError(true);
                       }}
                     />
                   ) : (
