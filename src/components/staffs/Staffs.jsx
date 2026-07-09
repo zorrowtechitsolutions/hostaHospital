@@ -92,11 +92,6 @@ const Staffs = () => {
   // 🔥 FIX: Staff now included in hospital filter
   const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
 
-  console.log("👤 Staff Page - User:", auth);
-  console.log("👨‍⚕️ Staff Page - Is Doctor:", isDoctor);
-  console.log("👤 Staff Page - Is Staff:", isStaff);
-  console.log("🏥 Staff Page - Hospital ID:", auth?.hospitalId || auth?.id);
-
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {

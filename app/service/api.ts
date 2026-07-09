@@ -80,14 +80,12 @@ const refreshResult = await baseQuery(
   extraOptions
 );
 
-console.log("🔄 Refresh Response:", refreshResult);
 
 if (refreshResult.data) {
   const data = refreshResult.data as RefreshResponse;
   const newToken = data.token || data.accessToken;
 
   if (newToken) {
-    console.log("✅ Token refreshed successfully");
 
     localStorage.setItem("accessToken", newToken);
 
@@ -104,7 +102,6 @@ clearAuth();
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
-        console.log("✅ Token refreshed successfully");
         localStorage.setItem("accessToken", newToken);
 
 

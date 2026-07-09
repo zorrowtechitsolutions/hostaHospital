@@ -1,4 +1,4 @@
-// src/components/Settings/Settings.jsx - UPDATED WORKING HOURS HANDLING
+// src/components/Settings/Settings.jsx - WITHOUT TODAY HIGHLIGHT
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -52,31 +52,7 @@ const HOSPITAL_TYPES = [
   'Physiotherapy', 'Mental Health', 'Laboratory', 'Other'
 ];
 
-// ✅ UPDATED: Convert API array format to frontend object format
-const convertApiToFrontendFormat = (apiHours) => {
-  if (!apiHours || !Array.isArray(apiHours)) return null;
-  
-  const result = { ...DEFAULT_WORKING_HOURS };
-  
-  apiHours.forEach(dayData => {
-    const dayKey = dayData.day?.toLowerCase();
-    if (dayKey && DAYS.some(d => d.key === dayKey)) {
-      // Convert "10:00" to "10:00 AM"
-      const openTime = convertTo12HourFormat(dayData.opening_time);
-      const closeTime = convertTo12HourFormat(dayData.closing_time);
-      
-      result[dayKey] = {
-        open: openTime || DEFAULT_WORKING_HOURS[dayKey].open,
-        close: closeTime || DEFAULT_WORKING_HOURS[dayKey].close,
-        closed: dayData.is_holiday || false,
-      };
-    }
-  });
-  
-  return result;
-};
-
-// Helper: Convert "10:00" to "10:00 AM"
+// ✅ Convert "10:00" to "10:00 AM" with proper validation
 const convertTo12HourFormat = (time) => {
   if (!time) return '09:00 AM';
   
@@ -85,20 +61,105 @@ const convertTo12HourFormat = (time) => {
     return time;
   }
   
+  // Handle "24:00" or "00:00" edge cases
+  if (time === '24:00' || time === '00:00') {
+    return '12:00 AM';
+  }
+  
   const parts = time.split(':');
   if (parts.length < 2) return '09:00 AM';
   
   const hours = parseInt(parts[0], 10);
   const minutes = parts[1] || '00';
   
-  if (isNaN(hours)) return '09:00 AM';
+  if (isNaN(hours) || hours > 24) return '09:00 AM';
+  
+  // Handle 24-hour format
+  if (hours === 24) {
+    return `12:${minutes.padStart(2, '0')} AM`;
+  }
+  if (hours === 0) {
+    return `12:${minutes.padStart(2, '0')} AM`;
+  }
   
   const period = hours >= 12 ? 'PM' : 'AM';
   const hour12 = hours % 12 || 12;
   return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
-// ✅ UPDATED: Normalize working hours from any format
+// ✅ Helper: Convert time string to minutes for comparison
+const convertTimeToMinutes = (timeStr) => {
+  if (!timeStr) return 0;
+  
+  const parts = timeStr.split(' ');
+  if (parts.length < 2) return 0;
+  
+  const timePart = parts[0];
+  const period = parts[1];
+  const timeParts = timePart.split(':');
+  
+  if (timeParts.length < 2) return 0;
+  
+  let hours = parseInt(timeParts[0], 10);
+  const minutes = parseInt(timeParts[1], 10);
+  
+  if (isNaN(hours) || isNaN(minutes)) return 0;
+  
+  if (period === 'PM' && hours !== 12) {
+    hours += 12;
+  } else if (period === 'AM' && hours === 12) {
+    hours = 0;
+  }
+  
+  return hours * 60 + minutes;
+};
+
+// ✅ Convert API array format to frontend object format with validation
+const convertApiToFrontendFormat = (apiHours) => {
+  if (!apiHours || !Array.isArray(apiHours)) return null;
+  
+  const result = { ...DEFAULT_WORKING_HOURS };
+  
+  apiHours.forEach(dayData => {
+    const dayKey = dayData.day?.toLowerCase();
+    if (dayKey && DAYS.some(d => d.key === dayKey)) {
+      // If holiday, mark as closed
+      if (dayData.is_holiday) {
+        result[dayKey] = {
+          open: DEFAULT_WORKING_HOURS[dayKey].open,
+          close: DEFAULT_WORKING_HOURS[dayKey].close,
+          closed: true,
+        };
+        return;
+      }
+      
+      // Convert "10:00" to "10:00 AM"
+      let openTime = convertTo12HourFormat(dayData.opening_time);
+      let closeTime = convertTo12HourFormat(dayData.closing_time);
+      
+      // ✅ Validate that close time is after open time
+      const openMinutes = convertTimeToMinutes(openTime);
+      const closeMinutes = convertTimeToMinutes(closeTime);
+      
+      // If close is before or equal to open, use default
+      if (closeMinutes <= openMinutes) {
+        console.warn(`Invalid hours for ${dayKey}: ${openTime} - ${closeTime}, using defaults`);
+        openTime = DEFAULT_WORKING_HOURS[dayKey].open;
+        closeTime = DEFAULT_WORKING_HOURS[dayKey].close;
+      }
+      
+      result[dayKey] = {
+        open: openTime,
+        close: closeTime,
+        closed: false,
+      };
+    }
+  });
+  
+  return result;
+};
+
+// ✅ Normalize working hours from any format
 const normalizeWorkingHours = (hours) => {
   if (!hours) return DEFAULT_WORKING_HOURS;
   
@@ -115,10 +176,25 @@ const normalizeWorkingHours = (hours) => {
   DAYS.forEach(day => {
     const dayData = hours[day.key];
     if (dayData) {
+      let openTime = dayData.open || DEFAULT_WORKING_HOURS[day.key].open;
+      let closeTime = dayData.close || DEFAULT_WORKING_HOURS[day.key].close;
+      const isClosed = dayData.closed !== undefined ? dayData.closed : DEFAULT_WORKING_HOURS[day.key].closed;
+      
+      // If not closed, validate that close time is after open time
+      if (!isClosed) {
+        const openMinutes = convertTimeToMinutes(openTime);
+        const closeMinutes = convertTimeToMinutes(closeTime);
+        
+        if (closeMinutes <= openMinutes) {
+          openTime = DEFAULT_WORKING_HOURS[day.key].open;
+          closeTime = DEFAULT_WORKING_HOURS[day.key].close;
+        }
+      }
+      
       normalized[day.key] = {
-        open: dayData.open || DEFAULT_WORKING_HOURS[day.key].open,
-        close: dayData.close || DEFAULT_WORKING_HOURS[day.key].close,
-        closed: dayData.closed !== undefined ? dayData.closed : DEFAULT_WORKING_HOURS[day.key].closed,
+        open: openTime,
+        close: closeTime,
+        closed: isClosed,
       };
     }
   });
@@ -407,7 +483,7 @@ const Settings = () => {
     }
   }, [updateError, logout, navigate, resetUpdate]);
 
-  // ✅ UPDATED: Properly handle working hours from API
+  // ✅ Properly handle working hours from API
   useEffect(() => {
     if (hospitalData) {
       console.log('Hospital Data received:', hospitalData);
@@ -426,7 +502,6 @@ const Settings = () => {
       // ✅ Check all possible API fields for working hours
       let workingHoursData = null;
       
-      // API returns working_hours_general as an array
       if (hospital.working_hours_general && Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length > 0) {
         workingHoursData = hospital.working_hours_general;
         console.log('Found working_hours_general:', workingHoursData);
@@ -437,7 +512,6 @@ const Settings = () => {
         workingHoursData = hospital.working_hours_clinic_nobreak;
         console.log('Found working_hours_clinic_nobreak:', workingHoursData);
       } else if (hospital.workingHours && typeof hospital.workingHours === 'object') {
-        // Already in frontend format
         workingHoursData = hospital.workingHours;
         console.log('Found workingHours (object):', workingHoursData);
       } else if (hospital.working_hours && Array.isArray(hospital.working_hours)) {
@@ -542,7 +616,6 @@ const Settings = () => {
       showSuccessToast('Hospital information updated successfully!', 4000);
       setIsEditing(false);
       
-      // Refetch to get the latest data
       await refetch();
       
     } catch (error) {
@@ -738,9 +811,13 @@ const Settings = () => {
                 </div>
               </div>
 
+              {/* ✅ Working Hours - WITHOUT Today Highlight */}
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-md font-semibold text-gray-900">Working Hours</h3>
+                  <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+                    <Clock size={18} className="text-gray-500" />
+                    Working Hours
+                  </h3>
                   <button
                     type="button"
                     onClick={handleSet24HourMode}
@@ -753,12 +830,18 @@ const Settings = () => {
                     {is24HourMode ? 'Disable 24/7' : 'Set 24/7 Hours'}
                   </button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {DAYS.map((day) => {
                     const hours = workingHours[day.key];
+                    
                     return (
-                      <div key={day.key} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                        <span className="text-sm font-medium text-gray-700 w-24">{day.label}</span>
+                      <div 
+                        key={day.key} 
+                        className="flex items-center justify-between py-2.5 px-3 border-b border-gray-100 last:border-0 rounded-lg"
+                      >
+                        <span className="text-sm font-medium text-gray-700 w-24">
+                          {day.label}
+                        </span>
                         {hours?.closed ? (
                           <span className="text-sm text-red-500 font-medium">Closed</span>
                         ) : (

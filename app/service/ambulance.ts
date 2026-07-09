@@ -78,14 +78,6 @@ export const ambulanceApi = api.injectEndpoints({
         // 🔥 FIX: Apply hospital filter for doctors AND hospital admins
         const shouldFilterByHospital = (isHospitalAdmin || isDoctor) && !skipHospitalFilter;
 
-        console.log("🚑 Ambulance API - Full Auth:", auth);
-        console.log("🚑 Ambulance API - User Role:", auth?.role, "RoleId:", auth?.roleId);
-        console.log("👨‍⚕️ Ambulance API - Is Doctor:", isDoctor);
-        console.log("🏥 Ambulance API - Is Hospital Admin:", isHospitalAdmin);
-        console.log("👑 Ambulance API - Is Super Admin:", isSuperAdmin);
-        console.log("🔒 Ambulance API - Should Filter By Hospital:", shouldFilterByHospital);
-        console.log("📋 Ambulance API - Auth ID (Doctor ID):", auth?.id);
-        console.log("📋 Ambulance API - Auth Hospital ID:", auth?.hospitalId);
 
         // 🔥 CRITICAL FIX: Use hospitalId, NOT auth.id
         let hospitalIdToUse = null;
@@ -97,16 +89,12 @@ export const ambulanceApi = api.injectEndpoints({
           
           if (hospitalIdToUse) {
             queryParams.append("hospitalId", String(hospitalIdToUse));
-            console.log("🔒 Doctor/Hospital Admin - Filtering ambulances by hospital ID:", hospitalIdToUse);
           } else {
             console.warn("⚠️ No hospital ID found for ambulance filtering - will not apply filter");
           }
         } else if (params.hospitalId) {
           // Use provided hospitalId if specified (for super admin)
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log("📋 Using provided hospital ID:", params.hospitalId);
-        } else {
-          console.log("📋 No hospital filter applied - showing all ambulances");
         }
 
         // User ID filter
@@ -167,8 +155,6 @@ export const ambulanceApi = api.injectEndpoints({
         } else {
           url = `/ambulance${queryString ? `?${queryString}` : ""}`;
         }
-        
-        console.log('📡 Ambulance API Request URL:', url);
         return url;
       },
 
@@ -198,10 +184,6 @@ export const ambulanceApi = api.injectEndpoints({
           hospitalId = auth?.hospitalId || auth?.id;
         }
         
-        console.log("🚑 CREATE AMBULANCE - Auth ID (Doctor ID):", auth?.id);
-        console.log("🚑 CREATE AMBULANCE - Auth Hospital ID:", auth?.hospitalId);
-        console.log("🚑 CREATE AMBULANCE - Provided hospitalId:", data.hospitalId);
-        console.log("🚑 CREATE AMBULANCE - Final hospitalId:", hospitalId);
         
         return {
           url: "/ambulance",
@@ -242,11 +224,6 @@ export const ambulanceApi = api.injectEndpoints({
           hospitalId = auth?.hospitalId || auth?.id;
         }
         
-        console.log("🚑 UPDATE AMBULANCE - ID:", id);
-        console.log("🚑 UPDATE AMBULANCE - Auth ID (Doctor ID):", auth?.id);
-        console.log("🚑 UPDATE AMBULANCE - Auth Hospital ID:", auth?.hospitalId);
-        console.log("🚑 UPDATE AMBULANCE - Provided hospitalId:", data.hospitalId);
-        console.log("🚑 UPDATE AMBULANCE - Final hospitalId:", hospitalId);
         
         return {
           url: `/ambulance/${id}`,
@@ -275,7 +252,6 @@ export const ambulanceApi = api.injectEndpoints({
       string | number
     >({
       query: (id) => {
-        console.log("🚑 DELETE AMBULANCE - ID:", id);
         return {
           url: `/ambulance/${id}`,
           method: "DELETE",

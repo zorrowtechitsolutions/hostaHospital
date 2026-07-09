@@ -1,4 +1,4 @@
-// src/components/patients/PatientDetails.jsx - With Fixed Prescription Doctor Names
+// src/components/patients/PatientDetails.jsx - With Fixed Prescription Doctor Names and Date Formatter
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
@@ -33,6 +33,9 @@ import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../a
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 import { Loader } from "../ui";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
+
+// Import date formatter
+import { formatDate } from "../../utils/dateFormatter";
 
 const PatientDetails = () => {
   const location = useLocation();
@@ -161,9 +164,9 @@ const PatientDetails = () => {
         doctor: booking.displayName || booking.doctor_name || "N/A",
         department: booking.department || booking.doctor_department || "N/A",
         appointmentDate: booking.booking_date,
-        date: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : "N/A",
+        date: booking.booking_date ? formatDate(booking.booking_date) : "N/A",
         time: booking.consulting_time || "N/A",
-        bookedOn: booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : "Today",
+        bookedOn: booking.createdAt ? formatDate(booking.createdAt) : "Today",
         consulting_time: booking.consulting_time,
         status: booking.status || "pending",
         reason: booking.reason || '',
@@ -196,7 +199,7 @@ const PatientDetails = () => {
           patientId: `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
           doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
           department: booking.doctor_department || booking.department || "General",
-          visitDate: booking.booking_date || "",
+          visitDate: booking.booking_date ? formatDate(booking.booking_date) : "",
           startTime: booking.consulting_time || "",
           token: booking.token || "N/A",
           status: booking.status === "completed" ? "Completed" : "In Progress",
@@ -281,7 +284,7 @@ const PatientDetails = () => {
         id: prescription.id || prescription._id || index,
         type: prescription.medications?.[0]?.name || "Prescription",
         quantity: prescription.medications?.length || 0,
-        date: prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+        date: prescription.createdAt ? formatDate(prescription.createdAt) : formatDate(new Date()),
         prescribedBy: doctorName,
         doctorName: doctorName,
         doctorSpecialization: doctorSpecialization,
@@ -383,8 +386,8 @@ const PatientDetails = () => {
           bmi: prescription.vitals?.bmi,
           waist: prescription.vitals?.waist,
           bsa: prescription.vitals?.bsa,
-          notes: `Vitals from consultation on ${prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}`,
-          date: prescription.createdAt ? new Date(prescription.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+          notes: `Vitals from consultation on ${prescription.createdAt ? formatDate(prescription.createdAt) : formatDate(new Date())}`,
+          date: prescription.createdAt ? formatDate(prescription.createdAt) : formatDate(new Date()),
           time: prescription.createdAt ? new Date(prescription.createdAt).toLocaleTimeString() : "",
           createdAt: prescription.createdAt,
           doctorName: doctorName,
@@ -433,7 +436,7 @@ const PatientDetails = () => {
         waist: vital.waist,
         bsa: vital.bsa,
         notes: vital.notes,
-        date: vital.createdAt ? new Date(vital.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+        date: vital.createdAt ? formatDate(vital.createdAt) : formatDate(new Date()),
         time: vital.createdAt ? new Date(vital.createdAt).toLocaleTimeString() : "",
         createdAt: vital.createdAt,
         doctorName: doctorName || "Dr. Unknown",
@@ -513,9 +516,9 @@ const PatientDetails = () => {
         phone: patientData.mobileNumber || patientData.phone || '',
         email: patientData.email || '',
         department: patientData.department || '',
-        lastVisit: patientData.lastVisit || '',
-        addedOn: patientData.createdAt ? new Date(patientData.createdAt).toLocaleDateString() : '',
-        dob: patientData.dob || '',
+        lastVisit: patientData.lastVisit ? formatDate(patientData.lastVisit) : '',
+        addedOn: patientData.createdAt ? formatDate(patientData.createdAt) : '',
+        dob: patientData.dob ? formatDate(patientData.dob) : '',
         age: patientData.age || '',
         maritalStatus: patientData.maritalStatus || '',
         blood: patientData.bloodGroup || '',

@@ -94,7 +94,6 @@ const getDoctorSpecialization = (item) => {
               </thead>
               <tbody>
                 {paginatedPrescriptions.map((item, index) => (
-                  console.log("Vital Item:", item),
                   <tr 
                     key={item.id} 
                     className="hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100"

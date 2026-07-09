@@ -25,7 +25,6 @@ const Preference = () => {
   const handleSaveChanges = () => {
     setIsSaving(true);
     setTimeout(() => {
-      console.log('Saved preferences:', preferences);
       const enabledCount = Object.values(preferences).filter(v => v === true).length;
       const totalCount = Object.keys(preferences).length;
       
@@ -42,7 +41,6 @@ const Preference = () => {
   };
   
   const handleCancel = () => {
-    console.log('Changes cancelled');
     showWarningToast('Changes cancelled. Original preferences restored.', 3000);
   };
 

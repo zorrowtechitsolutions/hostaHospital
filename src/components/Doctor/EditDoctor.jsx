@@ -1,4 +1,4 @@
-// src/components/Doctor/EditDoctor.jsx - Fixed with cache-busting
+// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -68,7 +68,7 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
     }
 
     return () => observer.disconnect();
-  }, [imageKey, refreshKey]); // FIX: Add refreshKey to dependency array
+  }, [imageKey, refreshKey]);
 
   return (
     <div ref={imgRef} className="w-full h-full">
@@ -81,7 +81,7 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       )}
       {imageSrc && (
         <img
-          key={refreshKey} // FIX: Add key to force re-render
+          key={refreshKey}
           src={imageSrc}
           alt="Profile"
           className="w-full h-full object-cover rounded-full"
@@ -439,8 +439,6 @@ const EditDoctor = () => {
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
   
-
-  
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
@@ -518,7 +516,7 @@ const EditDoctor = () => {
     joiningDate: '',
     experience: '',
     appointmentCount: '',
-    roleId: '', // Added roleId field
+    roleId: '',
     weeklySchedule: {},
     outDoorConsultingOpen: '',
     outDoorConsultingClose: '',
@@ -599,6 +597,68 @@ const EditDoctor = () => {
     if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-700';
   };
+
+  // ✅ FIX: Reset everything when doctor ID changes or component mounts
+  useEffect(() => {
+    // Reset initialization flag
+    setFormInitialized(false);
+    
+    // Reset form data to defaults
+    setFormData({
+      profileImage: null,
+      imageUrl: null,
+      imageKey: null,
+      firstName: '',
+      lastName: '',
+      department: '',
+      specialist: '',
+      qualification: '',
+      fees: '',
+      phoneNumber: '',
+      email: '',
+      dob: '',
+      gender: '',
+      registrationNumber: '',
+      knownLanguages: [],
+      about: '',
+      countryCode: '',
+      countryName: '',
+      stateCode: '',
+      stateName: '',
+      district: '',
+      place: '',
+      pincode: '',
+      displayName: '',
+      userName: '',
+      password: '',
+      confirmPassword: '',
+      joiningDate: '',
+      experience: '',
+      appointmentCount: '',
+      roleId: '',
+      weeklySchedule: getDefaultSchedule(),
+      outDoorConsultingOpen: '',
+      outDoorConsultingClose: '',
+      outDoorConsultingPlace: '',
+      bookingOpen: true,
+      isActive: true
+    });
+    
+    setPreviewImage(null);
+    setImageLoaded(false);
+    setImageRefreshKey(Date.now());
+    setErrors({});
+    
+    // Refetch doctor data
+    if (doctorId) {
+      refetch();
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      setFormInitialized(false);
+    };
+  }, [doctorId]); // Runs when doctorId changes
 
   // Initialize form with doctor data
   useEffect(() => {
@@ -688,7 +748,7 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
-        roleId: doctor.roleId || "", // Added roleId from doctor data
+        roleId: doctor.roleId || "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
@@ -699,7 +759,7 @@ const EditDoctor = () => {
       
       setFormData(newFormData);
       
-      // FIX: Set preview image with cache-busting
+      // Set preview image with cache-busting
       if (imageKey) {
         setPreviewImage(getFullImageUrl(imageKey));
         setImageRefreshKey(Date.now());
@@ -716,53 +776,6 @@ const EditDoctor = () => {
       setFormInitialized(true);
     }
   }, [doctor, formInitialized, countries]);
-
-  // Reset form initialization when doctor ID changes
-  useEffect(() => {
-    setFormInitialized(false);
-    setFormData({
-      profileImage: null,
-      imageUrl: null,
-      imageKey: null,
-      firstName: '',
-      lastName: '',
-      department: '',
-      specialist: '',
-      qualification: '',
-      fees: '',
-      phoneNumber: '',
-      email: '',
-      dob: '',
-      gender: '',
-      registrationNumber: '',
-      knownLanguages: [],
-      about: '',
-      countryCode: '',
-      countryName: '',
-      stateCode: '',
-      stateName: '',
-      district: '',
-      place: '',
-      pincode: '',
-      displayName: '',
-      userName: '',
-      password: '',
-      confirmPassword: '',
-      joiningDate: '',
-      experience: '',
-      appointmentCount: '',
-      roleId: '',
-      weeklySchedule: getDefaultSchedule(),
-      outDoorConsultingOpen: '',
-      outDoorConsultingClose: '',
-      outDoorConsultingPlace: '',
-      bookingOpen: true,
-      isActive: true
-    });
-    setPreviewImage(null);
-    setImageLoaded(false);
-    setImageRefreshKey(Date.now());
-  }, [doctorId]);
 
   const updateScheduleForDay = useCallback((day, newSchedule) => {
     setFormData(prev => ({
@@ -965,8 +978,8 @@ const EditDoctor = () => {
         bookingOpen: formData.bookingOpen,
         joiningDate: formData.joiningDate,
         isActive: formData.isActive,
-        roleId: roleId, // Add roleId to update data
-        hospitalName: hospitalName, // Add hospital name
+        roleId: roleId,
+        hospitalName: hospitalName,
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -1018,7 +1031,6 @@ const EditDoctor = () => {
       if (formData.password) {
         updatedDoctorData.password = formData.password;
       }
-
 
       await updateDoctor({
         id: String(doctorId),
@@ -1173,7 +1185,7 @@ const EditDoctor = () => {
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                           {previewImage ? (
                             <img 
-                              key={imageRefreshKey} // FIX: Add key to force re-render
+                              key={imageRefreshKey}
                               src={previewImage} 
                               alt="Profile" 
                               className="w-full h-full object-cover rounded-full"
@@ -1182,10 +1194,10 @@ const EditDoctor = () => {
                             />
                           ) : (
                             <LazyProfileImage 
-                              key={imageRefreshKey} // FIX: Add key to force re-render
+                              key={imageRefreshKey}
                               imageKey={formData.profileImage}
                               firstName={formData.firstName}
-                              refreshKey={imageRefreshKey} // FIX: Pass refreshKey
+                              refreshKey={imageRefreshKey}
                               onLoad={() => setImageLoaded(true)}
                               onError={() => setImageLoaded(false)}
                             />

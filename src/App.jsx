@@ -85,11 +85,9 @@ function App() {
     // ✅ Initialize socket connection when app loads
     const socketInstance = initSocket();
     
-    console.log("📡 Socket initialized:", socketInstance);
 
     // ✅ Cleanup on unmount
     return () => {
-      console.log("🧹 Cleaning up socket...");
       // Optionally disconnect, but you might want to keep it connected
       // disconnectSocket();
     };
@@ -119,18 +117,15 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    console.log("🔔 Initializing notifications...");
 
     const initNotifications = async () => {
       await requestNotificationPermission();
       const token = await generateToken();
-      console.log("🔥 FCM TOKEN:", token);
     };
 
     initNotifications();
 
     const unsubscribe = listenMessages((payload) => {
-      console.log("📩 Notification received:", payload);
 
       const title = payload?.notification?.title || payload?.data?.title;
       const body = payload?.notification?.body || payload?.data?.body;
@@ -147,10 +142,8 @@ function App() {
   useEffect(() => {
     const handleServiceWorkerMessage = (event) => {
       if (event.data && event.data.action === "openApproveModal") {
-        console.log("📱 Opening Approve Request Modal from notification");
         setShowApproveModal(true);
       } else if (event.data && event.data.action === "openRejectModal") {
-        console.log("📱 Opening Reject Request Modal from notification");
         setShowRejectModal(true);
       }
     };
@@ -183,7 +176,6 @@ function App() {
 
   // Log auth state for debugging
   useEffect(() => {
-    console.log("App - isAuthenticated:", isAuthenticated, "Path:", location.pathname, "Loading:", loading, "isSuperAdmin:", isSuperAdmin);
   }, [isAuthenticated, location.pathname, loading, isSuperAdmin]);
 
   if (loading) {
@@ -192,7 +184,6 @@ function App() {
 
   // If not authenticated, show login/register pages with ToastProvider
   if (!isAuthenticated) {
-    console.log("Rendering PUBLIC routes");
     return (  
       <ToastProvider>
         <Suspense fallback={<PageLoader />}>
@@ -211,7 +202,6 @@ function App() {
 
   // SUPER ADMIN RENDERING - If Super Admin, render Super Admin layout only
   if (isSuperAdmin) {
-    console.log("Rendering SUPER ADMIN routes - isSuperAdmin:", isSuperAdmin);
     return (
       <ToastProvider>
         <Suspense fallback={<PageLoader />}>
@@ -234,7 +224,6 @@ function App() {
   }
 
   // HOSPITAL ADMIN / DOCTOR / STAFF RENDERING
-  console.log("Rendering HOSPITAL routes");
   return (
     <ToastProvider>
       <div className="flex h-screen bg-gray-50 font-sans">
@@ -288,7 +277,6 @@ function App() {
                 setSelectedRequestId(null);
               }}
               onConfirm={(data) => {
-                console.log("Appointment confirmed:", data, "for request:", selectedRequestId);
                 setShowApproveModal(false);
                 setSelectedRequestId(null);
                 alert("Appointment confirmed successfully!");
@@ -305,7 +293,6 @@ function App() {
                 setRejectReason("");
               }}
               onConfirm={() => {
-                console.log("Request rejected with reason:", rejectReason, "for request:", selectedRequestId);
                 setShowRejectModal(false);
                 setSelectedRequestId(null);
                 setRejectReason("");

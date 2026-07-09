@@ -189,10 +189,8 @@ const DocumentsTab = ({ patient }) => {
         role: userRole,
       };
 
-      console.log("📄 Creating Document with payload:", documentData);
 
       const createResult = await createDocument(documentData).unwrap();
-      console.log("✅ Create Response FULL:", JSON.stringify(createResult, null, 2));
 
       // ✅ Extract ID from response.data
       const documentId = 
@@ -203,7 +201,6 @@ const DocumentsTab = ({ patient }) => {
         createResult?.data?.documentId ||
         createResult?.documentId;
       
-      console.log("📄 Extracted Document ID:", documentId);
 
       if (!documentId) {
         console.error("❌ Could not extract document ID. Response:", createResult);
@@ -213,13 +210,11 @@ const DocumentsTab = ({ patient }) => {
       setUploadProgress(30);
 
       // ✅ STEP 2: Upload file to S3
-      console.log("📤 Uploading file to S3 for document:", documentId);
 
       const timestamp = Date.now();
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
 
-      console.log("📁 File Key:", fileKey);
 
       const s3Result = await uploadToS3(
         selectedFile,
@@ -228,7 +223,6 @@ const DocumentsTab = ({ patient }) => {
         "documents"
       );
 
-      console.log("✅ S3 Upload Result:", s3Result);
 
       setUploadProgress(80);
 
@@ -243,7 +237,6 @@ const DocumentsTab = ({ patient }) => {
         contentType: selectedFile.type,
       };
 
-      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
 
       await updateDocument({
         id: documentId,
@@ -283,7 +276,6 @@ const DocumentsTab = ({ patient }) => {
   // ========================
 
   const handleEditDocument = (document) => {
-    console.log("✏️ Editing Document:", document);
     setEditingDocument(document);
     setEditDocumentName(document.documentName || document.name || "");
     setEditDocumentDate(document.date || "");

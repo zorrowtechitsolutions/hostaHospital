@@ -400,10 +400,8 @@ const LabResultsTab = ({ patient }) => {
         date: new Date().toLocaleDateString(),
       };
 
-      console.log("📤 Creating lab result with data:", labResultData);
 
       const createResult = await createLabResult(labResultData).unwrap();
-      console.log("✅ Create Response FULL:", JSON.stringify(createResult, null, 2));
 
       // ✅ Extract ID from response.data
       const labResultId = 
@@ -414,7 +412,6 @@ const LabResultsTab = ({ patient }) => {
         createResult?.data?.labResultId ||
         createResult?.labResultId;
       
-      console.log("📄 Extracted Lab Result ID:", labResultId);
 
       if (!labResultId) {
         console.error("❌ Could not extract lab result ID. Response:", createResult);
@@ -424,13 +421,12 @@ const LabResultsTab = ({ patient }) => {
       setUploadProgress(30);
 
       // ✅ STEP 2: Upload file to S3
-      console.log("📤 Uploading file to S3 for lab result:", labResultId);
+     
 
       const timestamp = Date.now();
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
 
-      console.log("📁 File Key:", fileKey);
 
       const s3Result = await uploadToS3(
         selectedFile,
@@ -439,7 +435,7 @@ const LabResultsTab = ({ patient }) => {
         "labresults"
       );
 
-      console.log("✅ S3 Upload Result:", s3Result);
+     
 
       setUploadProgress(80);
 
@@ -456,7 +452,7 @@ const LabResultsTab = ({ patient }) => {
         role: "labresults",
       };
 
-      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
+    
 
       await updateLabResult({
         id: labResultId,
@@ -590,17 +586,14 @@ const LabResultsTab = ({ patient }) => {
         date: new Date().toLocaleDateString(),
       };
 
-      console.log("📤 Updating lab result with data:", updateData);
 
       // ✅ If a new file is selected, upload to S3
       if (editFile) {
-        console.log("📤 Uploading file to S3 for lab result:", labResultId);
         
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
 
-        console.log("📁 File Key:", fileKey);
 
         setUploadProgress(20);
 
@@ -611,7 +604,6 @@ const LabResultsTab = ({ patient }) => {
           "labresults"
         );
 
-        console.log("✅ S3 Upload Result:", s3Result);
 
         setUploadProgress(70);
 
@@ -629,7 +621,6 @@ const LabResultsTab = ({ patient }) => {
         };
       }
 
-      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
 
       await updateLabResult({
         id: labResultId,
@@ -675,7 +666,6 @@ const LabResultsTab = ({ patient }) => {
   // ========================
 
   const handleDeleteClick = (id, name) => {
-    console.log(`🗑️ Delete requested for: ${id} - ${name}`);
     setDeletingLabResult({ id: String(id), name });
     setShowDeleteModal(true);
   };
@@ -687,13 +677,11 @@ const LabResultsTab = ({ patient }) => {
 
     try {
       const id = deletingLabResult.id;
-      console.log(`🗑️ Deleting lab result: ${id}`);
       
       // IMMEDIATE UI UPDATE: Add to deleted IDs and save to localStorage
       setDeletedIds(prev => {
         const newSet = new Set(prev);
         newSet.add(id);
-        console.log("📝 Added to deleted IDs:", Array.from(newSet));
         saveDeletedIds(newSet);
         return newSet;
       });
@@ -705,7 +693,6 @@ const LabResultsTab = ({ patient }) => {
         showSuccessToast(`✅ Lab Result "${deletingLabResult.name}" deleted successfully!`);
       } catch (error) {
         if (error.status === 404 || error.data?.message === 'Lab result not found') {
-          console.log("⚠️ Lab result already deleted");
           showWarningToast("Lab result was already deleted.");
         } else {
           setDeletedIds(prev => {
@@ -758,11 +745,9 @@ const LabResultsTab = ({ patient }) => {
   // ========================
 
   const forceRefresh = useCallback(async () => {
-    console.log("🔄 Force refreshing lab results...");
     try {
       setRefreshCounter(prev => prev + 1);
       await refetchLabResults();
-      console.log("✅ Refetch completed");
     } catch (error) {
       console.error("❌ Refetch failed:", error);
     }
@@ -775,13 +760,11 @@ const LabResultsTab = ({ patient }) => {
   // Save deleted IDs whenever they change
   useEffect(() => {
     saveDeletedIds(deletedIds);
-    console.log("💾 Saved deleted IDs to localStorage:", Array.from(deletedIds));
   }, [deletedIds, saveDeletedIds]);
 
   // Refetch when patient changes
   useEffect(() => {
     if (patient?.id) {
-      console.log("🔄 Patient changed, loading deleted IDs for patient:", patient.id);
       const loaded = loadDeletedIds();
       setDeletedIds(loaded);
       forceRefresh();
@@ -824,19 +807,16 @@ const LabResultsTab = ({ patient }) => {
 
   const labResultsList = useMemo(() => {
     const list = labResultsData?.data || [];
-    console.log("📊 Raw lab results from API:", list.length, "items");
-    console.log("📊 Deleted IDs from localStorage:", Array.from(deletedIds));
+   
     
     const filteredList = list.filter(item => {
       const id = String(item.id || item._id);
       const isDeleted = deletedIds.has(id);
       if (isDeleted) {
-        console.log(`🗑️ Filtering out deleted: ${id} - ${item.testName || item.name}`);
       }
       return !isDeleted;
     });
     
-    console.log("📊 Filtered lab results:", filteredList.length, "items");
     return filteredList;
   }, [labResultsData, deletedIds, refreshCounter]);
 

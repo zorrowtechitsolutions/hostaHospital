@@ -67,6 +67,7 @@ export interface OtpData {
   otp: string;
 }
 
+// ✅ UPDATED RegisterData interface with new fields
 export interface RegisterData {
   name: string;
   email: string;
@@ -85,9 +86,8 @@ export interface RegisterData {
   longitude?: number;
   about?: string;
   workingHours?: WorkingHours;
-  working_hours_clinic?: any[];
-  working_hours_general?: any[];
-  working_hours_clinic_nobreak?: any[];
+  workingHourType?: string;  // ✅ Added
+  workingHoursData?: any[];  // ✅ Added for API-formatted data
 }
 
 export interface ChangePasswordData {
@@ -290,7 +290,7 @@ export const hospitalApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ============================================
-    // ✅ REGISTER - Hospital Registration
+    // ✅ REGISTER - Hospital Registration (UPDATED)
     // ============================================
     register: builder.mutation<AuthResponse, RegisterData>({
       query: (hospitalData) => {
@@ -308,11 +308,35 @@ export const hospitalApi = api.injectEndpoints({
         if (hospitalData.longitude) body.longitude = hospitalData.longitude;
         if (hospitalData.about) body.about = hospitalData.about;
         
-        // Convert working hours to API format
-        if (hospitalData.workingHours) {
-          body.working_hours_general = mapFrontendToApiWorkingHours(hospitalData.workingHours);
-          body.working_hours_clinic = mapFrontendToApiWorkingHours(hospitalData.workingHours);
-          body.working_hours_clinic_nobreak = mapFrontendToApiWorkingHours(hospitalData.workingHours);
+        // ✅ NEW: Send ONLY the selected working hours type data
+        const workingHourType = hospitalData.workingHourType || 'normal';
+        
+        if (hospitalData.workingHoursData && hospitalData.workingHoursData.length > 0) {
+          // Send ONLY the selected type based on workingHourType
+          if (workingHourType === 'normal') {
+            body.working_hours_general = hospitalData.workingHoursData;
+            body.working_hours_clinic = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic') {
+            body.working_hours_clinic = hospitalData.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic-break') {
+            body.working_hours_clinic_nobreak = hospitalData.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic = [];
+          }
+        } else if (hospitalData.workingHours) {
+          // Fallback: use the old method if workingHoursData is not provided
+          const apiWorkingHours = mapFrontendToApiWorkingHours(hospitalData.workingHours);
+          body.working_hours_general = apiWorkingHours;
+          body.working_hours_clinic = apiWorkingHours;
+          body.working_hours_clinic_nobreak = apiWorkingHours;
+        } else {
+          // Send empty arrays if no working hours data
+          body.working_hours_general = [];
+          body.working_hours_clinic = [];
+          body.working_hours_clinic_nobreak = [];
         }
         
         return {
@@ -792,11 +816,33 @@ export const hospitalApi = api.injectEndpoints({
         if (newHospital.longitude) body.longitude = newHospital.longitude;
         if (newHospital.about) body.about = newHospital.about;
         
-        // Convert working hours to API format
-        if (newHospital.workingHours) {
-          body.working_hours_general = mapFrontendToApiWorkingHours(newHospital.workingHours);
-          body.working_hours_clinic = mapFrontendToApiWorkingHours(newHospital.workingHours);
-          body.working_hours_clinic_nobreak = mapFrontendToApiWorkingHours(newHospital.workingHours);
+        // ✅ NEW: Send ONLY the selected working hours type data
+        const workingHourType = newHospital.workingHourType || 'normal';
+        
+        if (newHospital.workingHoursData && newHospital.workingHoursData.length > 0) {
+          if (workingHourType === 'normal') {
+            body.working_hours_general = newHospital.workingHoursData;
+            body.working_hours_clinic = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic') {
+            body.working_hours_clinic = newHospital.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic-break') {
+            body.working_hours_clinic_nobreak = newHospital.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic = [];
+          }
+        } else if (newHospital.workingHours) {
+          // Fallback: use the old method
+          const apiWorkingHours = mapFrontendToApiWorkingHours(newHospital.workingHours);
+          body.working_hours_general = apiWorkingHours;
+          body.working_hours_clinic = apiWorkingHours;
+          body.working_hours_clinic_nobreak = apiWorkingHours;
+        } else {
+          body.working_hours_general = [];
+          body.working_hours_clinic = [];
+          body.working_hours_clinic_nobreak = [];
         }
         
         return {
@@ -832,8 +878,25 @@ export const hospitalApi = api.injectEndpoints({
           body.address = updateHospital.address;
         }
         
-        // Include workingHours if present - convert to API format
-        if (updateHospital.workingHours) {
+        // ✅ NEW: Handle working hours update based on type
+        if (updateHospital.workingHoursData && updateHospital.workingHoursData.length > 0) {
+          const workingHourType = updateHospital.workingHourType || 'normal';
+          
+          if (workingHourType === 'normal') {
+            body.working_hours_general = updateHospital.workingHoursData;
+            body.working_hours_clinic = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic') {
+            body.working_hours_clinic = updateHospital.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic_nobreak = [];
+          } else if (workingHourType === 'clinic-break') {
+            body.working_hours_clinic_nobreak = updateHospital.workingHoursData;
+            body.working_hours_general = [];
+            body.working_hours_clinic = [];
+          }
+        } else if (updateHospital.workingHours) {
+          // Fallback: use the old method
           const apiWorkingHours = mapFrontendToApiWorkingHours(updateHospital.workingHours);
           body.working_hours_general = apiWorkingHours;
           body.working_hours_clinic = apiWorkingHours;

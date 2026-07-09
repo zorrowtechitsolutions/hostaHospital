@@ -1,14 +1,67 @@
-// src/components/Requests/ApproveRequestModal.jsx - Updated (no booking ID required)
+// src/components/Requests/ApproveRequestModal.jsx - With Every Minute Time Slots
 import { useState } from "react";
 import { CalendarCheck, Hash } from "lucide-react";
 import { Modal, Button, Input, Select } from "../ui";
 import { showWarningToast } from "../ui/Toast";
 
-const TIME_SLOTS = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30", "17:00",
-];
+// Generate all time slots from 00:00 to 23:59 (every minute)
+const generateAllTimeSlots = () => {
+  const slots = [];
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute = 0; minute < 60; minute++) {
+      const hourStr = hour.toString().padStart(2, "0");
+      const minuteStr = minute.toString().padStart(2, "0");
+      slots.push(`${hourStr}:${minuteStr}`);
+    }
+  }
+  return slots;
+};
+
+const TIME_SLOTS = generateAllTimeSlots();
+
+// Helper function to format time for display with AM/PM
+const formatTimeDisplay = (time24h) => {
+  if (!time24h) return "";
+  
+  // If it already has AM/PM, return as is
+  if (time24h.includes("AM") || time24h.includes("PM")) {
+    return time24h;
+  }
+  
+  const [hours, minutes] = time24h.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
+// Helper function to convert display time back to 24-hour format
+const convertTo24Hour = (timeDisplay) => {
+  if (!timeDisplay) return "";
+  
+  // If it's already in 24-hour format (no AM/PM), return as is
+  if (!timeDisplay.includes("AM") && !timeDisplay.includes("PM")) {
+    return timeDisplay;
+  }
+  
+  const [time, modifier] = timeDisplay.split(" ");
+  let [hours, minutes] = time.split(":");
+  
+  // Handle 12 AM (midnight)
+  if (hours === "12" && modifier === "AM") {
+    hours = "00";
+  }
+  // Handle 12 PM (noon)
+  else if (hours === "12" && modifier === "PM") {
+    hours = "12";
+  }
+  // Handle PM times (except 12 PM)
+  else if (modifier === "PM") {
+    hours = String(parseInt(hours, 10) + 12);
+  }
+  
+  return `${hours.padStart(2, "0")}:${minutes}`;
+};
 
 const getDefaultDate = () => {
   const tomorrow = new Date();
@@ -20,19 +73,25 @@ const getDefaultTime = () => {
   const now = new Date();
   let hours = now.getHours();
   const minutes = now.getMinutes();
-  hours += minutes > 30 ? 2 : 1;
+  // Add 1 hour and round to nearest minute
+  hours += 1;
   if (hours >= 24) hours = 9;
-  return `${hours.toString().padStart(2, "0")}:00`;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 };
 
-const InfoRow = ({ icon: Icon, label, value }) => (
-  <div className="flex items-center gap-2">
-    <Icon size={16} className="text-green-600" />
-    <span className="text-sm text-gray-700">
-      <span className="font-medium">{label}:</span> {value}
-    </span>
-  </div>
-);
+const InfoRow = ({ icon: Icon, label, value }) => {
+  // Format time for display if it's a time value
+  const displayValue = label === "Consulting Time" ? formatTimeDisplay(value) : value;
+  
+  return (
+    <div className="flex items-center gap-2">
+      <Icon size={16} className="text-green-600" />
+      <span className="text-sm text-gray-700">
+        <span className="font-medium">{label}:</span> {displayValue}
+      </span>
+    </div>
+  );
+};
 
 const validateForm = (date, consulting_time, token) => {
   if (!date) {
@@ -48,6 +107,95 @@ const validateForm = (date, consulting_time, token) => {
     return false;
   }
   return true;
+};
+
+// Virtualized Select component for large lists
+const VirtualizedSelect = ({ label, options, value, onChange, required, disabled, renderOption }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Filter options based on search term
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return options;
+    return options.filter(option => {
+      const displayText = renderOption ? renderOption(option) : option;
+      return displayText.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }, [options, searchTerm, renderOption]);
+
+  // Handle click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const displayValue = value ? (renderOption ? renderOption(value) : value) : "";
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={isOpen ? searchTerm : displayValue}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder="Search time..."
+          disabled={disabled}
+          className="w-full px-4 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+        />
+        <button
+          type="button"
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+        >
+          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {isOpen && !disabled && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option, index) => (
+              <div
+                key={index}
+                onClick={() => {
+                  onChange(option);
+                  setIsOpen(false);
+                  setSearchTerm("");
+                }}
+                className={`px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors ${
+                  option === value ? "bg-blue-50 text-blue-600" : "text-gray-700"
+                }`}
+              >
+                {renderOption ? renderOption(option) : option}
+              </div>
+            ))
+          ) : (
+            <div className="px-4 py-3 text-center text-gray-500">
+              No matching times found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ApproveRequestModal = ({
@@ -72,7 +220,7 @@ const ApproveRequestModal = ({
     if (onConfirm) {
       onConfirm({
         booking_date: date,
-        consulting_time,
+        consulting_time: consulting_time, // Already in 24-hour format
         token: token.trim(),
       });
     }
@@ -131,7 +279,7 @@ const ApproveRequestModal = ({
         <p className="text-xs text-gray-500 text-center">
           Appointment scheduled for{" "}
           <span className="font-medium text-gray-700">{date}</span> at{" "}
-          <span className="font-medium text-gray-700">{consulting_time}</span>{" "}
+          <span className="font-medium text-gray-700">{formatTimeDisplay(consulting_time)}</span>{" "}
           {token && (
             <>with Token <span className="font-medium text-gray-700">#{token}</span></>
           )}
@@ -153,14 +301,14 @@ const ApproveRequestModal = ({
         disabled={isLoading}
       />
 
-      <Select
+      <VirtualizedSelect
         label="Appointment Time"
-        name="consulting_time"
         options={TIME_SLOTS}
         value={consulting_time}
-        onChange={(e) => setConsultingTime(e.target.value)}
+        onChange={(value) => setConsultingTime(value)}
         required
         disabled={isLoading}
+        renderOption={(option) => formatTimeDisplay(option)}
       />
 
       <Input
@@ -221,5 +369,8 @@ const ApproveRequestModal = ({
     </Modal>
   );
 };
+
+// Add missing imports
+import { useRef, useMemo, useEffect } from "react";
 
 export default ApproveRequestModal;

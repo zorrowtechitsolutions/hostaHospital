@@ -571,9 +571,6 @@ const AddStaff = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-      {submitSuccess && <Alert type="success" message="Staff added successfully! Redirecting..." className="fixed top-20 right-6 z-50 w-auto animate-pulse" />}
-      {submitError && <Alert type="error" message={submitError} className="fixed top-20 right-6 z-50 w-auto" />}
-
       <div className="p-6">
         <Card className="bg-white rounded-xl shadow-sm overflow-hidden">
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>

@@ -113,9 +113,6 @@ export const prescriptionApi = api.injectEndpoints({
           bsa: data?.bsa || 0,
         };
 
-        console.log("🚀 Prescription Payload:");
-        console.log(JSON.stringify(payload, null, 2));
-
         return {
           url: "/prescription",
           method: "POST",

@@ -72,7 +72,6 @@ const Patients = () => {
   // Filter states
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
 
   // Pagination state
@@ -89,10 +88,6 @@ const Patients = () => {
   
   // 🔥 FIX: Use hospitalId, NOT auth.id
   const hospitalId = isDoctor ? authUser?.hospitalId : authUser?.id;
-  
-  console.log("👤 Patients Page - Full Auth:", authUser);
-  console.log("👨‍⚕️ Patients Page - Is Doctor:", isDoctor);
-  console.log("🏥 Patients Page - Hospital ID being used:", hospitalId);
 
   // API hooks WITH QUERY PARAMETERS - using server-side pagination
   const { 
@@ -114,44 +109,32 @@ const Patients = () => {
 
   // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering patient event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
     
     registerPatientEvents({
       onPatientRegistered: async (data) => {
-        console.log("👤 NEW PATIENT REGISTERED:", data);
         showSuccessToast(`New patient registered!`, 3000);
         const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (REGISTERED):", result);
       },
 
       onPatientUpdated: async (data) => {
-        console.log("✏️ PATIENT UPDATED:", data);
         showSuccessToast(`Patient updated!`, 3000);
         const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (UPDATED):", result);
       },
 
       onPatientDeleted: async (data) => {
-        console.log("🗑️ PATIENT DELETED:", data);
         showSuccessToast(`Patient deleted!`, 3000);
         const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (DELETED):", result);
-        console.log("📊 NEW DATA:", result?.data);
       },
 
       onPatientRecovered: async (data) => {
-        console.log("♻️ PATIENT RECOVERED:", data);
         showSuccessToast(`Patient recovered successfully!`, 3000);
         const result = await refetchPatients();
-        console.log("📊 REFETCH RESULT (RECOVERED):", result);
       }
     });
 
     setEventsRegistered(true);
 
     return () => {
-      console.log("🧹 Unregistering patient events...");
       unregisterPatientEvents();
       setEventsRegistered(false);
     };
@@ -160,26 +143,21 @@ const Patients = () => {
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Patient events will work!");
       if (!eventsRegistered) {
         registerPatientEvents({
           onPatientRegistered: async (data) => {
-            console.log("👤 NEW PATIENT REGISTERED (reconnect):", data);
             showSuccessToast(`New patient registered!`, 3000);
             await refetchPatients();
           },
           onPatientUpdated: async (data) => {
-            console.log("✏️ PATIENT UPDATED (reconnect):", data);
             showSuccessToast(`Patient updated!`, 3000);
             await refetchPatients();
           },
           onPatientDeleted: async (data) => {
-            console.log("🗑️ PATIENT DELETED (reconnect):", data);
             showSuccessToast(`Patient deleted!`, 3000);
             await refetchPatients();
           },
           onPatientRecovered: async (data) => {
-            console.log("♻️ PATIENT RECOVERED (reconnect):", data);
             showSuccessToast(`Patient recovered successfully!`, 3000);
             await refetchPatients();
           }
@@ -189,7 +167,6 @@ const Patients = () => {
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Patient events won't work!");
       setEventsRegistered(false);
     };
 
@@ -205,7 +182,6 @@ const Patients = () => {
   // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PATIENT: ${event}:`, args);
     };
 
     socket.onAny(handleAnyEvent);
@@ -256,10 +232,9 @@ const Patients = () => {
 
   const activePatients = getActivePatients();
 
-  // Apply local filters for gender and department
+  // Apply local filters for gender
   const filteredPatients = activePatients.filter(p => {
     if (genderFilter && p.gender !== genderFilter) return false;
-    if (departmentFilter && p.department !== departmentFilter) return false;
     return true;
   });
 
@@ -270,7 +245,7 @@ const Patients = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, genderFilter, departmentFilter, activeTab]);
+  }, [searchTerm, genderFilter, activeTab]);
 
   // Navigation handlers
   const handleViewDetails = (patient) => {
@@ -464,7 +439,6 @@ const Patients = () => {
       setAppointmentPatient(null);
       navigate("/appointments");
     } catch (err) {
-      console.log("BOOKING ERROR:", err);
       showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
     }
   };
@@ -472,7 +446,6 @@ const Patients = () => {
   const clearAllFilters = () => {
     setStatusFilter('all');
     setDateFilter('');
-    setDepartmentFilter('');
     setGenderFilter('');
     setSearchTerm('');
     setActiveTab('all');
@@ -484,19 +457,13 @@ const Patients = () => {
     let count = 0;
     if (statusFilter !== 'all') count++;
     if (dateFilter) count++;
-    if (departmentFilter) count++;
     if (genderFilter) count++;
     if (searchTerm) count++;
     if (activeTab !== 'all') count++;
     return count;
   };
 
-  // Get unique departments for filter dropdown
-  const getAllDepartments = () => {
-    const departments = [...new Set(transformedPatients.map(p => p.department).filter(Boolean))];
-    return departments.sort();
-  };
-
+ 
   const formatDisplayDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -785,19 +752,6 @@ const Patients = () => {
               <option value="Other">Other</option>
             </select>
 
-            <select
-              value={departmentFilter}
-              onChange={(e) => {
-                setDepartmentFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="">All Departments</option>
-              {getAllDepartments().map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
           </div>
         </div>
       )}

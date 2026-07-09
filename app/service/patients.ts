@@ -128,11 +128,6 @@ export const patientsApi = api.injectEndpoints({
         const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
         const shouldSkipFilter = params.skipHospitalFilter === true;
         
-        console.log("👤 Patients API - Full Auth:", auth);
-        console.log("👨‍⚕️ Patients API - Is Doctor:", isDoctor);
-        console.log("🏥 Patients API - Is Hospital Admin:", isHospitalAdmin);
-        console.log("📋 Patients API - Auth ID (Doctor ID):", auth?.id);
-        console.log("📋 Patients API - Auth Hospital ID:", auth?.hospitalId);
         
         // 🔥 FIX: Use hospitalId from auth, NOT auth.id
         let hospitalIdToUse = null;
@@ -147,11 +142,8 @@ export const patientsApi = api.injectEndpoints({
         
         if (hospitalIdToUse && !shouldSkipFilter) {
           queryParams.append("hospitalId", String(hospitalIdToUse));
-          console.log("🔒 Filtering patients by hospital ID:", hospitalIdToUse);
-        } else {
-          console.log("📋 No hospital filter applied");
-        }
-
+        } 
+        
         // Search query
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
@@ -207,7 +199,6 @@ export const patientsApi = api.injectEndpoints({
         queryParams.append("limit", String(params.limit || 10));
 
         const url = `/patients?${queryParams.toString()}`;
-        console.log("📡 Patients API Request URL:", url);
         return url;
       },
 
@@ -240,10 +231,6 @@ export const patientsApi = api.injectEndpoints({
           // 🔥 FIX: Priority: auth.hospitalId > auth.id
           hospitalId = auth?.hospitalId || auth?.id;
         }
-        
-        console.log("📤 CREATE PATIENT - Auth ID (Doctor ID):", auth?.id);
-        console.log("📤 CREATE PATIENT - Auth Hospital ID:", auth?.hospitalId);
-        console.log("📤 CREATE PATIENT - Final hospitalId:", hospitalId);
         
         return {
           url: "/patients",

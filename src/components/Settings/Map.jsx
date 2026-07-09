@@ -439,13 +439,15 @@ const Map = () => {
             </div>
           </Card>
 
-          <Button
-            onClick={getCurrentLocation}
-            className="w-full rounded-xl border border-[#D6E2EE] bg-[#F5FAFF] text-[#154A7D] py-4 font-medium text-lg flex items-center justify-center gap-3 hover:bg-[#154A7D] hover:text-white transition-colors"
-          >
-            <LocationIcon />
-            Get Current Location
-          </Button>
+         <div className="flex justify-center">
+  <Button
+    onClick={getCurrentLocation}
+    className="w-56 h-10 rounded-lg border border-[#D6E2EE] bg-[#F5FAFF] text-[#154A7D] text-sm font-medium flex items-center justify-center gap-2 hover:bg-[#154A7D] hover:text-white transition-colors"
+  >
+    <LocationIcon className="w-4 h-4" />
+    Get Current Location
+  </Button>
+</div>
 
           <Card>
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -459,15 +461,17 @@ const Map = () => {
                     label="Latitude"
                     name="latitude"
                     value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    placeholder="Enter latitude"
+                    disabled={true}
+                    className="bg-gray-100 cursor-not-allowed"
+                    placeholder="Latitude will be auto-filled"
                   />
                   <Input
                     label="Longitude"
                     name="longitude"
                     value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    placeholder="Enter longitude"
+                    disabled={true}
+                    className="bg-gray-100 cursor-not-allowed"
+                    placeholder="Longitude will be auto-filled"
                   />
                 </div>
                 <Textarea
@@ -475,8 +479,9 @@ const Map = () => {
                   name="address"
                   rows={3}
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Hospital address will appear here automatically"
+                  disabled={true}
+                  className="bg-gray-100 cursor-not-allowed"
+                  placeholder="Address will be auto-filled from map selection"
                 />
                 <div className="flex space-x-3 pt-4">
                   <Button
