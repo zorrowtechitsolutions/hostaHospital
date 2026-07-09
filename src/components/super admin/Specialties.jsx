@@ -41,12 +41,6 @@ const formatDate = (date) => {
   });
 };
 
-// Capitalize the first letter of a string
-const capitalizeFirstLetter = (text = "") => {
-  if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
 // Convert string to Title Case (capitalize every word)
 const toTitleCase = (text = "") => {
   if (!text) return "";
@@ -77,13 +71,11 @@ const ImageUpload = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       showErrorToast('Please select an image file', 3000);
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast('Image size should be less than 5MB', 3000);
       return;
@@ -97,7 +89,6 @@ const ImageUpload = ({
       <label className="block text-sm font-medium text-gray-700">{label}</label>
       
       <div className="flex items-start gap-4">
-        {/* Image Preview */}
         <div className="relative w-24 h-24 flex-shrink-0">
           {imageUrl ? (
             <div className="relative w-full h-full">
@@ -122,7 +113,6 @@ const ImageUpload = ({
           )}
         </div>
 
-        {/* Upload Button */}
         <div className="flex-1">
           <input
             ref={fileInputRef}
@@ -261,7 +251,6 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       
       let imageKey = null;
 
-      // Upload image if selected
       if (imageFile) {
         const uploadResult = await uploadToS3(
           imageFile,
@@ -581,7 +570,9 @@ const Specialties = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const itemsPerPage = 12;
+  
+  // Set to 10 items per page
+  const itemsPerPage = 10;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -591,30 +582,36 @@ const Specialties = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Debounce search to avoid too many API calls
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
     }, 300);
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // API call with pagination parameters
   const {
     data: specialitiesResponse,
     isLoading: loading,
     refetch,
     isFetching
   } = useGetSpecialitiesQuery({
-name: debouncedSearchTerm || undefined
+    name: debouncedSearchTerm || undefined,
+    page: currentPage,
+    limit: itemsPerPage
   });
 
   const [registerSpeciality, { isLoading: isAdding }] = useRegisterSpecialityMutation();
   const [updateSpeciality, { isLoading: isUpdating }] = useUpdateSpecialityMutation();
   const [deleteSpeciality, { isLoading: isDeleting }] = useDeleteSpecialityMutation();
 
-  const specialities = specialitiesResponse?.data || [];
-  const totalItems = specialitiesResponse?.count || specialities.length;
+  // Handle API response - support multiple response formats
+  const specialities = specialitiesResponse?.data || specialitiesResponse?.results || specialitiesResponse?.items || [];
+  const totalItems = specialitiesResponse?.count || specialitiesResponse?.total || specialitiesResponse?.totalCount || specialities.length;
+  const totalPages = specialitiesResponse?.totalPages || specialitiesResponse?.pages || Math.ceil(totalItems / itemsPerPage) || 1;
 
   // Register socket event listeners
   useEffect(() => {
@@ -669,10 +666,6 @@ name: debouncedSearchTerm || undefined
       socket.off("connect", handleConnect);
     };
   }, [refetch, eventsRegistered]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchTerm]);
 
   const handleSpecialtyClick = (speciality) => {
     navigate(`/super-admin/specialities/${speciality.id}/hospitals`, {
@@ -816,18 +809,15 @@ name: debouncedSearchTerm || undefined
     showSuccessToast(`Exported ${exportData.length} speciality records`, 2000);
   };
 
-  // Handle search input change
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
 
-  // Handle search button click
   const handleSearchClick = () => {
     setDebouncedSearchTerm(searchTerm);
     setCurrentPage(1);
   };
 
-  // Handle Enter key press
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') {
       setDebouncedSearchTerm(searchTerm);
@@ -835,11 +825,10 @@ name: debouncedSearchTerm || undefined
     }
   };
 
-  const paginatedSpecialities = specialities.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-  const totalPages = Math.ceil(specialities.length / itemsPerPage);
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (loading) {
     return <SpecialitiesSkeleton />;
@@ -851,6 +840,12 @@ name: debouncedSearchTerm || undefined
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Specialities Management</h1>
         <p className="text-sm text-gray-500 mt-1">Manage medical specialities</p>
+        {totalItems > 0 && (
+          <p className="text-sm text-gray-500 mt-1">
+            Showing {specialities.length} of {totalItems} specialities
+            {searchTerm && ` matching "${searchTerm}"`}
+          </p>
+        )}
       </div>
 
       {/* Search and Action Buttons */}
@@ -885,7 +880,11 @@ name: debouncedSearchTerm || undefined
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          <button 
+            onClick={handleRefresh} 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            disabled={isFetching}
+          >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
@@ -900,10 +899,10 @@ name: debouncedSearchTerm || undefined
       </div>
 
       {/* Specialities Grid */}
-      {paginatedSpecialities.length > 0 ? (
+      {specialities.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedSpecialities.map((speciality) => {
+            {specialities.map((speciality) => {
               const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
               
               return (
@@ -967,17 +966,16 @@ name: debouncedSearchTerm || undefined
             })}
           </div>
 
+          {/* Global Pagination Component */}
           {totalPages > 1 && (
-            <div className="mt-6">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={specialities.length}
-                itemsPerPage={itemsPerPage}
-                itemLabel="specialities"
-              />
-            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              className="mt-6"
+            />
           )}
         </>
       ) : (

@@ -1,10 +1,10 @@
 // src/components/super-admin/HospitalStaffList.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Search, Briefcase, Phone, Mail, MapPin, Loader2, 
   Calendar, User, Eye, MoreVertical, Edit, Trash2, Plus,
-  Filter, X, RotateCcw, ChevronLeft, ChevronRight
+  Filter, X, RotateCcw, ChevronLeft, ChevronRight, Users as UsersIcon
 } from 'lucide-react';
 import { Card, Button, Modal, Badge } from '../../ui';
 import { useGetStaffQuery, useDeleteStaffMutation, useRecoverStaffMutation } from '../../../../app/service/staffApi';
@@ -74,6 +74,12 @@ const Pagination = ({
   );
 };
 
+// Helper function to safely convert to string for search
+const safeToString = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
 const HospitalStaffList = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -113,7 +119,7 @@ const HospitalStaffList = () => {
       limit: itemsPerPage,
     };
 
-    if (searchTerm && searchTerm.trim()) {
+    if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 2) {
       params.search_query = searchTerm.trim();
     }
 
@@ -144,6 +150,72 @@ const HospitalStaffList = () => {
   const allStaff = staffData?.data || [];
   const totalItems = staffData?.pagination?.totalItems || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Check if filters are active - MUST be before conditional return
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = genderFilter !== 'all' || designationFilter !== 'all' || statusFilter !== 'all';
+
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredStaff = useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return allStaff;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return allStaff.filter(item => {
+      const searchFields = [
+        safeToString(item.name).toLowerCase(),
+        safeToString(item.designation).toLowerCase(),
+        safeToString(item.staffType).toLowerCase(),
+        safeToString(item.phone).toLowerCase(),
+        safeToString(item.email).toLowerCase(),
+        safeToString(item.gender).toLowerCase(),
+        safeToString(item.id).toLowerCase()
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [allStaff, searchTerm]);
+
+  // ✅ Apply gender filter (frontend fallback)
+  const filteredByGender = useMemo(() => {
+    if (genderFilter === 'all') return filteredStaff;
+    return filteredStaff.filter(item => 
+      safeToString(item.gender).toLowerCase() === genderFilter.toLowerCase()
+    );
+  }, [filteredStaff, genderFilter]);
+
+  // ✅ Apply designation filter (frontend fallback)
+  const filteredByDesignation = useMemo(() => {
+    if (designationFilter === 'all') return filteredByGender;
+    return filteredByGender.filter(item => 
+      safeToString(item.designation).toLowerCase() === designationFilter.toLowerCase()
+    );
+  }, [filteredByGender, designationFilter]);
+
+  // ✅ Apply status filter (frontend fallback)
+  const filteredStaffFinal = useMemo(() => {
+    if (statusFilter === 'all') return filteredByDesignation;
+    return filteredByDesignation.filter(item => {
+      if (statusFilter === 'active') return item.isActive && !item.isDelete;
+      if (statusFilter === 'inactive') return !item.isActive && !item.isDelete;
+      return true;
+    });
+  }, [filteredByDesignation, statusFilter]);
+
+  // ✅ Use filteredStaffFinal for display instead of allStaff
+  const displayStaff = filteredStaffFinal;
+  const displayTotalItems = displayStaff.length;
+  const displayTotalPages = Math.ceil(displayTotalItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedStaff = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return displayStaff.slice(startIndex, endIndex);
+  }, [displayStaff, currentPage, itemsPerPage]);
 
   // Get unique designations for filter
   const getAllDesignations = () => {
@@ -340,6 +412,7 @@ const HospitalStaffList = () => {
     setDesignationFilter('all');
     setStatusFilter('all');
     setCurrentPage(1);
+    showSuccessToast("All filters cleared", 2000);
   };
 
   // Register socket event listeners
@@ -502,6 +575,7 @@ const HospitalStaffList = () => {
     );
   };
 
+  // ✅ Loading state - AFTER all hooks
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -531,7 +605,7 @@ const HospitalStaffList = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Staff List</h1>
-            <p className="text-sm text-gray-500 mt-1">Total Staff: {totalItems}</p>
+            <p className="text-sm text-gray-500 mt-1">Total Staff: {displayTotalItems}</p>
           </div>
           
           <Button
@@ -575,14 +649,6 @@ const HospitalStaffList = () => {
       {/* Active filter tags */}
       {getActiveFilterCount() > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
-          {searchTerm && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-              Search: {searchTerm}
-              <button onClick={() => setSearchTerm('')} className="hover:bg-blue-200 rounded-full p-0.5">
-                <X size={14} />
-              </button>
-            </span>
-          )}
           {genderFilter !== 'all' && (
             <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
               Gender: {genderFilter}
@@ -607,12 +673,6 @@ const HospitalStaffList = () => {
               </button>
             </span>
           )}
-          <button
-            onClick={handleClearFilters}
-            className="text-sm text-gray-500 hover:text-red-600 transition-colors"
-          >
-            Clear all
-          </button>
         </div>
       )}
 
@@ -678,10 +738,10 @@ const HospitalStaffList = () => {
       )}
 
       {/* Staff Grid */}
-      {allStaff.length > 0 ? (
+      {displayStaff.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allStaff.map((staffMember) => {
+            {paginatedStaff.map((staffMember) => {
               const isDeleted = staffMember.isDelete || false;
               const isInactive = !staffMember.isActive && !isDeleted;
               const isDisabled = isDeleted || isInactive;
@@ -794,31 +854,40 @@ const HospitalStaffList = () => {
             })}
           </div>
 
-          {/* Pagination - Simplified with < Prev 1 Next > */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            isLoading={isLoading || isFetching}
-          />
+          {/* Pagination */}
+          {displayTotalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={displayTotalPages}
+              onPageChange={setCurrentPage}
+              totalItems={displayTotalItems}
+              itemsPerPage={itemsPerPage}
+              isLoading={isLoading || isFetching}
+            />
+          )}
         </>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <Briefcase size={48} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">
-            {getActiveFilterCount() > 0 ? 'No staff members match your filters' : 'No staff members found for this hospital'}
+          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No staff members found' : 'No staff members available'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No staff members match the selected filters. Try adjusting your filters.'
+              : 'Start by adding your first staff member.'}
           </p>
-          {getActiveFilterCount() > 0 && (
-            <button
-              onClick={handleClearFilters}
-              className="mt-2 text-[#6366F1] hover:underline text-sm"
+          {(hasSearchTerm || hasActiveFilters) && (
+            <button 
+              onClick={handleClearFilters} 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
             >
               Clear all filters
             </button>
           )}
-          {canModifyStaff && getActiveFilterCount() === 0 && (
+          {canModifyStaff && !hasSearchTerm && !hasActiveFilters && (
             <Button
               onClick={handleAddStaff}
               className="mt-4 flex items-center gap-2 mx-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"

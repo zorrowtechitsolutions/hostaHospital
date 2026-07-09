@@ -24,6 +24,12 @@ import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../socket
 // Blood groups list
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+// Helper function to safely convert to string for search
+const safeToString = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
 // Helper function to format ID for display only
 const formatBloodId = (id) => {
   if (!id) return '#BLD0000';
@@ -328,7 +334,7 @@ const BloodBank = () => {
   } = useGetBloodBankQuery({
     hospitalId: hospitalId,
     bloodGroup: bloodGroupFilter !== "all" ? bloodGroupFilter : undefined,
-    search_query: searchTerm?.trim() ? searchTerm : undefined,
+    search_query: searchTerm?.trim() && searchTerm.trim().length >= 2 ? searchTerm : undefined,
   }, {
     skip: !hospitalId, // Skip if no hospital ID
   });
@@ -390,14 +396,61 @@ const BloodBank = () => {
   }, [refetch]);
 
   // Transform data from API response
-  const paginatedBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
-  const totalPages = bloodStocksResponse?.pagination?.totalPages || 1;
-  const totalItems = bloodStocksResponse?.pagination?.totalItems || 0;
+  const allBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
+  
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBloodStocks = React.useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return allBloodStocks;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return allBloodStocks.filter(item => {
+      const searchFields = [
+        safeToString(item.formattedId).toLowerCase(),
+        safeToString(item.bloodGroup).toLowerCase(),
+        safeToString(item.count).toLowerCase()
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [allBloodStocks, searchTerm]);
+
+  // ✅ Apply blood group filter (frontend fallback)
+  const paginatedBloodStocks = React.useMemo(() => {
+    let result = filteredBloodStocks;
+
+    // Apply blood group filter
+    if (bloodGroupFilter !== 'all') {
+      result = result.filter(item => 
+        safeToString(item.bloodGroup).toLowerCase() === bloodGroupFilter.toLowerCase()
+      );
+    }
+
+    return result;
+  }, [filteredBloodStocks, bloodGroupFilter]);
+
+  // Pagination
+  const totalFilteredItems = paginatedBloodStocks.length;
+  const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
+
+  // Paginate the filtered results
+  const paginatedData = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return paginatedBloodStocks.slice(startIndex, endIndex);
+  }, [paginatedBloodStocks, currentPage, itemsPerPage]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, bloodGroupFilter]);
+
+  // Check if filters are active
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = bloodGroupFilter !== 'all';
 
   // Handle click outside for menu
   useEffect(() => {
@@ -538,7 +591,7 @@ const BloodBank = () => {
   const activeFilterCount = getActiveFilterCount();
 
   const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= totalFilteredPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -660,11 +713,41 @@ const BloodBank = () => {
         </div>
       </div>
 
+      {/* No Results - Shows when no blood stock found */}
+      {!loading && paginatedBloodStocks.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No blood stock found' : 'No blood stock available'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No blood stock matches the selected filters. Try adjusting your filters.'
+              : 'Start by adding a new blood stock.'}
+          </p>
+          {(hasSearchTerm || hasActiveFilters) && (
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setBloodGroupFilter('all');
+                setCurrentPage(1);
+                showSuccessToast("All filters cleared", 2000);
+              }} 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
+      )}
+
       {/* GRID VIEW */}
-      {viewMode === 'grid' && (
+      {viewMode === 'grid' && paginatedBloodStocks.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedBloodStocks.map((stock) => {
+            {paginatedData.map((stock) => {
               return (
                 <div key={stock.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-full flex justify-between items-start mb-4">
@@ -707,13 +790,13 @@ const BloodBank = () => {
           </div>
 
           {/* Pagination for Grid View */}
-          {totalPages > 1 && (
+          {totalFilteredPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={totalFilteredPages}
                 onPageChange={handlePageChange}
-                totalItems={totalItems}
+                totalItems={totalFilteredItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="blood stocks"
                 variant="centered"
@@ -724,12 +807,15 @@ const BloodBank = () => {
       )}
 
       {/* LIST VIEW */}
-      {viewMode === 'list' && (
+      {viewMode === 'list' && paginatedBloodStocks.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Blood Stocks
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
+              {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
+                <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
+              )}
             </h2>
           </div>
 
@@ -746,7 +832,7 @@ const BloodBank = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedBloodStocks.map((stock) => (
+                  {paginatedData.map((stock) => (
                     <tr key={stock.id} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">
                         {stock.formattedId}
@@ -792,27 +878,19 @@ const BloodBank = () => {
             </div>
 
             {/* Pagination - Sticks to bottom */}
-            {totalPages > 1 && (
+            {totalFilteredPages > 1 && (
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}
-                  totalPages={totalPages}
+                  totalPages={totalFilteredPages}
                   onPageChange={handlePageChange}
-                  totalItems={totalItems}
+                  totalItems={totalFilteredItems}
                   itemsPerPage={itemsPerPage}
                   itemLabel="blood stocks"
                 />
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* No Results */}
-      {!loading && paginatedBloodStocks.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No blood stock found</h3>
         </div>
       )}
 

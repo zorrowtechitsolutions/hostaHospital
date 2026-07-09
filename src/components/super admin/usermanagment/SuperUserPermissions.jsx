@@ -22,11 +22,17 @@ const SuperUserPermissions = () => {
     module: '',
     action: ''
   });
-  const itemsPerPage = 10;
-
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const { data: permissionsData, isLoading, refetch } = useGetPermissionsQuery();
+  const {
+    data: permissionsData,
+    isLoading,
+    refetch,
+  } = useGetPermissionsQuery({
+    page: currentPage,
+    limit: 10,
+  });
+
   const [deletePermission] = useDeletePermissionMutation();
   const [createPermission] = useCreatePermissionMutation();
   const [updatePermission] = useUpdatePermissionMutation();
@@ -87,13 +93,11 @@ const SuperUserPermissions = () => {
     };
   }, [refetch, eventsRegistered]);
 
+  // Filter permissions (only for search, as pagination is handled by backend)
   const filteredPermissions = permissions.filter(permission => 
     permission.module?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     permission.action?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const paginatedPermissions = filteredPermissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPages = Math.ceil(filteredPermissions.length / itemsPerPage);
 
   const handleDelete = async (permission) => {
     if (window.confirm(`Are you sure you want to delete permission "${permission.module} - ${permission.action}"?`)) {
@@ -186,7 +190,9 @@ const SuperUserPermissions = () => {
           <p className="text-sm text-gray-500 mt-1">Manage system permissions</p>
           <div className="mt-2">
             <span className="text-sm text-gray-500">
-              Total Permissions: <span className="font-semibold text-gray-700">{permissions.length}</span>
+              <p>
+                Total Permissions: {permissionsData?.pagination?.totalItems || 0}
+              </p>
             </span>
           </div>
         </div>
@@ -225,8 +231,8 @@ const SuperUserPermissions = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paginatedPermissions.length > 0 ? (
-                  paginatedPermissions.map((permission) => (
+                {filteredPermissions.length > 0 ? (
+                  filteredPermissions.map((permission) => (
                     <TableRow key={permission.id} className="hover:bg-gray-50 transition">
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -268,15 +274,15 @@ const SuperUserPermissions = () => {
           </div>
         </Card>
 
-        {totalPages > 1 && (
+        {(permissionsData?.pagination?.totalPages || 0) > 1 && (
           <div className="mt-6">
             <Pagination 
-              currentPage={currentPage} 
-              totalPages={totalPages} 
-              onPageChange={setCurrentPage} 
-              totalItems={filteredPermissions.length} 
-              itemsPerPage={itemsPerPage} 
-              itemLabel="permissions" 
+              currentPage={currentPage}
+              totalPages={permissionsData?.pagination?.totalPages || 1}
+              onPageChange={setCurrentPage}
+              totalItems={permissionsData?.pagination?.totalItems || 0}
+              itemsPerPage={10}
+              itemLabel="permissions"
             />
           </div>
         )}

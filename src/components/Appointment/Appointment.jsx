@@ -115,16 +115,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-
   // API Hooks - Server-side pagination
-const { 
+  const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
     isFetching
   } = useGetBookingsQuery({
     ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
-    ...(searchTerm && { search_query: searchTerm }),
+    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
     page: currentPage,
@@ -177,6 +176,7 @@ const {
     }
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
+
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -213,9 +213,8 @@ const {
     return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
   };
 
-  // ✅ FIX: Helper function to extract gender from multiple sources
+  // Helper function to extract gender from multiple sources
   const extractGender = (booking) => {
-    // Check all possible gender sources
     const gender = 
       booking?.patient_gender ||
       booking?.patient?.gender ||
@@ -224,17 +223,20 @@ const {
       booking?.genderDisplay ||
       null;
     
-    
-    // Return normalized gender or null
     if (gender) {
       const normalized = gender.toLowerCase();
       if (normalized === 'male') return 'Male';
       if (normalized === 'female') return 'Female';
       if (normalized === 'other') return 'Other';
-      return gender; // Return as-is if not matching
+      return gender;
     }
-    
-    return null; // Return null so we don't default to "Male"
+    return null;
+  };
+
+  // Helper function to safely convert to string for search
+  const safeToString = (value) => {
+    if (value === null || value === undefined) return '';
+    return String(value);
   };
 
   // Transform API response
@@ -270,23 +272,19 @@ const {
         booking.patient_id ||
         booking.patientID;
 
-      // ✅ FIX: Extract gender using the helper function
       const extractedGender = extractGender(booking);
-      // If no gender found, use "N/A" instead of defaulting to "Male"
       const finalGender = extractedGender || "N/A";
-
 
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
-        patientId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
-        gender: finalGender, // ✅ FIX: Now uses extracted gender or "N/A"
+        gender: finalGender,
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
@@ -299,7 +297,6 @@ const {
         patientImageKey: patientImageKey,
         originalStatus: booking.status,
         userId: booking.userId || null,
-        // ✅ Store the raw gender for debugging
         rawGender: booking.gender,
         patientGender: booking.patient_gender,
         patientGenderNested: booking.patient?.gender
@@ -315,15 +312,82 @@ const {
   const totalItems = bookingsResponse?.pagination?.totalItems || appointmentsData.length;
   const totalPages = bookingsResponse?.pagination?.totalPages || 1;
 
-  // Filter doctor-specific data (client-side filter for doctor view)
-  const filteredAppointments = (() => {
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBySearch = React.useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return appointmentsData;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return appointmentsData.filter(item => {
+      // ✅ FIX: Use safeToString to prevent errors
+      const searchFields = [
+        safeToString(item.formattedId).toLowerCase(),
+        safeToString(item.patientName).toLowerCase(),
+        safeToString(item.patientId).toLowerCase(),
+        safeToString(item.contact).toLowerCase(),
+        safeToString(item.doctorName).toLowerCase(),
+        safeToString(item.department).toLowerCase(),
+        safeToString(item.appointmentDateDisplay).toLowerCase(),
+        safeToString(item.consulting_time).toLowerCase(),
+        safeToString(item.status).toLowerCase(),
+        safeToString(item.bookingStatus).toLowerCase()
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [appointmentsData, searchTerm]);
+
+  // ✅ Apply doctor filter
+  const filteredByDoctor = React.useMemo(() => {
     if (doctorId && !showAllData) {
-      return appointmentsData.filter(apt => 
-        apt.doctorId === doctorId || apt.doctorName === doctorName
+      return filteredBySearch.filter(item => 
+        item.doctorId === doctorId || item.doctorName === doctorName
       );
     }
-    return appointmentsData;
-  })();
+    return filteredBySearch;
+  }, [filteredBySearch, doctorId, doctorName, showAllData]);
+
+  // ✅ Apply status, department, and date filters (frontend fallback)
+  const filteredAppointments = React.useMemo(() => {
+    let result = filteredByDoctor;
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(item => 
+        safeToString(item.originalStatus).toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    // Apply department filter
+    if (departmentFilter) {
+      result = result.filter(item => 
+        safeToString(item.department).toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+
+    // Apply date filter
+    if (dateFilter) {
+      result = result.filter(item => 
+        safeToString(item.appointmentDateDisplay) === dateFilter
+      );
+    }
+
+    return result;
+  }, [filteredByDoctor, statusFilter, departmentFilter, dateFilter]);
+
+  // ✅ Get total items from filtered results
+  const totalFilteredItems = filteredAppointments.length;
+  const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedAppointments = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAppointments.slice(startIndex, endIndex);
+  }, [filteredAppointments, currentPage, itemsPerPage]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -335,6 +399,10 @@ const {
     const departments = [...new Set(appointmentsData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
+
+  // Check if filters are active
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = statusFilter !== 'all' || departmentFilter !== '' || dateFilter !== '';
 
   // Handlers
   const handleRefresh = () => {
@@ -354,7 +422,7 @@ const {
       'Patient Name': apt.patientName,
       'Contact': apt.contact,
       'Age': apt.age,
-      'Gender': apt.gender, // ✅ Now includes correct gender
+      'Gender': apt.gender,
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
@@ -400,7 +468,6 @@ const {
         appointmentDate: appointment.appointmentDateDisplay,
         reason: appointment.reason,
         notes: appointment.notes,
-        // ✅ Pass gender correctly
         gender: appointment.gender,
         patient_gender: appointment.gender
       }
@@ -574,6 +641,7 @@ const {
     setDepartmentFilter('');
     setDateFilter('');
     setSearchTerm('');
+    setCurrentPage(1);
     showSuccessToast("All filters cleared", 2000);
   };
 
@@ -642,7 +710,6 @@ const {
               <p className="text-sm text-gray-800">{appointment.contact}</p>
             </div>
 
-            {/* ✅ Add Gender to Details Modal */}
             <div>
               <p className="font-medium text-sm mb-1">Gender</p>
               <p className="text-sm text-gray-800">{appointment.gender}</p>
@@ -859,6 +926,9 @@ const {
                 ✕
               </button>
             )}
+            {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
+              <span className="text-xs text-yellow-500 mt-1 block">Type at least 2 characters</span>
+            )}
             <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
               <Search className="w-4 h-4 text-white" />
             </button>
@@ -958,15 +1028,34 @@ const {
       {filteredAppointments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
-          <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No appointments found' : 'No appointments available'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No appointments match the selected filters. Try adjusting your filters.'
+              : 'Start by creating a new appointment.'}
+          </p>
+          {(hasSearchTerm || hasActiveFilters) && (
+            <button 
+              onClick={clearAllFilters} 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Appointments 
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
+              {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
+                <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
+              )}
             </h2>
           </div>
           
@@ -987,7 +1076,7 @@ const {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAppointments.map((apt, index) => (
+                  {paginatedAppointments.map((apt, index) => (
                     <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
                       <td className="px-6 py-4">
@@ -1032,17 +1121,19 @@ const {
               </table>
             </div>
 
-            {/* Pagination - Uses server-side totalPages */}
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="appointments"
-              />
-            </div>
+            {/* Pagination - Uses client-side pagination */}
+            {totalFilteredPages > 1 && (
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalFilteredPages}
+                  onPageChange={handlePageChange}
+                  totalItems={totalFilteredItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="appointments"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

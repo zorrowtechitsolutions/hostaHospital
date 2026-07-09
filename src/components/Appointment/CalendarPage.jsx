@@ -247,8 +247,8 @@ const CalendarPage = () => {
         <div className="bg-white rounded-xl p-8 shadow-lg max-w-md">
           <div className="text-center">
             <div className="text-yellow-500 text-4xl mb-3">⚠️</div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Patient Selected</h3>
-            <p className="text-sm text-gray-600">Please select a patient to view their calendar.</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">History Not Found</h3>
+            <p className="text-sm text-gray-600">No visit history available for the selected patient.</p>
             <button 
               onClick={() => navigate(-1)}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

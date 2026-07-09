@@ -70,25 +70,6 @@ const AppointmentsTab = ({
           Total Appointments
           <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
         </h2>
-        <div className="flex gap-2">
-          <SearchBar
-            placeholder="Search by Doctor, Department..."
-            value={searchTerm}
-            onChange={setSearchTerm}
-            className="w-64"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-1.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            <option value="all">All Status</option>
-            <option value="accepted">Accepted</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
       </div>
 
       <div className="overflow-x-auto">

@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { MoreVertical, Trash2 } from "lucide-react";
 import { Button, TableHead, TableHeader, TableCell, Pagination } from "../../ui";
+import { formatDate } from "../../../utils/dateFormatter"; // Adjust the import path based on where you put the formatDate function
 
 const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,7 +77,7 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
                     className="px-4 py-3 text-gray-600 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
-                    {item.visitDate}
+                    {formatDate(item.visitDate)} {/* Changed this line */}
                   </td>
                   <td 
                     className="px-4 py-3 cursor-pointer"
@@ -103,7 +104,7 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                handleDeleteClick('visit', item.id, `Visit on ${item.visitDate}`);
+                                handleDeleteClick('visit', item.id, `Visit on ${formatDate(item.visitDate)}`); // Changed this line too
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"

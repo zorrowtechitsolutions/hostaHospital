@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE VERSION with All User Logout Support
+// hospitalApi.ts - COMPLETE VERSION with Working Hours Support
 
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
@@ -6,6 +6,16 @@ import { tokenManager } from '../../src/utils/fcmTokenManager';
 // ============================================
 // TYPE DEFINITIONS
 // ============================================
+
+export interface WorkingHours {
+  monday: { open: string; close: string; closed: boolean };
+  tuesday: { open: string; close: string; closed: boolean };
+  wednesday: { open: string; close: string; closed: boolean };
+  thursday: { open: string; close: string; closed: boolean };
+  friday: { open: string; close: string; closed: boolean };
+  saturday: { open: string; close: string; closed: boolean };
+  sunday: { open: string; close: string; closed: boolean };
+}
 
 export interface Hospital {
   id: string;
@@ -24,6 +34,10 @@ export interface Hospital {
   latitude?: number;
   longitude?: number;
   about?: string;
+  workingHours?: WorkingHours;
+  working_hours_general?: any[];
+  working_hours_clinic?: any[];
+  working_hours_clinic_nobreak?: any[];
   createdAt?: string;
   updatedAt?: string;
   lastPasswordChange?: string;
@@ -70,6 +84,7 @@ export interface RegisterData {
   latitude?: number;
   longitude?: number;
   about?: string;
+  workingHours?: WorkingHours;
   working_hours_clinic?: any[];
   working_hours_general?: any[];
   working_hours_clinic_nobreak?: any[];
@@ -187,6 +202,87 @@ export interface LogoutParams {
 }
 
 // ============================================
+// WORKING HOURS HELPER FUNCTIONS (Internal)
+// ============================================
+
+/**
+ * Convert "10:00" to "10:00 AM" format
+ */
+const convertTo12HourFormat = (time: string | undefined): string => {
+  if (!time) return '09:00 AM';
+  
+  // If already in 12-hour format, return as is
+  if (time.includes('AM') || time.includes('PM')) {
+    return time;
+  }
+  
+  const parts = time.split(':');
+  if (parts.length < 2) return '09:00 AM';
+  
+  const hours = parseInt(parts[0], 10);
+  const minutes = parts[1] || '00';
+  
+  if (isNaN(hours)) return '09:00 AM';
+  
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+/**
+ * Convert "10:00 AM" to "10:00" format
+ */
+const convertTo24HourFormat = (time: string | undefined): string => {
+  if (!time) return '09:00';
+  
+  // If already in 24-hour format, return as is
+  if (!time.includes('AM') && !time.includes('PM')) {
+    return time;
+  }
+  
+  const parts = time.split(' ');
+  if (parts.length < 2) return '09:00';
+  
+  const timePart = parts[0];
+  const period = parts[1];
+  const timeParts = timePart.split(':');
+  
+  if (timeParts.length < 2) return '09:00';
+  
+  let hours = parseInt(timeParts[0], 10);
+  const minutes = timeParts[1] || '00';
+  
+  if (isNaN(hours)) return '09:00';
+  
+  if (period === 'PM' && hours !== 12) {
+    hours += 12;
+  } else if (period === 'AM' && hours === 12) {
+    hours = 0;
+  }
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
+/**
+ * Map frontend working hours object to API array format
+ */
+const mapFrontendToApiWorkingHours = (frontendHours: WorkingHours | null | undefined): any[] => {
+  if (!frontendHours) return [];
+  
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  
+  return days.map(day => {
+    const dayData = frontendHours[day as keyof WorkingHours];
+    return {
+      day: day,
+      is_holiday: dayData?.closed || false,
+      opening_time: convertTo24HourFormat(dayData?.open || '09:00 AM'),
+      closing_time: convertTo24HourFormat(dayData?.close || '06:00 PM'),
+    };
+  });
+};
+
+// ============================================
 // API ENDPOINTS
 // ============================================
 
@@ -197,11 +293,34 @@ export const hospitalApi = api.injectEndpoints({
     // ✅ REGISTER - Hospital Registration
     // ============================================
     register: builder.mutation<AuthResponse, RegisterData>({
-      query: (hospitalData) => ({
-        url: `/hospital`,
-        method: "POST",
-        body: hospitalData,
-      }),
+      query: (hospitalData) => {
+        const body: any = {
+          name: hospitalData.name,
+          email: hospitalData.email,
+          password: hospitalData.password,
+          phone: hospitalData.phone,
+        };
+        
+        if (hospitalData.address) body.address = hospitalData.address;
+        if (hospitalData.type) body.type = hospitalData.type;
+        if (hospitalData.emergencyContact) body.emergencyContact = hospitalData.emergencyContact;
+        if (hospitalData.latitude) body.latitude = hospitalData.latitude;
+        if (hospitalData.longitude) body.longitude = hospitalData.longitude;
+        if (hospitalData.about) body.about = hospitalData.about;
+        
+        // Convert working hours to API format
+        if (hospitalData.workingHours) {
+          body.working_hours_general = mapFrontendToApiWorkingHours(hospitalData.workingHours);
+          body.working_hours_clinic = mapFrontendToApiWorkingHours(hospitalData.workingHours);
+          body.working_hours_clinic_nobreak = mapFrontendToApiWorkingHours(hospitalData.workingHours);
+        }
+        
+        return {
+          url: `/hospital`,
+          method: "POST",
+          body: body,
+        };
+      },
       transformResponse: (response: AuthResponse) => {
         const token = response.token || response.accessToken;
         if (token) {
@@ -305,14 +424,9 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // ✅ COMPLETE LOGOUT - Handles ALL user types
-    // Hospital: /hospital/logout/{hospitalId}
-    // Doctor: /doctor/logout/{doctorId}
-    // Staff: /staff/logout/{staffId}
-    // Super Admin: /users/logout/{superAdminId}
     // ============================================
     logout: builder.mutation<{ message: string; success?: boolean }, LogoutParams | void>({
       query: (params) => {
-        // Get all necessary data from localStorage
         let hospitalId = localStorage.getItem('hospitalId') || '';
         let userRole = localStorage.getItem('userRole') || 'hospital';
         let userId = params?.id || '';
@@ -333,12 +447,10 @@ export const hospitalApi = api.injectEndpoints({
           // Silent fail
         }
         
-        // Try to get hospitalId from authData if not found
         if (!hospitalId) {
           hospitalId = authData?.hospitalId || authData?.id || '';
         }
         
-        // Try to get userId from multiple sources
         if (!userId) {
           userId = authData?.id || authData?.userId || authData?.hospitalId || '';
         }
@@ -360,13 +472,8 @@ export const hospitalApi = api.injectEndpoints({
           userId = hospitalId;
         }
         
-        // Get role from params or localStorage
         const role = params?.role || userRole || 'hospital';
-        
-        // Get device ID from params or localStorage
         const deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
-        
-        // Determine which endpoint to use
         const useGlobalEndpoint = params?.useGlobalEndpoint !== undefined 
           ? params.useGlobalEndpoint 
           : (role === 'super_admin');
@@ -374,34 +481,21 @@ export const hospitalApi = api.injectEndpoints({
         let url = '';
         let body: any = {};
         
-        // ✅ Determine the correct endpoint based on role
         if (useGlobalEndpoint && role === 'super_admin') {
-          // ✅ Super Admin logout - Uses /users/logout/{id}
           url = `/users/logout/${userId}`;
-          body = {
-            deviceId: deviceIdValue,
-          };
+          body = { deviceId: deviceIdValue };
         } else if (role === 'doctor') {
-          // ✅ Doctor logout
           const doctorId = params?.id || userId || '';
           url = `/doctor/logout/${doctorId}`;
-          body = {
-            deviceId: deviceIdValue,
-          };
+          body = { deviceId: deviceIdValue };
         } else if (role === 'staff') {
-          // ✅ Staff logout
           const staffId = params?.id || userId || '';
           url = `/staff/logout/${staffId}`;
-          body = {
-            deviceId: deviceIdValue,
-          };
+          body = { deviceId: deviceIdValue };
         } else {
-          // ✅ Hospital logout (default)
           const hospitalIdValue = params?.hospitalId || hospitalId || userId || '';
           url = `/hospital/logout/${hospitalIdValue}`;
-          body = {
-            deviceId: deviceIdValue,
-          };
+          body = { deviceId: deviceIdValue };
         }
         
         return {
@@ -412,7 +506,6 @@ export const hospitalApi = api.injectEndpoints({
       },
       onQueryStarted: async (params, { queryFulfilled }) => {
         try {
-          // Get all necessary data
           let hospitalId = localStorage.getItem('hospitalId') || '';
           let userRole = localStorage.getItem('userRole') || 'hospital';
           let userId = params?.id || '';
@@ -461,7 +554,6 @@ export const hospitalApi = api.injectEndpoints({
           const role = params?.role || userRole || 'hospital';
           let deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
           
-          // ✅ Try to get deviceId from IndexedDB if not in localStorage
           if (!deviceIdValue) {
             try {
               const tokens = await tokenManager.getDeviceTokens();
@@ -481,7 +573,6 @@ export const hospitalApi = api.injectEndpoints({
           let body: any = {};
           
           if (useGlobalEndpoint && role === 'super_admin') {
-            // ✅ Super Admin logout
             url = `/users/logout/${userId}`;
             body = { deviceId: deviceIdValue };
           } else if (role === 'doctor') {
@@ -498,12 +589,9 @@ export const hospitalApi = api.injectEndpoints({
             body = { deviceId: deviceIdValue };
           }
           
-          // ✅ Wait for backend to delete FCM token from database
           await queryFulfilled;
           
         } catch (error) {
-          // ✅ Even if API fails, we still need to clear local data
-          // Check if error is an object with status property
           if (error && typeof error === 'object' && 'status' in error) {
             const err = error as { status?: number };
             if (err.status === 401 || err.status === 403) {
@@ -511,7 +599,6 @@ export const hospitalApi = api.injectEndpoints({
             }
           }
         } finally {
-          // ✅ Clear local IndexedDB
           try {
             if (tokenManager && typeof tokenManager.deleteDatabase === 'function') {
               await tokenManager.deleteDatabase();
@@ -526,7 +613,6 @@ export const hospitalApi = api.injectEndpoints({
             }
           }
           
-          // ✅ Clear ALL localStorage items
           const localStorageItems = [
             'accessToken',
             'refreshToken',
@@ -553,7 +639,6 @@ export const hospitalApi = api.injectEndpoints({
             localStorage.removeItem(key);
           });
           
-          // ✅ Clear sessionStorage
           sessionStorage.clear();
         }
       },
@@ -692,11 +777,34 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     addNewHospital: builder.mutation<AuthResponse, RegisterData>({
-      query: (newHospital) => ({
-        url: `/hospital`,
-        method: "POST",
-        body: newHospital,
-      }),
+      query: (newHospital) => {
+        const body: any = {
+          name: newHospital.name,
+          email: newHospital.email,
+          password: newHospital.password,
+          phone: newHospital.phone,
+        };
+        
+        if (newHospital.address) body.address = newHospital.address;
+        if (newHospital.type) body.type = newHospital.type;
+        if (newHospital.emergencyContact) body.emergencyContact = newHospital.emergencyContact;
+        if (newHospital.latitude) body.latitude = newHospital.latitude;
+        if (newHospital.longitude) body.longitude = newHospital.longitude;
+        if (newHospital.about) body.about = newHospital.about;
+        
+        // Convert working hours to API format
+        if (newHospital.workingHours) {
+          body.working_hours_general = mapFrontendToApiWorkingHours(newHospital.workingHours);
+          body.working_hours_clinic = mapFrontendToApiWorkingHours(newHospital.workingHours);
+          body.working_hours_clinic_nobreak = mapFrontendToApiWorkingHours(newHospital.workingHours);
+        }
+        
+        return {
+          url: `/hospital`,
+          method: "POST",
+          body: body,
+        };
+      },
       transformResponse: (response: AuthResponse) => {
         const token = response.token || response.accessToken;
         if (token) {
@@ -710,13 +818,50 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
+    // ✅ UPDATED: Include workingHours in the update with proper API format
     updateHospital: builder.mutation<Hospital, { id: string; updateHospital: any }>({
-      query: ({ id, updateHospital }) => ({
-        url: `/hospital/${id}`,
-        method: "PUT",
-        body: updateHospital,
-      }),
+      query: ({ id, updateHospital }) => {
+        const body: any = {
+          name: updateHospital.name,
+          email: updateHospital.email,
+          type: updateHospital.type,
+          phone: updateHospital.phone,
+        };
+        
+        if (updateHospital.address) {
+          body.address = updateHospital.address;
+        }
+        
+        // Include workingHours if present - convert to API format
+        if (updateHospital.workingHours) {
+          const apiWorkingHours = mapFrontendToApiWorkingHours(updateHospital.workingHours);
+          body.working_hours_general = apiWorkingHours;
+          body.working_hours_clinic = apiWorkingHours;
+          body.working_hours_clinic_nobreak = apiWorkingHours;
+        }
+        
+        // Include any other fields that might be in the update
+        if (updateHospital.emergencyContact) body.emergencyContact = updateHospital.emergencyContact;
+        if (updateHospital.latitude !== undefined) body.latitude = updateHospital.latitude;
+        if (updateHospital.longitude !== undefined) body.longitude = updateHospital.longitude;
+        if (updateHospital.about) body.about = updateHospital.about;
+        
+        return {
+          url: `/hospital/${id}`,
+          method: "PUT",
+          body: body,
+        };
+      },
       invalidatesTags: (result, error, { id }) => [{ type: "Hospital", id }],
+      transformResponse: (response: Hospital) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to update hospital",
+        };
+      },
     }),
 
     deleteHospital: builder.mutation<{ message: string }, string>({
