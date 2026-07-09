@@ -1,13 +1,72 @@
 // src/components/super-admin/HospitalAppointmentsList.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, CheckCircle, XCircle, Clock as ClockIcon, MapPin } from 'lucide-react';
-import { Card, Button, Pagination, Badge } from '../../ui';
+import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, CheckCircle, XCircle, Clock as ClockIcon, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Card, Button, Badge } from '../../ui';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../../socket/bookingEvents';
+// ✅ Import date formatter from shared utility
+import { formatDate } from '../../../utils/dateFormatter';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> appointments
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const HospitalAppointmentsList = () => {
   const { id } = useParams();
@@ -18,7 +77,7 @@ const HospitalAppointmentsList = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const { data: bookingsData, isLoading: isLoadingAppointments, refetch } = useGetBookingsQuery({
+  const { data: bookingsData, isLoading: isLoadingAppointments, refetch, isFetching } = useGetBookingsQuery({
     hospitalId: id,
     page: currentPage,
     limit: itemsPerPage,
@@ -27,7 +86,8 @@ const HospitalAppointmentsList = () => {
 
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery({
     hospitalId: id,
-    page: 1
+    page: 1,
+    limit: 100
   });
 
   const doctorMap = new Map();
@@ -159,9 +219,11 @@ const HospitalAppointmentsList = () => {
   return (
     <div>
       <div className="mb-6">
-        <Button variant="secondary" size="sm" onClick={() => navigate(-1)} className="mb-4">
-          <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
-        </Button>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
+          </Button>
+        </div>
         <h1 className="text-2xl font-bold text-gray-800">Appointments List</h1>
         <p className="text-sm text-gray-500 mt-1">
           Total Appointments: {totalItems}
@@ -213,7 +275,7 @@ const HospitalAppointmentsList = () => {
                     <div className="flex items-center gap-2 text-sm">
                       <Stethoscope size={14} className="text-gray-400 flex-shrink-0" />
                       <span className="text-gray-700 text-sm font-medium line-clamp-1">
-                        Dr. {doctorName}
+                        {doctorName}
                       </span>
                     </div>
                     {doctorSpeciality && (
@@ -235,7 +297,7 @@ const HospitalAppointmentsList = () => {
                   <div className="space-y-2 mb-3">
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Calendar size={12} className="text-gray-400 flex-shrink-0" />
-                      <span>{appointment.booking_date || appointment.appointmentDate || 'N/A'}</span>
+                      <span>{formatDate(appointment.booking_date || appointment.appointmentDate) || 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Clock size={12} className="text-gray-400 flex-shrink-0" />
@@ -270,18 +332,15 @@ const HospitalAppointmentsList = () => {
             })}
           </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="appointments"
-              />
-            </div>
-          )}
+          {/* Pagination Component - Simplified with < Prev 1 Next > */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isLoading || isFetching}
+          />
         </>
       ) : (
         <div className="text-center py-12">

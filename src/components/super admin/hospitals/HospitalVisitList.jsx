@@ -1,8 +1,8 @@
 // src/components/super-admin/HospitalVisitList.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, CheckCircle, XCircle, Clock as ClockIcon, MapPin, Users as UsersIcon, Filter, RefreshCcw, Download, Upload, MoreVertical, Eye, Edit, Trash2, PlayCircle } from 'lucide-react';
-import { Card, Button, Pagination, Badge, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Modal } from '../../ui';
+import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, CheckCircle, XCircle, Clock as ClockIcon, MapPin, Users as UsersIcon, Filter, RefreshCcw, Download, Upload, MoreVertical, Eye, Edit, Trash2, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Card, Button, Badge, Modal } from '../../ui';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
@@ -11,20 +11,67 @@ import { getS3ImageUrl } from '../../../../app/service/S3';
 import { socket } from '../../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../../socket/bookingEvents';
 
-// Helper functions for date formatting
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  try {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-  } catch (error) {
-    return "N/A";
-  }
+// ================= DATE FORMAT HELPER =================
+import { formatDate } from '../../../utils/dateFormatter';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> visits
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
+// Helper functions for date formatting
 const formatDateTime = (date, time) => {
   if (!date) return "N/A";
   try {
@@ -49,7 +96,9 @@ const HospitalVisitList = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const itemsPerPage = 10;
+  const [activeMenu, setActiveMenu] = useState(null);
+  const menuRef = useRef(null);
+  const itemsPerPage = 12;
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
@@ -65,7 +114,8 @@ const HospitalVisitList = () => {
 
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery({
     hospitalId: id,
-    page: 1
+    page: 1,
+    limit: 100
   });
 
   const doctorMap = new Map();
@@ -81,7 +131,7 @@ const HospitalVisitList = () => {
 
   const allVisits = bookingsData?.data || [];
   const totalItems = bookingsData?.pagination?.totalItems || allVisits.length;
-  const totalPages = bookingsData?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   // Register socket event listeners
   useEffect(() => {
@@ -157,6 +207,17 @@ const HospitalVisitList = () => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter]);
 
+  // Handle click outside for menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const getDoctorName = (doctorId) => {
     const doctor = doctorMap.get(String(doctorId));
     if (doctor) return doctor.name;
@@ -184,6 +245,7 @@ const HospitalVisitList = () => {
   const handleViewDetails = (visit) => {
     setSelectedVisit(visit);
     setShowDetailsModal(true);
+    setActiveMenu(null);
   };
 
   const handleStartVisit = (visit) => {
@@ -199,6 +261,44 @@ const HospitalVisitList = () => {
         token: visit.token
       }
     });
+    setActiveMenu(null);
+  };
+
+  const toggleMenu = (visitId, e) => {
+    e.stopPropagation();
+    setActiveMenu(activeMenu === visitId ? null : visitId);
+  };
+
+  // Row Action Menu for Card
+  const RowActionMenu = ({ visit }) => {
+    const visitId = visit.id;
+
+    return (
+      <div className="relative inline-block menu-container" ref={menuRef}>
+        <button 
+          onClick={(e) => toggleMenu(visitId, e)} 
+          className="p-1 rounded transition-colors hover:bg-gray-100"
+        >
+          <MoreVertical size={18} className="text-gray-600" />
+        </button>
+        {activeMenu === visitId && (
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+            <button 
+              onClick={() => { handleStartVisit(visit); }} 
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-t-lg"
+            >
+              <PlayCircle size={16} /> Start Visit
+            </button>
+            <button 
+              onClick={() => { handleViewDetails(visit); }} 
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+            >
+              <Eye size={16} /> View Details
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const VisitDetailsModal = ({ visit, onClose }) => {
@@ -239,7 +339,7 @@ const HospitalVisitList = () => {
                   {doctorName?.charAt(0)?.toUpperCase() || "D"}
                 </AvatarFallback>
               </ShadcnAvatar>
-              <p className="text-sm text-gray-800">Dr. {doctorName}</p>
+              <p className="text-sm text-gray-800">{doctorName}</p>
             </div>
           </div>
           <div>
@@ -284,44 +384,6 @@ const HospitalVisitList = () => {
     );
   };
 
-  // Row Action Menu
-  const RowActionMenu = ({ visit }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
-    
-    useEffect(() => {
-      const handleClickOutside = (e) => { 
-        if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false); 
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-    
-    return (
-      <div className="relative inline-block" ref={menuRef}>
-        <Button variant="ghost" size="sm" onClick={() => setShowMenu(!showMenu)} className="p-2">
-          <MoreVertical size={18} />
-        </Button>
-        {showMenu && (
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button 
-              onClick={() => { handleStartVisit(visit); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-t-lg"
-            >
-              <PlayCircle size={16} /> Start Visit
-            </button>
-            <button 
-              onClick={() => { handleViewDetails(visit); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <Eye size={16} /> View Details
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const isLoadingData = isLoading || isLoadingDoctors;
 
   if (isLoadingData) {
@@ -333,123 +395,84 @@ const HospitalVisitList = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb Navigation */}
+    <div>
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div className="text-xs text-gray-500">
-            <span className="text-gray-700">Visits</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Home</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Visits</span>
-          </div>
-        </div>
-        <h1 className="text-xl font-bold text-gray-800">Visits List</h1>
-        <p className="text-sm text-gray-500 mt-1">Total Visits: {totalItems}</p>
-      </div>
-
-      {/* Search and Action Buttons Row */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by patient name, doctor, or token..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
+          </Button>
+          
+          <div className="flex gap-2 flex-wrap items-center">
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setDepartmentFilter('');
+                setDateFilter('');
                 setCurrentPage(1);
-              }}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <Search className="w-4 h-4 text-white" />
+                refetch();
+                showSuccessToast("Refreshed visits", 2000);
+              }} 
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+              disabled={isFetching}
+            >
+              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+            </button>
+
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+                showFilters || activeFilterCount > 0 ? 'text-[#6366F1]' : 'text-gray-500'
+              } hover:bg-gray-50`}
+              title="Toggle Filters"
+            >
+              <Filter size={16} />
+              {activeFilterCount > 0 && !showFilters && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
+        <h1 className="text-2xl font-bold text-gray-800">Visits List</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Total Visits: {totalItems}
+        </p>
+      </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
-          <button 
-            onClick={() => {
-              setSearchTerm('');
-              setDepartmentFilter('');
-              setDateFilter('');
-              setCurrentPage(1);
-              refetch();
-              showSuccessToast("Refreshed visits", 2000);
-            }} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
-            disabled={isFetching}
-          >
-            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
-          </button>
-
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
-            title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search visits by patient or doctor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent border border-gray-300 outline-none"
+          />
         </div>
       </div>
 
       {/* FILTER SECTION */}
       {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
             <button onClick={() => {
               setDepartmentFilter('');
               setDateFilter('');
               setSearchTerm('');
               showSuccessToast("All filters cleared", 2000);
-            }} className="text-sm font-medium text-red-500 hover:text-red-600">
-              Clear All Filters
+            }} className="text-sm text-red-500 hover:text-red-600">
+              Clear All
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <select 
               value={departmentFilter} 
               onChange={(e) => setDepartmentFilter(e.target.value)} 
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
+              className="h-10 px-3 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6366F1] bg-white text-sm"
             >
               <option value="">All Departments</option>
               <option value="Cardiology">Cardiology</option>
@@ -463,119 +486,119 @@ const HospitalVisitList = () => {
               type="date" 
               value={dateFilter} 
               onChange={(e) => setDateFilter(e.target.value)} 
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]" 
+              className="h-10 px-3 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6366F1] text-sm" 
             />
           </div>
         </div>
       )}
 
-      {/* Visits Table */}
       {allVisits.length > 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Visits 
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
-            </h2>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {allVisits.map((visit) => {
+              const doctorName = getDoctorName(visit.doctorId);
+              const doctorSpeciality = getDoctorSpeciality(visit.doctorId);
+              
+              return (
+                <Card key={visit.id} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">
+                        {visit.patient_name || visit.patientName || 'Patient'}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Token: {visit.token || 'N/A'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Hospital ID: {visit.hospitalId}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+                        <CheckCircle size={12} /> Confirmed
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Stethoscope size={14} className="text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-700 text-sm font-medium line-clamp-1">
+                        {doctorName}
+                      </span>
+                    </div>
+                    {doctorSpeciality && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <User size={12} className="text-gray-400 flex-shrink-0" />
+                        <span className="line-clamp-1">{doctorSpeciality}</span>
+                      </div>
+                    )}
+                    {visit.department && !doctorSpeciality && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <User size={12} className="text-gray-400 flex-shrink-0" />
+                        <span className="line-clamp-1">{visit.department}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-gray-100 my-2"></div>
+
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <Calendar size={12} className="text-gray-400 flex-shrink-0" />
+                      <span>{formatDate(visit.booking_date || visit.appointmentDate) || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <Clock size={12} className="text-gray-400 flex-shrink-0" />
+                      <span>{visit.consulting_time || 'N/A'}</span>
+                    </div>
+                    {visit.patient_phone && (
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Phone size={12} className="text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{visit.patient_phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {visit.reason && (
+                    <>
+                      <div className="border-t border-gray-100 my-2"></div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        <span className="font-medium">Reason:</span>
+                        <p className="mt-0.5 line-clamp-2">{visit.reason}</p>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <button 
+                      onClick={() => handleStartVisit(visit)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-xs font-medium"
+                    >
+                      <PlayCircle size={14} /> Start Visit
+                    </button>
+                    <RowActionMenu visit={visit} />
+                  </div>
+                </Card>
+              );
+            })}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                <tr>
-                  <th className="px-6 py-3">Visit ID</th>
-                  <th className="px-6 py-3">Patient</th>
-                  <th className="px-6 py-3">Doctor</th>
-                  <th className="px-6 py-3">Department</th>
-                  <th className="px-6 py-3">Date & Time</th>
-                  <th className="px-6 py-3">Token</th>
-                  <th className="px-6 py-3 text-right w-16">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allVisits.map((visit, index) => {
-                  const doctorName = getDoctorName(visit.doctorId);
-                  const doctorImage = getDoctorImage(visit.doctorId);
-                  
-                  return (
-                    <tr key={visit.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                        #{visit.id || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <ShadcnAvatar className="w-8 h-8">
-                            <AvatarImage 
-                              src={getS3ImageUrl(visit.patient_image || visit.patientImage)} 
-                              alt={visit.patient_name || visit.patientName || 'Patient'}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                              {(visit.patient_name || visit.patientName || 'P')?.charAt(0)?.toUpperCase() || "P"}
-                            </AvatarFallback>
-                          </ShadcnAvatar>
-                          <div>
-                            <span className="font-medium text-gray-800">
-                              {visit.patient_name || visit.patientName || 'Patient'}
-                            </span>
-                            <p className="text-xs text-gray-400">ID: {visit.patientId || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <ShadcnAvatar className="w-6 h-6">
-                            <AvatarImage 
-                              src={getS3ImageUrl(doctorImage)} 
-                              alt={doctorName}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
-                              {doctorName?.charAt(0)?.toUpperCase() || "D"}
-                            </AvatarFallback>
-                          </ShadcnAvatar>
-                          <span className="text-gray-600">Dr. {doctorName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{visit.department || 'N/A'}</td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {formatDateTime(visit.booking_date || visit.appointmentDate, visit.consulting_time)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700">
-                          #{visit.token || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <RowActionMenu visit={visit} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="visits"
-              />
-            </div>
-          )}
-        </div>
+          {/* Pagination Component - Simplified with < Prev 1 Next > */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isLoading || isFetching}
+          />
+        </>
       ) : (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No visits found</h3>
+        <div className="text-center py-12">
+          <Calendar size={48} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">
-            {searchTerm ? 'No visits match your search' : 'No accepted appointments found for this hospital'}
+            {searchTerm ? 'No visits match your search' : 'No visits found for this hospital'}
           </p>
         </div>
       )}

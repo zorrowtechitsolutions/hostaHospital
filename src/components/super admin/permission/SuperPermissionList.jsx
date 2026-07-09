@@ -1,7 +1,7 @@
 // src/components/super admin/permission/SuperPermissionList.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, Card, Modal, Input, Alert, SearchBar } from "../../ui";
+import { Button, Card, Modal, Input, Alert } from "../../ui";
 import { showSuccessToast, showErrorToast, showWarningToast } from "../../ui/Toast";
 import { 
   useCreateRolePermissionMutation, 
@@ -13,10 +13,67 @@ import {
   useUpdatePermissionMutation,
   useDeletePermissionMutation
 } from "../../../../app/service/permission";
-import { Plus, Edit, Trash2, Eye, RefreshCw, Search, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { socket } from '../../../socket/socket';
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
 import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> permissions
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md min-w-[32px] text-center">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const SuperPermissionList = () => {
   const { roleId } = useParams();
@@ -25,6 +82,8 @@ const SuperPermissionList = () => {
   const [mainModules, setMainModules] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -42,7 +101,18 @@ const SuperPermissionList = () => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const [createRolePermission] = useCreateRolePermissionMutation();
-  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
+  
+  // ✅ Use server-side pagination - pass page parameter
+  const { 
+    data: permissionsData, 
+    isLoading: isLoadingPermissions, 
+    refetch: refetchPermissions,
+    isFetching 
+  } = useGetPermissionsQuery({ 
+    limit: itemsPerPage,
+    page: currentPage
+  });
+  
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({ roleId });
   
   const [createPermission, { isLoading: isCreating }] = useCreatePermissionMutation();
@@ -50,6 +120,10 @@ const SuperPermissionList = () => {
   const [deletePermission, { isLoading: isDeleting }] = useDeletePermissionMutation();
 
   const ACTIONS = ['create', 'edit', 'delete', 'view', 'manage'];
+
+  // ✅ Get pagination from API response
+  const totalItems = permissionsData?.pagination?.totalItems || 0;
+  const totalPages = permissionsData?.pagination?.totalPages || 1;
 
   // Register socket event listeners
   useEffect(() => {
@@ -176,9 +250,15 @@ const SuperPermissionList = () => {
     }
   }, [permissionData, mainModules.length]);
 
+  // Filter modules based on search
   const filteredModules = mainModules.filter(module => 
     module.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // ✅ Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const togglePermission = (moduleIndex, permissionType) => {
     setMainModules(prev => prev.map((mod, mi) => 
@@ -530,12 +610,6 @@ const SuperPermissionList = () => {
           )}
         </div>
 
-        <Alert 
-          type="error" 
-          message="Deleting this permission will remove it from all roles that have it assigned." 
-          className="mb-2"
-        />
-
         <div className="flex justify-end gap-3 mt-4 pt-4 border-t">
           <Button variant="outline" onClick={() => { setShowDeleteModal(false); setSelectedPermission(null); }}>Cancel</Button>
           <Button
@@ -635,6 +709,14 @@ const SuperPermissionList = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           
           <div className="flex gap-2">
@@ -643,7 +725,7 @@ const SuperPermissionList = () => {
               onClick={() => refetchPermissions()}
               className="flex items-center gap-2"
             >
-              <RefreshCw size={16} /> Refresh
+              <RefreshCw size={16} className={isFetching ? "animate-spin" : ""} /> Refresh
             </Button>
             <Button
               onClick={() => setShowCreateModal(true)}
@@ -659,106 +741,109 @@ const SuperPermissionList = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <TableHeader className="text-left">Module</TableHeader>
-                  <TableHeader className="text-center">Create</TableHeader>
-                  <TableHeader className="text-center">Edit</TableHeader>
-                  <TableHeader className="text-center">Delete</TableHeader>
-                  <TableHeader className="text-center">View</TableHeader>
-                  <TableHeader className="text-center">Allow All</TableHeader>
-                  <TableHeader className="text-center">Actions</TableHeader>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Create</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Edit</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Delete</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">View</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Allow All</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredModules.length > 0 ? (
-                  filteredModules.map((module, mi) => (
-                    <tr key={module.id} className="hover:bg-gray-50 transition-colors">
-                      <TableCell>
-                        <span className="font-medium text-gray-800">{module.name}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={module.create} 
-                          onChange={() => togglePermission(mi, "create")}
-                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          disabled={!module.createId}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={module.edit} 
-                          onChange={() => togglePermission(mi, "edit")}
-                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          disabled={!module.editId}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={module.delete} 
-                          onChange={() => togglePermission(mi, "delete")}
-                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          disabled={!module.deleteId}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={module.view} 
-                          onChange={() => togglePermission(mi, "view")}
-                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          disabled={!module.viewId}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={isAllChecked(module)} 
-                          onChange={() => toggleAllowAll(mi)}
-                          className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                          disabled={!module.createId && !module.editId && !module.deleteId && !module.viewId}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => {
-                              const perm = module.permissions?.[0];
-                              if (perm) openViewModal(perm);
-                            }}
-                            className="p-1 hover:bg-blue-100 rounded-full transition-colors text-blue-600"
-                            title="View Details"
-                            disabled={!module.permissions?.length}
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              const perm = module.permissions?.[0];
-                              if (perm) openEditModal(perm);
-                            }}
-                            className="p-1 hover:bg-yellow-100 rounded-full transition-colors text-yellow-600"
-                            title="Edit Permission"
-                            disabled={!module.permissions?.length}
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              const perm = module.permissions?.[0];
-                              if (perm) openDeleteModal(perm);
-                            }}
-                            className="p-1 hover:bg-red-100 rounded-full transition-colors text-red-600"
-                            title="Delete Permission"
-                            disabled={!module.permissions?.length}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </tr>
-                  ))
+                  filteredModules.map((module, mi) => {
+                    const actualIndex = mainModules.indexOf(module);
+                    return (
+                      <tr key={module.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-800">{module.name}</span>
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          <input 
+                            type="checkbox" 
+                            checked={module.create} 
+                            onChange={() => togglePermission(actualIndex, "create")}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            disabled={!module.createId}
+                          />
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          <input 
+                            type="checkbox" 
+                            checked={module.edit} 
+                            onChange={() => togglePermission(actualIndex, "edit")}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            disabled={!module.editId}
+                          />
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          <input 
+                            type="checkbox" 
+                            checked={module.delete} 
+                            onChange={() => togglePermission(actualIndex, "delete")}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            disabled={!module.deleteId}
+                          />
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          <input 
+                            type="checkbox" 
+                            checked={module.view} 
+                            onChange={() => togglePermission(actualIndex, "view")}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            disabled={!module.viewId}
+                          />
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          <input 
+                            type="checkbox" 
+                            checked={isAllChecked(module)} 
+                            onChange={() => toggleAllowAll(actualIndex)}
+                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                            disabled={!module.createId && !module.editId && !module.deleteId && !module.viewId}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => {
+                                const perm = module.permissions?.[0];
+                                if (perm) openViewModal(perm);
+                              }}
+                              className="p-1 hover:bg-blue-100 rounded-full transition-colors text-blue-600"
+                              title="View Details"
+                              disabled={!module.permissions?.length}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const perm = module.permissions?.[0];
+                                if (perm) openEditModal(perm);
+                              }}
+                              className="p-1 hover:bg-yellow-100 rounded-full transition-colors text-yellow-600"
+                              title="Edit Permission"
+                              disabled={!module.permissions?.length}
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const perm = module.permissions?.[0];
+                                if (perm) openDeleteModal(perm);
+                              }}
+                              className="p-1 hover:bg-red-100 rounded-full transition-colors text-red-600"
+                              title="Delete Permission"
+                              disabled={!module.permissions?.length}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
@@ -771,12 +856,15 @@ const SuperPermissionList = () => {
           </div>
         </Card>
 
-        <div className="mt-4 flex justify-between items-center">
-          <span className="text-sm text-gray-500">
-            Total Modules: <span className="font-semibold">{filteredModules.length}</span>
-            {searchTerm && ` (filtered from ${mainModules.length})`}
-          </span>
-        </div>
+        {/* ✅ Pagination - Using API pagination data */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          isLoading={isLoadingPermissions || isFetching}
+        />
 
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="outline" onClick={() => navigate('/super-admin/super-permissions')}>Cancel</Button>

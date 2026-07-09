@@ -49,7 +49,6 @@ const extractNumericId = (id) => {
 
 // ✅ NEW: Helper to get patient ID from appointment data
 const getPatientIdFromAppointment = (appointmentData) => {
-  console.log("🔍 Extracting patient ID from appointment:", appointmentData);
   
   // Priority 1: Check patient object
   if (appointmentData.patient) {
@@ -57,21 +56,18 @@ const getPatientIdFromAppointment = (appointmentData) => {
     if (appointmentData.patient.id) {
       const numericId = extractNumericId(appointmentData.patient.id);
       if (numericId) {
-        console.log("✅ Found numeric patient ID from patient.id:", numericId);
         return numericId;
       }
     }
     if (appointmentData.patient.patientId) {
       const numericId = extractNumericId(appointmentData.patient.patientId);
       if (numericId) {
-        console.log("✅ Found numeric patient ID from patient.patientId:", numericId);
         return numericId;
       }
     }
     if (appointmentData.patient._id) {
       const numericId = extractNumericId(appointmentData.patient._id);
       if (numericId) {
-        console.log("✅ Found numeric patient ID from patient._id:", numericId);
         return numericId;
       }
     }
@@ -82,12 +78,10 @@ const getPatientIdFromAppointment = (appointmentData) => {
     // If patientId is like "#PT0003", extract the numeric part
     const numericId = extractNumericId(appointmentData.patientId);
     if (numericId) {
-      console.log("✅ Extracted numeric ID from patientId:", numericId);
       return numericId;
     }
     // If it's already a number or numeric string
     if (!isNaN(appointmentData.patientId)) {
-      console.log("✅ PatientId is already numeric:", appointmentData.patientId);
       return Number(appointmentData.patientId);
     }
   }
@@ -96,7 +90,6 @@ const getPatientIdFromAppointment = (appointmentData) => {
   if (appointmentData.userId) {
     const numericId = extractNumericId(appointmentData.userId);
     if (numericId) {
-      console.log("✅ Found numeric user ID:", numericId);
       return numericId;
     }
   }
@@ -105,7 +98,6 @@ const getPatientIdFromAppointment = (appointmentData) => {
   if (appointmentData.patientData?.id) {
     const numericId = extractNumericId(appointmentData.patientData.id);
     if (numericId) {
-      console.log("✅ Found numeric ID from patientData.id:", numericId);
       return numericId;
     }
   }
@@ -294,7 +286,6 @@ const Consultation = () => {
   // ✅ Force refetch when patientId changes
   useEffect(() => {
     if (patientId && patientId !== currentPatientId) {
-      console.log("🔄 Patient ID changed, refetching...");
       setCurrentPatientId(patientId);
       refetchPatient();
     }
@@ -307,13 +298,6 @@ const Consultation = () => {
   const getHospitalTemplate = () => {
     const allTemplates = existingTemplates?.data || [];
     
-    console.log("🏥 Current Hospital ID:", currentHospitalId);
-    console.log("📋 All Templates:", allTemplates.map(t => ({
-      id: t.id,
-      type: t.templateType,
-      hospitalId: t.hospitalId,
-      name: t.name
-    })));
 
     // ✅ First try to find a custom template for this hospital
     const customTemplate = allTemplates.find(
@@ -321,7 +305,6 @@ const Consultation = () => {
     );
     
     if (customTemplate) {
-      console.log("✅ Found CUSTOM template for hospital:", currentHospitalId);
       return customTemplate;
     }
 
@@ -331,12 +314,10 @@ const Consultation = () => {
     );
     
     if (demoTemplate) {
-      console.log("✅ Found DEMO template (no custom for hospital:", currentHospitalId, ")");
       return demoTemplate;
     }
 
     // ✅ Fallback to any template or null
-    console.log("⚠️ No template found, using default");
     return null;
   };
 
@@ -361,26 +342,20 @@ const Consultation = () => {
 
   // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering prescription event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
     
     registerPrescriptionEvents({
       onPrescriptionCreated: async (data) => {
-        console.log("📋 NEW PRESCRIPTION CREATED:", data);
         showSuccessToast(`New prescription created!`, 3000);
       },
       onPrescriptionUpdated: async (data) => {
-        console.log("✏️ PRESCRIPTION UPDATED:", data);
         showSuccessToast(`Prescription updated!`, 3000);
       },
       onPrescriptionDeleted: async (data) => {
-        console.log("🗑️ PRESCRIPTION DELETED:", data);
         showSuccessToast(`Prescription deleted!`, 3000);
       }
     });
 
     return () => {
-      console.log("🧹 Unregistering prescription events...");
       unregisterPrescriptionEvents();
     };
   }, []);
@@ -388,11 +363,9 @@ const Consultation = () => {
   // ✅ Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Prescription events will work!");
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Prescription events won't work!");
     };
 
     socket.on("connect", handleConnect);
@@ -407,7 +380,6 @@ const Consultation = () => {
   // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PRESCRIPTION: ${event}:`, args);
     };
 
     socket.onAny(handleAnyEvent);
@@ -417,29 +389,10 @@ const Consultation = () => {
     };
   }, []);
 
-  // ✅ Enhanced debug logging with current patient data
-  useEffect(() => {
-    console.log("=== CONSULTATION PAGE DEBUG ===");
-    console.log("Appointment Data received:", appointmentData);
-    console.log("Patient ID extracted:", patientId);
-    console.log("Patient Name from appointment:", patientNameFromAppointment);
-    console.log("Current Patient ID state:", currentPatientId);
-    console.log("Patient Data fetched:", patientData);
-    console.log("Extracted patient:", patient);
-    console.log("Patient name from API:", patient?.name);
-    console.log("Patient gender from API:", patient?.gender);
-    console.log("Patient ID from API:", patient?.id);
-    console.log("==============================");
-  }, [appointmentData, patientData, patientId, currentPatientId, patient, patientNameFromAppointment]);
 
   // Debug template data
   useEffect(() => {
-    console.log("=== PRESCRIPTION TEMPLATE DEBUG ===");
-    console.log("Existing Templates:", existingTemplates);
-    console.log("Current Hospital:", currentHospitalId);
     const selected = getHospitalTemplate();
-    console.log("Selected Template:", selected);
-    console.log("================================");
   }, [existingTemplates, currentHospitalId]);
 
   const validateMedication = (med) => {
@@ -818,11 +771,6 @@ const Consultation = () => {
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
       
-      console.log("=== PATIENT ID VERIFICATION ===");
-      console.log("Extracted Patient ID:", extractedPatientId);
-      console.log("Patient ID type:", typeof extractedPatientId);
-      console.log("Patient from API:", patient);
-      console.log("================================");
       
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
@@ -844,13 +792,6 @@ const Consultation = () => {
       const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
       const templateType = selectedTemplate?.templateType || "demo";
 
-      console.log("📋 Using template:", {
-        templateId: selectedTemplate?.id,
-        templateType: templateType,
-        designLength: templateDesign.length,
-        hospitalId: currentHospitalId,
-        isCustom: templateType === "custom"
-      });
       
       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
 
@@ -896,11 +837,6 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      console.log("=== FINAL PRESCRIPTION PAYLOAD ===");
-      console.log("Patient ID in payload:", prescriptionData.patientId);
-      console.log("Patient Name in payload:", prescriptionData.patientName);
-      console.log(JSON.stringify(prescriptionData, null, 2));
-      console.log("===================================");
 
       const result = await createPrescription(prescriptionData).unwrap();
 
@@ -912,7 +848,6 @@ const Consultation = () => {
           hospitalId: extractedHospitalId,
           bookingId: bookingId,
         });
-        console.log("📤 Emitted PRESCRIPTION_CREATED event");
       }
 
       await updateBooking({
@@ -922,7 +857,6 @@ const Consultation = () => {
         }
       }).unwrap();
 
-      console.log("✅ Prescription response:", result);
       
       showSuccessToast("Consultation completed successfully");
       navigate("/visits", {

@@ -21,7 +21,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { hasPermission } from "../utils/permission";
 
-// Menu with permission IDs - Dashboard has no permission (always visible)
+// Menu with permission IDs - Dashboard and Help have no permission (always visible)
 const menu = [
   {
     title: "MAIN",
@@ -91,7 +91,7 @@ const menu = [
   },
   {
     title: "HELP",
-    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help", permissionId: 53 }],
+    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }], // No permissionId - always visible
   },
 ];
 
@@ -123,8 +123,10 @@ export default function Sidebar({ sidebarOpen }) {
       .map((section) => {
         const visibleItems = section.items
           .map((item) => {
-            // Dashboard is always visible
-            if (item.path === "/dashboard") return item;
+            // Dashboard and Help are always visible (no permission check)
+            if (item.path === "/dashboard" || item.path === "/help") {
+              return item;
+            }
             
             // For items with dropdown
             if (item.hasDropdown) {
@@ -143,7 +145,7 @@ export default function Sidebar({ sidebarOpen }) {
               };
             }
             
-            // For regular items
+            // For regular items with permission
             if (!item.permissionId) return item;
             if (!hasPermission(item.permissionId)) return null;
             

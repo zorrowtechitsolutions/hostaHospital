@@ -280,7 +280,7 @@ const Login = () => {
     if (role === 'super_admin') {
       welcomeMessage = `Welcome Super Admin ${authData.name}!`;
     } else if (role === 'doctor') {
-      welcomeMessage = `Welcome Dr. ${authData.name}!`;
+      welcomeMessage = `Welcome ${authData.name}!`;
     } else if (role === 'staff') {
       welcomeMessage = `Welcome ${authData.name}!`;
     } else {

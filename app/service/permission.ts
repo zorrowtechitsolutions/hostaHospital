@@ -19,6 +19,12 @@ export interface PermissionResponse {
   success: boolean;
   message?: string;
   data?: Permission[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    itemsPerPage: number;
+  };
 }
 
 // ================= API =================
@@ -26,9 +32,14 @@ export interface PermissionResponse {
 export const permissionApi = api.injectEndpoints({
   endpoints: (builder) => ({
     
-    // ✅ UPDATED: Get permissions with limit support
-    getPermissions: builder.query<PermissionResponse, { limit?: number; module?: string }>({
-      query: ({ limit, module }) => {
+    // ✅ Get permissions with pagination support
+    getPermissions: builder.query<PermissionResponse, { 
+      limit?: number; 
+      module?: string;
+      page?: number;
+      search?: string;
+    } | void>({
+      query: (params) => {
         const queryParams = new URLSearchParams();
         
         const hospitalId = getHospitalId();
@@ -36,9 +47,17 @@ export const permissionApi = api.injectEndpoints({
           queryParams.append("hospitalId", String(hospitalId));
         }
 
+        // ✅ Safe destructuring with default empty object
+        const { limit, module, page, search } = params || {};
+
         // ✅ Add limit if provided
         if (limit) {
           queryParams.append("limit", String(limit));
+        }
+
+        // ✅ Add page if provided
+        if (page) {
+          queryParams.append("page", String(page));
         }
 
         // ✅ Add module filter if provided
@@ -46,10 +65,30 @@ export const permissionApi = api.injectEndpoints({
           queryParams.append("module", module);
         }
 
+        // ✅ Add search filter if provided
+        if (search) {
+          queryParams.append("search", search);
+        }
+
         const queryString = queryParams.toString();
         return `/permission${queryString ? `?${queryString}` : ""}`;
       },
       providesTags: ["Permission"],
+      transformResponse: (response: PermissionResponse) => {
+        // Ensure pagination data is properly structured
+        if (response.data && Array.isArray(response.data)) {
+          return {
+            ...response,
+            pagination: response.pagination || {
+              totalItems: response.data.length,
+              totalPages: 1,
+              currentPage: 1,
+              itemsPerPage: response.data.length
+            }
+          };
+        }
+        return response;
+      },
     }),
 
     // Get permission by ID

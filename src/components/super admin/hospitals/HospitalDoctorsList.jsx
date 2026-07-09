@@ -1,8 +1,8 @@
 // src/components/super-admin/hospitals/HospitalDoctorsList.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Stethoscope, Phone, Mail, MapPin, Loader2, GraduationCap, Clock, Edit, Trash2, Plus, RotateCcw, MoreVertical } from 'lucide-react';
-import { Card, Button, Pagination, Modal, Badge } from '../../ui';
+import { ArrowLeft, Search, Stethoscope, Phone, Mail, MapPin, Loader2, GraduationCap, Clock, Edit, Trash2, Plus, RotateCcw, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Card, Button, Modal, Badge } from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { useGetDoctorsQuery, useDeleteDoctorMutation, useRecoverDoctorMutation } from '../../../../app/service/doctorApi';
 import { socket } from '../../../socket/socket';
@@ -21,6 +21,63 @@ const getImageUrlWithCache = (imageKey) => {
   return `${url}${separator}_t=${Date.now()}`;
 };
 
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> doctors
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const HospitalDoctorsList = () => {
   const { id: hospitalId } = useParams();
   const navigate = useNavigate();
@@ -34,7 +91,7 @@ const HospitalDoctorsList = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const { data: doctorsData, isLoading, refetch } = useGetDoctorsQuery({
+  const { data: doctorsData, isLoading, refetch, isFetching } = useGetDoctorsQuery({
     hospitalId: hospitalId,
     page: currentPage,
     limit: itemsPerPage,
@@ -304,7 +361,7 @@ const HospitalDoctorsList = () => {
   return (
     <div>
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <Button variant="secondary" size="sm" onClick={() => navigate(`/super-admin/hospitals/${hospitalId}`)}>
             <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
           </Button>
@@ -467,18 +524,15 @@ const HospitalDoctorsList = () => {
             })}
           </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="doctors"
-              />
-            </div>
-          )}
+          {/* Pagination Component - Simplified with < Prev 1 Next > */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isLoading || isFetching}
+          />
         </>
       ) : (
         <div className="text-center py-12">

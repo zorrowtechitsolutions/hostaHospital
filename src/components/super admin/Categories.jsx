@@ -12,6 +12,8 @@ import {
   MoreVertical,
   Image as ImageIcon,
   Upload,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   useGetCategoryQuery,
@@ -23,6 +25,63 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { socket } from '../../socket/socket';
 import { registerCategoryEvents, unregisterCategoryEvents } from '../../socket/categoryEvents';
 import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../app/service/S3';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> categories
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // ================= HELPER FUNCTIONS =================
 
@@ -212,6 +271,10 @@ const Categories = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   
+  // ✅ Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+  
   const [eventsRegistered, setEventsRegistered] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -226,15 +289,18 @@ const Categories = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
+  // ✅ Added limit: 1000 to fetch all categories
   const { 
     data: categoriesData, 
     isLoading, 
     error, 
-    refetch 
+    refetch,
+    isFetching
   } = useGetCategoryQuery({
     search_query: searchTerm || undefined,
     sortBy: 'name',
-    sortOrder: 'asc'
+    sortOrder: 'asc',
+    limit: 1000 // ✅ Set limit to 1000 to get all categories
   });
 
   const [createCategory, { isLoading: isCreating }] = useCreateCategoryMutation();
@@ -308,13 +374,27 @@ const Categories = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ✅ Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const categories = categoriesData?.data && Array.isArray(categoriesData.data) 
     ? categoriesData.data 
     : [];
 
+  // ✅ Client-side filtering and pagination
   const filteredCategories = categories.filter(category => 
     category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // ✅ Client-side pagination
+  const paginatedCategories = filteredCategories.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+  const totalItems = filteredCategories.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   // Helper to get category ID (handles both `id` and `_id`)
   const getCategoryId = (category) => {
@@ -657,7 +737,7 @@ const Categories = () => {
       )}
 
       {/* No Categories State */}
-      {!isLoading && !error && categories.length === 0 && (
+      {!isLoading && !error && categories.length === 0 && !searchTerm && (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <div className="text-6xl mb-4">📂</div>
           <h3 className="text-lg font-medium text-gray-700 mb-2">No Categories Found</h3>
@@ -671,108 +751,129 @@ const Categories = () => {
         </div>
       )}
 
+      {/* No Results for Search */}
+      {!isLoading && !error && categories.length > 0 && filteredCategories.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <div className="text-6xl mb-4">🔍</div>
+          <h3 className="text-lg font-medium text-gray-700 mb-2">No Results Found</h3>
+          <p className="text-gray-500">No categories match your search term "{searchTerm}"</p>
+        </div>
+      )}
+
       {/* Categories Grid */}
-      {!isLoading && !error && categories.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredCategories.map((category) => {
-            // Use cache-busted URL for image
-            const imageUrl = category.imageUrl ? getImageUrlWithCache(category.imageUrl) : null;
-            const categoryId = getCategoryId(category);
-            
-            return (
-              <div
-                key={categoryId || Math.random().toString()}
-                className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative"
-              >
-                {/* Three-Dot Menu - Top Right */}
-                <div className="absolute top-3 right-3 category-menu-container">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMenu(categoryId);
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                    title="More options"
-                  >
-                    <MoreVertical size={18} className="text-gray-600" />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {openMenuId === categoryId && (
-                    <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 category-menu-dropdown">
-                      {/* Edit */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEditModal(category);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150"
-                      >
-                        <Edit2 size={16} className="text-blue-600" />
-                        <span>Edit</span>
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(category);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150 text-red-600"
-                      >
-                        <Trash2 size={16} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col items-center mt-4">
-                  {/* Category Image or Initial */}
-                  {imageUrl ? (
-                    <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
-                      <img 
-                        src={imageUrl} 
-                        alt={category.name} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // If image fails to load, try without cache busting
-                          const fallbackUrl = getS3ImageUrl(category.imageUrl);
-                          if (fallbackUrl && e.target.src !== fallbackUrl) {
-                            e.target.src = fallbackUrl;
-                          }
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div 
-                      className="w-32 h-32 rounded-full flex items-center justify-center mb-4 text-5xl font-bold text-white"
-                      style={{ backgroundColor: getInitialColor(category.name) }}
+      {!isLoading && !error && filteredCategories.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {paginatedCategories.map((category) => {
+              // Use cache-busted URL for image
+              const imageUrl = category.imageUrl ? getImageUrlWithCache(category.imageUrl) : null;
+              const categoryId = getCategoryId(category);
+              
+              return (
+                <div
+                  key={categoryId || Math.random().toString()}
+                  className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative"
+                >
+                  {/* Three-Dot Menu - Top Right */}
+                  <div className="absolute top-3 right-3 category-menu-container">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMenu(categoryId);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                      title="More options"
                     >
-                      <span>{category.name.charAt(0).toUpperCase()}</span>
+                      <MoreVertical size={18} className="text-gray-600" />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {openMenuId === categoryId && (
+                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 category-menu-dropdown">
+                        {/* Edit */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditModal(category);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150"
+                        >
+                          <Edit2 size={16} className="text-blue-600" />
+                          <span>Edit</span>
+                        </button>
+
+                        {/* Delete */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(category);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150 text-red-600"
+                        >
+                          <Trash2 size={16} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-center mt-4">
+                    {/* Category Image or Initial */}
+                    {imageUrl ? (
+                      <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
+                        <img 
+                          src={imageUrl} 
+                          alt={category.name} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // If image fails to load, try without cache busting
+                            const fallbackUrl = getS3ImageUrl(category.imageUrl);
+                            if (fallbackUrl && e.target.src !== fallbackUrl) {
+                              e.target.src = fallbackUrl;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div 
+                        className="w-32 h-32 rounded-full flex items-center justify-center mb-4 text-5xl font-bold text-white"
+                        style={{ backgroundColor: getInitialColor(category.name) }}
+                      >
+                        <span>{category.name.charAt(0).toUpperCase()}</span>
+                      </div>
+                    )}
+
+                    {/* Category Name - Title Case */}
+                    <h3 className="text-xl font-semibold text-gray-800 text-center mb-1">
+                      {toTitleCase(category.name)}
+                    </h3>
+
+                    {/* Status Badge */}
+                    <div className="mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        category.isActive 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {category.isActive ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
-                  )}
-
-                  {/* Category Name - Title Case */}
-                  <h3 className="text-xl font-semibold text-gray-800 text-center mb-1">
-                    {toTitleCase(category.name)}
-                  </h3>
-
-                  {/* Status Badge */}
-                  <div className="mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      category.isActive 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {category.isActive ? 'Active' : 'Inactive'}
-                    </span>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* ✅ Pagination - Simplified with < Prev 1 Next > */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isLoading || isFetching}
+          />
+        </>
       )}
 
       {/* Create/Edit Modal */}

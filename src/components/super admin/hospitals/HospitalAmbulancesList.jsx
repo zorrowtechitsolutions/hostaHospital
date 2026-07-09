@@ -12,15 +12,16 @@ import {
   Upload,
   Trash2,
   MapPin,
-  Truck
+  Truck,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import DeleteModal from '../../patients/DeleteModel';
 import AddAmbulanceModal from '../../Ambulance/AddAmbulanceModal';
 import EditAmbulanceModal from '../../Ambulance/EditAmbulanceModal';
 import ViewAmbulanceModal from '../../Ambulance/ViewAmbulanceModal';
 import { 
-  Badge, 
-  Pagination
+  Badge
 } from '../../ui';
 import { 
   useGetAmbulanceQuery,
@@ -33,6 +34,63 @@ import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 // Import socket
 import { socket } from '../../../socket/socket';
 import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../../socket/ambulanceEvents';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> ambulances
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const ambulanceTypes = [
   "Basic Life Support (BLS)",
@@ -568,19 +626,14 @@ const HospitalAmbulancesList = () => {
           </div>
 
           {/* ✅ Pagination for Grid View - Using server-side totalPages */}
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="ambulances"
-                variant="centered"
-              />
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isFetching}
+          />
         </>
       )}
 
@@ -660,15 +713,15 @@ const HospitalAmbulancesList = () => {
               </table>
             </div>
 
-            {/* ✅ Pagination */}
+            {/* ✅ Pagination for List View */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
+                totalPages={totalPages}
                 onPageChange={handlePageChange}
                 totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
-                itemLabel="ambulances"
+                isLoading={isFetching}
               />
             </div>
           </div>

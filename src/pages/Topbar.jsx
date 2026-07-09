@@ -132,7 +132,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         email: doctor?.email || user?.email || storedUser?.email || '',
         profileImage: profileImage,
         role: 'doctor',
-        roleLabel: 'Doctor'
+        roleLabel: 'Doctor',
+        id: doctor?.id || userId
       };
     }
     
@@ -144,7 +145,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         email: staff?.email || user?.email || storedUser?.email || '',
         profileImage: profileImage,
         role: 'staff',
-        roleLabel: 'Staff'
+        roleLabel: 'Staff',
+        id: staff?.id || userId
       };
     }
     
@@ -156,7 +158,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       email: user?.email || hospital?.email || storedUser?.email || '',
       profileImage: profileImage,
       role: 'hospital',
-      roleLabel: 'Hospital Admin'
+      roleLabel: 'Hospital Admin',
+      id: hospital?.id || userId
     };
   };
   
@@ -179,15 +182,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     (n) => !n.hospitalReadStatus?.[hospitalId]
   ).length;
 
-  // ✅ FIXED: Debug useEffect - moved AFTER all variables are defined
-  useEffect(() => {
-    console.log('🔍 TopBar Debug:');
-    console.log('  userRole:', userRole);
-    console.log('  userId:', userId);
-    console.log('  profileImageUrl:', profileImageUrl);
-    console.log('  imageError:', imageError);
-  }, [userRole, userId, profileImageUrl, imageError]);
-
   // ✅ Reset image error when profileImageUrl changes
   useEffect(() => {
     setImageError(false);
@@ -204,56 +198,153 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     }
   };
 
-  // ✅ Updated logout handler
+  // ✅ COMPLETE LOGOUT HANDLER - Works for all roles (Hospital, Doctor, Staff, Super Admin)
   const handleLogout = async () => {
     try {
-      // ✅ Get deviceId from IndexedDB
+      // ✅ 1. Get user information from multiple sources
+      const authData = JSON.parse(localStorage.getItem('authData') || '{}');
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const storedUserRole = localStorage.getItem('userRole') || 'hospital';
+      const storedHospitalId = localStorage.getItem('hospitalId') || '';
+      
+      // ✅ 2. Determine user ID (priority: params > authData > userData > hospitalId)
+      let userId = profileData.id || authData?.id || authData?.userId || authData?.hospitalId || '';
+      
+      if (!userId) {
+        userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
+      }
+      
+      if (!userId) {
+        userId = storedHospitalId;
+      }
+      
+      // ✅ 3. Determine user role (priority: params > localStorage > default)
+      const role = userRole || storedUserRole || 'hospital';
+      
+      // ✅ 4. Get deviceId from IndexedDB (primary source)
       let deviceId = null;
       try {
         const tokens = await tokenManager.getDeviceTokens();
         if (tokens && tokens.length > 0) {
           deviceId = tokens[0].deviceId;
+          console.log('🔍 Device ID from IndexedDB:', deviceId);
         }
       } catch (error) {
         console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
       }
       
-      // ✅ Fallback to localStorage
+      // ✅ 5. Fallback to localStorage if IndexedDB fails
       if (!deviceId) {
         deviceId = getDeviceId();
+        console.log('🔍 Device ID from localStorage:', deviceId);
       }
       
-      // ✅ Call logout API
-      await logoutApi(deviceId).unwrap();
+      // ✅ 6. Check if this is a Super Admin
+      const isSuperAdmin = role === 'super_admin';
+      
+      // ✅ 7. Log the logout request
+      console.log('📤 Logging out with:', {
+        id: userId,
+        role: role,
+        deviceId: deviceId,
+        isSuperAdmin: isSuperAdmin,
+        endpoint: isSuperAdmin ? '/hospital/g-logout' : '/hospital/logout/' + storedHospitalId
+      });
+      
+      // ✅ 8. Call logout API with proper parameters
+      const logoutParams = {
+        id: userId,
+        role: role,
+        deviceId: deviceId,
+        useGlobalEndpoint: isSuperAdmin // Super Admin uses global endpoint
+      };
+      
+      // If not Super Admin, we can also pass the hospitalId
+      if (!isSuperAdmin && storedHospitalId) {
+        logoutParams.hospitalId = storedHospitalId;
+      }
+      
+      const result = await logoutApi(logoutParams).unwrap();
+      console.log('✅ Logout API call successful:', result);
       
     } catch (error) {
       console.error('❌ Logout API error:', error);
+      
+      // ✅ Even if API fails, we still need to clear local data
+      // Check if it's a network error or authentication error
+      if (error?.status === 401 || error?.status === 403) {
+        console.warn('⚠️ Authentication error during logout - likely already logged out');
+      }
     } finally {
-      // ✅ Clear IndexedDB
+      // ✅ 9. Clear IndexedDB (FCM tokens)
       try {
         await tokenManager.deleteDatabase();
-        // console.log('✅ IndexedDB database deleted');
+        console.log('✅ IndexedDB database deleted');
       } catch (dbError) {
         console.warn('⚠️ Could not delete database:', dbError);
+        // Try to clear tokens individually
+        try {
+          await tokenManager.clearAllDeviceTokens();
+          console.log('✅ IndexedDB tokens cleared');
+        } catch (e) {
+          console.warn('⚠️ Could not clear tokens:', e);
+        }
       }
       
-      // ✅ Clear localStorage
+      // ✅ 10. Clear ALL localStorage items
+      console.log('🔍 Clearing localStorage...');
       const localStorageItems = [
-        'accessToken', 'refreshToken', 'roleId', 'userRole',
-        'userData', 'authData', 'permissions', 'deviceId',
-        'hospitalId', 'hospitalInfo', 'superAdminId', 'doctorId',
-        'staffId', 'staffNumericId', 'user', 'token', 'refresh_token'
+        'accessToken',
+        'refreshToken',
+        'roleId',
+        'userRole',
+        'userData',
+        'authData',
+        'permissions',
+        'deviceId',
+        'hospitalId',
+        'hospitalInfo',
+        'superAdminId',
+        'doctorId',
+        'staffId',
+        'staffNumericId',
+        'user',
+        'token',
+        'refresh_token',
+        'profilePicture',
+        'userImage'
       ];
-      localStorageItems.forEach(key => localStorage.removeItem(key));
       
-      // ✅ Clear sessionStorage
+      localStorageItems.forEach(key => {
+        localStorage.removeItem(key);
+        console.log(`  ✓ Removed: ${key}`);
+      });
+      console.log('✅ localStorage cleared');
+      
+      // ✅ 11. Clear sessionStorage
       sessionStorage.clear();
+      console.log('✅ sessionStorage cleared');
       
-      // Auth context logout
+      // ✅ 12. Clear any cached data
+      if (window.caches) {
+        try {
+          const cacheNames = await caches.keys();
+          cacheNames.forEach(name => {
+            caches.delete(name);
+          });
+          console.log('✅ Caches cleared');
+        } catch (e) {
+          console.warn('⚠️ Could not clear caches:', e);
+        }
+      }
+      
+      // ✅ 13. Auth context logout
       logout();
+      console.log('✅ Auth context logout complete');
       
-      // Redirect to login
-      navigate("/sign-in");
+      // ✅ 14. Redirect to login
+      navigate("/sign-in", { replace: true });
+      console.log('✅ Redirected to login page');
     }
   };
 

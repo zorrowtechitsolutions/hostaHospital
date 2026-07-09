@@ -129,8 +129,6 @@ const DoctorProfile = () => {
   
   const doctorId = user?.doctorId || user?.id;
   
-  console.log('📱 DoctorProfile - Doctor ID:', doctorId);
-  console.log('📱 User object:', user);
   
   // ✅ Fetch doctor data from API
   const { data: doctorResponse, isLoading, error: fetchError, refetch } = useGetDoctorByIdQuery(doctorId, {
@@ -192,12 +190,10 @@ const DoctorProfile = () => {
 
   // ✅ Populate profile from API data
   useEffect(() => {
-    console.log('📥 doctorResponse changed:', doctorResponse);
     
     if (doctorResponse) {
       // ✅ The doctor data is in doctorResponse.data
       const doctor = doctorResponse.data || doctorResponse;
-      console.log('📥 Doctor object:', doctor);
       
       if (doctor) {
         const imageKey = 
@@ -258,7 +254,6 @@ const DoctorProfile = () => {
           updatedAt: doctor?.updatedAt || ''
         };
         
-        console.log('📥 Doctor info populated:', newFormData);
         
         setFormData(newFormData);
         setEditForm(newFormData);

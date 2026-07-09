@@ -81,18 +81,6 @@ const PrescriptionReportModal = ({
   };
 
   useEffect(() => {
-    console.log("📋 Modal Template Debug:", {
-      templateDesignLength: templateDesign?.length,
-      templateBgColor,
-      existingPrescriptionId: existingPrescription?.id,
-      hasCustomTemplate: !!customTemplate,
-      customTemplateId: customTemplate?.id,
-      customTemplateHospitalId: customTemplate?.hospitalId,
-      hasDemoTemplate: !!demoTemplate,
-      demoTemplateId: demoTemplate?.id,
-      currentHospitalId: hospitalId
-    });
-
     // ✅ CRITICAL FIX: Determine which template to use with proper priority
     let designToUse = [];
     let bgToUse = "#ffffff";
@@ -107,7 +95,6 @@ const PrescriptionReportModal = ({
       if (hasPositioning) {
         designToUse = templateDesign;
         bgToUse = templateBgColor || "#ffffff";
-        console.log("✅ Using template from existing prescription");
       }
     }
     
@@ -123,10 +110,7 @@ const PrescriptionReportModal = ({
         if (hasPositioning) {
           designToUse = customTemplate.design;
           bgToUse = customTemplate.canvasBg || "#ffffff";
-          console.log("✅ Using custom template for current hospital:", hospitalId);
         }
-      } else {
-        console.log("⚠️ Custom template belongs to different hospital:", customTemplate.hospitalId, "current:", hospitalId);
       }
     }
     
@@ -139,7 +123,6 @@ const PrescriptionReportModal = ({
       if (hasPositioning) {
         designToUse = demoTemplate.design;
         bgToUse = demoTemplate.canvasBg || "#ffffff";
-        console.log("✅ Using demo template (no custom template for this hospital)");
       }
     }
     
@@ -148,7 +131,6 @@ const PrescriptionReportModal = ({
       const defaultTemplate = getDefaultTemplate();
       designToUse = defaultTemplate.design;
       bgToUse = defaultTemplate.bgColor;
-      console.log("✅ Using default fallback template");
     }
 
     setActiveDesign(designToUse);
