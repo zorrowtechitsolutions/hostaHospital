@@ -4,9 +4,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2, 
   Calendar, Droplet, MoreVertical, Eye, Edit, Trash2, 
-  Plus, RotateCcw
+  Plus, RotateCcw, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { Card, Button, Pagination, Badge } from '../../ui';
+import { Card, Button, Badge } from '../../ui';
 import { 
   useGetPatientsQuery, 
   useDeletePatientMutation,
@@ -32,6 +32,63 @@ const getImageUrlWithCache = (imageKey) => {
   if (!url) return null;
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}_t=${Date.now()}`;
+};
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const HospitalPatientsList = () => {
@@ -65,9 +122,6 @@ const HospitalPatientsList = () => {
   const isHospitalAdminRole = isHospitalAdmin();
   const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
 
-  console.log("🏥 Hospital ID from route:", hospitalId);
-  console.log("🏥 Hospital ID from auth:", authHospitalId);
-
   // ✅ Use hospitalId from route params - same as HospitalDoctorsList
   const { data: patientsData, isLoading, refetch, isFetching } = useGetPatientsQuery({
     hospitalId: hospitalId,
@@ -75,9 +129,6 @@ const HospitalPatientsList = () => {
     limit: itemsPerPage,
     search_query: searchTerm || undefined
   });
-
-  console.log("Search Term:", searchTerm); // 👈 ADD HERE
-  console.log("Patients Data:", patientsData); // 👈 ADD HERE
 
   const [deletePatient] = useDeletePatientMutation();
   const [recoverPatient] = useRecoverPatientMutation();
@@ -463,9 +514,13 @@ const HospitalPatientsList = () => {
     <div>
       {/* Header with Add Patient Button */}
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          {/* ✅ Fixed: Navigate back to hospital details with the hospital ID */}
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/super-admin/hospitals/${hospitalId}`)}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={() => navigate(`/super-admin/hospitals/${hospitalId}`)}
+            className="flex items-center"
+          >
             <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
           </Button>
           {canModifyPatients && (
@@ -621,25 +676,24 @@ const HospitalPatientsList = () => {
         })}
       </div>
 
-      {transformedPatients.length === 0 && (
+      {transformedPatients.length === 0 && !isLoading && (
         <div className="text-center py-12">
           <User size={48} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">No patients found</p>
+          <p className="text-gray-500">
+            {searchTerm ? 'No patients found matching your search' : 'No patients found'}
+          </p>
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="mt-6">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            itemLabel="patients"
-          />
-        </div>
-      )}
+      {/* Pagination Component - Simplified with < Prev 1 Next > */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        totalItems={totalItems}
+        itemsPerPage={itemsPerPage}
+        isLoading={isLoading || isFetching}
+      />
 
       {/* Modals */}
       {showAppointmentModal && (

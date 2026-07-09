@@ -4,9 +4,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Search, Briefcase, Phone, Mail, MapPin, Loader2, 
   Calendar, User, Eye, MoreVertical, Edit, Trash2, Plus,
-  Filter, X, RotateCcw
+  Filter, X, RotateCcw, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { Card, Button, Pagination, Modal, Badge } from '../../ui';
+import { Card, Button, Modal, Badge } from '../../ui';
 import { useGetStaffQuery, useDeleteStaffMutation, useRecoverStaffMutation } from '../../../../app/service/staffApi';
 // ✅ Import StaffDetailsModal instead of StaffDetails page
 import StaffDetailsModal from './staff/staffDetails';
@@ -16,6 +16,63 @@ import { registerStaffEvents, unregisterStaffEvents } from '../../../socket/staf
 import { getHospitalId, isDoctor, isStaff, isHospitalAdmin } from '../../../utils/auth';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../../app/service/S3';
+
+// ================= PAGINATION COMPONENT =================
+const Pagination = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  totalItems, 
+  itemsPerPage,
+  isLoading 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+      <div className="text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{startItem}</span> to{' '}
+        <span className="font-medium text-gray-700">{endItem}</span> of{' '}
+        <span className="font-medium text-gray-700">{totalItems}</span> staff members
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === 1 || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ChevronLeft size={16} />
+          <span>Prev</span>
+        </button>
+
+        <span className="px-3 py-1.5 text-sm font-medium text-[#6366F1] bg-[#EEF2FF] rounded-md">
+          {currentPage}
+        </span>
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+            currentPage === totalPages || isLoading
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const HospitalStaffList = () => {
   const { id } = useParams();
@@ -85,10 +142,6 @@ const HospitalStaffList = () => {
   const [recoverStaff] = useRecoverStaffMutation();
 
   const allStaff = staffData?.data || [];
-  console.log("staffData =", staffData);
-console.log("allStaff =", allStaff);
-console.log("isFetching =", isFetching);
-
   const totalItems = staffData?.pagination?.totalItems || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
@@ -741,19 +794,15 @@ console.log("isFetching =", isFetching);
             })}
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-6">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="staff"
-              />
-            </div>
-          )}
+          {/* Pagination - Simplified with < Prev 1 Next > */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            isLoading={isLoading || isFetching}
+          />
         </>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">

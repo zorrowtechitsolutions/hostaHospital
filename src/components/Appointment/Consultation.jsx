@@ -1,4 +1,4 @@
-// Consultation.js - Complete fixed version with proper template selection
+// Consultation.js - COMPLETE FIXED VERSION
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -35,14 +35,84 @@ const calculateAge = (dob) => {
   }
 };
 
-// Helper function to extract numeric ID from string
+// ✅ FIXED: Helper function to extract numeric ID from string
 const extractNumericId = (id) => {
   if (!id) return null;
   if (typeof id === 'number') return id;
   if (typeof id === 'string') {
+    // If it's like "#PT0003", extract just the numbers
     const numericMatch = id.match(/\d+/);
     return numericMatch ? parseInt(numericMatch[0]) : null;
   }
+  return null;
+};
+
+// ✅ NEW: Helper to get patient ID from appointment data
+const getPatientIdFromAppointment = (appointmentData) => {
+  
+  // Priority 1: Check patient object
+  if (appointmentData.patient) {
+    // Check for numeric ID in patient object
+    if (appointmentData.patient.id) {
+      const numericId = extractNumericId(appointmentData.patient.id);
+      if (numericId) {
+        return numericId;
+      }
+    }
+    if (appointmentData.patient.patientId) {
+      const numericId = extractNumericId(appointmentData.patient.patientId);
+      if (numericId) {
+        return numericId;
+      }
+    }
+    if (appointmentData.patient._id) {
+      const numericId = extractNumericId(appointmentData.patient._id);
+      if (numericId) {
+        return numericId;
+      }
+    }
+  }
+  
+  // Priority 2: Check direct patientId field
+  if (appointmentData.patientId) {
+    // If patientId is like "#PT0003", extract the numeric part
+    const numericId = extractNumericId(appointmentData.patientId);
+    if (numericId) {
+      return numericId;
+    }
+    // If it's already a number or numeric string
+    if (!isNaN(appointmentData.patientId)) {
+      return Number(appointmentData.patientId);
+    }
+  }
+  
+  // Priority 3: Check userId
+  if (appointmentData.userId) {
+    const numericId = extractNumericId(appointmentData.userId);
+    if (numericId) {
+      return numericId;
+    }
+  }
+  
+  // Priority 4: Check nested patient data
+  if (appointmentData.patientData?.id) {
+    const numericId = extractNumericId(appointmentData.patientData.id);
+    if (numericId) {
+      return numericId;
+    }
+  }
+  
+  console.warn("⚠️ No valid patient ID found in appointment data");
+  return null;
+};
+
+// ✅ NEW: Helper to get patient name from appointment data
+const getPatientNameFromAppointment = (appointmentData) => {
+  if (appointmentData.patientName) return appointmentData.patientName;
+  if (appointmentData.patient?.name) return appointmentData.patient.name;
+  if (appointmentData.patient?.patientName) return appointmentData.patient.patientName;
+  if (appointmentData.name) return appointmentData.name;
+  if (appointmentData.patient?.displayName) return appointmentData.patient.displayName;
   return null;
 };
 
@@ -183,11 +253,9 @@ const Consultation = () => {
   // Fetch prescription templates
   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
-  // ✅ Get patient ID for fetching patient data
-  const patientId = appointmentData.patientId || 
-                   appointmentData.patient?.id || 
-                   appointmentData.patient?.patientId || 
-                   null;
+  // ✅ FIXED: Get patient ID using the helper function
+  const patientId = getPatientIdFromAppointment(appointmentData);
+  const patientNameFromAppointment = getPatientNameFromAppointment(appointmentData);
 
   // ✅ Track current patient ID to detect changes
   const [currentPatientId, setCurrentPatientId] = useState(patientId);
@@ -218,7 +286,6 @@ const Consultation = () => {
   // ✅ Force refetch when patientId changes
   useEffect(() => {
     if (patientId && patientId !== currentPatientId) {
-      console.log("🔄 Patient ID changed, refetching...");
       setCurrentPatientId(patientId);
       refetchPatient();
     }
@@ -231,13 +298,6 @@ const Consultation = () => {
   const getHospitalTemplate = () => {
     const allTemplates = existingTemplates?.data || [];
     
-    console.log("🏥 Current Hospital ID:", currentHospitalId);
-    console.log("📋 All Templates:", allTemplates.map(t => ({
-      id: t.id,
-      type: t.templateType,
-      hospitalId: t.hospitalId,
-      name: t.name
-    })));
 
     // ✅ First try to find a custom template for this hospital
     const customTemplate = allTemplates.find(
@@ -245,7 +305,6 @@ const Consultation = () => {
     );
     
     if (customTemplate) {
-      console.log("✅ Found CUSTOM template for hospital:", currentHospitalId);
       return customTemplate;
     }
 
@@ -255,12 +314,10 @@ const Consultation = () => {
     );
     
     if (demoTemplate) {
-      console.log("✅ Found DEMO template (no custom for hospital:", currentHospitalId, ")");
       return demoTemplate;
     }
 
     // ✅ Fallback to any template or null
-    console.log("⚠️ No template found, using default");
     return null;
   };
 
@@ -285,26 +342,20 @@ const Consultation = () => {
 
   // ✅ Register socket event listeners
   useEffect(() => {
-    console.log("🔄 Registering prescription event listeners...");
-    console.log("📡 Socket connected:", socket.connected);
     
     registerPrescriptionEvents({
       onPrescriptionCreated: async (data) => {
-        console.log("📋 NEW PRESCRIPTION CREATED:", data);
         showSuccessToast(`New prescription created!`, 3000);
       },
       onPrescriptionUpdated: async (data) => {
-        console.log("✏️ PRESCRIPTION UPDATED:", data);
         showSuccessToast(`Prescription updated!`, 3000);
       },
       onPrescriptionDeleted: async (data) => {
-        console.log("🗑️ PRESCRIPTION DELETED:", data);
         showSuccessToast(`Prescription deleted!`, 3000);
       }
     });
 
     return () => {
-      console.log("🧹 Unregistering prescription events...");
       unregisterPrescriptionEvents();
     };
   }, []);
@@ -312,11 +363,9 @@ const Consultation = () => {
   // ✅ Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
-      console.log("✅ Socket CONNECTED - Prescription events will work!");
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket DISCONNECTED - Prescription events won't work!");
     };
 
     socket.on("connect", handleConnect);
@@ -331,7 +380,6 @@ const Consultation = () => {
   // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {
-      console.log(`📡 ALL SOCKET EVENTS - PRESCRIPTION: ${event}:`, args);
     };
 
     socket.onAny(handleAnyEvent);
@@ -341,28 +389,10 @@ const Consultation = () => {
     };
   }, []);
 
-  // ✅ Enhanced debug logging with current patient data
-  useEffect(() => {
-    console.log("=== CONSULTATION PAGE DEBUG ===");
-    console.log("Appointment Data received:", appointmentData);
-    console.log("Patient ID extracted:", patientId);
-    console.log("Current Patient ID state:", currentPatientId);
-    console.log("Patient Data fetched:", patientData);
-    console.log("Extracted patient:", patient);
-    console.log("Patient name:", patient?.name);
-    console.log("Patient gender:", patient?.gender);
-    console.log("Patient ID from API:", patient?.id);
-    console.log("==============================");
-  }, [appointmentData, patientData, patientId, currentPatientId, patient]);
 
   // Debug template data
   useEffect(() => {
-    console.log("=== PRESCRIPTION TEMPLATE DEBUG ===");
-    console.log("Existing Templates:", existingTemplates);
-    console.log("Current Hospital:", currentHospitalId);
     const selected = getHospitalTemplate();
-    console.log("Selected Template:", selected);
-    console.log("================================");
   }, [existingTemplates, currentHospitalId]);
 
   const validateMedication = (med) => {
@@ -401,11 +431,8 @@ const Consultation = () => {
       missingData.push("Booking ID");
     }
     
-    const patientId = appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || null;
-    const userId = appointmentData.userId || appointmentData.patient?.userId || null;
-    
-    if (!patientId && !userId) {
-      missingData.push("Patient ID or User ID");
+    if (!patientId) {
+      missingData.push("Patient ID");
     }
     
     const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
@@ -495,8 +522,9 @@ const Consultation = () => {
     navigate("/appointments");
   };
 
-  // ✅ Get gender with HIGHEST PRIORITY from Patient API
+  // ✅ FIXED: Get gender with HIGHEST PRIORITY from Patient API
   const getPatientGender = () => {
+    // Priority 1: Patient API data
     const patientGender = patient?.gender || patient?.patient_gender || null;
     
     if (patientGender) {
@@ -508,6 +536,7 @@ const Consultation = () => {
       return gender;
     }
     
+    // Priority 2: Appointment data
     if (appointmentData.patient_gender) {
       const gender = String(appointmentData.patient_gender);
       const normalized = gender.toLowerCase();
@@ -538,42 +567,94 @@ const Consultation = () => {
     return "N/A";
   };
 
-  // ✅ Helper function to get patient name
+  // ✅ FIXED: Helper function to get patient name with priority
   const getPatientName = () => {
-    const name = patient?.name || 
-                 patient?.patientName ||
-                 appointmentData.patientName || 
-                 appointmentData.patient?.name || 
-                 appointmentData.name || 
-                 "Patient";
-    return name;
+    // Priority 1: Patient API data
+    if (patient?.name) {
+      return patient.name;
+    }
+    if (patient?.patientName) {
+      return patient.patientName;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.patientName) {
+      return appointmentData.patientName;
+    }
+    if (appointmentData.patient?.name) {
+      return appointmentData.patient.name;
+    }
+    if (appointmentData.name) {
+      return appointmentData.name;
+    }
+    if (appointmentData.patient?.patientName) {
+      return appointmentData.patient.patientName;
+    }
+    
+    return "Patient";
   };
 
-  // ✅ Helper function to get patient age
+  // ✅ FIXED: Helper function to get patient age with priority
   const getPatientAge = () => {
-    const age = patient?.age || 
-                patient?.patientAge ||
-                appointmentData.age || 
-                appointmentData.patient?.age || 
-                "N/A";
-    return age;
+    // Priority 1: Patient API data
+    if (patient?.age) {
+      return patient.age;
+    }
+    if (patient?.patientAge) {
+      return patient.patientAge;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.age) {
+      return appointmentData.age;
+    }
+    if (appointmentData.patient?.age) {
+      return appointmentData.patient.age;
+    }
+    if (appointmentData.patientAge) {
+      return appointmentData.patientAge;
+    }
+    
+    return "N/A";
   };
 
-  // ✅ Helper function to get patient contact
+  // ✅ FIXED: Helper function to get patient contact with priority
   const getPatientContact = () => {
-    const contact = patient?.mobileNumber || 
-                    patient?.contact || 
-                    patient?.phone || 
-                    patient?.patientPhone ||
-                    appointmentData.contact || 
-                    appointmentData.patient?.contact || 
-                    appointmentData.phone || 
-                    appointmentData.mobile || 
-                    "N/A";
-    return contact;
+    // Priority 1: Patient API data
+    if (patient?.mobileNumber) {
+      return patient.mobileNumber;
+    }
+    if (patient?.contact) {
+      return patient.contact;
+    }
+    if (patient?.phone) {
+      return patient.phone;
+    }
+    if (patient?.patientPhone) {
+      return patient.patientPhone;
+    }
+    
+    // Priority 2: Appointment data
+    if (appointmentData.contact) {
+      return appointmentData.contact;
+    }
+    if (appointmentData.patient?.contact) {
+      return appointmentData.patient.contact;
+    }
+    if (appointmentData.phone) {
+      return appointmentData.phone;
+    }
+    if (appointmentData.mobile) {
+      return appointmentData.mobile;
+    }
+    if (appointmentData.patient?.mobileNumber) {
+      return appointmentData.patient.mobileNumber;
+    }
+    
+    return "N/A";
   };
 
-  // ✅ Get all patient details
+  // ✅ Get all patient details with proper priority
   const displayPatientName = getPatientName();
   const displayPatientAge = getPatientAge();
   const displayPatientGender = getPatientGender();
@@ -593,7 +674,7 @@ const Consultation = () => {
     bgColor: "#ffffff"
   });
 
-  // ✅ handleEndConsultation with fixed template selection
+  // ✅ handleEndConsultation with fixed patient ID handling
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
     
@@ -607,10 +688,13 @@ const Consultation = () => {
     try {
       const bookingId = appointmentData.id || appointmentData.bookingId;
       
-      const extractedPatientId = extractNumericId(
+      // ✅ FIXED: Get the numeric patient ID correctly
+      const extractedPatientId = patientId || extractNumericId(
         appointmentData.patientId || 
         appointmentData.patient?.id || 
         appointmentData.patient?.patientId || 
+        appointmentData.userId || 
+        appointmentData.patient?.userId || 
         null
       );
       
@@ -687,6 +771,7 @@ const Consultation = () => {
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
       
+      
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
         dosage: med.dosage,
@@ -707,13 +792,6 @@ const Consultation = () => {
       const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
       const templateType = selectedTemplate?.templateType || "demo";
 
-      console.log("📋 Using template:", {
-        templateId: selectedTemplate?.id,
-        templateType: templateType,
-        designLength: templateDesign.length,
-        hospitalId: currentHospitalId,
-        isCustom: templateType === "custom"
-      });
       
       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
 
@@ -759,9 +837,6 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      console.log("=== FINAL PRESCRIPTION PAYLOAD ===");
-      console.log(JSON.stringify(prescriptionData, null, 2));
-      console.log("===================================");
 
       const result = await createPrescription(prescriptionData).unwrap();
 
@@ -773,7 +848,6 @@ const Consultation = () => {
           hospitalId: extractedHospitalId,
           bookingId: bookingId,
         });
-        console.log("📤 Emitted PRESCRIPTION_CREATED event");
       }
 
       await updateBooking({
@@ -783,7 +857,6 @@ const Consultation = () => {
         }
       }).unwrap();
 
-      console.log("✅ Prescription response:", result);
       
       showSuccessToast("Consultation completed successfully");
       navigate("/visits", {
@@ -870,8 +943,8 @@ const Consultation = () => {
                   {displayPatientName}
                 </p>
                 <p className="text-xs text-gray-500">Consultation ID : #{appointmentData.id || appointmentData.bookingId || "N/A"}</p>
-                {patient?.id && (
-                  <p className="text-xs text-gray-400">Patient ID: #{patient.id}</p>
+                {patientId && (
+                  <p className="text-xs text-gray-400">Patient ID: #{patientId}</p>
                 )}
               </div>
             </div>
@@ -1025,11 +1098,7 @@ const Consultation = () => {
       <ViewMedicalHistory
         isOpen={showMedicalHistory}
         onClose={() => setShowMedicalHistory(false)}
-        patientId={
-          appointmentData.patientId ||
-          appointmentData.patient?.id ||
-          appointmentData.patient?.patientId
-        }
+        patientId={patientId}
         department={
           appointmentData.department ||
           appointmentData.doctorDepartment ||

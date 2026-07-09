@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE VERSION with Super Admin FCM Token Handling
+// hospitalApi.ts - COMPLETE VERSION with All User Logout Support
 
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
@@ -41,7 +41,7 @@ export interface FCMTokenData {
 export interface LoginCredentials {
   email: string;
   password: string;
-  fcmToken?: FCMTokenData | null;  // ✅ Allow null for Super Admin
+  fcmToken?: FCMTokenData | null;
 }
 
 export interface PhoneLoginData {
@@ -156,6 +156,36 @@ export interface GetHospitalsParams {
   limit?: number;
 }
 
+// User data interface for localStorage
+export interface UserData {
+  id?: string;
+  hospitalId?: string;
+  doctorId?: string;
+  staffId?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  [key: string]: any;
+}
+
+// Auth data interface for localStorage
+export interface AuthData {
+  id?: string;
+  userId?: string;
+  hospitalId?: string;
+  role?: string;
+  [key: string]: any;
+}
+
+// Logout Parameters
+export interface LogoutParams {
+  deviceId?: string;
+  role?: string;
+  id?: string;
+  hospitalId?: string;
+  useGlobalEndpoint?: boolean;
+}
+
 // ============================================
 // API ENDPOINTS
 // ============================================
@@ -190,28 +220,16 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     login: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => {
-        // ✅ For Super Admin, ensure fcmToken is null
-        // The Login component will determine if this is a Super Admin login
-        // and set fcmToken accordingly
-        
         const payload: any = {
           email: loginData.email,
           password: loginData.password,
         };
 
-        // ✅ Only include fcmToken if it exists and is not null
         if (loginData.fcmToken !== undefined && loginData.fcmToken !== null) {
           payload.fcmToken = loginData.fcmToken;
         } else {
-          // ✅ Explicitly set fcmToken to null for Super Admin
           payload.fcmToken = null;
         }
-
-        console.log('📤 Login request payload:', {
-          email: payload.email,
-          password: '******',
-          fcmToken: payload.fcmToken === null ? 'null (Super Admin)' : 'present'
-        });
 
         return {
           url: `/hospital/g-login`,
@@ -286,53 +304,162 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // ✅ LOGOUT - Uses hospital ID in URL, deviceId in body
+    // ✅ COMPLETE LOGOUT - Handles ALL user types
+    // Hospital: /hospital/logout/{hospitalId}
+    // Doctor: /doctor/logout/{doctorId}
+    // Staff: /staff/logout/{staffId}
+    // Super Admin: /users/logout/{superAdminId}
     // ============================================
-    logout: builder.mutation<{ message: string }, string | void>({
-      query: (deviceId) => {
-        // ✅ Get hospital ID from localStorage
+    logout: builder.mutation<{ message: string; success?: boolean }, LogoutParams | void>({
+      query: (params) => {
+        // Get all necessary data from localStorage
         let hospitalId = localStorage.getItem('hospitalId') || '';
+        let userRole = localStorage.getItem('userRole') || 'hospital';
+        let userId = params?.id || '';
+        let userData: UserData = {};
+        let authData: AuthData = {};
         
+        try {
+          const parsedUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+          userData = parsedUserData as UserData;
+        } catch (e) {
+          // Silent fail
+        }
+        
+        try {
+          const parsedAuthData = JSON.parse(localStorage.getItem('authData') || '{}');
+          authData = parsedAuthData as AuthData;
+        } catch (e) {
+          // Silent fail
+        }
+        
+        // Try to get hospitalId from authData if not found
         if (!hospitalId) {
+          hospitalId = authData?.hospitalId || authData?.id || '';
+        }
+        
+        // Try to get userId from multiple sources
+        if (!userId) {
+          userId = authData?.id || authData?.userId || authData?.hospitalId || '';
+        }
+        
+        if (!userId) {
+          userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
+        }
+        
+        if (!userId) {
           try {
-            const authData = JSON.parse(localStorage.getItem('authData') || '{}');
-            hospitalId = authData?.hospitalId || authData?.id || '';
+            const user = JSON.parse(localStorage.getItem('user') || '{}') as UserData;
+            userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || '';
           } catch (e) {
-            console.warn('⚠️ Could not get hospitalId from authData');
+            // Silent fail
           }
         }
         
-        // ✅ Get device ID
-        const deviceIdValue = deviceId || localStorage.getItem('deviceId') || '';
+        if (!userId) {
+          userId = hospitalId;
+        }
         
-        console.log('📤 Logout request:');
-        console.log('  URL: /hospital/logout/' + hospitalId);
-        console.log('  Body:', { deviceId: deviceIdValue });
+        // Get role from params or localStorage
+        const role = params?.role || userRole || 'hospital';
+        
+        // Get device ID from params or localStorage
+        const deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
+        
+        // Determine which endpoint to use
+        const useGlobalEndpoint = params?.useGlobalEndpoint !== undefined 
+          ? params.useGlobalEndpoint 
+          : (role === 'super_admin');
+        
+        let url = '';
+        let body: any = {};
+        
+        // ✅ Determine the correct endpoint based on role
+        if (useGlobalEndpoint && role === 'super_admin') {
+          // ✅ Super Admin logout - Uses /users/logout/{id}
+          url = `/users/logout/${userId}`;
+          body = {
+            deviceId: deviceIdValue,
+          };
+        } else if (role === 'doctor') {
+          // ✅ Doctor logout
+          const doctorId = params?.id || userId || '';
+          url = `/doctor/logout/${doctorId}`;
+          body = {
+            deviceId: deviceIdValue,
+          };
+        } else if (role === 'staff') {
+          // ✅ Staff logout
+          const staffId = params?.id || userId || '';
+          url = `/staff/logout/${staffId}`;
+          body = {
+            deviceId: deviceIdValue,
+          };
+        } else {
+          // ✅ Hospital logout (default)
+          const hospitalIdValue = params?.hospitalId || hospitalId || userId || '';
+          url = `/hospital/logout/${hospitalIdValue}`;
+          body = {
+            deviceId: deviceIdValue,
+          };
+        }
         
         return {
-          url: `/hospital/logout/${hospitalId}`,
+          url: url,
           method: "POST",
-          body: {
-            deviceId: deviceIdValue,
-          },
+          body: body,
         };
       },
-      onQueryStarted: async (deviceId, { queryFulfilled }) => {
+      onQueryStarted: async (params, { queryFulfilled }) => {
         try {
-          // Get hospital ID
+          // Get all necessary data
           let hospitalId = localStorage.getItem('hospitalId') || '';
+          let userRole = localStorage.getItem('userRole') || 'hospital';
+          let userId = params?.id || '';
+          let userData: UserData = {};
+          let authData: AuthData = {};
+          
+          try {
+            const parsedUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+            userData = parsedUserData as UserData;
+          } catch (e) {
+            // Silent fail
+          }
+          
+          try {
+            const parsedAuthData = JSON.parse(localStorage.getItem('authData') || '{}');
+            authData = parsedAuthData as AuthData;
+          } catch (e) {
+            // Silent fail
+          }
           
           if (!hospitalId) {
+            hospitalId = authData?.hospitalId || authData?.id || '';
+          }
+          
+          if (!userId) {
+            userId = authData?.id || authData?.userId || authData?.hospitalId || '';
+          }
+          
+          if (!userId) {
+            userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
+          }
+          
+          if (!userId) {
             try {
-              const authData = JSON.parse(localStorage.getItem('authData') || '{}');
-              hospitalId = authData?.hospitalId || authData?.id || '';
+              const user = JSON.parse(localStorage.getItem('user') || '{}') as UserData;
+              userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || '';
             } catch (e) {
-              console.warn('⚠️ Could not get hospitalId from authData');
+              // Silent fail
             }
           }
           
-          // Get device ID
-          let deviceIdValue = deviceId || localStorage.getItem('deviceId') || '';
+          if (!userId) {
+            userId = hospitalId;
+          }
+          
+          const role = params?.role || userRole || 'hospital';
+          let deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
           
           // ✅ Try to get deviceId from IndexedDB if not in localStorage
           if (!deviceIdValue) {
@@ -340,38 +467,66 @@ export const hospitalApi = api.injectEndpoints({
               const tokens = await tokenManager.getDeviceTokens();
               if (tokens && tokens.length > 0) {
                 deviceIdValue = tokens[0].deviceId;
-                console.log('🔍 Device ID from IndexedDB:', deviceIdValue);
               }
             } catch (error) {
-              console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
+              // Silent fail
             }
           }
           
-          console.log('📤 Sending logout request to backend:');
-          console.log('  URL: /hospital/logout/' + hospitalId);
-          console.log('  Body:', { deviceId: deviceIdValue });
+          const useGlobalEndpoint = params?.useGlobalEndpoint !== undefined 
+            ? params.useGlobalEndpoint 
+            : (role === 'super_admin');
+          
+          let url = '';
+          let body: any = {};
+          
+          if (useGlobalEndpoint && role === 'super_admin') {
+            // ✅ Super Admin logout
+            url = `/users/logout/${userId}`;
+            body = { deviceId: deviceIdValue };
+          } else if (role === 'doctor') {
+            const doctorId = params?.id || userId || '';
+            url = `/doctor/logout/${doctorId}`;
+            body = { deviceId: deviceIdValue };
+          } else if (role === 'staff') {
+            const staffId = params?.id || userId || '';
+            url = `/staff/logout/${staffId}`;
+            body = { deviceId: deviceIdValue };
+          } else {
+            const hospitalIdValue = params?.hospitalId || hospitalId || userId || '';
+            url = `/hospital/logout/${hospitalIdValue}`;
+            body = { deviceId: deviceIdValue };
+          }
           
           // ✅ Wait for backend to delete FCM token from database
-          const response = await queryFulfilled;
-          console.log('✅ Backend logout response:', response.data);
+          await queryFulfilled;
           
+        } catch (error) {
+          // ✅ Even if API fails, we still need to clear local data
+          // Check if error is an object with status property
+          if (error && typeof error === 'object' && 'status' in error) {
+            const err = error as { status?: number };
+            if (err.status === 401 || err.status === 403) {
+              // Authentication error during logout - likely already logged out
+            }
+          }
+        } finally {
           // ✅ Clear local IndexedDB
-          console.log('🔍 Clearing local IndexedDB...');
           try {
-            await tokenManager.deleteDatabase();
-            console.log('✅ IndexedDB database deleted successfully');
+            if (tokenManager && typeof tokenManager.deleteDatabase === 'function') {
+              await tokenManager.deleteDatabase();
+            }
           } catch (dbError) {
-            console.warn('⚠️ Could not delete IndexedDB:', dbError);
             try {
-              await tokenManager.clearAllDeviceTokens();
-              console.log('✅ IndexedDB tokens cleared');
+              if (tokenManager && typeof tokenManager.clearAllDeviceTokens === 'function') {
+                await tokenManager.clearAllDeviceTokens();
+              }
             } catch (e) {
-              console.warn('⚠️ Could not clear tokens:', e);
+              // Silent fail
             }
           }
           
           // ✅ Clear ALL localStorage items
-          console.log('🔍 Clearing localStorage...');
           const localStorageItems = [
             'accessToken',
             'refreshToken',
@@ -389,38 +544,16 @@ export const hospitalApi = api.injectEndpoints({
             'staffNumericId',
             'user',
             'token',
-            'refresh_token'
+            'refresh_token',
+            'profilePicture',
+            'userImage'
           ];
           
           localStorageItems.forEach(key => {
             localStorage.removeItem(key);
           });
-          console.log('✅ localStorage cleared');
           
           // ✅ Clear sessionStorage
-          sessionStorage.clear();
-          console.log('✅ sessionStorage cleared');
-          
-          console.log('✅ Logout complete - backend and local data cleared');
-          
-        } catch (error) {
-          console.error('❌ Logout error:', error);
-          
-          // ✅ Even if API fails, clear local data
-          try {
-            await tokenManager.deleteDatabase();
-            console.log('✅ IndexedDB deleted despite API error');
-          } catch (dbError) {
-            console.warn('⚠️ Could not delete IndexedDB:', dbError);
-          }
-          
-          const localStorageItems = [
-            'accessToken', 'refreshToken', 'roleId', 'userRole',
-            'userData', 'authData', 'permissions', 'deviceId',
-            'hospitalId', 'hospitalInfo', 'superAdminId', 'doctorId',
-            'staffId', 'staffNumericId', 'user', 'token', 'refresh_token'
-          ];
-          localStorageItems.forEach(key => localStorage.removeItem(key));
           sessionStorage.clear();
         }
       },

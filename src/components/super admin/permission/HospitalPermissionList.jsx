@@ -27,7 +27,14 @@ const HospitalPermissionList = () => {
 
   const [createRolePermission] = useCreateRolePermissionMutation();
 
-  const { data: permissionsData, isLoading: isLoadingPermissions, refetch: refetchPermissions } = useGetPermissionsQuery();
+  // ✅ Added limit: 1000 to fetch all permissions
+  const { 
+    data: permissionsData, 
+    isLoading: isLoadingPermissions, 
+    refetch: refetchPermissions,
+    isFetching 
+  } = useGetPermissionsQuery({ limit: 1000 });
+  
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
     roleId,
   });

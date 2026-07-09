@@ -185,7 +185,7 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
   }
 };
 
-// Template Preview Component (Read-only)
+// Template Preview Component (Read-only) - Updated with responsive wrapper
 const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }) => {
   if (!template || !template.design || template.design.length === 0) {
     return (
@@ -196,38 +196,40 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
   }
 
   return (
-    <div className="relative w-full overflow-hidden">
-      <div
-        className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200 mx-auto"
-        style={{ backgroundColor: template.canvasBg || "#ffffff" }}
-      >
-        {template.design.map((item, index) => (
-          <div
-            key={index}
-            style={{
-              position: "absolute",
-              left: item.x || 0,
-              top: item.y || 0,
-              width: item.width || 200,
-              height: item.height || 80,
-            }}
-          >
-            <BlockRenderer
-              block={item}
-              prescriptionData={prescriptionData}
-              doctorData={doctorData}
-              patientData={patientData}
-              onTextChange={() => {}}
-              isEditable={false}
-            />
-          </div>
-        ))}
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[1000px] mx-auto">
+        <div
+          className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
+          style={{ backgroundColor: template.canvasBg || "#ffffff" }}
+        >
+          {template.design.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                position: "absolute",
+                left: item.x || 0,
+                top: item.y || 0,
+                width: item.width || 200,
+                height: item.height || 80,
+              }}
+            >
+              <BlockRenderer
+                block={item}
+                prescriptionData={prescriptionData}
+                doctorData={doctorData}
+                patientData={patientData}
+                onTextChange={() => {}}
+                isEditable={false}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 };
 
-// Custom Template Builder (Editable)
+// Custom Template Builder (Editable) - Updated with responsive wrapper
 const CustomTemplateBuilder = ({ 
   items, 
   setItems, 
@@ -243,45 +245,47 @@ const CustomTemplateBuilder = ({
   isEditable
 }) => {
   return (
-    <div className="relative w-full overflow-hidden">
-      <div
-        id="customTemplateCanvas"
-        className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200 mx-auto"
-        style={{ backgroundColor: customCanvasBg }}
-      >
-        {items.map((item) => (
-          <Rnd
-            key={item.id}
-            size={{ width: item.width, height: item.height }}
-            position={{ x: item.x, y: item.y }}
-            bounds="parent"
-            disableDragging={!isEditable}
-            enableResizing={isEditable}
-            resizeHandleStyles={{
-              bottomRight: { display: isEditable ? 'block' : 'none' },
-              bottomLeft: { display: 'none' },
-              topRight: { display: 'none' },
-              topLeft: { display: 'none' },
-            }}
-            onClick={() => setSelectedItemId && setSelectedItemId(item.id)}
-            onDragStop={(e, d) => onUpdatePosition && onUpdatePosition(item.id, d.x, d.y)}
-            onResizeStop={(e, direction, ref, delta, position) =>
-              onUpdatePosition && onUpdatePosition(item.id, position.x, position.y, ref.offsetWidth, ref.offsetHeight)
-            }
-            className={`transition-all duration-200 ${
-              selectedItemId === item.id ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg" : ""
-            }`}
-          >
-            <BlockRenderer
-              block={item}
-              prescriptionData={currentPrescription || {}}
-              doctorData={doctor}
-              patientData={patient}
-              onTextChange={onUpdateContent}
-              isEditable={isEditable}
-            />
-          </Rnd>
-        ))}
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[1000px] mx-auto">
+        <div
+          id="customTemplateCanvas"
+          className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
+          style={{ backgroundColor: customCanvasBg }}
+        >
+          {items.map((item) => (
+            <Rnd
+              key={item.id}
+              size={{ width: item.width, height: item.height }}
+              position={{ x: item.x, y: item.y }}
+              bounds="parent"
+              disableDragging={!isEditable}
+              enableResizing={isEditable}
+              resizeHandleStyles={{
+                bottomRight: { display: isEditable ? 'block' : 'none' },
+                bottomLeft: { display: 'none' },
+                topRight: { display: 'none' },
+                topLeft: { display: 'none' },
+              }}
+              onClick={() => setSelectedItemId && setSelectedItemId(item.id)}
+              onDragStop={(e, d) => onUpdatePosition && onUpdatePosition(item.id, d.x, d.y)}
+              onResizeStop={(e, direction, ref, delta, position) =>
+                onUpdatePosition && onUpdatePosition(item.id, position.x, position.y, ref.offsetWidth, ref.offsetHeight)
+              }
+              className={`transition-all duration-200 ${
+                selectedItemId === item.id ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg" : ""
+              }`}
+            >
+              <BlockRenderer
+                block={item}
+                prescriptionData={currentPrescription || {}}
+                doctorData={doctor}
+                patientData={patient}
+                onTextChange={onUpdateContent}
+                isEditable={isEditable}
+              />
+            </Rnd>
+          ))}
+        </div>
       </div>
     </div>
   );

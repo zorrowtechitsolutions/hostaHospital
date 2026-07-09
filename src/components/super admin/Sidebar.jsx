@@ -17,11 +17,11 @@ import {
   Hospital,
   X,
   Users,
-  UserPlus,
-  UserCheck,
-  Key
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLogoutMutation } from '../../../app/service/hospitalApi';
+import { tokenManager } from '../../utils/fcmTokenManager';
+import { getDeviceId } from '../../utils/deviceManager';
 
 const Sidebar = ({ isOpen, onToggle }) => {
   const navigate = useNavigate();
@@ -29,6 +29,9 @@ const Sidebar = ({ isOpen, onToggle }) => {
   const { logout } = useAuth();
   const [openDropdowns, setOpenDropdowns] = useState({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  const [logoutApi] = useLogoutMutation();
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/super-admin/dashboard' },
@@ -82,11 +85,161 @@ const Sidebar = ({ isOpen, onToggle }) => {
     setOpenDropdowns(prev => ({ ...prev, ...newOpenState }));
   }, [location.pathname]);
 
-  const handleLogout = () => {
-    localStorage.clear();
-    logout();
-    navigate("/sign-in", { replace: true });
-    setShowLogoutModal(false);
+  // ✅ Complete logout handler with API - EXACT FLOW
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+
+    try {
+      // ✅ STEP 1: Get Super Admin data from localStorage
+      let authData = {};
+      let userData = {};
+      
+      try {
+        authData = JSON.parse(localStorage.getItem('authData') || '{}');
+      } catch (e) {
+        console.warn('⚠️ Could not parse authData');
+      }
+      
+      try {
+        userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      } catch (e) {
+        console.warn('⚠️ Could not parse userData');
+      }
+      
+      // ✅ STEP 2: Get Super Admin ID from multiple sources
+      let superAdminId = localStorage.getItem('superAdminId') || '';
+      
+      if (!superAdminId) {
+        superAdminId = authData?.id || authData?.userId || userData?.id || userData?.userId || '';
+      }
+      
+      // If still no ID, try to get from user object
+      if (!superAdminId) {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          superAdminId = user?.id || user?.userId || '';
+        } catch (e) {
+          console.warn('⚠️ Could not get userId from user');
+        }
+      }
+      
+      // ✅ STEP 3: Get deviceId from IndexedDB (primary source)
+      let deviceId = null;
+      try {
+        const tokens = await tokenManager.getDeviceTokens();
+        if (tokens && tokens.length > 0) {
+          deviceId = tokens[0].deviceId;
+          console.log('🔍 Super Admin Device ID from IndexedDB:', deviceId);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
+      }
+      
+      // ✅ STEP 4: Fallback to localStorage if IndexedDB fails
+      if (!deviceId) {
+        deviceId = getDeviceId();
+        console.log('🔍 Super Admin Device ID from localStorage:', deviceId);
+      }
+      
+      // ✅ STEP 5: Log the logout request
+      console.log('📤 Super Admin Logging out with:', {
+        id: superAdminId,
+        role: 'super_admin',
+        deviceId: deviceId,
+        endpoint: '/hospital/g-logout'
+      });
+      
+      // ✅ STEP 6: Call logout API with Super Admin parameters
+      // This will remove the FCM token from the backend database
+      const result = await logoutApi({
+        id: superAdminId,
+        role: 'super_admin',
+        deviceId: deviceId,
+        useGlobalEndpoint: true // Super Admin always uses global endpoint
+      }).unwrap();
+      
+      console.log('✅ Super Admin logout successful - FCM token removed from backend:', result);
+      
+    } catch (error) {
+      console.error('❌ Super Admin logout error:', error);
+      
+      // ✅ Even if API fails, we still need to clear local data
+      if (error?.status === 401 || error?.status === 403) {
+        console.warn('⚠️ Authentication error during logout - likely already logged out');
+      }
+    } finally {
+      // ✅ STEP 7: Clear IndexedDB (FCM tokens from local storage)
+      console.log('🔍 Clearing IndexedDB...');
+      try {
+        await tokenManager.deleteDatabase();
+        console.log('✅ IndexedDB database deleted');
+      } catch (dbError) {
+        console.warn('⚠️ Could not delete database:', dbError);
+        try {
+          await tokenManager.clearAllDeviceTokens();
+          console.log('✅ IndexedDB tokens cleared');
+        } catch (e) {
+          console.warn('⚠️ Could not clear tokens:', e);
+        }
+      }
+      
+      // ✅ STEP 8: Clear ALL localStorage items
+      console.log('🔍 Clearing Super Admin localStorage...');
+      const localStorageItems = [
+        'accessToken',
+        'refreshToken',
+        'roleId',
+        'userRole',
+        'userData',
+        'authData',
+        'permissions',
+        'deviceId',
+        'hospitalId',
+        'hospitalInfo',
+        'superAdminId',
+        'doctorId',
+        'staffId',
+        'staffNumericId',
+        'user',
+        'token',
+        'refresh_token',
+        'profilePicture',
+        'userImage'
+      ];
+      
+      localStorageItems.forEach(key => {
+        localStorage.removeItem(key);
+        console.log(`  ✓ Removed: ${key}`);
+      });
+      console.log('✅ Super Admin localStorage cleared');
+      
+      // ✅ STEP 9: Clear sessionStorage
+      sessionStorage.clear();
+      console.log('✅ sessionStorage cleared');
+      
+      // ✅ STEP 10: Clear any cached data
+      if (window.caches) {
+        try {
+          const cacheNames = await caches.keys();
+          cacheNames.forEach(name => {
+            caches.delete(name);
+          });
+          console.log('✅ Caches cleared');
+        } catch (e) {
+          console.warn('⚠️ Could not clear caches:', e);
+        }
+      }
+      
+      // ✅ STEP 11: Auth context logout
+      logout();
+      console.log('✅ Auth context logout complete');
+      
+      // ✅ STEP 12: Close modal and redirect to login
+      setShowLogoutModal(false);
+      setIsLoggingOut(false);
+      navigate("/sign-in", { replace: true });
+      console.log('✅ Redirected to Super Admin login page');
+    }
   };
 
   // Color mapping for menu items to match dashboard
@@ -244,12 +397,13 @@ const Sidebar = ({ isOpen, onToggle }) => {
         <div className="p-4 border-t border-white/5 bg-white/5 backdrop-blur-sm">
           <button
             onClick={() => setShowLogoutModal(true)}
-            className={`w-full flex items-center ${isOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-xl text-red-400 hover:text-red-300 transition-all duration-200 hover:bg-red-500/10 group`}
+            disabled={isLoggingOut}
+            className={`w-full flex items-center ${isOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-xl text-red-400 hover:text-red-300 transition-all duration-200 hover:bg-red-500/10 group disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="p-1.5 rounded-lg group-hover:bg-red-500/20 transition-colors">
-              <LogOut size={18} />
+              <LogOut size={18} className={isLoggingOut ? 'animate-pulse' : ''} />
             </div>
-            {isOpen && <span className="text-sm font-medium">Logout</span>}
+            {isOpen && <span className="text-sm font-medium">{isLoggingOut ? 'Logging out...' : 'Logout'}</span>}
           </button>
         </div>
       </div>
@@ -292,9 +446,10 @@ const Sidebar = ({ isOpen, onToggle }) => {
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl transition-all duration-200 shadow-lg shadow-red-500/25"
+                  disabled={isLoggingOut}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl transition-all duration-200 shadow-lg shadow-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Yes, Logout
+                  {isLoggingOut ? 'Logging out...' : 'Yes, Logout'}
                 </button>
               </div>
             </div>
@@ -302,7 +457,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
         </div>
       )}
 
-      {/* CSS for scrollbar */}
+      {/* CSS for scrollbar and animations */}
       <style jsx>{`
         @keyframes fadeIn {
           from {
@@ -314,8 +469,19 @@ const Sidebar = ({ isOpen, onToggle }) => {
             transform: scale(1) translateY(0);
           }
         }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out;
+        }
+        .animate-pulse {
+          animation: pulse 1.5s ease-in-out infinite;
         }
         .scrollbar-thin::-webkit-scrollbar {
           width: 4px;

@@ -129,8 +129,7 @@ const StaffProfile = () => {
   
   const staffId = user?.staffId || user?.id;
   
-  console.log('📱 StaffProfile - Staff ID:', staffId);
-  console.log('📱 User object:', user);
+  
   
   const { data: staffResponse, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
     skip: !staffId,
@@ -190,11 +189,9 @@ const StaffProfile = () => {
 
   // ✅ Populate profile from API data
   useEffect(() => {
-    console.log('📥 staffResponse changed:', staffResponse);
     
     if (staffResponse) {
       const staff = staffResponse.data;
-      console.log('📥 Staff object:', staff);
       
       if (staff) {
         const imageKey = 
@@ -258,9 +255,7 @@ const StaffProfile = () => {
           createdAt: staff?.createdAt || '',
           updatedAt: staff?.updatedAt || ''
         };
-        
-        console.log('📥 Staff info populated:', staffInfo);
-        
+                
         setFormData(staffInfo);
         setEditForm(staffInfo);
         
@@ -306,15 +301,7 @@ const StaffProfile = () => {
     
     try {
       setUploadProgress(30);
-      
-      // ✅ Get the numeric ID from formData
-      // staffId is "STF00011" (formatted) - ❌ DON'T use this
-      // id is the numeric ID (e.g., 11) - ✅ USE THIS
       const numericId = formData.id || formData.staffNumericId || parseInt(formData.staffId?.replace(/\D/g, '') || '0');
-      
-      console.log('📤 Uploading with numeric ID:', numericId);
-      console.log('📤 Staff ID (formatted):', formData.staffId);
-      
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null, 

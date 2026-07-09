@@ -1,4 +1,4 @@
-// src/components/Settings/Security.jsx - With Green Change Password & Red Delete Button
+// src/components/Settings/Security.jsx - FIXED with correct hook names
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Modal, Input, Badge, Alert } from '../ui';
@@ -7,7 +7,7 @@ import {
   showErrorToast
 } from '../ui/Toast';
 import {
-  useLogoutHospitalMutation,
+  useLogoutMutation,  // ✅ Fixed: useLogoutMutation (not useLogoutHospitalMutation)
   useDeleteHospitalMutation,
   useChangePasswordMutation
 } from '../../../app/service/hospitalApi';
@@ -41,7 +41,8 @@ const Security = () => {
   const authUser = getAuthUser();
   const hospitalId = getHospitalId();
   
-  const [logoutHospital] = useLogoutHospitalMutation();
+  // ✅ Fixed: useLogoutMutation (correct hook name)
+  const [logoutHospital] = useLogoutMutation();
   const [deleteHospital, { isLoading: isDeleting }] = useDeleteHospitalMutation();
   const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
 
@@ -51,8 +52,11 @@ const Security = () => {
 
   const performLogout = async () => {
     try {
-      await logoutHospital().unwrap();
-    } catch {
+      // ✅ Get deviceId from localStorage
+      const deviceId = localStorage.getItem('deviceId') || '';
+      await logoutHospital(deviceId).unwrap();
+    } catch (error) {
+      console.error('Logout error:', error);
       // Silent fail - we'll log out anyway
     } finally {
       clearAuth();

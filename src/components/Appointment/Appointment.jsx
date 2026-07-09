@@ -224,7 +224,6 @@ const {
       booking?.genderDisplay ||
       null;
     
-    console.log(`Extracted gender for ${booking?.patient_name || booking?.patientName || 'Unknown'}:`, gender);
     
     // Return normalized gender or null
     if (gender) {
@@ -276,7 +275,6 @@ const {
       // If no gender found, use "N/A" instead of defaulting to "Male"
       const finalGender = extractedGender || "N/A";
 
-      console.log(`Patient ${booking.patient_name || booking.patientName || 'Unknown'} gender:`, finalGender);
 
       return {
         id: booking.id || booking._id,
