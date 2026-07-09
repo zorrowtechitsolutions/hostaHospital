@@ -1,4 +1,4 @@
-// src/components/patients/Patients.jsx - With Deleted/Blacklisted Support and Recover Functionality (No Show Deleted Button)
+// src/components/patients/Patients.jsx - With Hospital Filter Fix
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -82,9 +82,17 @@ const Patients = () => {
   // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Get hospitalId from auth
+  // 🔥 FIX: Get hospitalId from auth.hospitalId, NOT auth.id
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id;
+  const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
+  const isHospitalAdmin = authUser?.role === 'hospital' || authUser?.roleId === 2;
+  
+  // 🔥 FIX: Use hospitalId, NOT auth.id
+  const hospitalId = isDoctor ? authUser?.hospitalId : authUser?.id;
+  
+  console.log("👤 Patients Page - Full Auth:", authUser);
+  console.log("👨‍⚕️ Patients Page - Is Doctor:", isDoctor);
+  console.log("🏥 Patients Page - Hospital ID being used:", hospitalId);
 
   // API hooks WITH QUERY PARAMETERS - using server-side pagination
   const { 
@@ -98,7 +106,6 @@ const Patients = () => {
     page: currentPage,
     limit: itemsPerPage,
     ...(genderFilter && { gender: genderFilter }),
-    // includeDeleted: false // Always false - only show active patients (removed)
   });
 
   const [deletePatient] = useDeletePatientMutation();
@@ -589,6 +596,9 @@ const Patients = () => {
     );
   }
 
+  // Show hospital filter info
+  const showHospitalFilterInfo = isDoctor && hospitalId;
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Breadcrumb Navigation */}
@@ -608,6 +618,7 @@ const Patients = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Patients</h1>
+        
       </div>
 
       {/* Tabs */}
@@ -713,7 +724,6 @@ const Patients = () => {
             <Download size={16} />
           </button>
 
-
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
@@ -797,7 +807,9 @@ const Patients = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
-          <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
+          <p className="text-sm text-gray-500">
+            {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
+          </p>
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
@@ -944,6 +956,11 @@ const Patients = () => {
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                 {totalFilteredItems}
               </span>
+              {isDoctor && (
+                <span className="text-xs text-green-600 ml-2">
+                  🔒 Filtered by hospital
+                </span>
+              )}
             </h2>
           </div>
 

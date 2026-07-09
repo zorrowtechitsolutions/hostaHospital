@@ -25,6 +25,8 @@ export interface Doctor {
   appointmentCount?: number;
   autoDecline?: number;
   status?: string | boolean;
+  isDelete?: boolean;
+  isActive?: boolean;
 }
 
 export interface LoginDoctorData {
@@ -85,15 +87,39 @@ export const doctorApi = api.injectEndpoints({
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
+        // 🎯 ROLE DEFINITIONS - ALL users should be filtered by hospital
         const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
+        const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
+        const isSuperAdmin = auth?.role === 'super-admin';
         const shouldSkipFilter = params.skipHospitalFilter === true;
         
-        if (isHospitalAdmin && auth?.id && !params.hospitalId && !shouldSkipFilter) {
-          queryParams.append("hospitalId", String(auth.id));
-        } else if (params.hospitalId) {
+        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
+        // Staff should ONLY see their own hospital's data
+        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
+
+        console.log("👤 Doctor API - User Role:", auth?.role, "RoleId:", auth?.roleId);
+        console.log("👤 Doctor API - Is Staff:", isStaff);
+        console.log("🔒 Doctor API - Should Filter By Hospital:", shouldFilterByHospital);
+
+        if (shouldFilterByHospital && auth?.id) {
+          // Use hospitalId from auth for all hospital-bound users
+          const hospitalId = auth?.hospitalId || auth?.id;
+          queryParams.append("hospitalId", String(hospitalId));
+          console.log("🔒 User (Doctor/Hospital Admin/Staff) - Filtering by hospital ID:", hospitalId);
+        } else if (isSuperAdmin && params.hospitalId) {
+          // Super Admin can filter by specific hospital
           queryParams.append("hospitalId", String(params.hospitalId));
+          console.log("👑 Super Admin - Filtering by hospital ID:", params.hospitalId);
+        } else if (params.hospitalId && !shouldFilterByHospital) {
+          // Use provided hospitalId if user is not hospital-bound
+          queryParams.append("hospitalId", String(params.hospitalId));
+          console.log("📋 Using provided hospital ID:", params.hospitalId);
+        } else {
+          console.log("📋 No hospital filter applied - Showing all data");
         }
 
+        // Add other filters
         if (params.name) {
           queryParams.append("name", params.name);
         }
@@ -102,7 +128,7 @@ export const doctorApi = api.injectEndpoints({
           queryParams.append("speciality", params.speciality);
         }
 
-        if (params.status !== undefined) {
+        if (params.status !== undefined && params.status !== null && params.status !== '') {
           queryParams.append("status", String(params.status));
         }
 
@@ -110,10 +136,13 @@ export const doctorApi = api.injectEndpoints({
           queryParams.append("search_query", params.search_query);
         }
 
+        // Always add pagination
         queryParams.append("page", String(params.page || 1));
         queryParams.append("limit", String(params.limit || 10));
 
-        return `/doctor?${queryParams.toString()}`;
+        const url = `/doctor?${queryParams.toString()}`;
+        console.log("🚀 API Request URL:", url);
+        return url;
       },
       providesTags: ["Doctor"],
     }),
@@ -196,21 +225,21 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     addNewDoctor: builder.mutation<DoctorAuthResponse, AddDoctorPayload>({
-  query: ({ hospitalId, ...newDoctor }) => {
-    const auth = getAuthUser();
+      query: ({ hospitalId, ...newDoctor }) => {
+        const auth = getAuthUser();
 
-    return {
-      url: "/doctor",
-      method: "POST",
-      body: {
-        ...newDoctor,
-        hospitalId: hospitalId ?? auth?.id,
-        hospitalName: newDoctor.hospitalName ?? auth?.name ?? "",
+        return {
+          url: "/doctor",
+          method: "POST",
+          body: {
+            ...newDoctor,
+            hospitalId: hospitalId ?? auth?.id,
+            hospitalName: newDoctor.hospitalName ?? auth?.name ?? "",
+          },
+        };
       },
-    };
-  },
-  invalidatesTags: ["Doctor"],
-}),
+      invalidatesTags: ["Doctor"],
+    }),
 
     updateDoctor: builder.mutation<Doctor, { id: string; updateDoctor: Partial<Doctor> }>({
       query: ({ id, updateDoctor }) => ({

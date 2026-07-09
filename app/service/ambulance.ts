@@ -1,5 +1,4 @@
-// app/service/ambulance.ts - Ambulance API service with server-side pagination
-
+// app/service/ambulance.ts - Ambulance API service with Hospital Filter for Doctors
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
 
@@ -70,18 +69,44 @@ export const ambulanceApi = api.injectEndpoints({
       query: (params: GetAmbulanceParams = {}) => {
         const queryParams = new URLSearchParams();
 
-        // ✅ Use provided hospitalId or fallback to auth user's ID
+        const auth = getAuthUser();
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
+        const isSuperAdmin = auth?.role === 'super-admin';
         const skipHospitalFilter = params.skipHospitalFilter === true;
         
-        if (!skipHospitalFilter) {
-          const auth = getAuthUser();
-          // ✅ Priority: params.hospitalId > auth.id
-          const hospitalId = params.hospitalId ?? auth?.id;
+        // 🔥 FIX: Apply hospital filter for doctors AND hospital admins
+        const shouldFilterByHospital = (isHospitalAdmin || isDoctor) && !skipHospitalFilter;
+
+        console.log("🚑 Ambulance API - Full Auth:", auth);
+        console.log("🚑 Ambulance API - User Role:", auth?.role, "RoleId:", auth?.roleId);
+        console.log("👨‍⚕️ Ambulance API - Is Doctor:", isDoctor);
+        console.log("🏥 Ambulance API - Is Hospital Admin:", isHospitalAdmin);
+        console.log("👑 Ambulance API - Is Super Admin:", isSuperAdmin);
+        console.log("🔒 Ambulance API - Should Filter By Hospital:", shouldFilterByHospital);
+        console.log("📋 Ambulance API - Auth ID (Doctor ID):", auth?.id);
+        console.log("📋 Ambulance API - Auth Hospital ID:", auth?.hospitalId);
+
+        // 🔥 CRITICAL FIX: Use hospitalId, NOT auth.id
+        let hospitalIdToUse = null;
+        
+        if (shouldFilterByHospital) {
+          // 🔥 FIX: Priority: params.hospitalId > auth.hospitalId > auth.id
+          // For doctors, auth.hospitalId contains the actual hospital ID
+          hospitalIdToUse = params.hospitalId || auth?.hospitalId || auth?.id;
           
-          if (hospitalId) {
-            queryParams.append("hospitalId", String(hospitalId));
-            console.log("🚑 GET AMBULANCES - Using hospitalId:", hospitalId);
+          if (hospitalIdToUse) {
+            queryParams.append("hospitalId", String(hospitalIdToUse));
+            console.log("🔒 Doctor/Hospital Admin - Filtering ambulances by hospital ID:", hospitalIdToUse);
+          } else {
+            console.warn("⚠️ No hospital ID found for ambulance filtering - will not apply filter");
           }
+        } else if (params.hospitalId) {
+          // Use provided hospitalId if specified (for super admin)
+          queryParams.append("hospitalId", String(params.hospitalId));
+          console.log("📋 Using provided hospital ID:", params.hospitalId);
+        } else {
+          console.log("📋 No hospital filter applied - showing all ambulances");
         }
 
         // User ID filter
@@ -116,7 +141,7 @@ export const ambulanceApi = api.injectEndpoints({
         }
 
         // Vehicle type filter
-        if (params.vehicleType) {
+        if (params.vehicleType && params.vehicleType !== 'all') {
           queryParams.append("vehicleType", params.vehicleType);
         }
 
@@ -136,11 +161,15 @@ export const ambulanceApi = api.injectEndpoints({
 
         const queryString = queryParams.toString();
 
+        let url;
         if (params.id) {
-          return `/ambulance/${params.id}${queryString ? `?${queryString}` : ""}`;
+          url = `/ambulance/${params.id}${queryString ? `?${queryString}` : ""}`;
+        } else {
+          url = `/ambulance${queryString ? `?${queryString}` : ""}`;
         }
-
-        return `/ambulance${queryString ? `?${queryString}` : ""}`;
+        
+        console.log('📡 Ambulance API Request URL:', url);
+        return url;
       },
 
       providesTags: (result, error, params) => {
@@ -158,11 +187,19 @@ export const ambulanceApi = api.injectEndpoints({
     >({
       query: (data) => {
         const auth = getAuthUser();
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
         
-        // ✅ Use provided hospitalId or fallback to auth user's ID
-        const hospitalId = data.hospitalId || auth?.id;
+        // 🔥 FIX: Use hospitalId, NOT auth.id
+        let hospitalId = data.hospitalId;
         
-        console.log("🚑 CREATE AMBULANCE - Auth ID:", auth?.id);
+        if (!hospitalId && (isHospitalAdmin || isDoctor)) {
+          // 🔥 FIX: Priority: auth.hospitalId > auth.id
+          hospitalId = auth?.hospitalId || auth?.id;
+        }
+        
+        console.log("🚑 CREATE AMBULANCE - Auth ID (Doctor ID):", auth?.id);
+        console.log("🚑 CREATE AMBULANCE - Auth Hospital ID:", auth?.hospitalId);
         console.log("🚑 CREATE AMBULANCE - Provided hospitalId:", data.hospitalId);
         console.log("🚑 CREATE AMBULANCE - Final hospitalId:", hospitalId);
         
@@ -194,12 +231,20 @@ export const ambulanceApi = api.injectEndpoints({
     >({
       query: ({ id, data }) => {
         const auth = getAuthUser();
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
         
-        // ✅ Use provided hospitalId or fallback to auth user's ID
-        const hospitalId = data.hospitalId || auth?.id;
+        // 🔥 FIX: Use hospitalId, NOT auth.id
+        let hospitalId = data.hospitalId;
+        
+        if (!hospitalId && (isHospitalAdmin || isDoctor)) {
+          // 🔥 FIX: Priority: auth.hospitalId > auth.id
+          hospitalId = auth?.hospitalId || auth?.id;
+        }
         
         console.log("🚑 UPDATE AMBULANCE - ID:", id);
-        console.log("🚑 UPDATE AMBULANCE - Auth ID:", auth?.id);
+        console.log("🚑 UPDATE AMBULANCE - Auth ID (Doctor ID):", auth?.id);
+        console.log("🚑 UPDATE AMBULANCE - Auth Hospital ID:", auth?.hospitalId);
         console.log("🚑 UPDATE AMBULANCE - Provided hospitalId:", data.hospitalId);
         console.log("🚑 UPDATE AMBULANCE - Final hospitalId:", hospitalId);
         

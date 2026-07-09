@@ -1,4 +1,4 @@
-// Staffs.jsx - Complete file with Frontend Search AND Filter Functionality
+// src/components/staff/Staffs.jsx - Staff sees only their hospital
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,7 +8,7 @@ import {
   MoreVertical,
   Eye,
   Edit,
-  Users as UsersIcon,
+  UsersIcon,
   RefreshCcw,
   Upload,
   Trash2,
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/avatar";
 
 import { getS3ImageUrl, S3_BASE_URL } from '../../../app/service/S3';
+import { getAuthUser } from '../../../src/utils/auth';
 
 // Import socket
 import { socket } from '../../socket/socket';
@@ -81,6 +82,20 @@ const Staffs = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+
+  // 🔥 Get authenticated user to check role
+  const auth = getAuthUser();
+  const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+  const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
+  const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
+  
+  // 🔥 FIX: Staff now included in hospital filter
+  const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
+
+  console.log("👤 Staff Page - User:", auth);
+  console.log("👨‍⚕️ Staff Page - Is Doctor:", isDoctor);
+  console.log("👤 Staff Page - Is Staff:", isStaff);
+  console.log("🏥 Staff Page - Hospital ID:", auth?.hospitalId || auth?.id);
 
   // Debounce search term
   useEffect(() => {
@@ -268,7 +283,9 @@ const Staffs = () => {
         isDelete: staff.isDelete || false,
         deleteDate: staff.deleteDate || null,
         originalStatus: staff.status,
-        updatedAt: staff.updatedAt || staff.updated_at || null
+        updatedAt: staff.updatedAt || staff.updated_at || null,
+        hospitalId: staff.hospitalId || null,
+        hospitalName: staff.hospitalName || staff.hospital?.name || `Hospital ${staff.hospitalId}` || 'Unknown Hospital'
       };
     });
   };
@@ -276,7 +293,7 @@ const Staffs = () => {
   const allStaffsData = transformStaffData(staffApiResponse?.data || []);
   const totalItemsFromApi = staffApiResponse?.pagination?.totalItems || 0;
 
-  // ✅ FIX: Apply frontend search AND filter filtering
+  // ✅ Apply frontend search AND filter filtering
   const filteredStaffsData = useMemo(() => {
     let filtered = allStaffsData;
 
@@ -294,7 +311,8 @@ const Staffs = () => {
           staff.department?.toLowerCase() || '',
           staff.staffType?.toLowerCase() || '',
           staff.jobType?.toLowerCase() || '',
-          staff.address?.toLowerCase() || ''
+          staff.address?.toLowerCase() || '',
+          staff.hospitalName?.toLowerCase() || ''
         ];
 
         return searchFields.some(field => field.includes(searchLower));
@@ -344,6 +362,17 @@ const Staffs = () => {
   const staffsData = filteredStaffsData;
   const totalItems = staffsData.length;
 
+  // ✅ Get unique hospitals (should only be 1 for staff now)
+  const uniqueHospitals = useMemo(() => {
+    const hospitals = new Set();
+    staffsData.forEach(staff => {
+      if (staff.hospitalId) {
+        hospitals.add(staff.hospitalId);
+      }
+    });
+    return Array.from(hospitals);
+  }, [staffsData]);
+
   // ✅ Pagination for filtered data
   const paginatedStaffsData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -384,6 +413,7 @@ const Staffs = () => {
       'Designation': staff.designation,
       'Phone Number': staff.phone,
       'Email': staff.email,
+      'Hospital': staff.hospitalName || 'N/A',
       'Appointment Date': staff.appointmentDateDisplay,
       'Department': staff.department,
       'Status': staff.isDelete ? 'Blacklisted' : staff.status,
@@ -503,6 +533,9 @@ const Staffs = () => {
               <h3 className="font-semibold text-gray-800 text-lg">{staff.name}</h3>
               <span className="text-xs text-gray-500">{staff.formattedId}</span>
             </div>
+            {staff.hospitalName && (
+              <span className="text-xs text-blue-600">🏥 {staff.hospitalName}</span>
+            )}
           </div>
         </div>
         
@@ -549,6 +582,7 @@ const Staffs = () => {
               {staff.isDelete ? 'Blacklisted' : staff.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
+          
           
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500">Address</label>
@@ -721,13 +755,26 @@ const Staffs = () => {
             </div>
           </div>
           <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
+          
+          
+          {/* ✅ Show warning if multiple hospitals (shouldn't happen for staff now) */}
+          {isStaff && uniqueHospitals.length > 1 && (
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm text-red-800">
+                ⚠️ Warning: Showing staff from multiple hospitals ({uniqueHospitals.join(', ')})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
             <SearchBar 
-              placeholder="Search by name, staff ID, designation or phone..." 
+              placeholder="Search by name, staff ID, designation, phone or hospital..." 
               value={searchTerm} 
               onChange={setSearchTerm} 
               onClear={() => {

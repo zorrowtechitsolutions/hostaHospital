@@ -43,7 +43,6 @@ const Login = () => {
       try {
         await tokenManager.init();
         const deviceId = getDeviceId();
-        console.log('📱 Device ID:', deviceId);
       } catch (error) {
         console.error('❌ Failed to initialize IndexedDB:', error);
       }
@@ -104,7 +103,6 @@ const Login = () => {
       if (fcmToken) {
         try {
           await tokenManager.addFCMToken(fcmToken);
-          console.log('✅ FCM token saved to IndexedDB');
         } catch (dbError) {
           console.error('❌ Failed to save token to IndexedDB:', dbError);
         }
@@ -315,25 +313,16 @@ const Login = () => {
       
       try {
         const deviceId = getDeviceId();
-        console.log('📱 Device ID for login:', deviceId);
         
         // ✅ Get FCM token
         let fcmToken = null;
         
         if (isFCMAvailable()) {
-          console.log('🔔 FCM available, getting token...');
           try {
             fcmToken = await generateTokenWithTimeout(10000);
-            if (fcmToken) {
-              console.log('✅ FCM token generated');
-            } else {
-              console.log('ℹ️ No FCM token received');
-            }
           } catch (tokenError) {
             console.warn('⚠️ FCM token generation failed:', tokenError.message);
           }
-        } else {
-          console.log('ℹ️ FCM not available, skipping token generation');
         }
         
         // ✅ CORRECT: Build login payload with nested fcmToken object
@@ -347,20 +336,10 @@ const Login = () => {
           } : undefined
         };
 
-        console.log('📤 Sending login request with nested fcmToken...');
-        console.log('📤 Payload:', JSON.stringify({
-          email: loginPayload.email,
-          password: '******',
-          fcmToken: loginPayload.fcmToken ? {
-            deviceId: loginPayload.fcmToken.deviceId,
-            platform: loginPayload.fcmToken.platform,
-            fcmToken: loginPayload.fcmToken.fcmToken ? '✅ Present' : '❌ Missing'
-          } : '❌ Not provided'
-        }, null, 2));
+       
         
         // ✅ ONE API call
         const response = await loginUser(loginPayload).unwrap();
-        console.log('📥 Login response received');
         
         const roleId = response.roleId || response.data?.roleId;
         
@@ -368,7 +347,6 @@ const Login = () => {
         if (fcmToken) {
           try {
             await tokenManager.addFCMToken(fcmToken);
-            console.log('✅ FCM token saved to IndexedDB');
           } catch (dbError) {
             console.error('❌ Failed to save token to IndexedDB:', dbError);
           }

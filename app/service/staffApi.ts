@@ -141,22 +141,48 @@ export const staffApi = api.injectEndpoints({
       query: (params) => {
         const queryParams = new URLSearchParams();
         const auth = getAuthUser();
+        
+        // 🎯 ROLE DEFINITIONS - ALL users should be filtered by hospital
         const isSuperAdmin = auth?.role === 'super-admin';
         const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
+        const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
         const shouldSkipFilter = params?.skipHospitalFilter === true;
 
+        console.log("👤 Staff API - User:", auth);
+        console.log("👤 Staff API - Role:", auth?.role, "RoleId:", auth?.roleId);
+        console.log("👨‍⚕️ Staff API - Is Doctor:", isDoctor);
+        console.log("👤 Staff API - Is Staff:", isStaff);
+        console.log("🏥 Staff API - Is Hospital Admin:", isHospitalAdmin);
+
+        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
+        // Staff should ONLY see their own hospital's data
+        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
+
+        // Super Admin with specific hospital filter
         if (isSuperAdmin && params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-        } else if (isHospitalAdmin && !shouldSkipFilter) {
-          const hospitalId = getHospitalId();
+          console.log("👑 Super Admin - Filtering by hospital ID:", params.hospitalId);
+        } 
+        // Doctors, Hospital Admins, and Staff - filter by their hospital
+        else if (shouldFilterByHospital) {
+          const hospitalId = getHospitalId() || auth?.id || auth?.hospitalId;
           if (hospitalId) {
             queryParams.append("hospitalId", String(hospitalId));
+            console.log("🔒 User (Doctor/Hospital Admin/Staff) - Filtering by hospital ID:", hospitalId);
+          } else {
+            console.warn("⚠️ No hospital ID found for filtering");
           }
-        } else if (params?.hospitalId) {
+        }
+        // Use provided hospitalId if available
+        else if (params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
+          console.log("📋 Using provided hospital ID:", params.hospitalId);
+        } else {
+          console.log("📋 No hospital filter applied");
         }
 
-        // Filters
+        // Other filters
         if (params?.name) queryParams.append("name", params.name);
         if (params?.gender) queryParams.append("gender", params.gender);
         if (params?.phone) queryParams.append("phone", params.phone);
@@ -173,7 +199,7 @@ export const staffApi = api.injectEndpoints({
         if (params?.limit) queryParams.append("limit", String(params.limit));
 
         const url = `/staff?${queryParams.toString()}`;
-        console.log('📡 Fetching staff with URL:', url);
+        console.log('📡 Staff API Request URL:', url);
         return url;
       },
       providesTags: ["Staff"],
@@ -201,8 +227,6 @@ export const staffApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // ✅ FIXED: For Super Admin, use hospitalId from the request body
-        // For Hospital Admin, use their own hospital ID if not provided
         let hospitalId = data.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {

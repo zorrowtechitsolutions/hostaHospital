@@ -1,4 +1,4 @@
-// src/components/Doctor/Doctors.jsx - With Green Gradient Buttons and Socket Integration
+// src/components/Doctor/Doctors.jsx - With Hospital Filter for Doctors
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
@@ -7,44 +7,25 @@ import { Badge, Pagination } from '../ui';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
+import { getAuthUser } from '../../../src/utils/auth';
 
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
 
 // S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 
-// FIX 1: Updated getS3ImageUrl with cache-busting using Date.now()
+// getS3ImageUrl with cache-busting
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
-  
-  // If it's already a full URL, add cache-busting
   if (imageKey.startsWith("http")) {
     return `${imageKey}?t=${Date.now()}`;
   }
-  
-  // Otherwise construct the S3 URL with cache-busting
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// FIX 2: Alternative - Use updatedAt for cache-busting (recommended)
-// Uncomment this version if your API returns updatedAt field
-/*
-const getS3ImageUrl = (imageKey, updatedAt) => {
-  if (!imageKey) return "";
-  
-  const cacheBuster = updatedAt ? `v=${updatedAt}` : `t=${Date.now()}`;
-  
-  if (imageKey.startsWith("http")) {
-    return `${imageKey}?${cacheBuster}`;
-  }
-  
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?${cacheBuster}`;
-};
-*/
-
 // Helper functions
 const getDoctorName = (doctor) =>
-  doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`;
+  doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`.trim() || doctor.name || 'Doctor';
 
 const getAppointmentValue = (doctor) =>
   doctor.autoDecline
@@ -59,15 +40,9 @@ const getAppointmentValue = (doctor) =>
 const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
 
 const getDepartmentDisplay = (doctor) => {
-  if (doctor.department) {
-    return doctor.department;
-  }
-  if (doctor.specialist) {
-    return doctor.specialist;
-  }
-  if (doctor.specialty) {
-    return doctor.specialty;
-  }
+  if (doctor.department) return doctor.department;
+  if (doctor.specialist) return doctor.specialist;
+  if (doctor.specialty) return doctor.specialty;
   return 'Department not specified';
 };
 
@@ -230,20 +205,62 @@ const Doctors = () => {
 
   const [recoverDoctor] = useRecoverDoctorMutation();
 
-  // API Query with pagination parameters - server-side pagination
+  // 🔥 FIX: Get the authenticated user
+  const auth = getAuthUser();
+  
+  // 🔥 FIX: Check for doctor role as well (roleId 46 for doctors)
+  const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+  const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
+  const shouldFilterByHospital = isHospitalAdmin || isDoctor;
+
+  // Log user info for debugging
+  console.log("👤 Current User:", auth);
+  console.log("🏥 Is Hospital Admin:", isHospitalAdmin);
+  console.log("👨‍⚕️ Is Doctor:", isDoctor);
+  console.log("🔒 Should Filter By Hospital:", shouldFilterByHospital);
+  console.log("🏥 Hospital ID from auth:", auth?.hospitalId || auth?.id);
+
+  // 🔥 FIX: Build query params with hospital filter for doctors and hospital admins
+  const queryParams = {
+    search_query: searchTerm?.trim() ? searchTerm : undefined,
+    speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
+    status: filterStatus === "All" ? undefined : (filterStatus === "Active" ? true : false),
+    page: currentPage,
+    limit: itemsPerPage
+  };
+
+  // 🔥 CRITICAL FIX: If user is a doctor OR hospital admin, ALWAYS filter by their hospital ID
+  if (shouldFilterByHospital) {
+    // Use hospitalId from auth if available, otherwise use auth.id
+    const hospitalId = auth?.hospitalId || auth?.id;
+    if (hospitalId) {
+      queryParams.hospitalId = hospitalId;
+      console.log("🔒 Filtering by hospital ID:", hospitalId);
+    }
+  }
+
+  console.log("📤 Query Params being sent:", queryParams);
+
+  // API Query with hospital filter
   const {
     data: response,
     error,
     isLoading,
     isFetching,
     refetch,
-  } = useGetDoctorsQuery({
-    search_query: searchTerm?.trim() ? searchTerm : undefined,
-    speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
-    status: filterStatus === "All" ? undefined : (filterStatus === "Active" ? true : false),
-    page: currentPage,
-    limit: itemsPerPage
-  });
+  } = useGetDoctorsQuery(queryParams);
+
+  // Log response for debugging
+  useEffect(() => {
+    if (response?.data) {
+      const uniqueHospitalIds = new Set(response.data.map(d => d.hospitalId));
+      console.log("📥 Received Doctors:", response.data.length);
+      console.log("🏥 Unique Hospital IDs in results:", Array.from(uniqueHospitalIds));
+      if (uniqueHospitalIds.size > 1) {
+        console.warn("⚠️ WARNING: Multiple hospitals detected in results!");
+      }
+    }
+  }, [response]);
 
   // Register socket event listeners
   useEffect(() => {
@@ -535,8 +552,10 @@ const Doctors = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
+        
+
         {selectedSpecialty !== 'All' && (
-          <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">
+          <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm ml-2">
             <span>Filtering by department: <strong>{selectedSpecialty}</strong></span>
             <button onClick={clearDepartmentFilter} className="hover:text-blue-900" aria-label="Clear filter">
               ✕
@@ -656,6 +675,23 @@ const Doctors = () => {
         <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-md px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
           <span className="text-sm text-gray-600">Updating...</span>
+        </div>
+      )}
+
+      {/* Show warning if multiple hospitals detected */}
+      {doctors.length > 0 && (
+        <div className="mb-4">
+          {(() => {
+            const uniqueHospitalIds = new Set(doctors.map(d => d.hospitalId));
+            if (uniqueHospitalIds.size > 1) {
+              return (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg">
+                  ⚠️ Warning: Showing doctors from multiple hospitals ({Array.from(uniqueHospitalIds).join(', ')})
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
 
