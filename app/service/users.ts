@@ -90,28 +90,21 @@ export const usersApi = api.injectEndpoints({
     // ================= GET ALL USERS =================
     getUsers: builder.query<UserResponse, GetUsersParams | void>({
       query: (params: GetUsersParams = {}) => {
-        console.log("👥 GET USERS REQUEST");
-        console.log("🔑 TOKEN:", getToken());
-        console.log("📦 PARAMS:", params);
+      
         
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
         
-        console.log("👤 AUTH USER:", auth);
-        console.log("👤 AUTH ROLE:", auth?.role);
         
         const isSuperAdminUser = isSuperAdmin();
         const isHospitalAdminUser = isHospitalAdmin();
         
-        console.log("👑 Is Super Admin:", isSuperAdminUser);
-        console.log("🏥 Is Hospital Admin:", isHospitalAdminUser);
         
         // Super Admin sees all users, Hospital Admin sees only their hospital users
         if (!isSuperAdminUser) {
           // For Hospital Admin, auto-inject hospitalId
           if (isHospitalAdminUser && auth?.id) {
             queryParams.append("hospitalId", String(auth.id));
-            console.log(`🏥 Auto-injected hospitalId for hospital admin: ${auth.id}`);
           } else {
             // For other roles, use hospitalId from params or auth
             const hospitalId = params.hospitalId || auth?.hospitalId;
@@ -119,8 +112,6 @@ export const usersApi = api.injectEndpoints({
               queryParams.append("hospitalId", String(hospitalId));
             }
           }
-        } else {
-          console.log("👑 Super Admin - Seeing all users (no hospital filter)");
         }
 
         // Override hospitalId if provided in params (takes precedence)
@@ -180,16 +171,13 @@ export const usersApi = api.injectEndpoints({
         const queryString = queryParams.toString();
         const url = queryString ? `/users?${queryString}` : "/users";
         
-        console.log("🌐 FINAL URL:", url);
         
         // If ID is provided, get single user
         if (params.id) {
           const singleUrl = `/users/${params.id}${queryString ? `?${queryString}` : ""}`;
-          console.log("📍 SINGLE USER URL:", singleUrl);
           return singleUrl;
         }
 
-        console.log("📋 ALL USERS URL:", url);
         return url;
       },
 
@@ -204,7 +192,7 @@ export const usersApi = api.injectEndpoints({
     // ================= GET USER BY ID =================
     getUserById: builder.query<UserResponse, string | number>({
       query: (id) => {
-        console.log(`📍 GET USER BY ID: ${id}`);
+        
         return `/users/${id}`;
       },
       providesTags: (result, error, id) => [{ type: "Users", id }],
@@ -213,8 +201,6 @@ export const usersApi = api.injectEndpoints({
     // ================= CREATE USER =================
     createUser: builder.mutation<UserResponse, CreateUserData>({
       query: (data) => {
-        console.log("📝 CREATE USER REQUEST");
-        console.log("📦 DATA:", data);
         
         const auth = getAuthUser();
         const isSuperAdminUser = isSuperAdmin();
@@ -226,14 +212,11 @@ export const usersApi = api.injectEndpoints({
         if (!hospitalId) {
           if (isHospitalAdminUser && auth?.id) {
             hospitalId = auth.id;
-            console.log(`🏥 Using authenticated hospital admin ID: ${hospitalId}`);
           } else if (isSuperAdminUser) {
-            console.log("⚠️ Super Admin creating user - hospitalId may be required");
             // Super Admin can create users without hospitalId (system users)
           }
         }
         
-        console.log("🏥 FINAL HOSPITAL ID:", hospitalId);
         
         const requestBody: any = {
           name: data.name,
@@ -251,7 +234,6 @@ export const usersApi = api.injectEndpoints({
           requestBody.roleId = data.roleId;
         }
         
-        console.log("📤 REQUEST BODY:", requestBody);
         
         return {
           url: "/users",
@@ -266,9 +248,6 @@ export const usersApi = api.injectEndpoints({
     // ================= UPDATE USER =================
     updateUser: builder.mutation<UserResponse, { id: string | number; data: UpdateUserData }>({
       query: ({ id, data }) => {
-        console.log("✏️ UPDATE USER REQUEST");
-        console.log("🆔 USER ID:", id);
-        console.log("📦 UPDATE DATA:", data);
         
         const requestBody: any = {};
         
@@ -281,7 +260,6 @@ export const usersApi = api.injectEndpoints({
         if (data.hospitalId !== undefined) requestBody.hospitalId = data.hospitalId;
         if (data.isActive !== undefined) requestBody.isActive = data.isActive;
         
-        console.log("📤 REQUEST BODY:", requestBody);
         
         return {
           url: `/users/${id}`,
@@ -299,8 +277,6 @@ export const usersApi = api.injectEndpoints({
     // ================= DELETE USER =================
     deleteUser: builder.mutation<{ message: string }, string | number>({
       query: (id) => {
-        console.log("🗑️ DELETE USER REQUEST");
-        console.log("🆔 USER ID:", id);
         
         return {
           url: `/users/${id}`,
@@ -320,8 +296,6 @@ export const usersApi = api.injectEndpoints({
       string | number
     >({
       query: (id) => {
-        console.log("♻️ RECOVER USER REQUEST");
-        console.log("🆔 USER ID:", id);
         
         return {
           url: `/users/recover/${id}`,

@@ -149,12 +149,6 @@ export const staffApi = api.injectEndpoints({
         const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
         const shouldSkipFilter = params?.skipHospitalFilter === true;
 
-        console.log("👤 Staff API - User:", auth);
-        console.log("👤 Staff API - Role:", auth?.role, "RoleId:", auth?.roleId);
-        console.log("👨‍⚕️ Staff API - Is Doctor:", isDoctor);
-        console.log("👤 Staff API - Is Staff:", isStaff);
-        console.log("🏥 Staff API - Is Hospital Admin:", isHospitalAdmin);
-
         // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
         // Staff should ONLY see their own hospital's data
         const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
@@ -162,14 +156,12 @@ export const staffApi = api.injectEndpoints({
         // Super Admin with specific hospital filter
         if (isSuperAdmin && params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log("👑 Super Admin - Filtering by hospital ID:", params.hospitalId);
         } 
         // Doctors, Hospital Admins, and Staff - filter by their hospital
         else if (shouldFilterByHospital) {
           const hospitalId = getHospitalId() || auth?.id || auth?.hospitalId;
           if (hospitalId) {
             queryParams.append("hospitalId", String(hospitalId));
-            console.log("🔒 User (Doctor/Hospital Admin/Staff) - Filtering by hospital ID:", hospitalId);
           } else {
             console.warn("⚠️ No hospital ID found for filtering");
           }
@@ -177,10 +169,7 @@ export const staffApi = api.injectEndpoints({
         // Use provided hospitalId if available
         else if (params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log("📋 Using provided hospital ID:", params.hospitalId);
-        } else {
-          console.log("📋 No hospital filter applied");
-        }
+        } 
 
         // Other filters
         if (params?.name) queryParams.append("name", params.name);
@@ -199,12 +188,10 @@ export const staffApi = api.injectEndpoints({
         if (params?.limit) queryParams.append("limit", String(params.limit));
 
         const url = `/staff?${queryParams.toString()}`;
-        console.log('📡 Staff API Request URL:', url);
         return url;
       },
       providesTags: ["Staff"],
       transformResponse: (response: StaffResponse) => {
-        console.log('✅ Staff API Response:', response);
         return response;
       },
     }),
@@ -233,7 +220,6 @@ export const staffApi = api.injectEndpoints({
           hospitalId = Number(getHospitalId());
         }
         
-        console.log("📤 Creating staff with hospitalId:", hospitalId);
         
         return {
           url: "/staff",
@@ -356,12 +342,10 @@ export const staffApi = api.injectEndpoints({
         method: "POST",
       }),
       transformResponse: (response: StaffResponse) => {
-        console.log("🔄 Staff token refresh initiated...");
         
         const token = response.token;
         if (token) {
           localStorage.setItem("accessToken", token);
-          console.log("✅ Staff token refreshed successfully");
         } else {
           console.warn("⚠️ No token received from refresh endpoint");
         }
@@ -389,7 +373,6 @@ export const staffApi = api.injectEndpoints({
           await queryFulfilled;
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
-          console.log("🔴 Staff logged out");
         } catch (error) {
           console.error("Logout error:", error);
         }

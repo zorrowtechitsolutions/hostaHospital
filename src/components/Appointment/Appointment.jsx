@@ -28,6 +28,22 @@ import { registerBookingEvents, unregisterBookingEvents } from '../../socket/boo
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
 
+// Helper function to convert 24-hour time to 12-hour format with AM/PM
+const convertTo12Hour = (time24h) => {
+  if (!time24h || time24h === "N/A") return "";
+  
+  // If already in 12-hour format, return as is
+  if (time24h.includes("AM") || time24h.includes("PM")) {
+    return time24h;
+  }
+  
+  const [hours, minutes] = time24h.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
 // Skeleton Loader Component
 const SkeletonLoader = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -115,9 +131,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
 
-
   // API Hooks - Server-side pagination
-const { 
+  const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
@@ -177,6 +192,7 @@ const {
     }
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
+
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -213,9 +229,8 @@ const {
     return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
   };
 
-  // ✅ FIX: Helper function to extract gender from multiple sources
+  // Helper function to extract gender from multiple sources
   const extractGender = (booking) => {
-    // Check all possible gender sources
     const gender = 
       booking?.patient_gender ||
       booking?.patient?.gender ||
@@ -224,17 +239,15 @@ const {
       booking?.genderDisplay ||
       null;
     
-    
-    // Return normalized gender or null
     if (gender) {
       const normalized = gender.toLowerCase();
       if (normalized === 'male') return 'Male';
       if (normalized === 'female') return 'Female';
       if (normalized === 'other') return 'Other';
-      return gender; // Return as-is if not matching
+      return gender;
     }
     
-    return null; // Return null so we don't default to "Male"
+    return null;
   };
 
   // Transform API response
@@ -270,23 +283,19 @@ const {
         booking.patient_id ||
         booking.patientID;
 
-      // ✅ FIX: Extract gender using the helper function
       const extractedGender = extractGender(booking);
-      // If no gender found, use "N/A" instead of defaulting to "Male"
       const finalGender = extractedGender || "N/A";
-
 
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
-        patientId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
-        gender: finalGender, // ✅ FIX: Now uses extracted gender or "N/A"
+        gender: finalGender,
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
@@ -299,7 +308,6 @@ const {
         patientImageKey: patientImageKey,
         originalStatus: booking.status,
         userId: booking.userId || null,
-        // ✅ Store the raw gender for debugging
         rawGender: booking.gender,
         patientGender: booking.patient_gender,
         patientGenderNested: booking.patient?.gender
@@ -354,7 +362,7 @@ const {
       'Patient Name': apt.patientName,
       'Contact': apt.contact,
       'Age': apt.age,
-      'Gender': apt.gender, // ✅ Now includes correct gender
+      'Gender': apt.gender,
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
       'Appointment Date': apt.appointmentDateDisplay,
@@ -400,7 +408,6 @@ const {
         appointmentDate: appointment.appointmentDateDisplay,
         reason: appointment.reason,
         notes: appointment.notes,
-        // ✅ Pass gender correctly
         gender: appointment.gender,
         patient_gender: appointment.gender
       }
@@ -428,11 +435,31 @@ const {
     setIsApproving(true);
     
     try {
+      // The approve modal already returns time in 24-hour format
+      // But we need to make sure it's in the correct format
+      let consultingTime = appointmentData.consulting_time;
+      
+      // If the time has AM/PM, convert it to 24-hour format
+      if (consultingTime.includes("AM") || consultingTime.includes("PM")) {
+        // The modal should have already converted it, but just in case
+        const [time, modifier] = consultingTime.split(" ");
+        let [hours, minutes] = time.split(":");
+        
+        if (hours === "12" && modifier === "AM") {
+          hours = "00";
+        } else if (hours === "12" && modifier === "PM") {
+          hours = "12";
+        } else if (modifier === "PM") {
+          hours = String(parseInt(hours, 10) + 12);
+        }
+        consultingTime = `${hours.padStart(2, "0")}:${minutes}`;
+      }
+      
       await approveBooking({
         id: selectedRequest.id,
         data: {
-          date: appointmentData.date,
-          consulting_time: appointmentData.consulting_time,
+          date: appointmentData.booking_date,
+          consulting_time: consultingTime,
           token: appointmentData.token,
           notes: appointmentData.notes
         }
@@ -444,8 +471,8 @@ const {
           bookingId: selectedRequest.id,
           patientName: selectedRequest.patientName,
           doctorName: selectedRequest.doctorName,
-          date: appointmentData.date,
-          consulting_time: appointmentData.consulting_time,
+          date: appointmentData.booking_date,
+          consulting_time: appointmentData.consulting_time, // Send original (with AM/PM) for display
           token: appointmentData.token,
           timestamp: new Date().toISOString()
         }
@@ -634,7 +661,7 @@ const {
             
             <div>
               <p className="font-medium text-sm mb-1">Date & Time</p>
-              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {appointment.consulting_time}</p>
+              <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {convertTo12Hour(appointment.consulting_time)}</p>
             </div>
             
             <div>
@@ -642,7 +669,6 @@ const {
               <p className="text-sm text-gray-800">{appointment.contact}</p>
             </div>
 
-            {/* ✅ Add Gender to Details Modal */}
             <div>
               <p className="font-medium text-sm mb-1">Gender</p>
               <p className="text-sm text-gray-800">{appointment.gender}</p>
@@ -1011,7 +1037,7 @@ const {
                       <td className="px-6 py-4 text-gray-600">
                         {apt.appointmentDateDisplay}
                         <br />
-                        <span className="text-xs text-gray-400">{apt.consulting_time}</span>
+                        <span className="text-xs text-gray-400">{convertTo12Hour(apt.consulting_time)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
@@ -1064,8 +1090,8 @@ const {
             setSelectedRequest(null); 
           }} 
           onConfirm={handleConfirmApprove}
-          initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          initialTime={selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}
+          initialDate={selectedRequest.appointmentDateDisplay !== "N/A" ? selectedRequest.appointmentDateDisplay : ""}
+          initialTime={selectedRequest.consulting_time !== "N/A" ? convertTo12Hour(selectedRequest.consulting_time) : ""}
           initialToken=""
           isLoading={isApproving}
         />

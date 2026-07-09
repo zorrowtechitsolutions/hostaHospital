@@ -26,12 +26,10 @@ export class FCMTokenManager {
                     store.createIndex('fcmToken', 'fcmToken', { unique: true });
                     store.createIndex('createdAt', 'createdAt', { unique: false });
                 }
-                console.log('📦 IndexedDB initialized');
             };
             
             request.onsuccess = () => {
                 this.db = request.result;
-                console.log('✅ IndexedDB connected');
                 resolve();
             };
             request.onerror = () => {
@@ -49,7 +47,6 @@ export class FCMTokenManager {
         // Check if token already exists
         const exists = await this.hasToken(fcmToken);
         if (exists) {
-            console.log('⚠️ Token already exists:', fcmToken);
             return false;
         }
 
@@ -67,7 +64,6 @@ export class FCMTokenManager {
             
             const request = store.add(tokenData);
             request.onsuccess = () => {
-                console.log('✅ FCM token saved:', fcmToken);
                 resolve(true);
             };
             request.onerror = () => {
@@ -144,7 +140,6 @@ export class FCMTokenManager {
                 if (result) {
                     const deleteRequest = store.delete(result.id);
                     deleteRequest.onsuccess = () => {
-                        console.log('🗑️ Token removed:', fcmToken);
                         resolve(true);
                     };
                     deleteRequest.onerror = () => reject(deleteRequest.error);
@@ -181,7 +176,6 @@ export class FCMTokenManager {
                     deleteReq.onsuccess = () => {
                         deleted++;
                         if (deleted === tokens.length) {
-                            console.log(`🗑️ Cleared ${deleted} tokens for device`);
                             resolve(deleted);
                         }
                     };
@@ -216,12 +210,10 @@ export class FCMTokenManager {
                 this.db = null;
             }
             
-            console.log('🗑️ Deleting database:', this.dbName);
             
             const request = indexedDB.deleteDatabase(this.dbName);
             
             request.onsuccess = () => {
-                console.log('✅ Database deleted successfully');
                 resolve();
             };
             
@@ -236,7 +228,6 @@ export class FCMTokenManager {
                 try {
                     const retryRequest = indexedDB.deleteDatabase(this.dbName);
                     retryRequest.onsuccess = () => {
-                        console.log('✅ Database deleted on retry');
                         resolve();
                     };
                     retryRequest.onerror = () => {

@@ -469,8 +469,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 <div className="mt-4 flex items-center text-xs text-gray-400 group-hover:text-[#1C62A0] transition-colors">
-                  <span>View details</span>
-                  <ArrowRight size={12} className="ml-1 group-hover:translate-x-1 transition-transform" />
+                
                 </div>
               </div>
             </Card>

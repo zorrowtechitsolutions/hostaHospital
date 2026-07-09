@@ -227,7 +227,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         const tokens = await tokenManager.getDeviceTokens();
         if (tokens && tokens.length > 0) {
           deviceId = tokens[0].deviceId;
-          console.log('🔍 Device ID from IndexedDB:', deviceId);
         }
       } catch (error) {
         console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
@@ -236,7 +235,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       // ✅ 5. Fallback to localStorage if IndexedDB fails
       if (!deviceId) {
         deviceId = getDeviceId();
-        console.log('🔍 Device ID from localStorage:', deviceId);
       }
       
       // ✅ 6. Check if this is a Super Admin
@@ -265,7 +263,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       }
       
       const result = await logoutApi(logoutParams).unwrap();
-      console.log('✅ Logout API call successful:', result);
       
     } catch (error) {
       console.error('❌ Logout API error:', error);
@@ -279,20 +276,17 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       // ✅ 9. Clear IndexedDB (FCM tokens)
       try {
         await tokenManager.deleteDatabase();
-        console.log('✅ IndexedDB database deleted');
       } catch (dbError) {
         console.warn('⚠️ Could not delete database:', dbError);
         // Try to clear tokens individually
         try {
           await tokenManager.clearAllDeviceTokens();
-          console.log('✅ IndexedDB tokens cleared');
         } catch (e) {
           console.warn('⚠️ Could not clear tokens:', e);
         }
       }
       
       // ✅ 10. Clear ALL localStorage items
-      console.log('🔍 Clearing localStorage...');
       const localStorageItems = [
         'accessToken',
         'refreshToken',
@@ -317,13 +311,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       
       localStorageItems.forEach(key => {
         localStorage.removeItem(key);
-        console.log(`  ✓ Removed: ${key}`);
       });
-      console.log('✅ localStorage cleared');
       
       // ✅ 11. Clear sessionStorage
       sessionStorage.clear();
-      console.log('✅ sessionStorage cleared');
       
       // ✅ 12. Clear any cached data
       if (window.caches) {
@@ -332,7 +323,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           cacheNames.forEach(name => {
             caches.delete(name);
           });
-          console.log('✅ Caches cleared');
         } catch (e) {
           console.warn('⚠️ Could not clear caches:', e);
         }
@@ -340,11 +330,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       
       // ✅ 13. Auth context logout
       logout();
-      console.log('✅ Auth context logout complete');
       
       // ✅ 14. Redirect to login
       navigate("/sign-in", { replace: true });
-      console.log('✅ Redirected to login page');
     }
   };
 

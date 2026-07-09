@@ -213,12 +213,6 @@ const Doctors = () => {
   const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
   const shouldFilterByHospital = isHospitalAdmin || isDoctor;
 
-  // Log user info for debugging
-  console.log("👤 Current User:", auth);
-  console.log("🏥 Is Hospital Admin:", isHospitalAdmin);
-  console.log("👨‍⚕️ Is Doctor:", isDoctor);
-  console.log("🔒 Should Filter By Hospital:", shouldFilterByHospital);
-  console.log("🏥 Hospital ID from auth:", auth?.hospitalId || auth?.id);
 
   // 🔥 FIX: Build query params with hospital filter for doctors and hospital admins
   const queryParams = {
@@ -235,11 +229,10 @@ const Doctors = () => {
     const hospitalId = auth?.hospitalId || auth?.id;
     if (hospitalId) {
       queryParams.hospitalId = hospitalId;
-      console.log("🔒 Filtering by hospital ID:", hospitalId);
     }
   }
 
-  console.log("📤 Query Params being sent:", queryParams);
+ 
 
   // API Query with hospital filter
   const {
@@ -254,8 +247,6 @@ const Doctors = () => {
   useEffect(() => {
     if (response?.data) {
       const uniqueHospitalIds = new Set(response.data.map(d => d.hospitalId));
-      console.log("📥 Received Doctors:", response.data.length);
-      console.log("🏥 Unique Hospital IDs in results:", Array.from(uniqueHospitalIds));
       if (uniqueHospitalIds.size > 1) {
         console.warn("⚠️ WARNING: Multiple hospitals detected in results!");
       }

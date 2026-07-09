@@ -98,26 +98,18 @@ export const doctorApi = api.injectEndpoints({
         // Staff should ONLY see their own hospital's data
         const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
 
-        console.log("👤 Doctor API - User Role:", auth?.role, "RoleId:", auth?.roleId);
-        console.log("👤 Doctor API - Is Staff:", isStaff);
-        console.log("🔒 Doctor API - Should Filter By Hospital:", shouldFilterByHospital);
 
         if (shouldFilterByHospital && auth?.id) {
           // Use hospitalId from auth for all hospital-bound users
           const hospitalId = auth?.hospitalId || auth?.id;
           queryParams.append("hospitalId", String(hospitalId));
-          console.log("🔒 User (Doctor/Hospital Admin/Staff) - Filtering by hospital ID:", hospitalId);
         } else if (isSuperAdmin && params.hospitalId) {
           // Super Admin can filter by specific hospital
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log("👑 Super Admin - Filtering by hospital ID:", params.hospitalId);
         } else if (params.hospitalId && !shouldFilterByHospital) {
           // Use provided hospitalId if user is not hospital-bound
           queryParams.append("hospitalId", String(params.hospitalId));
-          console.log("📋 Using provided hospital ID:", params.hospitalId);
-        } else {
-          console.log("📋 No hospital filter applied - Showing all data");
-        }
+        } 
 
         // Add other filters
         if (params.name) {
@@ -141,7 +133,6 @@ export const doctorApi = api.injectEndpoints({
         queryParams.append("limit", String(params.limit || 10));
 
         const url = `/doctor?${queryParams.toString()}`;
-        console.log("🚀 API Request URL:", url);
         return url;
       },
       providesTags: ["Doctor"],

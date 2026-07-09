@@ -124,14 +124,9 @@ const getUserId = (): string | number | undefined => {
     localStorage.getItem("user") || "{}"
   );
   
-  console.log("=== getUserId DEBUG ===");
-  console.log("Auth object:", auth);
-
   // Return the user ID from auth
   const userId = auth.id || auth.userId || auth.hospitalId;
-  
-  console.log("Final User ID:", userId);
-  console.log("=======================");
+
   
   return userId;
 };
@@ -152,14 +147,6 @@ export const uploadToS3 = async (
     // Get ID - use provided customId or get from storage
     let id: string | number | undefined = customId || getUserId();
 
-    console.log("=== S3 UPLOAD DEBUG ===");
-    console.log("Original size:", (file.size / 1024 / 1024).toFixed(2), "MB");
-    console.log("Compressed size:", (file.size / 1024 / 1024).toFixed(2), "MB");
-    console.log("ID:", id);
-    console.log("Custom ID passed:", customId);
-    console.log("Custom Role:", customRole);
-    console.log("Token exists:", !!token);
-    console.log("Existing key:", key);
 
     if (!id) {
       throw new Error("ID is required for S3 upload. Please make sure you are logged in.");
@@ -178,9 +165,7 @@ export const uploadToS3 = async (
         ? { key }
         : { size: compressed.size }),
     };
-
-    console.log("Request body:", JSON.stringify(body, null, 2));
-
+    
     const res = await fetch(API_URL, {
       method: key ? "PUT" : "POST",
       headers: {
@@ -208,7 +193,6 @@ export const uploadToS3 = async (
     }
 
     const data = await res.json();
-    console.log("Presign response:", data);
 
     const upload = await fetch(data.presignedUrl, {
       method: "PUT",
@@ -226,7 +210,6 @@ export const uploadToS3 = async (
       throw new Error(`Upload to S3 failed: ${upload.statusText}`);
     }
 
-    console.log("Upload successful! Key:", data.key);
 
     return {
       key: data.key,
@@ -245,12 +228,6 @@ export const uploadToS3 = async (
 export const deleteFromS3 = async (key: string, id?: string | number, role: string = "hospital") => {
   const token = getToken();
   let finalId: string | number | undefined = id || getUserId();
-
-  console.log("=== S3 DELETE DEBUG ===");
-  console.log("Key:", key);
-  console.log("ID:", finalId);
-  console.log("Role:", role);
-  console.log("Token exists:", !!token);
 
   if (!finalId) {
     console.warn("No ID found for delete operation");
@@ -288,6 +265,5 @@ export const deleteFromS3 = async (key: string, id?: string | number, role: stri
     return false;
   }
 
-  console.log("Delete successful!");
   return true;
 };

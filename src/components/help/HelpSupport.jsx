@@ -1,5 +1,5 @@
-// src/components/HelpSupport/HelpSupport.jsx
-import React, { useState } from 'react';
+// src/components/HelpSupport/HelpSupport.jsx - FIXED ICON POSITIONING
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail,
@@ -11,6 +11,71 @@ import {
 import { Button, Card } from '../ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { useCreateEnquiryMutation } from '../../../app/service/emailEnquiryApi';
+
+// ✅ FormField component with fixed icon positioning for textarea
+const FormField = React.memo(({ 
+  name, 
+  type = 'text', 
+  icon: Icon, 
+  placeholder, 
+  value, 
+  onChange, 
+  onBlur, 
+  error, 
+  touched, 
+  disabled,
+  label
+}) => {
+  const isTextarea = name === 'message';
+  const hasError = error && touched;
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} <span className="text-red-500">*</span>
+      </label>
+      <div className="relative">
+        {/* ✅ Icon positioned at top for textarea, center for input */}
+        <Icon className={`absolute left-3 ${
+          isTextarea ? 'top-3' : 'top-1/2 transform -translate-y-1/2'
+        } h-4 w-4 text-gray-400 pointer-events-none z-10`} />
+        
+        {isTextarea ? (
+          <textarea
+            name={name}
+            value={value}
+            onChange={onChange}
+            onBlur={onBlur}
+            placeholder={placeholder}
+            rows={5}
+            className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent resize-none transition ${
+              hasError ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={disabled}
+          />
+        ) : (
+          <input
+            type={type}
+            name={name}
+            value={value}
+            onChange={onChange}
+            onBlur={onBlur}
+            placeholder={placeholder}
+            className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
+              hasError ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={disabled}
+          />
+        )}
+      </div>
+      {hasError && (
+        <p className="text-xs text-red-500 mt-1">{error}</p>
+      )}
+    </div>
+  );
+});
+
+FormField.displayName = 'FormField';
 
 const HelpSupport = () => {
   const navigate = useNavigate();
@@ -32,7 +97,7 @@ const HelpSupport = () => {
     message: 'Message'
   };
 
-  const validateField = (name, value) => {
+  const validateField = useCallback((name, value) => {
     const trimmed = value.trim();
     
     switch (name) {
@@ -55,26 +120,29 @@ const HelpSupport = () => {
       default:
         return '';
     }
-  };
+  }, []);
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (touched[name]) {
-      const error = validateField(name, value);
-      setErrors(prev => ({ ...prev, [name]: error }));
-    }
-  };
+    setTouched(prev => {
+      if (prev[name]) {
+        const error = validateField(name, value);
+        setErrors(prevErrors => ({ ...prevErrors, [name]: error }));
+      }
+      return prev;
+    });
+  }, [validateField]);
 
-  const handleBlur = (e) => {
+  const handleBlur = useCallback((e) => {
     const { name, value } = e.target;
     setTouched(prev => ({ ...prev, [name]: true }));
     const error = validateField(name, value);
     setErrors(prev => ({ ...prev, [name]: error }));
-  };
+  }, [validateField]);
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors = {};
     FIELDS.forEach(field => {
       const error = validateField(field, formData[field]);
@@ -82,9 +150,9 @@ const HelpSupport = () => {
     });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData, validateField]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
     const allTouched = {};
@@ -120,9 +188,9 @@ const HelpSupport = () => {
       const errorMessage = error?.data?.message || 'Failed to send message. Please try again.';
       showErrorToast(errorMessage);
     }
-  };
+  }, [formData, createEnquiry, validateForm]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     setFormData({
       name: '',
       email: '',
@@ -132,61 +200,24 @@ const HelpSupport = () => {
     setErrors({});
     setTouched({});
     showWarningToast('Form cleared');
-  };
+  }, []);
 
-  const FormField = ({ name, type = 'text', icon: Icon, placeholder }) => {
-    const isTextarea = name === 'message';
-    const error = errors[name];
-    const touchedField = touched[name];
-    const value = formData[name];
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {FIELD_LABELS[name]} <span className="text-red-500">*</span>
-        </label>
-        <div className="relative">
-          <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          {isTextarea ? (
-            <textarea
-              name={name}
-              value={value}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              placeholder={placeholder}
-              rows={5}
-              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent resize-none transition ${
-                error && touchedField ? 'border-red-500' : 'border-gray-300'
-              }`}
-              disabled={isSubmitting}
-            />
-          ) : (
-            <input
-              type={type}
-              name={name}
-              value={value}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              placeholder={placeholder}
-              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent transition ${
-                error && touchedField ? 'border-red-500' : 'border-gray-300'
-              }`}
-              disabled={isSubmitting}
-            />
-          )}
-        </div>
-        {error && touchedField && (
-          <p className="text-xs text-red-500 mt-1">{error}</p>
-        )}
-      </div>
-    );
-  };
+  const fieldConfigs = useMemo(() => [
+    { name: 'name', type: 'text', icon: User, placeholder: 'Enter your full name' },
+    { name: 'email', type: 'email', icon: Mail, placeholder: 'Enter your email address' },
+    { name: 'subject', type: 'text', icon: FileText, placeholder: 'Enter message subject' },
+    { name: 'message', type: 'text', icon: MessageSquare, placeholder: 'Enter your message here...' },
+  ], []);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            type="button"
+          >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
@@ -212,30 +243,22 @@ const HelpSupport = () => {
 
           <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-5">
-              <FormField
-                name="name"
-                icon={User}
-                placeholder="Enter your full name"
-              />
-
-              <FormField
-                name="email"
-                type="email"
-                icon={Mail}
-                placeholder="Enter your email address"
-              />
-
-              <FormField
-                name="subject"
-                icon={FileText}
-                placeholder="Enter message subject"
-              />
-
-              <FormField
-                name="message"
-                icon={MessageSquare}
-                placeholder="Enter your message here..."
-              />
+              {fieldConfigs.map(({ name, type, icon, placeholder }) => (
+                <FormField
+                  key={name}
+                  name={name}
+                  type={type}
+                  icon={icon}
+                  placeholder={placeholder}
+                  label={FIELD_LABELS[name]}
+                  value={formData[name]}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors[name]}
+                  touched={touched[name]}
+                  disabled={isSubmitting}
+                />
+              ))}
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button

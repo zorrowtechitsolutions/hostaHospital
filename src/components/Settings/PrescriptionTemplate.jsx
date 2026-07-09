@@ -372,13 +372,9 @@ const PrescriptionTemplate = () => {
 
   // Load templates with proper priority
   useEffect(() => {
-    console.log("🔄 Loading templates for hospital:", hospitalId);
-    console.log("Custom template found:", !!customTemplate);
-    console.log("Demo template found:", !!demoTemplate);
     
     // First check if we have a custom template for this hospital
     if (customTemplate && customTemplate.design && customTemplate.design.length > 0) {
-      console.log("✅ Loading CUSTOM template for hospital:", hospitalId);
       setItems(
         (customTemplate.design || []).map((item, index) => ({
           ...item,
@@ -399,7 +395,6 @@ const PrescriptionTemplate = () => {
     } 
     // If no custom template, use demo template
     else if (demoTemplate && demoTemplate.design && demoTemplate.design.length > 0) {
-      console.log("✅ Loading DEMO template (no custom for hospital:", hospitalId, ")");
       setItems(
         (demoTemplate.design || []).map((item, index) => ({
           ...item,
@@ -420,7 +415,6 @@ const PrescriptionTemplate = () => {
     } 
     // No templates exist - create default
     else {
-      console.log("⚠️ No templates found, using DEFAULT");
       const defaultTemplate = getDefaultTemplate();
       setItems(defaultTemplate.design);
       setCustomCanvasBg(defaultTemplate.bgColor);
@@ -698,14 +692,11 @@ const PrescriptionTemplate = () => {
       if (customTemplate) {
         selectedTemplate = customTemplate;
         designToUse = customTemplate.design;
-        console.log("✅ Using CUSTOM template for hospital:", hospitalId);
       } else if (demoTemplate) {
         selectedTemplate = demoTemplate;
         designToUse = demoTemplate.design;
-        console.log("✅ Using DEMO template (no custom for hospital:", hospitalId, ")");
       } else {
         designToUse = getDefaultTemplate().design;
-        console.log("✅ Using DEFAULT template");
       }
 
       const prescriptionPayload = {

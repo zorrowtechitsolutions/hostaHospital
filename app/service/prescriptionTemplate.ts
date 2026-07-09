@@ -64,7 +64,6 @@ export const prescriptionTemplateApi = api.injectEndpoints({
           url += `${url.includes('?') ? '&' : '?'}limit=${params.limit}`;
         }
         
-        console.log("📡 Fetching all templates");
         
         return {
           url,

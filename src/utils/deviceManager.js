@@ -10,7 +10,6 @@ export function getDeviceId() {
     if (!deviceId) {
         deviceId = uuidv4(); // ✅ Using the latest uuid
         localStorage.setItem('deviceId', deviceId);
-        console.log('🆕 New device ID created:', deviceId);
     }
     
     return deviceId;
@@ -19,5 +18,4 @@ export function getDeviceId() {
 // Optional: Clear device ID (for logout)
 export function clearDeviceId() {
     localStorage.removeItem('deviceId');
-    console.log('🗑️ Device ID cleared');
 }

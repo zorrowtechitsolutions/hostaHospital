@@ -28,7 +28,6 @@ const Notification = () => {
   const handleSaveChanges = () => {
     setIsSaving(true);
     setTimeout(() => {
-      console.log('Saved notification preferences:', { notifications, notificationMethod });
       showSuccessToast(
         'Notification preferences saved successfully!',
         4000,
