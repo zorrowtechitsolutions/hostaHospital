@@ -8,7 +8,6 @@ import {
   Filter,
   RefreshCcw,
   Download,
-  Upload,
   Users as UsersIcon,
   Phone
 } from "lucide-react";
@@ -29,6 +28,9 @@ import { getS3ImageUrl } from "../../../app/service/S3";
 
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -88,6 +90,7 @@ const transformBookingsData = (bookingList) => {
       consulting_time: rawTime,
       status: booking.status || "pending",
       patientImageKey: patientImageKey,
+      reason: booking.reason || booking.notes || "N/A",
     };
   });
 };
@@ -134,21 +137,27 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <th key={i} className="px-6 py-3">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                </th>
-              ))}
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
             </tr>
           </thead>
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
-                  <td key={j} className="px-6 py-4">
-                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
-                ))}
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
               </tr>
             ))}
           </tbody>
@@ -403,49 +412,52 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     showSuccessToast("All filters cleared", TOAST_DURATION);
   };
 
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
-    const exportData = filteredRequests.map(req => ({
-      'Request ID': req.formattedId,
-      'Patient ID': req.patientId,
-      'Patient Name': req.patientName,
-      'Age': req.age,
-      'Contact Number': req.contact,
-      'Doctor Name': req.doctorName,
-      'Department': req.department,
-      'Appointment Date': `${req.appointmentDate} at ${req.consulting_time}`,
-      'Status': req.status,
-      'Reason': req.reason
-    }));
+    if (filteredRequests.length === 0) {
+      showErrorToast("No data available to export", TOAST_DURATION);
+      return;
+    }
 
-    const link = document.createElement('a');
-    link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    showSuccessToast(`Exported ${exportData.length} requests`, TOAST_DURATION);
+    try {
+      // Transform data for Excel export
+      const exportData = filteredRequests.map(req => ({
+        'Request ID': req.formattedId,
+        'Patient ID': req.patientId,
+        'Patient Name': req.patientName,
+        'Age': req.age,
+        'Contact Number': req.contact,
+        'Doctor Name': req.doctorName,
+        'Department': req.department,
+        'Appointment Date': req.appointmentDate !== "N/A" ? req.appointmentDate : "",
+        'Consulting Time': req.consulting_time && req.consulting_time !== "N/A" ? req.consulting_time : "",
+        'Status': req.status || "pending",
+        'Reason/Notes': req.reason || "N/A"
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `requests_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Pending Requests",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} requests to Excel!`,
+        SUCCESS_DURATION
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", TOAST_DURATION);
+    }
   };
 
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        const pendingImports = importedData.filter(item => item.status === "pending");
-        showAddToast(`Successfully imported ${pendingImports.length} pending requests!`, SUCCESS_DURATION, {
-          'Total': importedData.length,
-          'Pending': pendingImports.length,
-          'Other': importedData.length - pendingImports.length
-        });
-        refetch();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please check file format.', TOAST_DURATION);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+  // ✅ REMOVED: handleImport function
 
   const handleApproveClick = (request) => {
     if (!request.id) {
@@ -638,9 +650,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             onChange={setSearchTerm}
             onClear={() => setSearchTerm('')}
           />
-          {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
-            <span className="text-xs text-yellow-500 ml-2">Type at least 2 characters</span>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">  
           <button
@@ -651,14 +660,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className={`${ICON_BUTTON_CLASS} cursor-pointer`} title="Import Requests">
-            <Upload size={16} />
-          </label>
+          {/* ✅ IMPORT BUTTON REMOVED */}
           <button
             onClick={handleExport}
             className={ICON_BUTTON_CLASS}
-            title="Export Requests"
+            title="Export to Excel"
           >
             <Download size={16} />
           </button>
@@ -754,14 +760,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               ? 'No requests match the selected filters. Try adjusting your filters.'
               : 'All requests have been processed.'}
           </p>
-          {(hasSearchTerm || hasActiveFilters) && (
-            <button 
-              onClick={clearAllFilters} 
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Clear all filters
-            </button>
-          )}
         </div>
       ) : (
         <div className="w-full overflow-hidden">

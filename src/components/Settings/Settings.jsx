@@ -486,7 +486,6 @@ const Settings = () => {
   // ✅ Properly handle working hours from API
   useEffect(() => {
     if (hospitalData) {
-      console.log('Hospital Data received:', hospitalData);
       
       const hospital = hospitalData.data || hospitalData;
       
@@ -504,25 +503,19 @@ const Settings = () => {
       
       if (hospital.working_hours_general && Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length > 0) {
         workingHoursData = hospital.working_hours_general;
-        console.log('Found working_hours_general:', workingHoursData);
       } else if (hospital.working_hours_clinic && Array.isArray(hospital.working_hours_clinic) && hospital.working_hours_clinic.length > 0) {
         workingHoursData = hospital.working_hours_clinic;
-        console.log('Found working_hours_clinic:', workingHoursData);
       } else if (hospital.working_hours_clinic_nobreak && Array.isArray(hospital.working_hours_clinic_nobreak) && hospital.working_hours_clinic_nobreak.length > 0) {
         workingHoursData = hospital.working_hours_clinic_nobreak;
-        console.log('Found working_hours_clinic_nobreak:', workingHoursData);
       } else if (hospital.workingHours && typeof hospital.workingHours === 'object') {
         workingHoursData = hospital.workingHours;
-        console.log('Found workingHours (object):', workingHoursData);
       } else if (hospital.working_hours && Array.isArray(hospital.working_hours)) {
         workingHoursData = hospital.working_hours;
-        console.log('Found working_hours:', workingHoursData);
       }
       
       // Normalize the working hours
       const normalizedHours = normalizeWorkingHours(workingHoursData);
       setWorkingHours(normalizedHours);
-      console.log('Normalized working hours:', normalizedHours);
       
       if (hospital.address) {
         const country = countries.find(c => c.name === hospital.address.country);
@@ -572,14 +565,12 @@ const Settings = () => {
         workingHours: editForm.workingHours
       };
       
-      console.log('Saving working hours:', editForm.workingHours);
       
       const result = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 
       }).unwrap();
       
-      console.log('Update result:', result);
       
       socket.emit("hospital_event", {
         event: "HOSPITAL_UPDATED",

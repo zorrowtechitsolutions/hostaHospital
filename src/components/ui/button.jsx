@@ -40,21 +40,30 @@ export const Button = ({
   rightIcon,
   className = "",
   disabled,
+  type = 'button',
+  loading, // ✅ Capture loading prop
   ...props
 }) => {
+  // ✅ Combine both props - loading takes precedence if provided
+  const isButtonLoading = loading !== undefined ? loading : isLoading;
+  
+  // ✅ Remove loading from props so it doesn't get passed to DOM
+  const { loading: _, ...safeProps } = props;
+
   return (
     <button
+      type={type}
       className={`font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2
         ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
-      disabled={disabled || isLoading}
-      {...props}
+      disabled={disabled || isButtonLoading}
+      {...safeProps}
     >
-      {isLoading && (
+      {isButtonLoading && (
         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
       )}
-      {!isLoading && leftIcon}
+      {!isButtonLoading && leftIcon}
       {children}
-      {!isLoading && rightIcon}
+      {!isButtonLoading && rightIcon}
     </button>
   );
 };

@@ -1,6 +1,5 @@
 // app/service/permission.ts
 import { api } from "./api";
-import { getHospitalId } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -10,7 +9,7 @@ export interface Permission {
   module: string;
   action: string;
   description?: string;
-  hospitalId?: number;
+  hospitalId?: number; // Keep for type compatibility, but not used in queries
   createdAt?: string;
   updatedAt?: string;
 }
@@ -32,7 +31,7 @@ export interface PermissionResponse {
 export const permissionApi = api.injectEndpoints({
   endpoints: (builder) => ({
     
-    // ✅ Get permissions with pagination support
+    // ✅ Get permissions with pagination support (NO hospitalId)
     getPermissions: builder.query<PermissionResponse, { 
       limit?: number; 
       module?: string;
@@ -42,11 +41,6 @@ export const permissionApi = api.injectEndpoints({
       query: (params) => {
         const queryParams = new URLSearchParams();
         
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
-
         // ✅ Safe destructuring with default empty object
         const { limit, module, page, search } = params || {};
 
@@ -91,68 +85,40 @@ export const permissionApi = api.injectEndpoints({
       },
     }),
 
-    // Get permission by ID
+    // ✅ Get permission by ID (NO hospitalId)
     getPermissionById: builder.query<PermissionResponse, string | number>({
       query: (id: string | number) => {
-        const queryParams = new URLSearchParams();
-        
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
-
-        const queryString = queryParams.toString();
-        return `/permission/${id}${queryString ? `?${queryString}` : ""}`;
+        return `/permission/${id}`;
       },
       providesTags: (result, error, id) => [{ type: "Permission", id }],
     }),
 
-    // Create permission
+    // ✅ Create permission (NO hospitalId)
     createPermission: builder.mutation<PermissionResponse, Partial<Permission>>({
-      query: (body) => {
-        const hospitalId = getHospitalId();
-        return {
-          url: "/permission",
-          method: "POST",
-          body: {
-            ...body,
-            hospitalId: hospitalId,
-          },
-        };
-      },
+      query: (body) => ({
+        url: "/permission",
+        method: "POST",
+        body: body,
+      }),
       invalidatesTags: ["Permission"],
     }),
 
-    // Update permission
+    // ✅ Update permission (NO hospitalId)
     updatePermission: builder.mutation<PermissionResponse, { id: string | number; data: Partial<Permission> }>({
-      query: ({ id, data }) => {
-        const hospitalId = getHospitalId();
-        return {
-          url: `/permission/${id}`,
-          method: "PUT",
-          body: {
-            ...data,
-            hospitalId: hospitalId,
-          },
-        };
-      },
+      query: ({ id, data }) => ({
+        url: `/permission/${id}`,
+        method: "PUT",
+        body: data,
+      }),
       invalidatesTags: (result, error, { id }) => [{ type: "Permission", id }, "Permission"],
     }),
 
-    // Delete permission
+    // ✅ Delete permission (NO hospitalId)
     deletePermission: builder.mutation<{ success: boolean; message?: string }, string | number>({
-      query: (id: string | number) => {
-        const hospitalId = getHospitalId();
-        const queryParams = new URLSearchParams();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
-        }
-        const queryString = queryParams.toString();
-        return {
-          url: `/permission/${id}${queryString ? `?${queryString}` : ""}`,
-          method: "DELETE",
-        };
-      },
+      query: (id: string | number) => ({
+        url: `/permission/${id}`,
+        method: "DELETE",
+      }),
       invalidatesTags: (result, error, id) => [{ type: "Permission", id }, "Permission"],
     }),
   }),

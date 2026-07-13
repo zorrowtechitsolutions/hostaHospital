@@ -42,37 +42,12 @@ import {
 import { Country, State, City } from 'country-state-city';
 import { useUpdateHospitalMutation } from '../../../../app/service/hospitalApi';
 
-const TIME_OPTIONS = [
-  '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
-  '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-  '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
-  '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
-];
-
 const HOSPITAL_TYPES = [
   'Allopathy', 'Homeopathy', 'Ayurveda', 'Unani', 
   'Physiotherapy', 'Mental Health', 'Laboratory', 'Other'
 ];
 
-const DAYS = [
-  { key: 'monday', label: 'Monday' },
-  { key: 'tuesday', label: 'Tuesday' },
-  { key: 'wednesday', label: 'Wednesday' },
-  { key: 'thursday', label: 'Thursday' },
-  { key: 'friday', label: 'Friday' },
-  { key: 'saturday', label: 'Saturday' },
-  { key: 'sunday', label: 'Sunday' },
-];
-
-const DEFAULT_WORKING_HOURS = {
-  monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  wednesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  thursday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  friday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  saturday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
-};
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const SearchableDropdown = ({ 
   label, 
@@ -271,13 +246,15 @@ const EditHospital = () => {
   const hospitalData = location.state?.hospital;
   const [updateHospital, { isLoading: isApiLoading }] = useUpdateHospitalMutation();
   
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("normal");
+  // ✅ Working Hours Type
+  const [workingHourType, setWorkingHourType] = useState("normal");
   const [is24x7, setIs24x7] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);     
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
   const [updateError, setUpdateError] = useState('');
-  const [workingHours, setWorkingHours] = useState(DEFAULT_WORKING_HOURS);
-  const [is24HourMode, setIs24HourMode] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -303,6 +280,40 @@ const EditHospital = () => {
   const states = State.getStatesOfCountry(formData.countryCode);
   const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
 
+  // ✅ Normal Hours (for "normal" type)
+  const [normalHours, setNormalHours] = useState({
+    monday: { start: "09:00", end: "18:00", isHoliday: false },
+    tuesday: { start: "09:00", end: "18:00", isHoliday: false },
+    wednesday: { start: "09:00", end: "18:00", isHoliday: false },
+    thursday: { start: "09:00", end: "18:00", isHoliday: false },
+    friday: { start: "09:00", end: "18:00", isHoliday: false },
+    saturday: { start: "09:00", end: "18:00", isHoliday: false },
+    sunday: { start: "09:00", end: "18:00", isHoliday: true }
+  });
+
+  // ✅ Clinic Hours (for "clinic" type)
+  const [clinicHours, setClinicHours] = useState({
+    monday: { start: "09:00", end: "18:00", isHoliday: false },
+    tuesday: { start: "09:00", end: "18:00", isHoliday: false },
+    wednesday: { start: "09:00", end: "18:00", isHoliday: false },
+    thursday: { start: "09:00", end: "18:00", isHoliday: false },
+    friday: { start: "09:00", end: "18:00", isHoliday: false },
+    saturday: { start: "09:00", end: "18:00", isHoliday: false },
+    sunday: { start: "09:00", end: "18:00", isHoliday: true }
+  });
+
+  // ✅ Clinic Break Hours (for "clinic-break" type)
+  const [clinicBreakHours, setClinicBreakHours] = useState({
+    monday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    tuesday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    wednesday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    thursday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    friday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    saturday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+    sunday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: true }
+  });
+
+  // Load hospital data into form
   useEffect(() => {
     if (hospitalData) {
       const country = countries.find(c => c.name === hospitalData.address?.country);
@@ -325,20 +336,31 @@ const EditHospital = () => {
         stateName: hospitalData.address?.state || '',
         cityName: hospitalData.address?.district || ''
       });
-      
-      if (hospitalData.working_hours) {
-        const mappedHours = { ...DEFAULT_WORKING_HOURS };
+
+      // Load working hours if available
+      if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
+        const mappedHours = {};
         DAYS.forEach(day => {
-          const apiHours = hospitalData.working_hours[day.key];
-          if (apiHours) {
-            mappedHours[day.key] = {
-              open: apiHours.open || '09:00 AM',
-              close: apiHours.close || '06:00 PM',
-              closed: apiHours.closed || false
+          const dayKey = day.toLowerCase();
+          const found = hospitalData.working_hours_general.find(h => h.day === dayKey);
+          if (found) {
+            mappedHours[dayKey] = {
+              start: found.opening_time || '09:00',
+              end: found.closing_time || '18:00',
+              isHoliday: found.is_holiday || false
             };
           }
         });
-        setWorkingHours(mappedHours);
+        setNormalHours(prev => ({ ...prev, ...mappedHours }));
+      }
+
+      // Try to determine working hour type from data
+      if (hospitalData.working_hours_clinic && hospitalData.working_hours_clinic.length > 0) {
+        setWorkingHourType('clinic');
+      } else if (hospitalData.working_hours_clinic_nobreak && hospitalData.working_hours_clinic_nobreak.length > 0) {
+        setWorkingHourType('clinic-break');
+      } else if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
+        setWorkingHourType('normal');
       }
     }
   }, [hospitalData, countries, states]);
@@ -384,42 +406,83 @@ const EditHospital = () => {
     }));
   };
 
-  const handleWorkingHourChange = (day, field, value) => {
-    setWorkingHours(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [field]: value }
-    }));
+  // ✅ Normal Hours handlers
+  const handleNormalHoursChange = (day, field, value) => {
+    const dayKey = day.toLowerCase();
+    setNormalHours(prev => ({ ...prev, [dayKey]: { ...prev[dayKey], [field]: value } }));
   };
 
-  const handleToggleClosed = (day) => {
-    setWorkingHours(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        closed: !prev[day].closed
+  // ✅ Clinic Hours handlers
+  const handleClinicHoursChange = (day, field, value) => {
+    const dayKey = day.toLowerCase();
+    setClinicHours(prev => ({ ...prev, [dayKey]: { ...prev[dayKey], [field]: value } }));
+  };
+
+  // ✅ Clinic Break Hours handlers
+  const handleClinicBreakHoursChange = (day, field, value) => {
+    const dayKey = day.toLowerCase();
+    setClinicBreakHours(prev => ({ ...prev, [dayKey]: { ...prev[dayKey], [field]: value } }));
+  };
+
+  const toggle247Mode = () => {
+    if (!is24x7) {
+      if (workingHourType === "normal") {
+        const newHours = {};
+        DAYS.forEach(day => {
+          newHours[day.toLowerCase()] = { start: "00:00", end: "23:59", isHoliday: false };
+        });
+        setNormalHours(newHours);
+      } else if (workingHourType === "clinic") {
+        const newHours = {};
+        DAYS.forEach(day => {
+          newHours[day.toLowerCase()] = { start: "00:00", end: "23:59", isHoliday: false };
+        });
+        setClinicHours(newHours);
+      } else {
+        const newHours = {};
+        DAYS.forEach(day => {
+          newHours[day.toLowerCase()] = { morningStart: "00:00", morningEnd: "11:59", eveningStart: "12:00", eveningEnd: "23:59", isHoliday: false };
+        });
+        setClinicBreakHours(newHours);
       }
-    }));
-  };
-
-  const handleSet24HourMode = () => {
-    if (is24HourMode) {
-      setWorkingHours(DEFAULT_WORKING_HOURS);
-      showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
+      setIs24x7(true);
+      showSuccessToast('24/7 mode enabled.', 4000);
     } else {
-      const newHours = Object.fromEntries(
-        DAYS.map(day => [
-          day.key,
-          {
-            open: '00:00 AM',
-            close: '11:59 PM',
-            closed: false
-          }
-        ])
-      );
-      setWorkingHours(newHours);
-      showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
+      const defaultNormalHours = {
+        monday: { start: "09:00", end: "18:00", isHoliday: false },
+        tuesday: { start: "09:00", end: "18:00", isHoliday: false },
+        wednesday: { start: "09:00", end: "18:00", isHoliday: false },
+        thursday: { start: "09:00", end: "18:00", isHoliday: false },
+        friday: { start: "09:00", end: "18:00", isHoliday: false },
+        saturday: { start: "09:00", end: "18:00", isHoliday: false },
+        sunday: { start: "09:00", end: "18:00", isHoliday: true }
+      };
+      const defaultClinicHours = {
+        monday: { start: "09:00", end: "18:00", isHoliday: false },
+        tuesday: { start: "09:00", end: "18:00", isHoliday: false },
+        wednesday: { start: "09:00", end: "18:00", isHoliday: false },
+        thursday: { start: "09:00", end: "18:00", isHoliday: false },
+        friday: { start: "09:00", end: "18:00", isHoliday: false },
+        saturday: { start: "09:00", end: "18:00", isHoliday: false },
+        sunday: { start: "09:00", end: "18:00", isHoliday: true }
+      };
+      const defaultClinicBreakHours = {
+        monday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        tuesday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        wednesday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        thursday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        friday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        saturday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
+        sunday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: true }
+      };
+      
+      if (workingHourType === "normal") setNormalHours(defaultNormalHours);
+      else if (workingHourType === "clinic") setClinicHours(defaultClinicHours);
+      else setClinicBreakHours(defaultClinicBreakHours);
+      
+      setIs24x7(false);
+      showWarningToast('24/7 mode disabled.', 3000);
     }
-    setIs24HourMode(prev => !prev);
   };
 
   const getCurrentLocation = () => {
@@ -482,6 +545,48 @@ const EditHospital = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // ✅ Convert to API format based on selected type
+  const convertToApiWorkingHours = () => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const result = [];
+    
+    if (workingHourType === "normal") {
+      days.forEach(day => {
+        const dayData = normalHours[day];
+        result.push({
+          day: day,
+          is_holiday: dayData?.isHoliday || false,
+          opening_time: dayData?.start || '09:00',
+          closing_time: dayData?.end || '18:00'
+        });
+      });
+    } else if (workingHourType === "clinic") {
+      days.forEach(day => {
+        const dayData = clinicHours[day];
+        result.push({
+          day: day,
+          is_holiday: dayData?.isHoliday || false,
+          opening_time: dayData?.start || '09:00',
+          closing_time: dayData?.end || '18:00'
+        });
+      });
+    } else if (workingHourType === "clinic-break") {
+      days.forEach(day => {
+        const dayData = clinicBreakHours[day];
+        result.push({
+          day: day,
+          is_holiday: dayData?.isHoliday || false,
+          morning_start: dayData?.morningStart || '09:00',
+          morning_end: dayData?.morningEnd || '12:00',
+          evening_start: dayData?.eveningStart || '16:00',
+          evening_end: dayData?.eveningEnd || '20:00'
+        });
+      });
+    }
+    
+    return result;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -493,6 +598,8 @@ const EditHospital = () => {
     setIsSubmitting(true);
     setUpdateError('');
     showInfoToast('Updating hospital information...', 2000);
+
+    const apiWorkingHours = convertToApiWorkingHours();
 
     const updateData = {
       id: hospitalData.id,
@@ -511,8 +618,11 @@ const EditHospital = () => {
       latitude: formData.latitude ? Number(parseFloat(formData.latitude).toFixed(6)) : null,
       longitude: formData.longitude ? Number(parseFloat(formData.longitude).toFixed(6)) : null,
       about: formData.about || "",
-      working_hours: workingHours
+      workingHourType: workingHourType,
+      workingHoursData: apiWorkingHours
     };
+
+    console.log('Updating hospital with working hours:', updateData);
 
     try {
       await updateHospital(updateData).unwrap();
@@ -537,6 +647,175 @@ const EditHospital = () => {
 
   const handleBack = () => {
     navigate(-1);
+  };
+
+  // ✅ Render Normal Hours
+  const renderNormalHours = () => {
+    return DAYS.map((day) => {
+      const dayHours = normalHours[day.toLowerCase()] || { start: "09:00", end: "18:00", isHoliday: false };
+      return (
+        <div key={day} className="rounded-xl border border-blue-200 bg-white p-5 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
+            <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={dayHours.isHoliday} 
+                onChange={(e) => handleNormalHoursChange(day, 'isHoliday', e.target.checked)} 
+                className="w-4 h-4 rounded border-red-400" 
+              />
+              Holiday
+            </label>
+          </div>
+          {!dayHours.isHoliday ? (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Open Time</label>
+                <input 
+                  type="time" 
+                  value={dayHours.start} 
+                  onChange={(e) => handleNormalHoursChange(day, 'start', e.target.value)} 
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Close Time</label>
+                <input 
+                  type="time" 
+                  value={dayHours.end} 
+                  onChange={(e) => handleNormalHoursChange(day, 'end', e.target.value)} 
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Closed for the day</p>
+          )}
+        </div>
+      );
+    });
+  };
+
+  // ✅ Render Clinic Hours
+  const renderClinicHours = () => {
+    return DAYS.map((day) => {
+      const dayHours = clinicHours[day.toLowerCase()] || { start: "09:00", end: "18:00", isHoliday: false };
+      return (
+        <div key={day} className="rounded-xl border border-blue-200 bg-white p-5 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
+            <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={dayHours.isHoliday} 
+                onChange={(e) => handleClinicHoursChange(day, 'isHoliday', e.target.checked)} 
+                className="w-4 h-4 rounded border-red-400" 
+              />
+              Holiday
+            </label>
+          </div>
+          {!dayHours.isHoliday ? (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Opening Time</label>
+                <input 
+                  type="time" 
+                  value={dayHours.start} 
+                  onChange={(e) => handleClinicHoursChange(day, 'start', e.target.value)} 
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Closing Time</label>
+                <input 
+                  type="time" 
+                  value={dayHours.end} 
+                  onChange={(e) => handleClinicHoursChange(day, 'end', e.target.value)} 
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Closed for the day</p>
+          )}
+        </div>
+      );
+    });
+  };
+
+  // ✅ Render Clinic Break Hours
+  const renderClinicBreakHours = () => {
+    return DAYS.map((day) => {
+      const dayHours = clinicBreakHours[day.toLowerCase()] || { 
+        morningStart: "09:00", morningEnd: "12:00", 
+        eveningStart: "16:00", eveningEnd: "20:00", 
+        isHoliday: false 
+      };
+      return (
+        <div key={day} className="rounded-xl border border-blue-200 bg-white p-5 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
+            <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={dayHours.isHoliday} 
+                onChange={(e) => handleClinicBreakHoursChange(day, 'isHoliday', e.target.checked)} 
+                className="w-4 h-4 rounded border-red-400" 
+              />
+              Holiday
+            </label>
+          </div>
+          {!dayHours.isHoliday ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Morning Session</label>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <input 
+                      type="time" 
+                      value={dayHours.morningStart} 
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningStart', e.target.value)} 
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    />
+                  </div>
+                  <div>
+                    <input 
+                      type="time" 
+                      value={dayHours.morningEnd} 
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningEnd', e.target.value)} 
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Evening Session</label>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <input 
+                      type="time" 
+                      value={dayHours.eveningStart} 
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningStart', e.target.value)} 
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    />
+                  </div>
+                  <div>
+                    <input 
+                      type="time" 
+                      value={dayHours.eveningEnd} 
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningEnd', e.target.value)} 
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Closed for the day</p>
+          )}
+        </div>
+      );
+    });
   };
 
   if (!hospitalData) {
@@ -791,68 +1070,52 @@ const EditHospital = () => {
                 )}
               </div>
 
+              {/* ✅ Working Hours Section */}
               <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-[#154A7D]" /> 
-                    Working Hours
-                  </h2>
-                  <button 
-                    type="button" 
-                    onClick={handleSet24HourMode} 
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${is24HourMode ? "bg-[#154A7D] text-white hover:bg-[#0e3a61]" : "bg-white hover:bg-[#154A7D] hover:text-white border border-gray-200 hover:border-[#154A7D] text-gray-700"}`}
-                  >
+                  <div className="flex flex-col">
+                    <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                      <Clock size={20} className="text-[#154A7D]" />
+                      Working Hours
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">Select the working hours type for your hospital</p>
+                  </div>
+                  <button type="button" onClick={toggle247Mode} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${is24x7 ? "bg-[#154A7D] text-white hover:bg-[#0e3a61] hover:shadow-md" : "bg-white hover:bg-[#154A7D] hover:text-white border border-gray-200 hover:border-[#154A7D] text-gray-700"}`}>
                     <Sun size={14} />
-                    {is24HourMode ? "24/7 Mode: ON" : "Set 24/7 Hours"}
+                    {is24x7 ? "24/7 Mode: ON" : "Set 24/7 Hours"}
                   </button>
                 </div>
-                
-                <div className="space-y-4">
-                  {DAYS.map((day) => (
-                    <div key={day.key} className="border-b border-gray-200 pb-4 last:border-0">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-[#154A7D] text-lg">{day.label}</h3>
-                        <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={workingHours[day.key].closed}
-                            onChange={() => handleToggleClosed(day.key)}
-                            className="w-4 h-4 rounded border-red-400"
-                          />
-                          Closed for the day
-                        </label>
-                      </div>
-                      
-                      {!workingHours[day.key].closed && (
-                        <div className="grid md:grid-cols-2 gap-4 ml-6">
-                          <div>
-                            <label className="block text-sm text-gray-600 mb-1">Open Time</label>
-                            <select
-                              value={workingHours[day.key].open}
-                              onChange={(e) => handleWorkingHourChange(day.key, 'open', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium bg-white"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm text-gray-600 mb-1">Close Time</label>
-                            <select
-                              value={workingHours[day.key].close}
-                              onChange={(e) => handleWorkingHourChange(day.key, 'close', e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium bg-white"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+
+                {/* ✅ Working Hours Type Dropdown */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Working Hours Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none z-10" />
+                    <select
+                      value={workingHourType}
+                      onChange={(e) => setWorkingHourType(e.target.value)}
+                      className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer"
+                    >
+                      <option value="normal">🏥 Normal Hospital</option>
+                      <option value="clinic">🏪 Clinic</option>
+                      <option value="clinic-break">🏪 Clinic with Break</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {workingHourType === "normal" && "Single session per day (e.g., 9:00 AM - 6:00 PM)"}
+                    {workingHourType === "clinic" && "Single session per day without break (e.g., 9:00 AM - 6:00 PM)"}
+                    {workingHourType === "clinic-break" && "Two sessions per day with a break (Morning & Evening)"}
+                  </p>
+                </div>
+
+                {/* ✅ Render based on selected type */}
+                <div className="space-y-3 mt-4">
+                  {workingHourType === "normal" && renderNormalHours()}
+                  {workingHourType === "clinic" && renderClinicHours()}
+                  {workingHourType === "clinic-break" && renderClinicBreakHours()}
                 </div>
               </div>
 

@@ -441,7 +441,6 @@ const AddDoctor = () => {
   
   // ✅ FIXED: Properly extract roles from the response
   const rolesList = React.useMemo(() => {
-    console.log("📋 Roles Data Received:", rolesData);
     
     // Check if we have roles in the response
     if (!rolesData) return [];
@@ -470,14 +469,12 @@ const AddDoctor = () => {
       roles = rolesData.roles.filter(role => role.hospitalId === Number(hospitalId));
     }
     
-    console.log("📋 Processed Roles List:", roles);
     return roles;
   }, [rolesData, hospitalId]);
 
   // ✅ FIXED: Log roles for debugging
   useEffect(() => {
     if (rolesData) {
-      console.log("✅ Roles Data:", rolesData);
     }
     if (rolesError) {
       console.error("❌ Roles Error:", rolesError);
@@ -871,9 +868,6 @@ const AddDoctor = () => {
         const roleId = Number(formData.roleId);
         const selectedRoleName = getRoleNameById(roleId);
         
-        console.log("📤 Sending doctor data:", doctorData);
-        console.log("🏥 Hospital ID:", hospitalId);
-        console.log("👤 Role ID:", roleId);
         
         // ✅ FIXED: Now addNewDoctor is properly defined
 const result = await addNewDoctor({
@@ -883,7 +877,6 @@ const result = await addNewDoctor({
 
 const doctor = result.data || result;
         
-        console.log("✅ Doctor created:", doctor);
         
         if (doctor?.id && roleId) {
           const payload = {
@@ -898,9 +891,7 @@ const doctor = result.data || result;
             ]
           };
           
-          console.log("📤 Assigning permissions:", payload);
           await assignPermissions(payload).unwrap();
-          console.log("✅ Permissions assigned successfully");
         }
         
         showSuccessToast(

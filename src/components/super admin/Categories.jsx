@@ -416,9 +416,7 @@ const Categories = () => {
   };
 
   const handleOpenEditModal = (category) => {
-    console.log("📝 Opening edit modal for category:", category);
     const categoryId = getCategoryId(category);
-    console.log("📝 Category ID:", categoryId);
     
     if (!categoryId) {
       showErrorToast("❌ Invalid category ID", 3000);
@@ -508,7 +506,6 @@ const Categories = () => {
             "category"
           );
           finalImageUrl = uploadResult.key;
-          console.log("✅ Image uploaded:", finalImageUrl);
         }
       }
 
@@ -520,7 +517,6 @@ const Categories = () => {
 
       if (editingCategory) {
         const id = getCategoryId(editingCategory);
-        console.log("🔄 Updating category:", id, categoryData);
         
         await updateCategory({
           id: id,
@@ -586,11 +582,9 @@ const Categories = () => {
   const handleConfirmDelete = async () => {
     if (!categoryToDelete) return;
 
-    console.log("🗑️ Delete category:", categoryToDelete);
     
     try {
       const categoryId = getCategoryId(categoryToDelete);
-      console.log("🗑️ Category ID:", categoryId);
       
       if (!categoryId) {
         showErrorToast("❌ Invalid category ID", 3000);
@@ -635,7 +629,6 @@ const Categories = () => {
   };
 
   const handleToggleStatus = async (category) => {
-    console.log("🔄 Toggle status:", category);
     setOpenMenuId(null);
     
     const newStatus = !category.isActive;
@@ -674,7 +667,6 @@ const Categories = () => {
   };
 
   const toggleMenu = (categoryId) => {
-    console.log("🔄 Toggle menu for ID:", categoryId, "Current open:", openMenuId);
     setOpenMenuId(openMenuId === categoryId ? null : categoryId);
   };
 

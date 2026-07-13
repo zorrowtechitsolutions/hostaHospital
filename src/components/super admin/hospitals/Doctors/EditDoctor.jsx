@@ -445,13 +445,6 @@ const EditDoctor = () => {
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
   
-  console.log("🏥 Hospital ID from URL:", hospitalIdFromUrl);
-  console.log("🏥 Hospital ID from state:", hospitalIdFromState);
-  console.log("🏥 Hospital ID from auth:", hospitalIdFromAuth);
-  console.log("🏥 Final Hospital ID:", hospitalId);
-  console.log("👨‍⚕️ Doctor ID from URL:", doctorId);
-  console.log("🔙 Return path:", returnPath);
-  
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
@@ -1050,9 +1043,6 @@ const EditDoctor = () => {
         updatedDoctorData.password = formData.password;
       }
 
-      console.log("📤 UPDATE DATA BEING SENT TO API:", JSON.stringify(updatedDoctorData, null, 2));
-      console.log("🏥 Hospital Name being sent:", hospitalName);
-      console.log("👤 Role ID being sent:", roleId);
 
       await updateDoctor({
         id: String(doctorId),
@@ -1072,7 +1062,6 @@ const EditDoctor = () => {
           ]
         };
         
-        console.log("📤 UPDATING ROLE PERMISSION:", payload);
         await assignPermissions(payload).unwrap();
       }
 

@@ -3,11 +3,17 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Pagination } from '../ui';
+import { Badge, Pagination, SearchBar } from '../ui';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { getAuthUser } from '../../../src/utils/auth';
+
+// ✅ Import Excel Export Button
+import ExcelExportButton from '../ui/ExcelExportButton';
+
+// ✅ Import date formatter
+import { formatDate } from "../../utils/dateFormatter";
 
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
 
@@ -21,6 +27,27 @@ const getS3ImageUrl = (imageKey) => {
     return `${imageKey}?t=${Date.now()}`;
   }
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+};
+
+// ✅ Helper function to format address
+const formatAddress = (address) => {
+  if (!address) return 'N/A';
+  
+  if (typeof address === 'string') {
+    return address;
+  }
+  
+  if (typeof address === 'object') {
+    const parts = [];
+    if (address.place) parts.push(address.place);
+    if (address.district) parts.push(address.district);
+    if (address.state) parts.push(address.state);
+    if (address.country) parts.push(address.country);
+    if (address.pincode) parts.push(address.pincode);    
+    return parts.length > 0 ? parts.join(', ') : 'N/A';
+  }
+  
+  return 'N/A';
 };
 
 // Helper functions
@@ -201,8 +228,6 @@ const Doctors = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const fileInputRef = useRef(null);
-
   const [recoverDoctor] = useRecoverDoctorMutation();
 
   // 🔥 FIX: Get the authenticated user
@@ -212,7 +237,6 @@ const Doctors = () => {
   const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
   const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
   const shouldFilterByHospital = isHospitalAdmin || isDoctor;
-
 
   // 🔥 FIX: Build query params with hospital filter for doctors and hospital admins
   const queryParams = {
@@ -225,14 +249,11 @@ const Doctors = () => {
 
   // 🔥 CRITICAL FIX: If user is a doctor OR hospital admin, ALWAYS filter by their hospital ID
   if (shouldFilterByHospital) {
-    // Use hospitalId from auth if available, otherwise use auth.id
     const hospitalId = auth?.hospitalId || auth?.id;
     if (hospitalId) {
       queryParams.hospitalId = hospitalId;
     }
   }
-
- 
 
   // API Query with hospital filter
   const {
@@ -341,6 +362,20 @@ const Doctors = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    // If value is an event object, extract the value
+    const searchValue = typeof value === 'string' ? value : value?.target?.value || '';
+    setSearchTerm(searchValue);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const handlePageChange = useCallback((page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
@@ -348,59 +383,7 @@ const Doctors = () => {
     }
   }, [totalPages]);
 
-  const handleImport = useCallback((event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        if (!Array.isArray(importedData)) {
-          throw new Error('Invalid data format: Expected an array');
-        }
-        showSuccessToast(`${importedData.length} doctors imported successfully!`, 3000);
-        refetch();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file: ' + error.message, 3000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = null;
-  }, [refetch]);
-
-  const handleExport = useCallback(() => {
-    const exportData = doctors.map(doctor => ({
-      'ID': doctor.id,
-      'Name': getDoctorName(doctor),
-      'Department': doctor.department,
-      'Specialty': doctor.specialist || doctor.specialty,
-      'Experience': doctor.experience,
-      'Appointments': getAppointmentValue(doctor),
-      'Email': doctor.email,
-      'Phone': doctor.phone,
-      'Status': doctor.isActive ? 'Active' : 'Inactive',
-      'DOB': doctor.dob,
-      'Gender': doctor.gender,
-      'Registration Number': doctor.registrationNumber,
-      'Known Languages': doctor.knownLanguages,
-      'About': doctor.about,
-      'Address': doctor.address,
-      'Country': doctor.country,
-      'State': doctor.state,
-      'City': doctor.city,
-      'Pin Code': doctor.pinCode,
-      'Display Name': doctor.displayName,
-      'Username': doctor.userName
-    }));
-    
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', `doctors_export_${new Date().toISOString().split('T')[0]}.json`);
-    linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} doctors`, 2000);
-  }, [doctors]);
+  // ✅ REMOVED: handleImport function
 
   const handleRefresh = useCallback(() => {
     setSearchTerm('');
@@ -466,6 +449,32 @@ const Doctors = () => {
   const clearDepartmentFilter = useCallback(() => {
     setSelectedSpecialty('All');
   }, []);
+
+  // ✅ Prepare export data for Excel with formatted address and formatted date
+  const getExportData = useCallback(() => {
+    return doctors.map((doctor) => {
+      const formattedAddress = formatAddress(doctor.address);
+      const formattedDOB = doctor.dob ? formatDate(doctor.dob) : 'N/A';
+      
+      return {
+        'Doctor ID': getDoctorId(doctor.id),
+        'Name': getDoctorName(doctor),
+        'Department': getDepartmentDisplay(doctor),
+        'Specialty': doctor.specialist || doctor.specialty || 'N/A',
+        'Qualification': doctor.qualification || 'MBBS',
+        'Experience': doctor.experience || 'N/A',
+        'Appointments': getAppointmentValue(doctor),
+        'Email': doctor.email || 'N/A',
+        'Phone': doctor.phone || 'N/A',
+        'Status': doctor.isDelete ? 'Blacklisted' : (doctor.isActive ? 'Active' : 'Inactive'),
+        'DOB': formattedDOB,
+        'Gender': doctor.gender || 'N/A',
+        'Address': formattedAddress,
+        'Display Name': doctor.displayName || 'N/A',
+        'Hospital': doctor.hospitalName || 'N/A'
+      };
+    });
+  }, [doctors]);
 
   // Error handling
   if (error) {
@@ -543,7 +552,6 @@ const Doctors = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
-        
 
         {selectedSpecialty !== 'All' && (
           <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm ml-2">
@@ -558,28 +566,15 @@ const Doctors = () => {
       {/* Search and Filter */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
+          {/* ✅ Using global SearchBar component */}
+          <div className="flex-1 max-w-sm">
+            <SearchBar
               placeholder="Search by name, department, specialty..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              onChange={handleSearchChange}
+              onClear={handleClearSearch}
+              className="w-full"
             />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded" aria-label="Search">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
           </div>
 
           <select
@@ -640,18 +635,15 @@ const Doctors = () => {
             </svg>
           </button>
 
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" aria-label="Import">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          </button>
+          {/* ✅ IMPORT BUTTON REMOVED */}
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" aria-label="Export">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </button>
+          {/* ✅ Replace Download button with ExcelExportButton */}
+          <ExcelExportButton
+            data={getExportData()}
+            fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
+            sheetName="Doctors"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+          />
 
           <Link 
             to="/add-doctor" 
@@ -662,12 +654,6 @@ const Doctors = () => {
         </div>
       </div>
 
-      {isFetching && doctors.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-md px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
-          <span className="text-sm text-gray-600">Updating...</span>
-        </div>
-      )}
 
       {/* Show warning if multiple hospitals detected */}
       {doctors.length > 0 && (

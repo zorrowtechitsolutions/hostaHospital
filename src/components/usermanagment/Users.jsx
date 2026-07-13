@@ -8,7 +8,6 @@ import {
   Edit,
   Users as UsersIcon,
   RefreshCcw,
-  Upload,
   Trash2,
   X,
   Loader2
@@ -17,7 +16,8 @@ import {
 import {
   Button,
   Card,
-  Pagination
+  Pagination,
+  SearchBar
 } from '../ui';
 
 import DeleteModal from '../patients/DeleteModel';
@@ -32,32 +32,6 @@ import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
 import { useGetStaffQuery } from '../../../app/service/staffApi';
 import { useGetRolePermissionsQuery, useDeleteRolePermissionMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
-
-// Custom SearchBar component
-const SearchBar = ({ placeholder, value, onChange, onClear }) => {
-  return (
-    <div className="relative w-full">
-      <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
-      />
-      {value && (
-        <button
-          onClick={onClear}
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-        >
-          <X size={14} />
-        </button>
-      )}
-    </div>
-  );
-};
 
 // Skeleton Loader Component
 const SkeletonLoader = () => (
@@ -273,21 +247,18 @@ const Users = () => {
     showSuccessToast(`Exported ${exportData.length} user records as CSV`, 2000);
   };
 
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        showWarningToast(`Import is currently disabled.`, 3000);
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
+  // ✅ REMOVED: handleImport function
+
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
   };
 
   const handleEditUser = (user) => {
@@ -382,11 +353,13 @@ const Users = () => {
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
+            {/* ✅ Using global SearchBar component */}
             <SearchBar 
               placeholder="Search by user type..." 
               value={searchTerm} 
-              onChange={setSearchTerm} 
-              onClear={() => setSearchTerm('')} 
+              onChange={handleSearchChange}
+              onClear={handleClearSearch}
+              className="w-full"
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
@@ -394,12 +367,7 @@ const Users = () => {
               <RefreshCcw size={16} className={isRefreshing ? "animate-spin" : ""} />
             </Button>
             
-            <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-            <label htmlFor="import-file">
-              <Button variant="outline" size="sm" as="span" className="cursor-pointer">
-                <Upload size={16} />
-              </Button>
-            </label>
+            {/* ✅ IMPORT BUTTON REMOVED */}
             
             <Button variant="outline" size="sm" onClick={handleExportCSV} title="Export CSV">
               <Download size={16} />
@@ -472,6 +440,9 @@ const Users = () => {
               <h2 className="text-sm font-semibold text-gray-700">
                 All Users
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredUsers.length}</span>
+                {searchTerm && filteredUsers.length > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
+                )}
               </h2>
             </div>
 

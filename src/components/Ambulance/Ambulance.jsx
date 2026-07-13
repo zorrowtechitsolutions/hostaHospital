@@ -8,7 +8,6 @@ import {
   LayoutGrid,
   List,
   RefreshCcw,
-  Upload,
   Trash2,
   MapPin,
   Truck
@@ -19,7 +18,8 @@ import EditAmbulanceModal from './EditAmbulanceModal';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
 import { 
   Badge, 
-  Pagination
+  Pagination,
+  SearchBar
 } from '../ui';
 import { 
   useGetAmbulanceQuery,
@@ -28,6 +28,9 @@ import {
   useDeleteAmbulanceMutation
 } from '../../../app/service/ambulance';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
+
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 // Import socket
 import { socket } from '../../socket/socket';
@@ -102,7 +105,6 @@ const AmbulanceSkeleton = () => {
 
 const Ambulance = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid'); 
   const [typeFilter, setTypeFilter] = useState('all');
@@ -244,6 +246,18 @@ const Ambulance = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   // CRUD Handlers with API
   const handleAddAmbulance = async (newAmbulance) => {
     try {
@@ -324,73 +338,49 @@ const Ambulance = () => {
     showSuccessToast("Refreshed ambulance list", 2000);
   };
 
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
-    const exportData = ambulancesData.map(amb => ({
-      'ID': amb.id,
-      'Formatted ID': amb.formattedId,
-      'Service Name': amb.serviceName,
-      'Vehicle Type': amb.vehicleType,
-      'Phone': amb.phone,
-      'Country': amb.address?.country,
-      'State': amb.address?.state,
-      'District': amb.address?.district,
-      'Place': amb.address?.place,
-      'Pincode': amb.address?.pincode,
-      'Created At': amb.createdAt,
-      'Last Updated': amb.lastUpdated
-    }));
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `ambulances_export_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} ambulance records`, 2000);
-  };
+    if (ambulancesData.length === 0) {
+      showErrorToast("No data available to export", 3000);
+      return;
+    }
 
-  const handleImport = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    try {
+      // Transform data for Excel export
+      const exportData = ambulancesData.map(amb => ({
+        'Ambulance ID': amb.formattedId,
+        'Service Name': amb.serviceName,
+        'Vehicle Type': amb.vehicleType,
+        'Phone': amb.phone,
+        'Country': amb.address?.country || 'N/A',
+        'State': amb.address?.state || 'N/A',
+        'District': amb.address?.district || 'N/A',
+        'Place': amb.address?.place || 'N/A',
+        'Pincode': amb.address?.pincode || 'N/A',
+        'Created Date': amb.createdAt,
+        'Last Updated': amb.lastUpdated
+      }));
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const amb of importedData) {
-          try {
-            await createAmbulance({
-              serviceName: amb['Service Name'] || amb.serviceName,
-              phone: amb.Phone || amb.phone,
-              vehicleType: amb['Vehicle Type'] || amb.vehicleType,
-              address: {
-                country: amb.Country || amb.address?.country,
-                state: amb.State || amb.address?.state,
-                district: amb.District || amb.address?.district,
-                place: amb.Place || amb.address?.place,
-                pincode: amb.Pincode || amb.address?.pincode
-              }
-            }).unwrap();
-            successCount++;
-          } catch (error) {
-            errorCount++;
-          }
-        }
-        
-        showSuccessToast(`Successfully imported ${successCount} ambulances! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
-        refetch();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    
-    reader.readAsText(file);
-    event.target.value = '';
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `ambulances_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Ambulances",
+        columnWidth: 18
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} ambulance records to Excel!`,
+        3000
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", 3000);
+    }
   };
 
   // ✅ Loading state with skeleton
@@ -425,29 +415,14 @@ const Ambulance = () => {
       {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by name, ID, place..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
-          </div>
-
+          {/* ✅ Using global SearchBar component */}
+          <SearchBar
+            placeholder="Search by name, ID, place..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            onClear={handleClearSearch}
+            className="flex-1 max-w-sm"
+          />
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -484,12 +459,7 @@ const Ambulance = () => {
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
-            <Upload size={16} />
-          </label>
-
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
             <Download size={16} />
           </button>
 

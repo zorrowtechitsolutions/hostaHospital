@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, Plus, Filter, Download, MoreVertical, Eye, Edit, 
-  Trash2, RefreshCcw, Upload, Search, Users as UsersIcon, PlayCircle
+  Trash2, RefreshCcw, Search, Users as UsersIcon, PlayCircle
 } from 'lucide-react';
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, 
@@ -19,6 +19,9 @@ import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/component
 import { getS3ImageUrl } from '../../../app/service/S3';
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 // Helper function to safely convert to string for search
 const safeToString = (value) => {
@@ -276,6 +279,18 @@ const Visits = () => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter]);
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const handleRefresh = () => { 
     setSearchTerm(""); 
     setDepartmentFilter(""); 
@@ -285,42 +300,49 @@ const Visits = () => {
     showSuccessToast("Refreshed visits", 2000);
   };
   
+  // Updated Export handler with Excel functionality (exactly like Appointments)
   const handleExport = () => {
-    const exportData = filteredVisits.map(visit => ({ 
-      'Visit ID': visit.visitId,
-      'Patient ID': visit.patientId,
-      'Patient Name': visit.patientName,
-      'Doctor Name': visit.doctorName,
-      'Department': visit.department,
-      'Date': formatDate(visit.visitDate),
-      'Time': visit.startTime,
-      'Token': visit.token
-    }));
-    
-    const link = document.createElement('a');
-    link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    link.download = `approved_visits_export_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    showSuccessToast(`Exported ${exportData.length} visits`, 2000);
+    if (allVisitsData.length === 0) {
+      showErrorToast("No data available to export", 3000);
+      return;
+    }
+
+    try {
+      // Transform data for Excel export
+      const exportData = allVisitsData.map(visit => ({
+        'Visit ID': visit.visitId,
+        'Patient ID': visit.patientIdDisplay || visit.patientId,
+        'Patient Name': visit.patientName,
+        'Doctor Name': visit.doctorName,
+        'Department': visit.department,
+        'Visit Date': formatDate(visit.visitDate),
+        'Start Time': visit.startTime || "N/A",
+        'Token': visit.token || "N/A"
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `visits_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Visits",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} visits to Excel!`,
+        3000
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", 3000);
+    }
   };
   
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        showSuccessToast(`Successfully imported ${importedData.length} visits!`, 3000);
-        refetch();
-      } catch (error) { 
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+  // ✅ REMOVED: handleImport function
   
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
@@ -576,7 +598,7 @@ const Visits = () => {
           <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
         </div>
         <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           ))}
         </div>
@@ -609,11 +631,13 @@ const Visits = () => {
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-16 border-b border-gray-100">
             <div className="flex items-center px-6 py-4">
-              {[1, 2, 3, 4, 5, 6, 7].map((j) => (
-                <div key={j} className="flex-1">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                </div>
-              ))}
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
+              <div className="flex-1"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></div>
             </div>
           </div>
         ))}
@@ -652,35 +676,14 @@ const Visits = () => {
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by Visit ID, Patient Name, Doctor, Token..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
-              <span className="text-xs text-yellow-500 mt-1 block">Type at least 2 characters</span>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <Search className="w-4 h-4 text-white" />
-            </button>
-          </div>
+          {/* ✅ Using global SearchBar component */}
+          <SearchBar
+            placeholder="Search by Visit ID, Patient Name, Doctor, Token..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            onClear={handleClearSearch}
+            className="flex-1 max-w-sm"
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -691,11 +694,8 @@ const Visits = () => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
-            <Upload size={16} />
-          </label>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          {/* ✅ IMPORT BUTTON REMOVED */}
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>
           <button
@@ -829,14 +829,6 @@ const Visits = () => {
               ? 'No visits match the selected filters. Try adjusting your filters.'
               : 'No approved appointments yet. Approved requests will appear here.'}
           </p>
-          {(hasSearchTerm || hasActiveFilters) && (
-            <button 
-              onClick={clearAllFilters} 
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Clear all filters
-            </button>
-          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
@@ -844,9 +836,6 @@ const Visits = () => {
             <h2 className="text-sm font-semibold text-gray-700">
               Visits 
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
-              {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
-                <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
-              )}
             </h2>
           </div>
 

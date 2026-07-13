@@ -146,11 +146,7 @@ const AddPatient = () => {
   
   // ✅ FIXED: Use hospitalId from route first, then state, then auth
   const hospitalId = hospitalIdFromRoute || hospitalIdFromState || hospitalIdFromAuth;
-  
-  console.log("🏥 Hospital ID from route:", hospitalIdFromRoute);
-  console.log("🏥 Hospital ID from state:", hospitalIdFromState);
-  console.log("🏥 Hospital ID from auth:", hospitalIdFromAuth);
-  console.log("🏥 Final Hospital ID:", hospitalId);
+
   
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
@@ -370,7 +366,6 @@ const AddPatient = () => {
       try {
         const patientData = preparePatientData();
         
-        console.log("📤 Creating patient with data:", patientData);
         
         const result = await createPatient(patientData).unwrap();
         

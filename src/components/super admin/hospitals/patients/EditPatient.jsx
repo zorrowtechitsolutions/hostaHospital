@@ -143,9 +143,6 @@ const EditPatient = () => {
     ? Number(hospitalIdFromRoute)
     : authUser?.id;
 
-  console.log("🔍 Route params:", { hospitalIdFromRoute, patientId });
-  console.log("🔍 Numeric Patient ID:", numericPatientId);
-  console.log("🔍 Hospital ID:", hospitalId);
 
   const { 
     data: patientResponse, 
@@ -200,8 +197,6 @@ const EditPatient = () => {
   // ✅ Load patient data with proper address fields and populate dropdowns
   useEffect(() => {
     if (patient && patient.id && !formData.fullName) {
-      console.log("📋 Loading patient data:", patient);
-      console.log("📋 Patient location:", patient.location);
       
       // Find country and state - same pattern as EditDoctor
       const country = countries.find(c => 
@@ -220,15 +215,6 @@ const EditPatient = () => {
         stateCode = state?.isoCode || '';
       }
       
-      console.log("🔍 Found Country:", { 
-        countryName: patient.location?.country, 
-        countryCode: countryCode 
-      });
-      console.log("🔍 Found State:", { 
-        stateName: patient.location?.state, 
-        stateCode: stateCode 
-      });
-      console.log("🔍 District:", patient.location?.district);
       
       // ✅ Set available states and cities for dropdowns
       setAvailableStates(stateList);
@@ -267,7 +253,6 @@ const EditPatient = () => {
   }, [patient, countries]);
 
   const handleCountryChange = (code, name) => {
-    console.log("🌍 Country changed:", { code, name });
     setFormData(prev => ({
       ...prev,
       countryCode: String(code),
@@ -284,7 +269,6 @@ const EditPatient = () => {
   };
 
   const handleStateChange = (code, name) => {
-    console.log("📍 State changed:", { code, name });
     setFormData(prev => ({
       ...prev,
       stateCode: String(code),
@@ -300,7 +284,6 @@ const EditPatient = () => {
   };
 
   const handleCityChange = (name) => {
-    console.log("🏙️ District changed:", name);
     setFormData(prev => ({
       ...prev,
       district: String(name)
@@ -455,7 +438,6 @@ const EditPatient = () => {
       try {
         const updateData = prepareUpdateData();
         
-        console.log("📤 Updating patient:", { id: originalPatientId, updateData });
         
         await updatePatient({ 
           id: originalPatientId, 
