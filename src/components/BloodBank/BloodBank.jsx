@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Droplet, Plus, Filter, Download, MoreVertical, Eye, 
-  Edit, RefreshCcw, Upload, Trash2, Search, LayoutGrid, List
+  Edit, RefreshCcw, Trash2, Search, LayoutGrid, List
 } from 'lucide-react';
 import { 
   Button, Badge, Loader, Card, Modal, SearchBar, Pagination
@@ -16,6 +16,9 @@ import {
   useDeleteBloodBankMutation
 } from '../../../app/service/bloodbank';
 import { getHospitalId } from '../../utils/auth';
+
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 // Import socket
 import { socket } from '../../socket/socket';
@@ -292,7 +295,6 @@ const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
 
 const BloodBank = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [currentPage, setCurrentPage] = useState(1);
@@ -475,58 +477,45 @@ const BloodBank = () => {
     showSuccessToast("Blood stock refreshed", 2000);
   };
 
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
-    const exportData = paginatedBloodStocks.map(stock => ({
-      'ID': stock.formattedId,
-      'Blood Group': stock.bloodGroup,
-      'Count (Units)': stock.count,
-      'Last Updated': stock.lastUpdated
-    }));
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `blood_bank_export_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} blood stock records`, 2000);
+    if (paginatedBloodStocks.length === 0) {
+      showErrorToast("No data available to export", 3000);
+      return;
+    }
+
+    try {
+      // Transform data for Excel export
+      const exportData = paginatedBloodStocks.map(stock => ({
+        'Stock ID': stock.formattedId,
+        'Blood Group': stock.bloodGroup,
+        'Available Units': stock.count,
+        'Last Updated': stock.lastUpdated || new Date().toISOString().split('T')[0]
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `blood_bank_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Blood Stock",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} blood stock records to Excel!`,
+        3000
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", 3000);
+    }
   };
 
-  const handleImport = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const stock of importedData) {
-          try {
-            await createBloodBank({
-              bloodGroup: stock['Blood Group'] || stock.bloodGroup,
-              count: stock['Count (Units)'] || stock.count || 0
-            }).unwrap();
-            successCount++;
-          } catch {
-            errorCount++;
-          }
-        }
-        
-        showSuccessToast(`Successfully imported ${successCount} blood stock records! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
-        refetch();
-      } catch {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+  // ✅ REMOVED: handleImport function
 
   const getActiveFilterCount = () => {
     let count = 0;
@@ -575,32 +564,20 @@ const BloodBank = () => {
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by blood group or ID..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <Search className="w-4 h-4 text-white" />
-            </button>
-          </div>
+          {/* ✅ Replaced custom search input with SearchBar component */}
+          <SearchBar
+            placeholder="Search by blood group or ID..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            onClear={() => {
+              setSearchTerm('');
+              setCurrentPage(1);
+            }}
+            className="flex-1 max-w-sm"
+          />
 
           {/* Blood Group Dropdown - Filter */}
           <select
@@ -642,12 +619,9 @@ const BloodBank = () => {
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer">
-            <Upload size={16} />
-          </label>
+          {/* ✅ IMPORT BUTTON REMOVED */}
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors">
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
             <Download size={16} />
           </button>
 

@@ -120,13 +120,6 @@ export const isFCMAvailable = () => {
   const hasServiceWorker = "serviceWorker" in navigator;
   const permissionGranted = Notification.permission === "granted";
   
-  console.log('🔍 FCM Availability Check:', {
-    hasVapid,
-    hasNotification,
-    hasServiceWorker,
-    permissionGranted,
-    vapidKey: VAPID_KEY ? '✅ Present' : '❌ Missing'
-  });
   
   if (!hasVapid) {
     return false;

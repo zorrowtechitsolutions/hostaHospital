@@ -1,7 +1,7 @@
 // src/Authentication/ForgotPassword.jsx
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
 import { 
@@ -20,6 +20,10 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  
+  // ✅ Add state for password visibility
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [sendOtp, { isLoading: isSendingOtp }] = useSendOtpMutation();
   const [verifyOtp, { isLoading: isVerifyingOtp }] = useVerifyOtpMutation();
@@ -297,36 +301,56 @@ const ForgotPassword = () => {
       
       {error && <Alert type="error" message={error} />}
       
+      {/* ✅ New Password with Eye Icon */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           New Password <span className="text-red-500">*</span>
         </label>
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(e) => {
-            setNewPassword(e.target.value);
-            setError('');
-          }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154A7D] focus:border-transparent outline-none transition-all"
-          placeholder="Enter new password (min 8 characters)"
-        />
+        <div className="relative">
+          <input
+            type={showNewPassword ? "text" : "password"}
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setError('');
+            }}
+            className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154A7D] focus:border-transparent outline-none transition-all"
+            placeholder="Enter new password (min 8 characters)"
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewPassword(!showNewPassword)}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+          >
+            {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
       </div>
       
+      {/* ✅ Confirm Password with Eye Icon */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Confirm New Password <span className="text-red-500">*</span>
         </label>
-        <input
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => {
-            setConfirmPassword(e.target.value);
-            setError('');
-          }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154A7D] focus:border-transparent outline-none transition-all"
-          placeholder="Confirm new password"
-        />
+        <div className="relative">
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setError('');
+            }}
+            className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154A7D] focus:border-transparent outline-none transition-all"
+            placeholder="Confirm new password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+          >
+            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
       </div>
       
       <Alert 

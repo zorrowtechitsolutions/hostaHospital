@@ -1,6 +1,6 @@
-// src/components/patients/Patients.jsx - With Hospital Filter Fix
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// src/components/patients/Patients.jsx - With Enhanced Address Handling, Skeleton Loader & Filter Box - Card UI aligned with Doctors
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   User, 
   Calendar, 
@@ -16,9 +16,7 @@ import {
   LayoutGrid,
   List,
   RefreshCcw,
-  Upload,
   Trash2,
-  Filter,
   Search,
   RotateCcw
 } from 'lucide-react';
@@ -44,39 +42,269 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
 
+// ✅ Import Excel Export Button
+import ExcelExportButton from '../ui/ExcelExportButton';
+
 // ✅ Import socket
 import { socket } from '../../socket/socket';
 // ✅ Import socket event listeners
 import { registerPatientEvents, unregisterPatientEvents } from '../../socket/patientEvents';
 
+// S3 Base URL for images
+const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+
+// getS3ImageUrl with cache-busting
+const getS3ImageUrlWithCache = (imageKey) => {
+  if (!imageKey) return "";
+  if (imageKey.startsWith("http")) {
+    return `${imageKey}?t=${Date.now()}`;
+  }
+  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+};
+
+// ✅ Enhanced Helper function to format address - tries multiple address formats
+const formatAddress = (address) => {
+  if (!address) return '';
+  
+  // If address is a string, return it
+  if (typeof address === 'string') {
+    return address;
+  }
+  
+  // If address is an object, extract fields
+  if (typeof address === 'object') {
+    const parts = [];
+    
+    // Common address field names
+    const fieldNames = [
+      'place', 'district', 'state', 'country', 'pincode'
+    ];
+    
+    // Check each field and add if it has a value
+    fieldNames.forEach(field => {
+      if (address[field] && typeof address[field] === 'string' && address[field].trim()) {
+        parts.push(address[field].trim());
+      }
+    });
+    
+    // If we have parts, join them
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+    
+    // If no fields found but address object exists, try to get values
+    const values = Object.values(address).filter(v => v && typeof v === 'string' && v.trim());
+    if (values.length > 0) {
+      return values.join(', ');
+    }
+  }
+  
+  return '';
+};
+
+// ✅ Function to extract address from patient object - tries multiple sources
+const extractAddress = (patient) => {
+  if (!patient) return '';
+  
+  // Try multiple possible address locations
+  const addressSources = [
+    patient.address,
+    patient.patientAddress,
+    patient.patient_address,
+    patient.addressLine,
+  ];
+  
+  // Find the first valid address source
+  let addressData = null;
+  for (const source of addressSources) {
+    if (source) {
+      addressData = source;
+      break;
+    }
+  }
+  
+  // If no address found, try to build from individual fields
+  if (!addressData) {
+    const parts = [];
+    const individualFields = ['place', 'district', 'state', 'country', 'pincode', 'city', 'street'];
+    individualFields.forEach(field => {
+      if (patient[field]) {
+        parts.push(patient[field]);
+      }
+    });
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+  }
+  
+  // Format the address data
+  return formatAddress(addressData);
+};
+
+// Helper functions
+const getPatientName = (patient) => patient.name || 'Patient';
+const getPatientId = (id) => id ? `#PT${String(id).padStart(4, '0')}` : '#PT0000';
+const getPatientType = (patient) => patient.patientType || 'Outpatient';
+const getPatientStatus = (patient) => {
+  if (patient.isDelete) return 'Blacklisted';
+  return patient.isActive ? 'Active' : 'Inactive';
+};
+
+// ✅ Patient Action Menu Component (Matches DoctorActionMenu style)
+const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
+  if (activeMenu !== patient.id) return null;
+  
+  return (
+    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+      {!patient.isDelete && (
+        <button 
+          onClick={() => onView(patient)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Eye className="w-4 h-4" />
+          View Details
+        </button>
+      )}
+      {!patient.isDelete && (
+        <button 
+          onClick={() => onEdit(patient)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Edit className="w-4 h-4" />
+          Edit
+        </button>
+      )}
+      {!patient.isDelete && (
+        <button 
+          onClick={() => onAppointment(patient)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Calendar className="w-4 h-4" />
+          Appointment
+        </button>
+      )}
+      {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
+      
+      {patient.isDelete ? (
+        <button
+          onClick={() => onRecover(patient)}
+          className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Recover Patient
+        </button>
+      ) : (
+        <button 
+          onClick={() => onDelete(patient)} 
+          className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      )}
+    </div>
+  );
+});
+
+// ✅ Skeleton Loader Component (Matches Doctors Skeleton style)
+const PatientSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[...Array(8)].map((_, index) => (
+          <div key={index} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm">
+            <div className="w-full flex justify-between items-start mb-4">
+              <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-7 h-7 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+            <div className="relative mb-3">
+              <div className="w-16 h-16 rounded-full bg-gray-200 animate-pulse"></div>
+            </div>
+            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-4"></div>
+            <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+              <div className="text-center">
+                <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
+                <div className="h-4 w-12 bg-gray-200 rounded animate-pulse mx-auto"></div>
+              </div>
+              <div className="text-center">
+                <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
+                <div className="h-4 w-12 bg-gray-200 rounded animate-pulse mx-auto"></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+        <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100">
+            <tr>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(itemsPerPage)].map((_, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-6 py-4 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+          <div className="flex gap-2">
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Patients = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('all');
+  const location = useLocation();
+
+  // State management
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [appointmentPatient, setAppointmentPatient] = useState(null);
-  const [patientType, setPatientType] = useState('outpatient');
+  const [genderFilter, setGenderFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
-  const [showFilters, setShowFilters] = useState(false);
-  
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
-  
+
   // Approve Modal State
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [bookingData, setBookingData] = useState(null);
-  
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const [genderFilter, setGenderFilter] = useState('');
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  // Appointment Modal State
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentPatient, setAppointmentPatient] = useState(null);
 
   // ✅ Track if events are registered
   const [eventsRegistered, setEventsRegistered] = useState(false);
@@ -100,7 +328,8 @@ const Patients = () => {
     search_query: searchTerm?.trim() || undefined,
     page: currentPage,
     limit: itemsPerPage,
-    ...(genderFilter && { gender: genderFilter }),
+    ...(genderFilter !== 'All' && { gender: genderFilter }),
+    ...(statusFilter !== 'All' && { status: statusFilter === 'Active' ? true : false }),
   });
 
   const [deletePatient] = useDeletePatientMutation();
@@ -109,26 +338,22 @@ const Patients = () => {
 
   // ✅ Register socket event listeners
   useEffect(() => {
-    
     registerPatientEvents({
       onPatientRegistered: async (data) => {
         showSuccessToast(`New patient registered!`, 3000);
-        const result = await refetchPatients();
+        await refetchPatients();
       },
-
       onPatientUpdated: async (data) => {
         showSuccessToast(`Patient updated!`, 3000);
-        const result = await refetchPatients();
+        await refetchPatients();
       },
-
       onPatientDeleted: async (data) => {
         showSuccessToast(`Patient deleted!`, 3000);
-        const result = await refetchPatients();
+        await refetchPatients();
       },
-
       onPatientRecovered: async (data) => {
         showSuccessToast(`Patient recovered successfully!`, 3000);
-        const result = await refetchPatients();
+        await refetchPatients();
       }
     });
 
@@ -179,28 +404,21 @@ const Patients = () => {
     };
   }, [refetchPatients, eventsRegistered]);
 
-  // ✅ Log all socket events for debugging
+  // Save view mode to localStorage
   useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {
-    };
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
+    localStorage.setItem('patientViewMode', viewMode);
+  }, [viewMode]);
 
   // Get patients array and pagination info from response
   const allPatients = patientsResponse?.data || [];
   const totalItems = patientsResponse?.pagination?.totalItems || 0;
   const totalPages = patientsResponse?.pagination?.totalPages || 1;
 
-  // ✅ Transform patient data to include isDelete and isActive flags
+  // ✅ Transform patient data with enhanced address handling
   const transformPatientData = (patients) => {
     if (!patients || !Array.isArray(patients)) return [];
     
-    return patients.map((patient) => {
+    return patients.map((patient, index) => {
       let status = 'Active';
       if (patient.isDelete) {
         status = 'Blacklisted';
@@ -208,72 +426,83 @@ const Patients = () => {
         status = 'Inactive';
       }
       
+      // ✅ Extract and format address using enhanced function
+      const formattedAddress = extractAddress(patient);
+      
       return {
         ...patient,
         isDelete: patient.isDelete || false,
         isActive: patient.isActive !== undefined ? patient.isActive : true,
-        displayStatus: status
+        displayStatus: status,
+        formattedAddress: formattedAddress || 'N/A'
       };
     });
   };
 
   const transformedPatients = transformPatientData(allPatients);
 
-  // Separate patients into outpatient and inpatient based on patientType
-  const outpatientPatients = transformedPatients.filter(p => p.patientType === 'Outpatient' || !p.patientType);
-  const inpatientPatients = transformedPatients.filter(p => p.patientType === 'Inpatient');
-
-  // Get active patients based on tab
-  const getActivePatients = () => {
-    if (activeTab === 'outpatient') return outpatientPatients;
-    if (activeTab === 'inpatient') return inpatientPatients;
-    return transformedPatients;
-  };
-
-  const activePatients = getActivePatients();
-
-  // Apply local filters for gender
-  const filteredPatients = activePatients.filter(p => {
-    if (genderFilter && p.gender !== genderFilter) return false;
-    return true;
-  });
-
-  // Use server-side totalPages for pagination
-  const totalFilteredItems = totalItems;
-  const totalFilteredPages = totalPages;
+  // ✅ Get unique genders from patients for filter options
+  const genderOptions = useMemo(() => {
+    const genders = new Set();
+    transformedPatients.forEach(p => {
+      if (p.gender) genders.add(p.gender);
+    });
+    return ['All', ...Array.from(genders)];
+  }, [transformedPatients]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, genderFilter, activeTab]);
+  }, [searchTerm, genderFilter, statusFilter]);
+
+  // Handle click outside for menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (activeMenu !== null && !event.target.closest('.menu-container')) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenu]);
+
+  const handlePageChange = useCallback((page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [totalPages]);
 
   // Navigation handlers
-  const handleViewDetails = (patient) => {
+  const handleViewDetails = useCallback((patient) => {
     if (patient.isDelete) {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
     }
     navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
-  };
+    setActiveMenu(null);
+  }, [navigate]);
 
-  const handleAddPatient = () => {
+  const handleAddPatient = useCallback(() => {
     navigate('/add-patient');
-  };
+  }, [navigate]);
 
-  const handleEditPatient = (patient) => {
+  const handleEditPatient = useCallback((patient) => {
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
     }
     navigate(`/edit-patient/${patient.id || patient._id}`, { state: { patient } });
-  };
+    setActiveMenu(null);
+  }, [navigate]);
 
-  const handleDeleteClick = (patient) => {
+  const handleDeleteClick = useCallback((patient) => {
     setPatientToDelete(patient);
     setShowDeleteModal(true);
-  };
+    setActiveMenu(null);
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (patientToDelete) {
       try {
         await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
@@ -286,85 +515,49 @@ const Patients = () => {
         showErrorToast('Failed to delete patient. Please try again.', 3000);
       }
     }
-  };
+  }, [patientToDelete, deletePatient, refetchPatients]);
 
-  // ✅ Recover handler
-  const handleRecoverPatient = async (patient) => {
+  const handleRecoverPatient = useCallback(async (patient) => {
     try {
       await recoverPatient(patient.id || patient._id).unwrap();
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
       refetchPatients();
+      setActiveMenu(null);
     } catch (error) {
       console.error('Recover error:', error);
       showErrorToast(error?.data?.message || 'Failed to recover patient', 3000);
     }
-  };
+  }, [recoverPatient, refetchPatients]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setSearchTerm("");
-    setStatusFilter("all");
-    setDepartmentFilter("");
-    setDateFilter("");
-    setGenderFilter("");
+    setGenderFilter("All");
+    setStatusFilter("All");
     setCurrentPage(1);
+    setActiveMenu(null);
     refetchPatients();
     showSuccessToast("Refreshed patients", 2000);
-  };
+  }, [refetchPatients]);
 
-  const handleExport = () => {
-    const exportData = filteredPatients.map(patient => ({
-      'ID': patient.id || patient._id,
-      'Name': patient.name,
-      'Gender': patient.gender,
-      'Age': patient.age,
-      'Phone': patient.mobileNumber,
-      'Email': patient.email || '',
-      'Blood Group': patient.bloodGroup,
-      'Patient Type': patient.patientType || 'Outpatient',
-      'Status': patient.isDelete ? 'Blacklisted' : (patient.isActive ? 'Active' : 'Inactive'),
-      'Created At': patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : ''
-    }));
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `patients_export_${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} patients`, 2000);
-  };
+  const clearGenderFilter = useCallback(() => {
+    setGenderFilter('All');
+  }, []);
 
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  const clearStatusFilter = useCallback(() => {
+    setStatusFilter('All');
+  }, []);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        showSuccessToast(`Import functionality requires bulk create endpoint. Found ${importedData.length} records.`, 4000);
-        refetchPatients();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    
-    reader.readAsText(file);
-    event.target.value = '';
-  };
-
-  const handleAddAppointmentModal = (patient) => {
+  const handleAddAppointmentModal = useCallback((patient) => {
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for blacklisted patient', 3000);
       return;
     }
     setAppointmentPatient(patient);
     setShowAppointmentModal(true);
-  };
+    setActiveMenu(null);
+  }, []);
 
-  const handleProceedApprove = (data) => {
+  const handleProceedApprove = useCallback((data) => {
     const patientId = appointmentPatient?.id || appointmentPatient?._id;
     
     const updatedData = {
@@ -375,7 +568,7 @@ const Patients = () => {
     setBookingData(updatedData);
     setShowAppointmentModal(false);
     setShowApproveModal(true);
-  };
+  }, [appointmentPatient]);
 
   const formatDate = (date) => {
     if (!date) return "";
@@ -398,7 +591,7 @@ const Patients = () => {
     return age;
   };
 
-  const handleConfirmAppointment = async (approveData) => {
+  const handleConfirmAppointment = useCallback(async (approveData) => {
     try {
       const payload = {
         patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
@@ -441,137 +634,86 @@ const Patients = () => {
     } catch (err) {
       showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
     }
-  };
+  }, [bookingData, appointmentPatient, createBooking, navigate]);
 
-  const clearAllFilters = () => {
-    setStatusFilter('all');
-    setDateFilter('');
-    setGenderFilter('');
-    setSearchTerm('');
-    setActiveTab('all');
-    setCurrentPage(1);
-    showSuccessToast("All filters cleared", 2000);
-  };
-
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (statusFilter !== 'all') count++;
-    if (dateFilter) count++;
-    if (genderFilter) count++;
-    if (searchTerm) count++;
-    if (activeTab !== 'all') count++;
-    return count;
-  };
-
- 
   const formatDisplayDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const toggleMenu = useCallback((id, e) => {
+    e.stopPropagation();
+    setActiveMenu(prevActive => prevActive === id ? null : id);
+  }, []);
 
-  // ✅ Updated RowActionMenu Component - Shows Recover for Blacklisted patients
-  const RowActionMenu = ({ patient }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
-
-    useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (menuRef.current && !menuRef.current.contains(e.target)) {
-          setShowMenu(false);
-        }
+  // ✅ Prepare export data for Excel with formatted address
+  const getExportData = useCallback(() => {
+    const patientsToExport = transformedPatients;
+    
+    return patientsToExport.map((patient) => {
+      const address = patient.formattedAddress || 'N/A';
+      
+      return {
+        'Patient ID': patient.id || patient._id || 'N/A',
+        'Name': patient.name || 'N/A',
+        'Gender': patient.gender || 'N/A',
+        'Age': patient.age || 'N/A',
+        'Mobile Number': patient.mobileNumber || 'N/A',
+        'Email': patient.email || 'N/A',
+        'Blood Group': patient.bloodGroup || 'N/A',
+        'Patient Type': patient.patientType || 'Outpatient',
+        'Status': patient.isDelete ? 'Blacklisted' : (patient.isActive ? 'Active' : 'Inactive'),
+        'Created Date': patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : 'N/A',
+        'Address': address,
+        'Emergency Contact': patient.emergencyContact || 'N/A'
       };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    });
+  }, [transformedPatients]);
 
-    return (
-      <div className="relative inline-block" ref={menuRef}>
-        <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded hover:bg-gray-100 transition-colors">
-          <MoreVertical size={18} />
-        </button>
-        {showMenu && (
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {/* ✅ View Details - Only for Active/Inactive patients */}
-            {!patient.isDelete && (
-              <button 
-                onClick={() => { handleViewDetails(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-              >
-                <Eye size={16} /> View Details
-              </button>
-            )}
-            
-            {/* ✅ Edit - Only for Active/Inactive patients */}
-            {!patient.isDelete && (
-              <button 
-                onClick={() => { handleEditPatient(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Edit size={16} /> Edit
-              </button>
-            )}
-            
-            {/* ✅ Appointment - Only for Active/Inactive patients */}
-            {!patient.isDelete && (
-              <button 
-                onClick={() => { handleAddAppointmentModal(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
-              >
-                <Calendar size={16} /> Appointment
-              </button>
-            )}
-            
-            {/* Show divider only if there are items above */}
-            {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
-            
-            {/* ✅ Show Delete or Recover based on isDelete status */}
-            {patient.isDelete ? (
-              <button 
-                onClick={() => { handleRecoverPatient(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
-              >
-                <RotateCcw size={16} /> Recover Patient
-              </button>
-            ) : (
-              <button 
-                onClick={() => { handleDeleteClick(patient); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-              >
-                <Trash2 size={16} /> Delete
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const activeFilterCount = getActiveFilterCount();
-
-  // Centered loader
+  // ✅ Loading state with Skeleton Loader (matches Doctors style)
   if (isLoadingPatients && !transformedPatients.length) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
-        <Loader />
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            <div className="relative flex-1 max-w-sm">
+              <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
+            </div>
+            <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-24 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+        </div>
+
+        <PatientSkeletonLoader viewMode={viewMode} itemsPerPage={itemsPerPage} />
       </div>
     );
   }
-
-  // Show hospital filter info
-  const showHospitalFilterInfo = isDoctor && hospitalId;
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Breadcrumb Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            aria-label="Go back"
+          >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
@@ -585,44 +727,14 @@ const Patients = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Patients</h1>
-        
+        {isDoctor && (
+          <span className="text-xs text-green-600 ml-2">
+            🔒 Filtered by hospital
+          </span>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'all' 
-              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          All Patients ({totalItems})
-        </button>
-        <button
-          onClick={() => setActiveTab('outpatient')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'outpatient' 
-              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Outpatients ({outpatientPatients.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('inpatient')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'inpatient' 
-              ? 'text-[#1C62A0] border-b-2 border-[#1C62A0]' 
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Inpatients ({inpatientPatients.length})
-        </button>
-      </div>
-
-      {/* Search and Action Buttons Row */}
+      {/* Search and Filter */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="relative flex-1 max-w-sm">
@@ -630,27 +742,51 @@ const Patients = () => {
               type="text"
               placeholder="Search by name, mobile..."
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
             />
             {searchTerm && (
               <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
+                onClick={() => setSearchTerm('')}
                 className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
               >
                 ✕
               </button>
             )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <Search className="w-4 h-4 text-white" />
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded" aria-label="Search">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </button>
           </div>
+
+          {/* ✅ Gender Filter */}
+          <select
+            value={genderFilter}
+            onChange={(e) => setGenderFilter(e.target.value)}
+            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            aria-label="Filter by gender"
+          >
+            {genderOptions.map(gender => (
+              <option key={gender} value={gender}>
+                {gender === 'All' ? 'All Genders' : gender}
+              </option>
+            ))}
+          </select>
+
+          {/* ✅ Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            aria-label="Filter by status"
+          >
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Blacklisted">Blacklisted</option>
+          </select>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -658,12 +794,14 @@ const Patients = () => {
             <button 
               onClick={() => setViewMode('grid')} 
               className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+              aria-label="Grid view"
             >
               <LayoutGrid size={16} />
             </button>
             <button 
               onClick={() => setViewMode('list')} 
               className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+              aria-label="List view"
             >
               <List size={16} />
             </button>
@@ -671,93 +809,39 @@ const Patients = () => {
 
           <button 
             onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
-            title="Refresh" 
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             disabled={isFetching}
+            aria-label="Refresh"
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import Patients">
-            <Upload size={16} />
-          </label>
-
-          <button 
-            onClick={handleExport} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
-            title="Export Patients"
-          >
-            <Download size={16} />
-          </button>
-
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
-            title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          <ExcelExportButton
+            data={getExportData()}
+            fileName={`patients_${new Date().toISOString().split("T")[0]}`}
+            sheetName="Patients"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+          />
 
           <Button 
             onClick={handleAddPatient} 
-            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={16} /> New Patient
           </Button>
         </div>
       </div>
 
-      {/* FILTER SECTION */}
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
-              Clear All Filters
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select
-              value={genderFilter}
-              onChange={(e) => {
-                setGenderFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="">All Genders</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-
-          </div>
+      {/* ✅ Show fetching indicator */}
+      {isFetching && transformedPatients.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-md px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
+          <span className="text-sm text-gray-600">Updating...</span>
         </div>
       )}
 
-      {/* Patients View */}
-      {filteredPatients.length === 0 ? (
+      {/* Empty State */}
+      {transformedPatients.length === 0 && !isLoadingPatients && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
@@ -765,135 +849,121 @@ const Patients = () => {
             {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
           </p>
         </div>
-      ) : viewMode === 'grid' ? (
-        /* GRID VIEW */
+      )}
+
+      {/* GRID VIEW - Matching Doctors Card UI */}
+      {viewMode === 'grid' && transformedPatients.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredPatients.map((patient) => {
+            {transformedPatients.map((patient) => {
               const isBlacklisted = patient.isDelete;
+              const patientStatus = getPatientStatus(patient);
+              
               return (
                 <div 
                   key={patient.id || patient._id} 
-                  className={`bg-white rounded-xl border ${isBlacklisted ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} shadow-sm hover:shadow-md transition-shadow overflow-hidden ${!isBlacklisted ? 'cursor-pointer' : ''}`}
-                  onClick={() => !isBlacklisted && handleViewDetails(patient)}
+                  className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar className={`w-12 h-12 ${isBlacklisted ? 'opacity-60' : ''}`}>
-                          <AvatarImage 
-                            src={getS3ImageUrl(patient.imageKey)} 
-                            alt={patient.name}
-                            className="object-cover"
-                          />
-                          <AvatarFallback className={`${isBlacklisted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
-                            {patient.name?.charAt(0)?.toUpperCase() || "P"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="default" className="text-xs font-mono">
-                              #PT00{patient.id || patient._id?.slice(-6)}
-                            </Badge>
-                            {isBlacklisted ? (
-                              <Badge variant="secondary" className="text-xs">
-                                Blacklisted
-                              </Badge>
-                            ) : (
-                              <Badge variant={patient.patientType === 'Inpatient' ? 'danger' : 'success'} className="text-xs">
-                                {patient.patientType || 'Outpatient'}
-                              </Badge>
-                            )}
-                          </div>
-                          <h3 className={`font-semibold text-lg mt-1 ${isBlacklisted ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {patient.name}
-                          </h3>
-                          <p className={`text-xs ${isBlacklisted ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Phone className="w-4 h-4" />
-                          <span>Mobile</span>
-                        </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
-                          {patient.mobileNumber}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Mail className="w-4 h-4" />
-                          <span>Email</span>
-                        </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'} truncate max-w-[150px]`}>
-                          {patient.email || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Activity className="w-4 h-4" />
-                          <span>Blood Group</span>
-                        </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
-                          {patient.bloodGroup || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Calendar className="w-4 h-4" />
-                          <span>Created</span>
-                        </div>
-                        <span className={`font-medium ${isBlacklisted ? 'text-gray-400' : 'text-gray-900'}`}>
-                          {formatDisplayDate(patient.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Action buttons - Show Recover for blacklisted, Appointment for active */}
-                    <div className="flex gap-2 border-t border-gray-100 pt-4">
-                      {isBlacklisted ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRecoverPatient(patient);
-                          }} 
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                        >
-                          <RotateCcw className="w-4 h-4" /> 
-                          Recover
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddAppointmentModal(patient);
-                          }} 
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-                        >
-                          <Calendar className="w-4 h-4" /> 
-                          Add Appointment
-                        </button>
-                      )}
+                  <div className="w-full flex justify-between items-start mb-4">
+                    <Badge variant="info" className="text-[10px]">
+                      {getPatientId(patient.id || patient._id)}
+                    </Badge>
+                    <div className="relative menu-container">
+                      <button 
+                        onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                        aria-label="Actions menu"
+                      >
+                        ⋮
+                      </button>
+                      <PatientActionMenu
+                        patient={patient}
+                        activeMenu={activeMenu}
+                        onView={handleViewDetails}
+                        onEdit={handleEditPatient}
+                        onDelete={handleDeleteClick}
+                        onAppointment={handleAddAppointmentModal}
+                        onRecover={handleRecoverPatient}
+                      />
                     </div>
                   </div>
+                  
+                  <div className="relative mb-3">
+                    <Avatar className="w-16 h-16">
+                      <AvatarImage
+                        src={getS3ImageUrl(patient.imageKey)}
+                        alt={getPatientName(patient)}
+                      />
+                      <AvatarFallback>
+                        {(patient.name?.[0] || "P").toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                        isBlacklisted
+                          ? "bg-black"
+                          : patient.isActive
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                  </div>
+                  
+                  <h3 
+                    onClick={() => !isBlacklisted && handleViewDetails(patient)} 
+                    className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                  >
+                    {getPatientName(patient)}
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mb-4">
+                    {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
+                  </p>
+                  
+                  {/* ✅ Stats Grid - Now shows Type and Gender instead of Type and Status */}
+                  <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                    <div className="text-center">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
+                      <p className="text-xs font-bold text-gray-700">
+                        {getPatientType(patient)}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
+                      <p className="text-xs font-bold text-gray-700">
+                        {patient.gender || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Action Button */}
+                  {isBlacklisted ? (
+                    <button 
+                      onClick={() => handleRecoverPatient(patient)} 
+                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Recover
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => handleAddAppointmentModal(patient)} 
+                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-4 h-4" /> Appointment
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* Pagination for Grid View - Using server-side totalPages */}
-          {totalFilteredPages > 1 && (
+          {/* Pagination for Grid View */}
+          {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalFilteredPages}
+                totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalFilteredItems}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
                 variant="centered"
@@ -901,14 +971,16 @@ const Patients = () => {
             </div>
           )}
         </>
-      ) : (
-        /* LIST VIEW */
+      )}
+
+      {/* LIST VIEW - Matching Doctors List style */}
+      {viewMode === 'list' && transformedPatients.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Patients
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {totalFilteredItems}
+                {totalItems}
               </span>
               {isDoctor && (
                 <span className="text-xs text-green-600 ml-2">
@@ -934,77 +1006,74 @@ const Patients = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPatients.map((patient) => {
+                  {transformedPatients.map((patient) => {
                     const isBlacklisted = patient.isDelete;
+                    const patientStatus = getPatientStatus(patient);
+                    
                     return (
-                      <tr 
-                        key={patient.id || patient._id} 
-                        className={`hover:bg-gray-50 border-b border-gray-100 ${isBlacklisted ? 'bg-gray-50' : ''}`}
-                      >
-                        <td className={`px-6 py-4 font-medium ${isBlacklisted ? 'text-gray-500' : 'text-[#1C62A0]'}`}>
-                          #PT00{patient.id || patient._id?.slice(-6)}
+                      <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
+                        <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                          {getPatientId(patient.id || patient._id)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <Avatar className={`w-8 h-8 ${isBlacklisted ? 'opacity-60' : ''}`}>
-                              <AvatarImage 
-                                src={getS3ImageUrl(patient.imageKey)} 
-                                alt={patient.name}
-                                className="object-cover"
+                            <Avatar className="w-8 h-8">
+                              <AvatarImage
+                                src={getS3ImageUrl(patient.imageKey)}
+                                alt={getPatientName(patient)}
                               />
-                              <AvatarFallback className={`${isBlacklisted ? 'bg-gray-200 text-gray-500' : 'bg-gray-200 text-gray-600'} text-xs font-medium`}>
-                                {patient.name?.charAt(0)?.toUpperCase() || "P"}
+                              <AvatarFallback>
+                                {(patient.name?.[0] || "P").toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <span 
                               onClick={() => !isBlacklisted && handleViewDetails(patient)} 
-                              className={`font-medium ${isBlacklisted ? 'text-gray-500 cursor-default' : 'text-gray-800 cursor-pointer hover:text-[#1C62A0]'}`}
+                              className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                             >
-                              {patient.name}
+                              {getPatientName(patient)}
                             </span>
                           </div>
                         </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {patient.gender || 'N/A'}
-                        </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {patient.mobileNumber}
-                        </td>
-                        <td className={`px-6 py-4 ${isBlacklisted ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {patient.bloodGroup || 'N/A'}
-                        </td>
+                        <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
+                        <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
                         <td className="px-6 py-4">
-                          {isBlacklisted ? (
-                            <Badge variant="secondary" className="text-xs">
-                              Blacklisted
-                            </Badge>
-                          ) : (
-                            <Badge variant={patient.patientType === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
-                              {patient.patientType || 'Outpatient'}
-                            </Badge>
-                          )}
+                          <Badge variant={getPatientType(patient) === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
+                            {getPatientType(patient)}
+                          </Badge>
                         </td>
                         <td className="px-6 py-4">
                           <Badge
                             variant={
                               isBlacklisted
-                                ? 'secondary'
+                                ? "dark"
                                 : patient.isActive
-                                ? 'success'
-                                : 'danger'
+                                ? "success"
+                                : "danger"
                             }
                             className="text-xs"
                           >
-                            {isBlacklisted
-                              ? 'Blacklisted'
-                              : patient.isActive
-                              ? 'Active'
-                              : 'Inactive'}
+                            {patientStatus}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right relative menu-container">
                           <div className="flex justify-end">
-                            <RowActionMenu patient={patient} />
+                            <button 
+                              onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                              aria-label="Actions menu"
+                            >
+                              ⋮
+                            </button>
+                            <PatientActionMenu
+                              patient={patient}
+                              activeMenu={activeMenu}
+                              onView={handleViewDetails}
+                              onEdit={handleEditPatient}
+                              onDelete={handleDeleteClick}
+                              onAppointment={handleAddAppointmentModal}
+                              onRecover={handleRecoverPatient}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -1014,13 +1083,13 @@ const Patients = () => {
               </table>
             </div>
 
-            {/* Pagination - Sticks to bottom using mt-auto with server-side totalPages */}
+            {/* Pagination - Sticks to bottom */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalFilteredPages}
+                totalPages={totalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalFilteredItems}
+                totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
               />

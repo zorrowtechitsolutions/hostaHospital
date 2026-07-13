@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Filter, Download, MoreVertical, Eye, 
-  Edit, Users as UsersIcon, RefreshCcw, Upload, Search, Trash2,
+  Edit, Users as UsersIcon, RefreshCcw, Search, Trash2,
   PlayCircle, Check, X
 } from 'lucide-react';
 import { 
-  Button, Pagination
+  Button, Pagination, SearchBar
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
@@ -24,6 +24,9 @@ import { getS3ImageUrl } from '../../../app/service/S3';
 
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
@@ -74,21 +77,29 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                <th key={i} className="px-6 py-3">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                </th>
-              ))}
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
             </tr>
           </thead>
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
-                  <td key={j} className="px-6 py-4">
-                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
-                ))}
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
               </tr>
             ))}
           </tbody>
@@ -355,46 +366,56 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     showSuccessToast("Refreshed appointments", 2000);
   };
 
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
-    const exportData = filteredAppointments.map(apt => ({
-      'Appointment ID': apt.formattedId,
-      'Patient ID': apt.patientId,
-      'Patient Name': apt.patientName,
-      'Contact': apt.contact,
-      'Age': apt.age,
-      'Gender': apt.gender,
-      'Doctor Name': apt.doctorName,
-      'Department': apt.department,
-      'Appointment Date': apt.appointmentDateDisplay,
-      'Consulting Time': apt.consulting_time,
-      'Booking Status': apt.bookingStatus,
-      'Status': apt.status,
-      'Original Status': apt.originalStatus,
-      'Reason': apt.reason
-    }));
-    const link = document.createElement('a');
-    link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    link.download = `appointments_export_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    showSuccessToast(`Exported ${exportData.length} appointments`, 3000);
+    if (filteredAppointments.length === 0) {
+      showErrorToast("No data available to export", 3000);
+      return;
+    }
+
+    try {
+      // Transform data for Excel export
+      const exportData = filteredAppointments.map(apt => ({
+        'Appointment ID': apt.formattedId,
+        'Patient ID': apt.patientDisplayId || apt.patientId,
+        'Patient Name': apt.patientName,
+        'Contact': apt.contact,
+        'Age': apt.age,
+        'Gender': apt.gender,
+        'Doctor Name': apt.doctorName,
+        'Department': apt.department,
+        'Appointment Date': apt.appointmentDateDisplay,
+        'Consulting Time': convertTo12Hour(apt.consulting_time),
+        'Booking Status': apt.bookingStatus,
+        'Status': apt.status,
+        'Original Status': apt.originalStatus || apt.status,
+        'Reason': apt.reason || "N/A",
+        'Notes': apt.notes || "N/A"
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `appointments_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Appointments",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} appointments to Excel!`,
+        3000
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", 3000);
+    }
   };
 
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        showSuccessToast(`Successfully imported ${importedData.length} appointments!`, 3000);
-        refetch();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+  // ✅ REMOVED: handleImport function
 
   const handleStartConsultation = (appointment) => {
     navigate('/appointments/consultation', {
@@ -863,32 +884,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by Appointment ID, Patient Name, Contact..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded">
-              <Search className="w-4 h-4 text-white" />
-            </button>
-          </div>
+          {/* ✅ Replaced custom search input with SearchBar component */}
+          <SearchBar
+            placeholder="Search by Appointment ID, Patient Name, Contact..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            onClear={() => {
+              setSearchTerm('');
+              setCurrentPage(1);
+            }}
+            className="flex-1 max-w-sm"
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -899,11 +908,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
-            <Upload size={16} />
-          </label>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          {/* ✅ IMPORT BUTTON REMOVED */}
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>
           <button

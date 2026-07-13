@@ -453,6 +453,9 @@ const HospitalDetails = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // ✅ Add the updateHospital mutation hook
+  const [updateHospital, { isLoading: isUpdating }] = useUpdateHospitalMutation();
+  
   const { data: hospitalData, isLoading: isHospitalLoading, error, refetch } = useGetHospitalByIdQuery(id);
   const hospital = hospitalData?.data || hospitalData;
 
@@ -524,12 +527,19 @@ const HospitalDetails = () => {
   const patientsCount = patientsList.length;
   const doctorsCount = doctorsList.length;
   const staffCount = staffList.length;
+  
+  // ✅ Appointments count - bookings that are NOT completed or cancelled
   const appointmentsCount = bookingsList.filter(
     booking => booking.status !== 'completed' && booking.status !== 'cancelled'
   ).length;
+  
+  // ✅ FIXED: Visits count - ONLY pending visits (not completed or cancelled)
   const visitsCount = bookingsList.filter(
-    booking => booking.status === 'completed' || booking.status === 'accepted'
+    booking => 
+      booking.status === 'pending' || 
+      booking.status === 'accepted'
   ).length;
+  
   const ambulancesCount = ambulancesList.length;
   const bloodBanksCount = bloodBanksList.length;
 
@@ -558,9 +568,6 @@ const HospitalDetails = () => {
       showSuccessToast('Hospital updated successfully!', 3000);
       setShowEditModal(false);
       refetch();
-      
-      // Update the hospital in the parent component if needed
-      // The refetch will update the data
       
     } catch (error) {
       console.error("Update error:", error);
@@ -733,7 +740,7 @@ const HospitalDetails = () => {
       actionLabel: 'View Appointments'
     },
     { 
-      title: 'Total Visits', 
+      title: 'Pending Visits', 
       value: visitsCount, 
       icon: Activity, 
       bgColor: 'bg-indigo-50',
@@ -742,7 +749,7 @@ const HospitalDetails = () => {
       borderColor: 'border-indigo-200',
       hoverBg: 'hover:bg-indigo-50/50',
       onClick: navigateToVisits,
-      description: `${visitsCount} completed visits`,
+      description: `${visitsCount} pending visits`,
       actionLabel: 'View Visits'
     },
     { 

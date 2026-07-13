@@ -12,12 +12,16 @@ import { useGetPermissionsQuery } from "../../../../app/service/permission";
 import { socket } from '../../../socket/socket';
 import { registerPermissionEvents, unregisterPermissionEvents } from '../../../socket/permissionEvents';
 import { registerRolePermissionEvents, unregisterRolePermissionEvents } from '../../../socket/rolePermissionEvents';
+import { getAuthUser, getHospitalId } from "../../../utils/auth"; // ✅ Import auth utilities
 
 const HospitalPermissionList = () => {
-  const { hospitalId, roleId } = useParams();
+  const { hospitalId: urlHospitalId, roleId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { hospitalName, roleName } = location.state || {};
+  const { hospitalName, roleName, hospitalId: stateHospitalId } = location.state || {};
+
+  // ✅ Use state hospitalId if available, otherwise fallback to URL param
+  const hospitalId = stateHospitalId || urlHospitalId;
 
   const [mainModules, setMainModules] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,12 +39,30 @@ const HospitalPermissionList = () => {
     isFetching 
   } = useGetPermissionsQuery({ limit: 1000 });
   
+  // ✅ FIX 1: Added hospitalId to the query
   const { data: permissionData, refetch: refetchRolePermissions } = useGetRolePermissionsQuery({
     roleId,
+    hospitalId, // ✅ Using the resolved hospitalId
   });
+
+  // Log when component mounts
+  useEffect(() => {
+    
+    if (!hospitalId) {
+      console.warn('⚠️ Hospital ID is missing!');
+    }
+    if (!roleId) {
+      console.warn('⚠️ Role ID is missing from URL params!');
+    }
+  }, []); // Run only once on mount
+
+  // Log when params change
+  useEffect(() => {
+  }, [hospitalId, roleId, hospitalName, roleName]);
 
   // Register socket event listeners
   useEffect(() => {
+    
     registerPermissionEvents({
       onPermissionRegistered: () => {
         showSuccessToast(`New permission created!`, 3000);
@@ -111,7 +133,10 @@ const HospitalPermissionList = () => {
 
   // Dynamically build modules from permissionsData
   useEffect(() => {
-    if (!permissionsData?.data?.length) return;
+    
+    if (!permissionsData?.data?.length) {
+      return;
+    }
 
     const hiddenModules = [
       "users",
@@ -172,12 +197,16 @@ const HospitalPermissionList = () => {
       }
     });
 
-    setMainModules(Array.from(modulesMap.values()));
+    const modules = Array.from(modulesMap.values());
+    setMainModules(modules);
   }, [permissionsData]);
 
   // Apply assigned permissions to modules
   useEffect(() => {
-    if (!permissionData || mainModules.length === 0) return;
+    if (!permissionData || mainModules.length === 0) {
+      return;
+    }
+
 
     let permissionsArray = null;
 
@@ -213,10 +242,12 @@ const HospitalPermissionList = () => {
       return;
     }
 
+
     const assignedPermissions = permissionsArray.map(item => {
       const id = item.permissionId || item.permission_id || item.id || item.permission;
       return Number(id);
     }).filter(id => !isNaN(id));
+
 
     setMainModules(prev =>
       prev.map(module => ({
@@ -252,6 +283,8 @@ const HospitalPermissionList = () => {
   );
 
   const handleSave = async () => {
+    
+    
     try {
       setIsSaving(true);
 
@@ -264,10 +297,14 @@ const HospitalPermissionList = () => {
         if (module.view && module.viewId) permissionIds.push(module.viewId);
       });
 
+      
+      // ✅ FIX 2: Added hospitalId to the payload
       const payload = {
         roleId: Number(roleId),
+        hospitalId: Number(hospitalId), // ✅ Using the resolved hospitalId
         permissionIds,
       };
+
 
       await createRolePermission(payload).unwrap();
 
@@ -275,7 +312,7 @@ const HospitalPermissionList = () => {
         event: "ROLEPERMISSION_UPDATED",
         data: {
           roleId: Number(roleId),
-          hospitalId: hospitalId,
+          hospitalId: Number(hospitalId),
           permissionIds: permissionIds,
           count: permissionIds.length,
           timestamp: new Date().toISOString()
@@ -288,6 +325,7 @@ const HospitalPermissionList = () => {
       await refetchRolePermissions();
       
     } catch (error) {
+      console.error('❌ Error saving permissions:', error);
       showErrorToast(error?.data?.message || "Failed to save permission");
     } finally {
       setIsSaving(false);

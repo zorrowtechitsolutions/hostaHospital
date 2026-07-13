@@ -1,6 +1,6 @@
 // rolePermissionApi.ts
 import { api } from "./api";
-import { getHospitalId } from "../../src/utils/auth";
+import { getAuthUser } from "../../src/utils/auth";
 
 export interface RolePermission {
   id?: string | number;
@@ -46,20 +46,46 @@ export interface AssignPermissionResponse {
 }
 
 export const rolePermissionApi = api.injectEndpoints({
+  // ✅ Add this to override existing endpoints
+  overrideExisting: true,
   endpoints: (builder) => ({
 
+    // ==============================
+    // GET ROLE PERMISSIONS
+    // ==============================
     getRolePermissions: builder.query<
       RolePermissionResponse,
-      { roleId?: string | number; limit?: number }  // ✅ Added limit
+      { roleId?: string | number; hospitalId?: string | number; limit?: number }
     >({
-      query: ({ roleId, limit }) => {
+      query: ({ roleId, hospitalId, limit }) => {
+        const auth = getAuthUser();
         const queryParams = new URLSearchParams();
-        
-        const hospitalId = getHospitalId();
-        if (hospitalId) {
-          queryParams.append("hospitalId", String(hospitalId));
+
+        // 🔥 Check user role - only Super Admin or Hospital Admin
+        const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+
+        // 🔥 Determine which hospital ID to use
+        let finalHospitalId = null;
+
+        if (isSuperAdmin) {
+          // 🔥 Super Admin: Use hospitalId from params (passed from URL)
+          finalHospitalId = hospitalId;
+        } else if (isHospitalAdmin) {
+          // 🔥 Hospital Admin: Use hospitalId from auth context
+          // Priority: params.hospitalId > auth.hospitalId > auth.id
+          finalHospitalId = hospitalId || auth?.hospitalId || auth?.id;
+        } else if (hospitalId) {
+          // 🔥 Fallback: Use provided hospitalId if available
+          finalHospitalId = hospitalId;
         }
 
+        // ✅ Add hospitalId to query params if available
+        if (finalHospitalId) {
+          queryParams.append("hospitalId", String(finalHospitalId));
+        }
+
+        // ✅ Add roleId if provided
         if (roleId) {
           queryParams.append("roleId", String(roleId));
         }
@@ -70,68 +96,130 @@ export const rolePermissionApi = api.injectEndpoints({
         }
 
         const queryString = queryParams.toString();
+        
         return `/rolepermission${queryString ? `?${queryString}` : ""}`;
       },
       providesTags: ["RolePermission"],
     }),
 
+    // ==============================
+    // GET ROLE PERMISSION BY ID
+    // ==============================
     getRolePermissionById: builder.query<RolePermissionResponse, string | number>({
       query: (id) => `/rolepermission/${id}`,
       providesTags: (result, error, id) => [{ type: "RolePermission", id }],
     }),
 
+    // ==============================
+    // CREATE ROLE PERMISSION
+    // ==============================
     createRolePermission: builder.mutation<
       RolePermissionResponse,
       {
         roleId: string | number;
         permissionIds: (string | number)[];
+        hospitalId?: string | number;
       }
     >({
       query: (data) => {
-        const hospitalId = getHospitalId();
+        const auth = getAuthUser();
         
+        // 🔥 Check user role - only Super Admin or Hospital Admin
+        const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+
+        // 🔥 Determine which hospital ID to use
+        let finalHospitalId = null;
+
+        if (isSuperAdmin) {
+          // 🔥 Super Admin: Use hospitalId from data (passed from component)
+          finalHospitalId = data.hospitalId;
+        } else if (isHospitalAdmin) {
+          // 🔥 Hospital Admin: Use hospitalId from auth context
+          // Priority: data.hospitalId > auth.hospitalId > auth.id
+          finalHospitalId = data.hospitalId || auth?.hospitalId || auth?.id;
+        } else if (data.hospitalId) {
+          // 🔥 Fallback: Use provided hospitalId if available
+          finalHospitalId = data.hospitalId;
+        }
+
+        const payload = {
+          roleId: data.roleId,
+          permissionIds: data.permissionIds,
+          hospitalId: finalHospitalId,
+        };
+
         return {
           url: "/rolepermission",
           method: "POST",
-          body: {
-            ...data,
-            hospitalId: hospitalId,
-          },
+          body: payload,
         };
       },
       invalidatesTags: ["RolePermission"],
     }),
 
+    // ==============================
+    // ASSIGN PERMISSIONS (Bulk)
+    // ==============================
     assignPermissions: builder.mutation<
       AssignPermissionResponse,
       AssignPermissionData
     >({
-      query: (data) => ({
-        url: "/rolepermission",
-        method: "PATCH",
-        body: data,
-      }),
+      query: (data) => {
+        const auth = getAuthUser();
+        
+        return {
+          url: "/rolepermission",
+          method: "PATCH",
+          body: data,
+        };
+      },
       invalidatesTags: ["RolePermission"],
     }),
 
+    // ==============================
+    // UPDATE ROLE PERMISSION
+    // ==============================
     updateRolePermission: builder.mutation<
       RolePermissionResponse,
       {
         id: string | number;
         roleId?: string | number;
         permissionIds?: (string | number)[];
+        hospitalId?: string | number;
       }
     >({
       query: ({ id, ...data }) => {
-        const hospitalId = getHospitalId();
+        const auth = getAuthUser();
         
+        // 🔥 Check user role - only Super Admin or Hospital Admin
+        const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
+        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
+
+        // 🔥 Determine which hospital ID to use
+        let finalHospitalId = null;
+
+        if (isSuperAdmin) {
+          // 🔥 Super Admin: Use hospitalId from data (passed from component)
+          finalHospitalId = data.hospitalId;
+        } else if (isHospitalAdmin) {
+          // 🔥 Hospital Admin: Use hospitalId from auth context
+          // Priority: data.hospitalId > auth.hospitalId > auth.id
+          finalHospitalId = data.hospitalId || auth?.hospitalId || auth?.id;
+        } else if (data.hospitalId) {
+          // 🔥 Fallback: Use provided hospitalId if available
+          finalHospitalId = data.hospitalId;
+        }
+
+        const payload = {
+          ...data,
+          hospitalId: finalHospitalId,
+        };
+
         return {
           url: `/rolepermission/${id}`,
           method: "PUT",
-          body: {
-            ...data,
-            hospitalId: hospitalId,
-          },
+          body: payload,
         };
       },
       invalidatesTags: (result, error, { id }) => [
@@ -140,6 +228,9 @@ export const rolePermissionApi = api.injectEndpoints({
       ],
     }),
 
+    // ==============================
+    // DELETE ROLE PERMISSION
+    // ==============================
     deleteRolePermission: builder.mutation<
       { success: boolean; message?: string },
       string | number

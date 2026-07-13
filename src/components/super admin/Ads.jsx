@@ -84,7 +84,6 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
         throw new Error("Please select a hospital first before uploading an image.");
       }
       
-      console.log("🏥 Uploading ad image for hospital ID:", selectedHospitalId);
       
       // ✅ Add role parameter - backend requires it
       const uploaded = await uploadToS3(
@@ -403,7 +402,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
         throw new Error("Hospital ID not found. Please select a hospital.");
       }
       
-      console.log("🏥 Uploading ad image for hospital ID:", hospitalIdToUse);
       
       // ✅ Add role parameter - backend requires it
       const uploaded = await uploadToS3(
@@ -862,11 +860,9 @@ const Ads = () => {
       const result = await createAd(newAd).unwrap();
       const createdAd = result.data || result;
       
-      console.log("📄 Ad created with ID:", createdAd.id);
       
       // ✅ If there's an image, update the ad with the image URL
       if (newAd.imageKey && createdAd.id) {
-        console.log("📤 Updating ad with image:", newAd.imageKey);
         
         // ✅ Update the ad with the image URL using the ad ID
         await updateAd({
@@ -877,7 +873,6 @@ const Ads = () => {
           }
         }).unwrap();
         
-        console.log("✅ Ad image updated successfully");
       }
       
       socket.emit("ad_event", {

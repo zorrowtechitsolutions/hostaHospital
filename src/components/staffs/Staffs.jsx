@@ -46,6 +46,9 @@ import {
 import { getS3ImageUrl, S3_BASE_URL } from '../../../app/service/S3';
 import { getAuthUser } from '../../../src/utils/auth';
 
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
+
 // Import socket
 import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
@@ -400,50 +403,54 @@ const Staffs = () => {
     showSuccessToast("Refreshed staff list", 2000);
   };
 
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
-    const exportData = staffsData.map(staff => ({
-      'Staff ID': staff.formattedId,
-      'Staff Name': staff.name,
-      'Gender': staff.gender,
-      'Designation': staff.designation,
-      'Phone Number': staff.phone,
-      'Email': staff.email,
-      'Hospital': staff.hospitalName || 'N/A',
-      'Appointment Date': staff.appointmentDateDisplay,
-      'Department': staff.department,
-      'Status': staff.isDelete ? 'Blacklisted' : staff.status,
-      'Joining Date': staff.joiningDate,
-      'Delete Date': staff.deleteDate || 'N/A'
-    }));
-    
-    const link = document.createElement('a');
-    const jsonStr = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    link.href = URL.createObjectURL(blob);
-    link.download = `staffs_export_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    showSuccessToast(`Exported ${exportData.length} staff records`, 2000);
+    if (staffsData.length === 0) {
+      showErrorToast("No data available to export", 3000);
+      return;
+    }
+
+    try {
+      // Transform data for Excel export
+      const exportData = staffsData.map(staff => ({
+        'Staff ID': staff.formattedId,
+        'Staff Name': staff.name,
+        'Gender': staff.gender || 'N/A',
+        'Designation': staff.designation || 'N/A',
+        'Phone Number': staff.phone || 'N/A',
+        'Email': staff.email || 'N/A',
+        'Hospital': staff.hospitalName || 'N/A',
+        'Appointment Date': staff.appointmentDateDisplay || 'N/A',
+        'Department': staff.department || 'N/A',
+        'Status': staff.isDelete ? 'Blacklisted' : staff.status || 'Active',
+        'Joining Date': staff.joiningDate || 'N/A',
+        'Date of Birth': staff.dob || 'N/A',
+        'Address': staff.address || 'N/A'
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `staffs_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Staff",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} staff records to Excel!`,
+        3000
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", 3000);
+    }
   };
 
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        showSuccessToast(`Successfully imported ${importedData.length} staff members!`, 3000);
-        refetch();
-        setImageRefreshKey(Date.now());
-      } catch {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
+  // ✅ REMOVED: handleImport function
 
   const handleViewDetails = (staff) => {
     if (staff.isDelete) {
@@ -777,22 +784,13 @@ const Staffs = () => {
                 setDebouncedSearchTerm('');
               }} 
             />
-            {searchTerm && searchTerm !== debouncedSearchTerm && (
-              <span className="text-xs text-blue-500 ml-2">Searching...</span>
-            )}
-            {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
-              <span className="text-xs text-yellow-500 ml-2">Type at least 2 characters</span>
-            )}
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
-            <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-            <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer" title="Import">
-              <Upload size={16} />
-            </label>
-            <Button variant="outline" size="sm" onClick={handleExport} title="Export">
+            {/* ✅ IMPORT BUTTON REMOVED */}
+            <Button variant="outline" size="sm" onClick={handleExport} title="Export to Excel">
               <Download size={16} />
             </Button>
 

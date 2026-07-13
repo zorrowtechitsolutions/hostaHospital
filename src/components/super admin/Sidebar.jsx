@@ -22,6 +22,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useLogoutMutation } from '../../../app/service/hospitalApi';
 import { tokenManager } from '../../utils/fcmTokenManager';
 import { getDeviceId } from '../../utils/deviceManager';
+// ✅ Import your logo
+import logoImage from '../../assets/logo.jpeg';
 
 const Sidebar = ({ isOpen, onToggle }) => {
   const navigate = useNavigate();
@@ -129,7 +131,6 @@ const Sidebar = ({ isOpen, onToggle }) => {
         const tokens = await tokenManager.getDeviceTokens();
         if (tokens && tokens.length > 0) {
           deviceId = tokens[0].deviceId;
-          console.log('🔍 Super Admin Device ID from IndexedDB:', deviceId);
         }
       } catch (error) {
         console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
@@ -138,16 +139,8 @@ const Sidebar = ({ isOpen, onToggle }) => {
       // ✅ STEP 4: Fallback to localStorage if IndexedDB fails
       if (!deviceId) {
         deviceId = getDeviceId();
-        console.log('🔍 Super Admin Device ID from localStorage:', deviceId);
       }
       
-      // ✅ STEP 5: Log the logout request
-      console.log('📤 Super Admin Logging out with:', {
-        id: superAdminId,
-        role: 'super_admin',
-        deviceId: deviceId,
-        endpoint: '/hospital/g-logout'
-      });
       
       // ✅ STEP 6: Call logout API with Super Admin parameters
       // This will remove the FCM token from the backend database
@@ -158,7 +151,6 @@ const Sidebar = ({ isOpen, onToggle }) => {
         useGlobalEndpoint: true // Super Admin always uses global endpoint
       }).unwrap();
       
-      console.log('✅ Super Admin logout successful - FCM token removed from backend:', result);
       
     } catch (error) {
       console.error('❌ Super Admin logout error:', error);
@@ -169,22 +161,18 @@ const Sidebar = ({ isOpen, onToggle }) => {
       }
     } finally {
       // ✅ STEP 7: Clear IndexedDB (FCM tokens from local storage)
-      console.log('🔍 Clearing IndexedDB...');
       try {
         await tokenManager.deleteDatabase();
-        console.log('✅ IndexedDB database deleted');
       } catch (dbError) {
         console.warn('⚠️ Could not delete database:', dbError);
         try {
           await tokenManager.clearAllDeviceTokens();
-          console.log('✅ IndexedDB tokens cleared');
         } catch (e) {
           console.warn('⚠️ Could not clear tokens:', e);
         }
       }
       
       // ✅ STEP 8: Clear ALL localStorage items
-      console.log('🔍 Clearing Super Admin localStorage...');
       const localStorageItems = [
         'accessToken',
         'refreshToken',
@@ -209,13 +197,10 @@ const Sidebar = ({ isOpen, onToggle }) => {
       
       localStorageItems.forEach(key => {
         localStorage.removeItem(key);
-        console.log(`  ✓ Removed: ${key}`);
       });
-      console.log('✅ Super Admin localStorage cleared');
       
       // ✅ STEP 9: Clear sessionStorage
       sessionStorage.clear();
-      console.log('✅ sessionStorage cleared');
       
       // ✅ STEP 10: Clear any cached data
       if (window.caches) {
@@ -224,7 +209,6 @@ const Sidebar = ({ isOpen, onToggle }) => {
           cacheNames.forEach(name => {
             caches.delete(name);
           });
-          console.log('✅ Caches cleared');
         } catch (e) {
           console.warn('⚠️ Could not clear caches:', e);
         }
@@ -232,13 +216,11 @@ const Sidebar = ({ isOpen, onToggle }) => {
       
       // ✅ STEP 11: Auth context logout
       logout();
-      console.log('✅ Auth context logout complete');
       
       // ✅ STEP 12: Close modal and redirect to login
       setShowLogoutModal(false);
       setIsLoggingOut(false);
       navigate("/sign-in", { replace: true });
-      console.log('✅ Redirected to Super Admin login page');
     }
   };
 
@@ -267,16 +249,18 @@ const Sidebar = ({ isOpen, onToggle }) => {
   return (
     <>
       <div className={`${isOpen ? 'w-64' : 'w-20'} bg-[#0F172A] text-white transition-all duration-300 flex flex-col shadow-2xl h-screen fixed left-0 top-0 z-20 overflow-hidden`}>
-        {/* Logo Section - Enhanced */}
+        {/* Logo Section - Enhanced with Custom Logo */}
         <div className="relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-[#1C62A0] to-[#2a7fc7] opacity-10"></div>
           <div className="relative flex items-center justify-between p-4 border-b border-white/5">
             <div className={`flex items-center gap-3 ${!isOpen && 'justify-center w-full'}`}>
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl blur opacity-60"></div>
-                <div className="relative bg-gradient-to-r from-blue-500 to-indigo-500 p-2 rounded-xl shadow-lg">
-                  <Shield className="h-5 w-5 text-white" />
-                </div>
+              {/* ✅ Custom Logo Image - Removed blue border and zoomed */}
+              <div className="relative flex items-center justify-center">
+                <img 
+                  src={logoImage} 
+                  alt="Hosta Logo" 
+                  className="h-10 w-10 object-contain rounded-lg"
+                />
               </div>
               {isOpen && (
                 <div className="flex flex-col">

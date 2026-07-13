@@ -214,12 +214,6 @@ const HospitalAddUser = () => {
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
       
-      console.log("=== PERMISSION ASSIGNMENT DEBUG ===");
-      console.log("Hospital ID:", hospitalId);
-      console.log("Selected Role ID:", roleId);
-      console.log("Selected Role Name:", selectedRoleName);
-      console.log("User Type:", selectedRoleType);
-      console.log("Selected Doctors/Staff:", selectedRoleType === 'doctor' ? selectedDoctors : selectedStaff);
       
       if (selectedRoleType === 'doctor') {
         const doctorIds = selectedDoctors.map(id => ({

@@ -134,8 +134,6 @@ const PatientDetails = () => {
 
   const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
 
-  console.log("PATIENT ID", patientId);
-  console.log("PRESCRIPTION ID", prescriptionId);
 
   // Fetch vitals for this patient
   const {
@@ -166,9 +164,6 @@ const PatientDetails = () => {
 
   const patientData = patientResponse?.data || patientResponse || passedPatient;
 
-  console.log("PATIENT API DATA", patientData);
-  console.log("VITALS RESPONSE", vitalsResponse);
-  console.log("PRESCRIPTIONS RESPONSE", prescriptionsResponse);
   
   // Create doctor lookup map
   const doctorMap = React.useMemo(() => {
@@ -281,7 +276,6 @@ const PatientDetails = () => {
       if (doctorInfo) {
         doctorName = doctorInfo.name;
         doctorSpecialization = doctorInfo.specialization;
-        console.log(`✅ Found doctor in map: ID=${prescription.doctorId}, Name=${doctorName}`);
       }
       
       if (!doctorName && booking) {
@@ -319,7 +313,6 @@ const PatientDetails = () => {
       
       if (!doctorName || doctorName === "null" || doctorName === "undefined") {
         doctorName = `Dr. ${prescription.doctorId || "Unknown"}`;
-        console.log(`⚠️ Using fallback doctor name: ${doctorName} for ID=${prescription.doctorId}`);
       }
       
       if (!doctorSpecialization || doctorSpecialization === "null" || doctorSpecialization === "undefined") {
@@ -721,9 +714,6 @@ const handleBackToPatients = () => {
       canvasBg: prescription.fullData?.canvasBg || "#ffffff"
     };
 
-    console.log("FULL PRESCRIPTION", prescription.fullData);
-    console.log("Prescription Design:", prescription.fullData?.design);
-    console.log("Canvas Bg:", prescription.fullData?.canvasBg);
     
     setSelectedPrescription(formattedPrescription);
     setShowPrescriptionModal(true);

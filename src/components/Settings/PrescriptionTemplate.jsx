@@ -329,28 +329,6 @@ const PrescriptionTemplate = () => {
     t => t.templateType === "custom" && Number(t.hospitalId) === Number(hospitalId)
   ) || null;
 
-  console.log("🔍 FULL TEMPLATE DEBUG:", {
-    allTemplatesCount: allTemplates.length,
-    hospitalId,
-    demoTemplate: demoTemplate ? {
-      id: demoTemplate.id,
-      type: demoTemplate.templateType,
-      hospitalId: demoTemplate.hospitalId,
-      designLength: demoTemplate.design?.length || 0
-    } : null,
-    customTemplate: customTemplate ? {
-      id: customTemplate.id,
-      type: customTemplate.templateType,
-      hospitalId: customTemplate.hospitalId,
-      designLength: customTemplate.design?.length || 0
-    } : null,
-    allTemplates: allTemplates.map(t => ({
-      id: t.id,
-      type: t.templateType,
-      hospitalId: t.hospitalId,
-      name: t.name
-    }))
-  });
 
   // Background color for custom templates
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
@@ -729,12 +707,6 @@ const PrescriptionTemplate = () => {
         bsa: prescriptionFormData.bsa
       };
 
-      console.log("📝 Creating Prescription:", {
-        hospitalId,
-        templateType: customTemplate ? "custom" : "demo",
-        designLength: designToUse.length,
-        usingTemplate: customTemplate ? "custom" : "demo"
-      });
 
       const result = await createPrescription(prescriptionPayload).unwrap();
       
