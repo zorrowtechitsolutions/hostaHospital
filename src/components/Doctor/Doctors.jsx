@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Pagination, SearchBar } from '../ui';
+import { Badge, Pagination } from '../ui';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -29,7 +29,7 @@ const getS3ImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// ✅ Helper function to format address
+// ✅ Helper function to format address like Staff component
 const formatAddress = (address) => {
   if (!address) return 'N/A';
   
@@ -136,8 +136,8 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
   );
 });
 
-// ✅ Skeleton Loader Component (exactly like RequestTable)
-const DoctorSkeletonLoader = ({ viewMode = 'grid' }) => {
+// Skeleton Loader Component
+const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
   if (viewMode === 'grid') {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -169,49 +169,41 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid' }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
       </div>
-      <div className="flex flex-col min-h-[500px]">
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-                <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...Array(10)].map((_, i) => (
-                <tr key={i} className="border-b border-gray-100">
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                  <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                </tr>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100">
+            <tr>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </th>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-          <div className="flex justify-between items-center">
-            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-            <div className="flex gap-2">
-              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-              <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-            </div>
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(itemsPerPage)].map((_, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-6 py-4 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+          <div className="flex gap-2">
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
           </div>
         </div>
       </div>
@@ -236,6 +228,8 @@ const Doctors = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const fileInputRef = useRef(null);
+
   const [recoverDoctor] = useRecoverDoctorMutation();
 
   // 🔥 FIX: Get the authenticated user
@@ -257,6 +251,7 @@ const Doctors = () => {
 
   // 🔥 CRITICAL FIX: If user is a doctor OR hospital admin, ALWAYS filter by their hospital ID
   if (shouldFilterByHospital) {
+    // Use hospitalId from auth if available, otherwise use auth.id
     const hospitalId = auth?.hospitalId || auth?.id;
     if (hospitalId) {
       queryParams.hospitalId = hospitalId;
@@ -377,7 +372,26 @@ const Doctors = () => {
     }
   }, [totalPages]);
 
-  // ✅ REMOVED: handleImport function
+  const handleImport = useCallback((event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        if (!Array.isArray(importedData)) {
+          throw new Error('Invalid data format: Expected an array');
+        }
+        showSuccessToast(`${importedData.length} doctors imported successfully!`, 3000);
+        refetch();
+      } catch (error) {
+        showErrorToast('Error parsing JSON file: ' + error.message, 3000);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = null;
+  }, [refetch]);
 
   const handleRefresh = useCallback(() => {
     setSearchTerm('');
@@ -447,7 +461,10 @@ const Doctors = () => {
   // ✅ Prepare export data for Excel with formatted address and formatted date
   const getExportData = useCallback(() => {
     return doctors.map((doctor) => {
+      // ✅ Format address using the helper function
       const formattedAddress = formatAddress(doctor.address);
+      
+      // ✅ Format date of birth using the date formatter
       const formattedDOB = doctor.dob ? formatDate(doctor.dob) : 'N/A';
       
       return {
@@ -491,7 +508,6 @@ const Doctors = () => {
     );
   }
 
-  // ✅ Loading state with Skeleton Loader (like RequestTable)
   if (isLoading || (isFetching && doctors.length === 0)) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -519,7 +535,7 @@ const Doctors = () => {
           </div>
         </div>
 
-        <DoctorSkeletonLoader viewMode={viewMode} />
+        <DoctorSkeletonLoader viewMode={viewMode} itemsPerPage={itemsPerPage} />
       </div>
     );
   }
@@ -547,6 +563,7 @@ const Doctors = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
+        
 
         {selectedSpecialty !== 'All' && (
           <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm ml-2">
@@ -561,20 +578,29 @@ const Doctors = () => {
       {/* Search and Filter */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Replaced custom search input with SearchBar component */}
-          <SearchBar
-            placeholder="Search by name, department, specialty..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm('');
-              setCurrentPage(1);
-            }}
-            className="flex-1 max-w-sm"
-          />
+          <div className="relative flex-1 max-w-sm">
+            <input
+              type="text"
+              placeholder="Search by name, department, specialty..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded" aria-label="Search">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </div>
 
           <select
             value={selectedSpecialty}
@@ -634,7 +660,12 @@ const Doctors = () => {
             </svg>
           </button>
 
-          {/* ✅ IMPORT BUTTON REMOVED */}
+          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" />
+          <button onClick={() => fileInputRef.current?.click()} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" aria-label="Import">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          </button>
 
           {/* ✅ Replace Download button with ExcelExportButton */}
           <ExcelExportButton
