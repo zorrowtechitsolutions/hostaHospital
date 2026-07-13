@@ -1,32 +1,47 @@
-// src/components/ui/SearchBar.jsx
-import React from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X } from "lucide-react";
 
-export const SearchBar = ({ 
-  placeholder = "Search...", 
-  value, 
-  onChange, 
-  onClear,
-  className = '' 
+export const SearchBar = ({
+  value,
+  onChange,
+  placeholder = "Search...",
+  className = "",
 }) => {
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative w-full ${className}`}>
       <input
         type="text"
-        placeholder={placeholder}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+        className="
+          w-full
+          h-10
+          pl-4
+          pr-12
+          border
+          border-gray-200
+          rounded-md
+          text-sm
+          bg-white
+          focus:outline-none
+          focus:ring-2
+          focus:ring-green-500
+          focus:border-green-500
+        "
       />
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-      {value && onClear && (
+
+      {value && (
         <button
-          onClick={onClear}
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          onClick={() => onChange("")}
+          className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
         >
-          <X className="w-4 h-4" />
+          <X size={16} />
         </button>
       )}
+
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-to-r from-green-600 to-emerald-600 rounded p-1">
+        <Search className="w-4 h-4 text-white" />
+      </div>
     </div>
   );
 };

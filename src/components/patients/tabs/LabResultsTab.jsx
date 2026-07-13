@@ -1,8 +1,8 @@
-// src/components/patients/tabs/LabResultsTab.jsx - Complete with S3 Upload
+// src/components/patients/tabs/LabResultsTab.jsx - Show Blacklisted Items
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle, Image as ImageIcon } from "lucide-react";
-import { Button, Pagination } from "../../ui";
+import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle, Image as ImageIcon, RotateCcw } from "lucide-react";
+import { Button, Pagination, Badge } from "../../ui";
 import { 
   showSuccessToast,
   showErrorToast,
@@ -12,7 +12,8 @@ import {
   useGetLabResultsQuery,
   useDeleteLabResultMutation,
   useCreateLabResultMutation,
-  useUpdateLabResultMutation
+  useUpdateLabResultMutation,
+  useRecoverLabResultMutation
 } from "../../../../app/service/labresults";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 import { getAuthUser } from "../../../utils/auth";
@@ -215,7 +216,7 @@ const LabResultsTab = ({ patient }) => {
   const [doctorId, setDoctorId] = useState("");
   const [doctorName, setDoctorName] = useState("");
   const [labName, setLabName] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null); // ✅ For create modal
+  const [selectedFile, setSelectedFile] = useState(null);
   
   // Edit form fields
   const [editTestName, setEditTestName] = useState("");
@@ -253,6 +254,7 @@ const LabResultsTab = ({ patient }) => {
   const [createLabResult] = useCreateLabResultMutation();
   const [updateLabResult] = useUpdateLabResultMutation();
   const [deleteLabResult] = useDeleteLabResultMutation();
+  const [recoverLabResult] = useRecoverLabResultMutation();
 
   // ========================
   // HELPER FUNCTIONS
@@ -274,17 +276,6 @@ const LabResultsTab = ({ patient }) => {
     return !!(item.fileKey || item.imageUrl || item.fileUrl);
   };
 
-  const getStatusBadge = (status) => {
-    const classes = {
-      received: "bg-blue-100 text-blue-700",
-      progress: "bg-yellow-100 text-yellow-700",
-      pending: "bg-orange-100 text-orange-700",
-      cancelled: "bg-red-100 text-red-700",
-      completed: "bg-green-100 text-green-700"
-    };
-    return `px-2 py-1 rounded-full text-xs font-medium ${classes[status] || 'bg-gray-100 text-gray-700'}`;
-  };
-
   const isImageFile = (fileType) => {
     if (!fileType) return false;
     const imageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
@@ -294,6 +285,12 @@ const LabResultsTab = ({ patient }) => {
   const isPDFFile = (fileType) => {
     if (!fileType) return false;
     return fileType === 'application/pdf';
+  };
+
+  // Check if item is blacklisted (deleted)
+  const isBlacklisted = (item) => {
+    const id = String(item.id || item._id);
+    return deletedIds.has(id);
   };
 
   // ========================
@@ -348,7 +345,6 @@ const LabResultsTab = ({ patient }) => {
   };
 
   const handleAddLabResult = async () => {
-    // Validate required fields
     if (!testName.trim()) {
       showWarningToast("Please enter a test name");
       return;
@@ -383,7 +379,6 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // ✅ STEP 1: Create lab result in database (without file)
       const labResultData = {
         patientId: patient.id,
         patientName: patient.name || patient.displayName || '',
@@ -400,10 +395,8 @@ const LabResultsTab = ({ patient }) => {
         date: new Date().toLocaleDateString(),
       };
 
-
       const createResult = await createLabResult(labResultData).unwrap();
 
-      // ✅ Extract ID from response.data
       const labResultId = 
         createResult?.data?.id ||      
         createResult?.id ||            
@@ -411,7 +404,6 @@ const LabResultsTab = ({ patient }) => {
         createResult?._id ||           
         createResult?.data?.labResultId ||
         createResult?.labResultId;
-      
 
       if (!labResultId) {
         console.error("❌ Could not extract lab result ID. Response:", createResult);
@@ -420,13 +412,9 @@ const LabResultsTab = ({ patient }) => {
 
       setUploadProgress(30);
 
-      // ✅ STEP 2: Upload file to S3
-     
-
       const timestamp = Date.now();
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
-
 
       const s3Result = await uploadToS3(
         selectedFile,
@@ -435,11 +423,8 @@ const LabResultsTab = ({ patient }) => {
         "labresults"
       );
 
-     
-
       setUploadProgress(80);
 
-      // ✅ STEP 3: Update lab result with file info
       const updateData = {
         fileKey: s3Result.key,
         fileUrl: s3Result.imageUrl,
@@ -452,8 +437,6 @@ const LabResultsTab = ({ patient }) => {
         role: "labresults",
       };
 
-    
-
       await updateLabResult({
         id: labResultId,
         updateData: updateData
@@ -463,17 +446,7 @@ const LabResultsTab = ({ patient }) => {
 
       showSuccessToast(`✅ Lab Result "${testName}" created successfully!`);
       
-      // Reset form
-      setTestName("");
-      setStatus("pending");
-      setDepartment("");
-      setDoctorId("");
-      setDoctorName("");
-      setLabName("");
-      setSelectedFile(null);
-      setShowAddModal(false);
-      setUploadProgress(0);
-
+      resetAddForm();
       await forceRefresh();
       
     } catch (error) {
@@ -534,7 +507,6 @@ const LabResultsTab = ({ patient }) => {
   };
 
   const handleUpdateLabResult = async () => {
-    // Validate required fields
     if (!editTestName.trim()) {
       showWarningToast("Please enter a test name");
       return;
@@ -586,14 +558,10 @@ const LabResultsTab = ({ patient }) => {
         date: new Date().toLocaleDateString(),
       };
 
-
-      // ✅ If a new file is selected, upload to S3
       if (editFile) {
-        
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
-
 
         setUploadProgress(20);
 
@@ -603,7 +571,6 @@ const LabResultsTab = ({ patient }) => {
           labResultId,
           "labresults"
         );
-
 
         setUploadProgress(70);
 
@@ -621,7 +588,6 @@ const LabResultsTab = ({ patient }) => {
         };
       }
 
-
       await updateLabResult({
         id: labResultId,
         updateData: updateData
@@ -631,18 +597,7 @@ const LabResultsTab = ({ patient }) => {
 
       showSuccessToast(`✅ Lab Result "${editTestName}" updated successfully!`);
       
-      setShowEditModal(false);
-      setEditingLabResult(null);
-      setEditTestName("");
-      setEditStatus("pending");
-      setEditDepartment("");
-      setEditDoctorId("");
-      setEditDoctorName("");
-      setEditLabName("");
-      setEditFile(null);
-      setEditFilePreview(null);
-      setUploadProgress(0);
-
+      resetEditForm();
       await forceRefresh();
       
     } catch (error) {
@@ -717,6 +672,37 @@ const LabResultsTab = ({ patient }) => {
     }
   };
 
+  // Handle recover lab result
+  const handleRecoverLabResult = async (labResult) => {
+    const id = String(labResult.id || labResult._id);
+    
+    try {
+      // Remove from deleted IDs immediately
+      setDeletedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        saveDeletedIds(newSet);
+        return newSet;
+      });
+      
+      showSuccessToast(`✅ Lab Result "${labResult.testName || labResult.name}" recovered successfully!`);
+      
+      // Try to call API if endpoint exists
+      try {
+        await recoverLabResult(id).unwrap();
+      } catch (error) {
+        console.warn("Recover API not available, using local recovery only:", error);
+      }
+      
+      await refetchLabResults();
+      setRefreshCounter(prev => prev + 1);
+      
+    } catch (error) {
+      console.error("❌ Recover failed:", error);
+      showErrorToast(`❌ Failed to recover: ${error.message || "Unknown error"}`);
+    }
+  };
+
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
     setDeletingLabResult(null);
@@ -757,12 +743,10 @@ const LabResultsTab = ({ patient }) => {
   // EFFECTS
   // ========================
 
-  // Save deleted IDs whenever they change
   useEffect(() => {
     saveDeletedIds(deletedIds);
   }, [deletedIds, saveDeletedIds]);
 
-  // Refetch when patient changes
   useEffect(() => {
     if (patient?.id) {
       const loaded = loadDeletedIds();
@@ -802,22 +786,22 @@ const LabResultsTab = ({ patient }) => {
   };
 
   // ========================
-  // PAGINATION
+  // PAGINATION - SHOW ALL ITEMS INCLUDING BLACKLISTED
   // ========================
 
   const labResultsList = useMemo(() => {
     const list = labResultsData?.data || [];
-   
     
-    const filteredList = list.filter(item => {
+    // ✅ DON'T FILTER - Show all items including blacklisted
+    // Just mark them as blacklisted in the UI
+    return list.map(item => {
       const id = String(item.id || item._id);
       const isDeleted = deletedIds.has(id);
-      if (isDeleted) {
-      }
-      return !isDeleted;
+      return {
+        ...item,
+        isBlacklisted: isDeleted
+      };
     });
-    
-    return filteredList;
   }, [labResultsData, deletedIds, refreshCounter]);
 
   const totalItems = labResultsList.length;
@@ -881,7 +865,7 @@ const LabResultsTab = ({ patient }) => {
       </div>
 
       {/* ======================== */}
-      {/* ADD LAB RESULT MODAL WITH FILE */}
+      {/* ADD LAB RESULT MODAL */}
       {/* ======================== */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -936,7 +920,7 @@ const LabResultsTab = ({ patient }) => {
                 label="Doctor"
               />
 
-              {/* Lab Name (Optional) */}
+              {/* Lab Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Lab Name <span className="text-gray-400 text-xs">(Optional)</span>
@@ -970,7 +954,7 @@ const LabResultsTab = ({ patient }) => {
                 </select>
               </div>
 
-              {/* ✅ File Upload - NEW */}
+              {/* File Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   File <span className="text-red-500">*</span>
@@ -1035,16 +1019,6 @@ const LabResultsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
-
-              {/* Info Box */}
-              <div className="bg-blue-50 p-3 rounded-lg text-xs text-gray-600">
-                <p className="font-medium mb-1">📋 Information to be saved:</p>
-                <ul className="space-y-1">
-                  <li>• Patient: <span className="font-medium">{patient?.name || 'N/A'}</span></li>
-                  <li>• Hospital: <span className="font-medium">{hospitalName || 'N/A'}</span></li>
-                  <li>• Doctor: <span className="font-medium">{doctorName || 'Not selected'}</span></li>
-                </ul>
-              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0 rounded-b-xl">
               <div className="flex gap-3">
@@ -1083,7 +1057,7 @@ const LabResultsTab = ({ patient }) => {
       )}
 
       {/* ======================== */}
-      {/* EDIT LAB RESULT MODAL WITH FILE */}
+      {/* EDIT LAB RESULT MODAL */}
       {/* ======================== */}
       {showEditModal && editingLabResult && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -1136,7 +1110,7 @@ const LabResultsTab = ({ patient }) => {
                 label="Doctor"
               />
 
-              {/* Lab Name (Optional) */}
+              {/* Lab Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Lab Name <span className="text-gray-400 text-xs">(Optional)</span>
@@ -1165,11 +1139,12 @@ const LabResultsTab = ({ patient }) => {
                   <option value="pending">Pending</option>
                   <option value="received">Received</option>
                   <option value="progress">In Progress</option>
+                  <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
 
-              {/* Current File Display */}
+              {/* Current File */}
               {editingLabResult.fileKey && (
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
@@ -1276,16 +1251,6 @@ const LabResultsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
-
-              {/* Info Box */}
-              <div className="bg-blue-50 p-3 rounded-lg text-xs text-gray-600">
-                <p className="font-medium mb-1">📋 Information to be saved:</p>
-                <ul className="space-y-1">
-                  <li>• Patient: <span className="font-medium">{patient?.name || 'N/A'}</span></li>
-                  <li>• Hospital: <span className="font-medium">{hospitalName || 'N/A'}</span></li>
-                  <li>• Doctor: <span className="font-medium">{editDoctorName || 'Not selected'}</span></li>
-                </ul>
-              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0 rounded-b-xl">
               <div className="flex gap-3">
@@ -1376,7 +1341,7 @@ const LabResultsTab = ({ patient }) => {
       )}
 
       {/* ======================== */}
-      {/* TABLE */}
+      {/* TABLE - SHOW ALL ITEMS INCLUDING BLACKLISTED */}
       {/* ======================== */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -1395,76 +1360,98 @@ const LabResultsTab = ({ patient }) => {
               paginatedLabResults.map((item, index) => {
                 const hasFileValue = hasFile(item);
                 const itemId = item.id || item._id;
+                const isBlacklistedItem = item.isBlacklisted === true;
 
                 return (
                   <tr
                     key={`${itemId || index}-${refreshCounter}`}
-                    className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
+                    className={`border-t border-gray-100 hover:bg-gray-50 transition-colors ${
+                      isBlacklistedItem ? 'opacity-60' : ''
+                    }`}
                   >
                     <td className="px-4 py-3">
-  <div className="flex items-center gap-2">
-    <Beaker size={16} className="text-blue-500 flex-shrink-0" />
-    <span className="font-medium text-[#1C62A0]">
-      {String(startIndex + index + 1)}
-    </span>
-  </div>
-</td>
+                      <div className="flex items-center gap-2">
+                        <Beaker size={16} className={`flex-shrink-0 ${isBlacklistedItem ? 'text-gray-400' : 'text-blue-500'}`} />
+                        <span className={`font-medium ${isBlacklistedItem ? 'text-gray-400' : 'text-[#1C62A0]'}`}>
+                          {String(startIndex + index + 1)}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-800">
+                      <span className={`font-medium ${isBlacklistedItem ? 'text-gray-400' : 'text-gray-800'}`}>
                         {item.testName || item.name}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className={`px-4 py-3 ${isBlacklistedItem ? 'text-gray-400' : 'text-gray-600'}`}>
                       {item.department || 'N/A'}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className={`px-4 py-3 ${isBlacklistedItem ? 'text-gray-400' : 'text-gray-600'}`}>
                       {item.doctorName || 'N/A'}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={getStatusBadge(item.status)}>
-                        {item.status || 'Pending'}
-                      </span>
+                      <Badge
+                        variant={isBlacklistedItem ? "dark" : "success"}
+                        className="text-xs"
+                      >
+                        {isBlacklistedItem ? "Blacklisted" : (item.status || 'Pending')}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex gap-1 justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewReport(item)}
-                          className="p-2 hover:text-blue-600"
-                          title="View Report"
-                        >
-                          <Eye size={16} className="text-gray-500 hover:text-blue-600" />
-                        </Button>
-                        {hasFileValue && (
+                        {!isBlacklistedItem && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewReport(item)}
+                              className="p-2 hover:text-blue-600"
+                              title="View Report"
+                            >
+                              <Eye size={16} className="text-gray-500 hover:text-blue-600" />
+                            </Button>
+                            {hasFileValue && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownloadFile(item)}
+                                className="p-2 hover:text-blue-600"
+                                title="Download Report"
+                              >
+                                <Download size={16} className="text-gray-500 hover:text-blue-600" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditLabResult(item)}
+                              className="p-2 hover:text-green-600"
+                              title="Edit Lab Result"
+                            >
+                              <Edit2 size={16} className="text-gray-500 hover:text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteClick(itemId, item.testName || item.name)}
+                              className="p-2 hover:text-red-600"
+                              title="Delete Lab Result"
+                            >
+                              <Trash2 size={16} className="text-gray-500 hover:text-red-600" />
+                            </Button>
+                          </>
+                        )}
+                        {isBlacklistedItem && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDownloadFile(item)}
-                            className="p-2 hover:text-blue-600"
-                            title="Download Report"
+                            onClick={() => handleRecoverLabResult(item)}
+                            title="Recover Lab Result"
+                             className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-50"
                           >
-                            <Download size={16} className="text-gray-500 hover:text-blue-600" />
+
+                            <RotateCcw size={16} className="text-green-600 " />Recover
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditLabResult(item)}
-                          className="p-2 hover:text-green-600"
-                          title="Edit Lab Result"
-                        >
-                          <Edit2 size={16} className="text-gray-500 hover:text-green-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteClick(itemId, item.testName || item.name)}
-                          className="p-2 hover:text-red-600"
-                          title="Delete Lab Result"
-                        >
-                          <Trash2 size={16} className="text-gray-500 hover:text-red-600" />
-                        </Button>
                       </div>
                     </td>
                   </tr>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Filter, Download, MoreVertical, Eye, 
@@ -27,6 +27,12 @@ import { registerBookingEvents, unregisterBookingEvents } from '../../socket/boo
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
+
+// Helper function to safely convert to string for search
+const safeToString = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
 
 // Helper function to convert 24-hour time to 12-hour format with AM/PM
 const convertTo12Hour = (time24h) => {
@@ -133,7 +139,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // API Hooks - Server-side pagination
   const { 
-  const { 
     data: bookingsResponse, 
     isLoading: loading, 
     refetch,
@@ -194,7 +199,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return `#APT${String(numericId).padStart(4, '0')}`;
   };
 
-
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
       case 'accepted':
@@ -232,7 +236,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   // Helper function to extract gender from multiple sources
-  // Helper function to extract gender from multiple sources
   const extractGender = (booking) => {
     const gender = 
       booking?.patient_gender ||
@@ -248,15 +251,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       if (normalized === 'female') return 'Female';
       if (normalized === 'other') return 'Other';
       return gender;
-      return gender;
     }
+    
     return null;
-  };
-
-  // Helper function to safely convert to string for search
-  const safeToString = (value) => {
-    if (value === null || value === undefined) return '';
-    return String(value);
   };
 
   // Transform API response
@@ -305,7 +302,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         age: calculateAge(booking.patient_dob || booking.dob),
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: finalGender,
-        gender: finalGender,
         doctorId: booking.doctorId,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
@@ -325,25 +321,32 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     });
   };
 
-  // Get data from API response
-  const bookingList = bookingsResponse?.data || [];
-  const appointmentsData = transformBookingsData(bookingList);
+  // Get data from API response - ALL DATA (not just current page)
+  // We need to fetch all data for frontend filtering
+  const { 
+    data: allBookingsResponse, 
+    isLoading: allLoading
+  } = useGetBookingsQuery({
+    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter }),
+    page: 1,
+    limit: 1000 // Get all data for filtering
+  });
 
-  // Use server-side pagination data
-  const totalItems = bookingsResponse?.pagination?.totalItems || appointmentsData.length;
-  const totalPages = bookingsResponse?.pagination?.totalPages || 1;
+  const allBookingList = allBookingsResponse?.data || [];
+  const allAppointmentsData = transformBookingsData(allBookingList);
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
-  const filteredBySearch = React.useMemo(() => {
+  const filteredBySearch = useMemo(() => {
     // If no search term or search term is too short, return all data
     if (!searchTerm || searchTerm.trim().length < 2) {
-      return appointmentsData;
+      return allAppointmentsData;
     }
 
     const searchLower = searchTerm.toLowerCase().trim();
     
-    return appointmentsData.filter(item => {
-      // ✅ FIX: Use safeToString to prevent errors
+    return allAppointmentsData.filter(item => {
       const searchFields = [
         safeToString(item.formattedId).toLowerCase(),
         safeToString(item.patientName).toLowerCase(),
@@ -351,33 +354,22 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         safeToString(item.contact).toLowerCase(),
         safeToString(item.doctorName).toLowerCase(),
         safeToString(item.department).toLowerCase(),
-        safeToString(item.appointmentDateDisplay).toLowerCase(),
-        safeToString(item.consulting_time).toLowerCase(),
-        safeToString(item.status).toLowerCase(),
-        safeToString(item.bookingStatus).toLowerCase()
+        safeToString(item.bookingStatus).toLowerCase(),
+        safeToString(item.status).toLowerCase()
       ];
 
       return searchFields.some(field => field.includes(searchLower));
     });
-  }, [appointmentsData, searchTerm]);
+  }, [allAppointmentsData, searchTerm]);
 
-  // ✅ Apply doctor filter
-  const filteredByDoctor = React.useMemo(() => {
-    if (doctorId && !showAllData) {
-      return filteredBySearch.filter(item => 
-        item.doctorId === doctorId || item.doctorName === doctorName
-      );
-    }
-    return filteredBySearch;
-  }, [filteredBySearch, doctorId, doctorName, showAllData]);
-
-  // ✅ Apply status, department, and date filters (frontend fallback)
-  const filteredAppointments = React.useMemo(() => {
-    let result = filteredByDoctor;
+  // ✅ Apply department and date filters (frontend fallback)
+  const filteredAppointments = useMemo(() => {
+    let result = filteredBySearch;
 
     // Apply status filter
     if (statusFilter !== 'all') {
       result = result.filter(item => 
+        safeToString(item.status).toLowerCase() === statusFilter.toLowerCase() ||
         safeToString(item.originalStatus).toLowerCase() === statusFilter.toLowerCase()
       );
     }
@@ -391,20 +383,28 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
     // Apply date filter
     if (dateFilter) {
-      result = result.filter(item => 
-        safeToString(item.appointmentDateDisplay) === dateFilter
+      result = result.filter(item => {
+        const visitDate = item.appointmentDateDisplay ? new Date(item.appointmentDateDisplay).toISOString().split('T')[0] : '';
+        return visitDate === dateFilter;
+      });
+    }
+
+    // Apply doctor filter
+    if (doctorId && !showAllData) {
+      result = result.filter(apt => 
+        apt.doctorId === doctorId || apt.doctorName === doctorName
       );
     }
 
     return result;
-  }, [filteredByDoctor, statusFilter, departmentFilter, dateFilter]);
+  }, [filteredBySearch, statusFilter, departmentFilter, dateFilter, doctorId, doctorName, showAllData]);
 
   // ✅ Get total items from filtered results
   const totalFilteredItems = filteredAppointments.length;
   const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
 
   // ✅ Paginate the filtered results
-  const paginatedAppointments = React.useMemo(() => {
+  const paginatedAppointments = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredAppointments.slice(startIndex, endIndex);
@@ -417,11 +417,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // Get unique departments from API data
   const getAllDepartments = () => {
-    const departments = [...new Set(appointmentsData.map(a => a.department).filter(Boolean))];
+    const departments = [...new Set(allAppointmentsData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
 
-  // Check if filters are active
+  // Check if any filters are active
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = statusFilter !== 'all' || departmentFilter !== '' || dateFilter !== '';
 
@@ -443,7 +443,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       'Patient Name': apt.patientName,
       'Contact': apt.contact,
       'Age': apt.age,
-      'Gender': apt.gender,
       'Gender': apt.gender,
       'Doctor Name': apt.doctorName,
       'Department': apt.department,
@@ -517,13 +516,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setIsApproving(true);
     
     try {
-      // The approve modal already returns time in 24-hour format
-      // But we need to make sure it's in the correct format
       let consultingTime = appointmentData.consulting_time;
       
-      // If the time has AM/PM, convert it to 24-hour format
       if (consultingTime.includes("AM") || consultingTime.includes("PM")) {
-        // The modal should have already converted it, but just in case
         const [time, modifier] = consultingTime.split(" ");
         let [hours, minutes] = time.split(":");
         
@@ -554,7 +549,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           patientName: selectedRequest.patientName,
           doctorName: selectedRequest.doctorName,
           date: appointmentData.booking_date,
-          consulting_time: appointmentData.consulting_time, // Send original (with AM/PM) for display
+          consulting_time: appointmentData.consulting_time,
           token: appointmentData.token,
           timestamp: new Date().toISOString()
         }
@@ -684,6 +679,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setDateFilter('');
     setSearchTerm('');
     setCurrentPage(1);
+    refetch();
     showSuccessToast("All filters cleared", 2000);
   };
 
@@ -879,7 +875,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   // Loading state
-  if (loading) {
+  if (loading || allLoading) {
     return <SkeletonLoader />;
   }
 
@@ -902,6 +898,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          View and manage all appointments
+        </p>
       </div>
 
       {/* Doctor Banner */}
@@ -1066,7 +1065,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Appointments Table */}
+      {/* Appointments Table - WITH FRONTEND FILTERING */}
       {filteredAppointments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -1078,7 +1077,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               ? `No results found for "${searchTerm}". Try adjusting your search.`
               : hasActiveFilters
               ? 'No appointments match the selected filters. Try adjusting your filters.'
-              : 'Start by creating a new appointment.'}
+              : 'No appointments have been scheduled yet.'}
           </p>
           {(hasSearchTerm || hasActiveFilters) && (
             <button 
@@ -1163,7 +1162,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </table>
             </div>
 
-            {/* Pagination - Uses client-side pagination */}
+            {/* Pagination */}
             {totalFilteredPages > 1 && (
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination

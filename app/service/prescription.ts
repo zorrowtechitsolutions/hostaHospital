@@ -1,4 +1,4 @@
-// prescription.js - Complete file
+// prescription.js - Complete file with recovery
 
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
@@ -144,6 +144,9 @@ export const prescriptionApi = api.injectEndpoints({
         if (params?.limit) {
           url += `&limit=${params.limit}`;
         }
+        if (params?.status) {
+          url += `&status=${params.status}`;
+        }
         
         return {
           url,
@@ -195,6 +198,20 @@ export const prescriptionApi = api.injectEndpoints({
       },
       invalidatesTags: ["Prescription"],
     }),
+
+    // ================= RECOVER PRESCRIPTION =================
+    // PUT /prescription/recover/:id
+    recoverPrescription: builder.mutation({
+      query: (id) => {
+        const hospitalId = getHospitalId();
+
+        return {
+          url: `/prescription/recover/${id}?hospitalId=${hospitalId}`,
+          method: "PUT",
+        };
+      },
+      invalidatesTags: (result, error, id) => [{ type: "Prescription", id }, "Prescription"],
+    }),
   }),
 });
 
@@ -204,4 +221,5 @@ export const {
   useGetPrescriptionByIdQuery,
   useUpdatePrescriptionMutation,
   useDeletePrescriptionMutation,
+  useRecoverPrescriptionMutation, // 👈 Added
 } = prescriptionApi;
