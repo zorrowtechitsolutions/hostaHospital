@@ -1,4 +1,5 @@
-// src/app/service/labResults.ts
+// src/app/service/labresults.ts
+
 import { api } from "./api";
 import { getUserRole } from "../../src/utils/auth";
 
@@ -6,15 +7,15 @@ export interface LabResult {
   id?: string;
   _id?: string;
   patientId: string | number;
-  patientName: string; // ✅ Required
+  patientName: string;
   name?: string;
   date?: string;
   labId?: string | number | null;
-  labName?: string | null; // ✅ Optional
+  labName?: string | null;
   hospitalId?: string | number | null;
-  hospitalName: string; // ✅ Required
+  hospitalName: string;
   doctorId?: string | number | null;
-  doctorName: string; // ✅ Required
+  doctorName: string;
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -39,15 +40,15 @@ export interface LabResult {
 
 export interface CreateLabResultData {
   patientId: string | number;
-  patientName: string; // ✅ Required
+  patientName: string;
   name?: string;
   date?: string;
   labId?: string | number | null;
-  labName?: string | null; // ✅ Optional
+  labName?: string | null;
   hospitalId?: string | number | null;
-  hospitalName: string; // ✅ Required
+  hospitalName: string;
   doctorId?: string | number | null;
-  doctorName: string; // ✅ Required
+  doctorName: string;
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -70,15 +71,15 @@ export interface CreateLabResultData {
 
 export interface UpdateLabResultData {
   patientId: string | number;
-  patientName: string; // ✅ Required
+  patientName: string;
   name?: string;
   date?: string;
   labId?: string | number | null;
-  labName?: string | null; // ✅ Optional
+  labName?: string | null;
   hospitalId?: string | number | null;
-  hospitalName: string; // ✅ Required
+  hospitalName: string;
   doctorId?: string | number | null;
-  doctorName: string; // ✅ Required
+  doctorName: string;
   department?: string | null;
   testName: string;
   status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled' | null;
@@ -218,20 +219,29 @@ export const labResultsApi = api.injectEndpoints({
       invalidatesTags: ["LabResult"],
     }),
 
+    // 👇 NEW: Recover Lab Result
+    recoverLabResult: builder.mutation<{ message: string }, string>({
+      query: (id) => ({
+        url: `/lab-results/recover/${id}`,
+        method: "PUT",
+      }),
+      invalidatesTags: ["LabResult"],
+    }),
+
     uploadLabResultWithFile: builder.mutation<
       LabResultResponse, 
       { 
         file: File; 
         patientId: string | number;
-        patientName: string; // ✅ Required
+        patientName: string;
         testName: string; 
         date?: string; 
         labId?: string | number;
-        labName?: string | null; // ✅ Optional
+        labName?: string | null;
         hospitalId?: string | number;
-        hospitalName: string; // ✅ Required
+        hospitalName: string;
         doctorId?: string | number;
-        doctorName: string; // ✅ Required
+        doctorName: string;
         department?: string;
         status?: 'received' | 'progress' | 'pending' | 'completed' | 'cancelled';
         category?: string;
@@ -273,15 +283,15 @@ export const labResultsApi = api.injectEndpoints({
           
           const labResultData: CreateLabResultData = {
             patientId: patientId,
-            patientName: patientName, // ✅ Required
+            patientName: patientName,
             name: testName,
             date: date || new Date().toLocaleDateString(),
             labId: labId || null,
-            labName: labName || null, // ✅ Optional
+            labName: labName || null,
             hospitalId: hospitalId || null,
-            hospitalName: hospitalName, // ✅ Required
+            hospitalName: hospitalName,
             doctorId: doctorId || null,
-            doctorName: doctorName, // ✅ Required
+            doctorName: doctorName,
             department: department || null,
             testName: testName,
             status: status || 'pending',
@@ -321,4 +331,5 @@ export const {
   useUpdateLabResultMutation,
   useDeleteLabResultMutation,
   useUploadLabResultWithFileMutation,
-} = labResultsApi;
+  useRecoverLabResultMutation, // 👈 Added
+} = labResultsApi;  

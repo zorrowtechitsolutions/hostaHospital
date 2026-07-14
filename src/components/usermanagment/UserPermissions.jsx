@@ -375,6 +375,18 @@ const UserPermissions = () => {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const closeEditModal = () => {
     setShowEditRoleModal(false);
     setSelectedRole(null);
@@ -532,6 +544,9 @@ const UserPermissions = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
+  // ✅ Check if there are any roles to display
+  const hasRoles = totalFilteredRoles > 0;
+
   if (isLoading) {
     return <RoleSkeleton />;
   }
@@ -559,38 +574,32 @@ const UserPermissions = () => {
         <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
       </div>
 
-      <Card>
+      <Card className="flex flex-col bg-white rounded-xl shadow-sm">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Total Roles: {totalFilteredRoles}</h2>
-              <p className="text-sm text-gray-500 mt-1">Manage user roles and permissions</p>
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Roles
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {totalFilteredRoles}
+                </span>
+                {searchTerm && totalFilteredRoles > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">
+                    (Filtered)
+                  </span>
+                )}
+              </h2>
             </div>
-            <div className="flex gap-3">
-              <div className="relative">
-                <input
-                  type="text"
+            <div className="flex gap-3 items-center">
+              {/* ✅ Using global SearchBar component */}
+              <div className="w-64">
+                <SearchBar
                   placeholder="Search by role name or description..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 px-4 py-2 pl-10 pr-4 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onChange={handleSearchChange}
+                  onClear={handleClearSearch}
+                  className="w-full"
                 />
-                <svg 
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
               <Button type="button" variant="primary" onClick={() => setShowNewRoleModal(true)} className="flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -600,114 +609,118 @@ const UserPermissions = () => {
           </div>
         </div>
         
-        {totalFilteredRoles === 0 && searchTerm && (
-          <div className="p-8 text-center">
-            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="text-gray-500">No roles found matching "{searchTerm}"</p>
-            <button 
-              onClick={() => setSearchTerm('')} 
-              className="mt-2 text-sm text-blue-600 hover:text-blue-700"
-            >
-              Clear search
-            </button>
-          </div>
-        )}
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <TableHeader>Role</TableHeader>
-                <TableHeader>Description</TableHeader>
-                <TableHeader>Created Date</TableHeader>
-                <TableHeader>Actions</TableHeader>
-              </tr>
-            </thead>
-            {filteredAdminRoles.length > 0 && (
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAdminRoles.map((admin) => (
-                  <tr key={admin?.id} className="hover:bg-gray-50 transition-colors">
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {admin?.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {admin?.description || "-"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {admin?.createdDate || admin?.createdAt || "-"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <span className="text-xs text-gray-400">System role</span>
-                    </TableCell>
-                  </tr>
-                ))}
-              </tbody>
-            )}
-            
-            {paginatedHospitalRoles.length > 0 && (
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedHospitalRoles.map((role) => (
-                  <tr key={role?.id} className="hover:bg-gray-50 transition-colors">
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {role?.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {role?.description || "-"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {role?.createdDate || role?.createdAt || "-"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <RoleDropdown 
-                        role={role}
-                        onView={handleOpenViewModal}
-                        onEdit={handleOpenEditModal}
-                        onDelete={handleOpenDeleteModal}
-                        onPermissions={handleOpenPermissionsPage}
-                      />
-                    </TableCell>
-                  </tr>
-                ))}
-              </tbody>
-            )}
-           </table>
+        <div className="flex flex-col min-h-[420px]">
+          {/* ✅ Show "No results" message when searching and no roles found */}
+          {searchTerm && totalFilteredRoles === 0 && (
+            <div className="p-8 text-center">
+              <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <p className="text-gray-500">No roles found matching "{searchTerm}"</p>
+            </div>
+          )}
+
+          {/* ✅ Show "No roles" message when not searching and no roles exist */}
+          {!searchTerm && totalFilteredRoles === 0 && (
+            <div className="p-8 text-center">
+              <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <p className="text-gray-500">{rolesResponse?.message || "No roles found"}</p>
+            </div>
+          )}
+
+          {/* ✅ Only show the table if there are roles to display */}
+          {hasRoles && (
+            <>
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <TableHeader>Role</TableHeader>
+                      <TableHeader>Description</TableHeader>
+                      <TableHeader>Created Date</TableHeader>
+                      <TableHeader>Actions</TableHeader>
+                    </tr>
+                  </thead>
+                  {filteredAdminRoles.length > 0 && (
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredAdminRoles.map((admin) => (
+                        <tr key={admin?.id} className="hover:bg-gray-50 transition-colors">
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {admin?.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm text-gray-500">
+                              {admin?.description || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm text-gray-500">
+                              {admin?.createdDate || admin?.createdAt || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className="text-xs text-gray-400">System role</span>
+                          </TableCell>
+                        </tr>
+                      ))}
+                    </tbody>
+                  )}
+                  
+                  {paginatedHospitalRoles.length > 0 && (
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paginatedHospitalRoles.map((role) => (
+                        <tr key={role?.id} className="hover:bg-gray-50 transition-colors">
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {role?.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm text-gray-500">
+                              {role?.description || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="text-sm text-gray-500">
+                              {role?.createdDate || role?.createdAt || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <RoleDropdown 
+                              role={role}
+                              onView={handleOpenViewModal}
+                              onEdit={handleOpenEditModal}
+                              onDelete={handleOpenDeleteModal}
+                              onPermissions={handleOpenPermissionsPage}
+                            />
+                          </TableCell>
+                        </tr>
+                      ))}
+                    </tbody>
+                  )}
+                </table>
+              </div>
+
+              {/* ✅ Pagination - Stuck at bottom like Staffs */}
+              {totalHospitalRoles > 0 && totalPages > 1 && (
+                <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    totalItems={totalHospitalRoles}
+                    itemsPerPage={itemsPerPage}
+                    itemLabel="hospital roles"
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
-
-        {totalHospitalRoles > 0 && totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-              totalItems={totalHospitalRoles}
-              itemsPerPage={itemsPerPage}
-              itemLabel="hospital roles"
-            />
-          </div>
-        )}
-
-        {totalFilteredRoles === 0 && !searchTerm && (
-          <div className="p-8 text-center">
-            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <p className="text-gray-500">{rolesResponse?.message || "No roles found"}</p>
-          </div>
-        )}
       </Card>
 
       <NewRoleModal

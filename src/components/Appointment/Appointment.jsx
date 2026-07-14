@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Filter, Download, MoreVertical, Eye, 
@@ -30,6 +30,12 @@ import { exportToExcel } from "../../utils/excelExport";
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
+
+// Helper function to safely convert to string for search
+const safeToString = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
 
 // Helper function to convert 24-hour time to 12-hour format with AM/PM
 const convertTo12Hour = (time24h) => {
@@ -150,7 +156,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     isFetching
   } = useGetBookingsQuery({
     ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
-    ...(searchTerm && { search_query: searchTerm }),
+    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
     page: currentPage,
@@ -193,7 +199,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // Helper functions
   const formatAppointmentId = (id) => {
-    if (!id) return '#APT0000';
+    if (!id) return '#APT00000';
     let numericId;
     if (typeof id === 'string') {
       const match = id.match(/\d+/);
@@ -326,23 +332,94 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     });
   };
 
-  // Get data from API response
-  const bookingList = bookingsResponse?.data || [];
-  const appointmentsData = transformBookingsData(bookingList);
+  // Get data from API response - ALL DATA (not just current page)
+  // We need to fetch all data for frontend filtering
+  const { 
+    data: allBookingsResponse, 
+    isLoading: allLoading
+  } = useGetBookingsQuery({
+    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
+    ...(departmentFilter && { department: departmentFilter }),
+    ...(dateFilter && { date: dateFilter }),
+    page: 1,
+    limit: 1000 // Get all data for filtering
+  });
 
-  // Use server-side pagination data
-  const totalItems = bookingsResponse?.pagination?.totalItems || appointmentsData.length;
-  const totalPages = bookingsResponse?.pagination?.totalPages || 1;
+  const allBookingList = allBookingsResponse?.data || [];
+  const allAppointmentsData = transformBookingsData(allBookingList);
 
-  // Filter doctor-specific data (client-side filter for doctor view)
-  const filteredAppointments = (() => {
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBySearch = useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return allAppointmentsData;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return allAppointmentsData.filter(item => {
+      const searchFields = [
+        safeToString(item.formattedId).toLowerCase(),
+        safeToString(item.patientName).toLowerCase(),
+        safeToString(item.patientId).toLowerCase(),
+        safeToString(item.contact).toLowerCase(),
+        safeToString(item.doctorName).toLowerCase(),
+        safeToString(item.department).toLowerCase(),
+        safeToString(item.bookingStatus).toLowerCase(),
+        safeToString(item.status).toLowerCase()
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [allAppointmentsData, searchTerm]);
+
+  // ✅ Apply department and date filters (frontend fallback)
+  const filteredAppointments = useMemo(() => {
+    let result = filteredBySearch;
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(item => 
+        safeToString(item.status).toLowerCase() === statusFilter.toLowerCase() ||
+        safeToString(item.originalStatus).toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    // Apply department filter
+    if (departmentFilter) {
+      result = result.filter(item => 
+        safeToString(item.department).toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+
+    // Apply date filter
+    if (dateFilter) {
+      result = result.filter(item => {
+        const visitDate = item.appointmentDateDisplay ? new Date(item.appointmentDateDisplay).toISOString().split('T')[0] : '';
+        return visitDate === dateFilter;
+      });
+    }
+
+    // Apply doctor filter
     if (doctorId && !showAllData) {
-      return appointmentsData.filter(apt => 
+      result = result.filter(apt => 
         apt.doctorId === doctorId || apt.doctorName === doctorName
       );
     }
-    return appointmentsData;
-  })();
+
+    return result;
+  }, [filteredBySearch, statusFilter, departmentFilter, dateFilter, doctorId, doctorName, showAllData]);
+
+  // ✅ Get total items from filtered results
+  const totalFilteredItems = filteredAppointments.length;
+  const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedAppointments = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAppointments.slice(startIndex, endIndex);
+  }, [filteredAppointments, currentPage, itemsPerPage]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -351,8 +428,24 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // Get unique departments from API data
   const getAllDepartments = () => {
-    const departments = [...new Set(appointmentsData.map(a => a.department).filter(Boolean))];
+    const departments = [...new Set(allAppointmentsData.map(a => a.department).filter(Boolean))];
     return departments.sort();
+  };
+
+  // Check if any filters are active
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = statusFilter !== 'all' || departmentFilter !== '' || dateFilter !== '';
+
+  // ✅ Search handler for SearchBar - receives value directly
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
   };
 
   // Handlers
@@ -415,8 +508,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  // ✅ REMOVED: handleImport function
-
   const handleStartConsultation = (appointment) => {
     navigate('/appointments/consultation', {
       state: {
@@ -456,13 +547,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setIsApproving(true);
     
     try {
-      // The approve modal already returns time in 24-hour format
-      // But we need to make sure it's in the correct format
       let consultingTime = appointmentData.consulting_time;
       
-      // If the time has AM/PM, convert it to 24-hour format
       if (consultingTime.includes("AM") || consultingTime.includes("PM")) {
-        // The modal should have already converted it, but just in case
         const [time, modifier] = consultingTime.split(" ");
         let [hours, minutes] = time.split(":");
         
@@ -493,7 +580,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           patientName: selectedRequest.patientName,
           doctorName: selectedRequest.doctorName,
           date: appointmentData.booking_date,
-          consulting_time: appointmentData.consulting_time, // Send original (with AM/PM) for display
+          consulting_time: appointmentData.consulting_time,
           token: appointmentData.token,
           timestamp: new Date().toISOString()
         }
@@ -622,6 +709,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setDepartmentFilter('');
     setDateFilter('');
     setSearchTerm('');
+    setCurrentPage(1);
+    refetch();
     showSuccessToast("All filters cleared", 2000);
   };
 
@@ -817,7 +906,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   // Loading state
-  if (loading) {
+  if (loading || allLoading) {
     return <SkeletonLoader />;
   }
 
@@ -840,6 +929,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          View and manage all appointments
+        </p>
       </div>
 
       {/* Doctor Banner */}
@@ -884,18 +976,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Replaced custom search input with SearchBar component */}
+          {/* ✅ SearchBar with proper handlers */}
           <SearchBar
             placeholder="Search by Appointment ID, Patient Name, Contact..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm('');
-              setCurrentPage(1);
-            }}
+            onChange={handleSearchChange}
+            onClear={handleClearSearch}
             className="flex-1 max-w-sm"
           />
         </div>
@@ -908,7 +994,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          {/* ✅ IMPORT BUTTON REMOVED */}
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>
@@ -986,19 +1071,30 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Appointments Table */}
+      {/* Appointments Table - WITH FRONTEND FILTERING */}
       {filteredAppointments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
-          <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No appointments found' : 'No appointments available'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No appointments match the selected filters. Try adjusting your filters.'
+              : 'No appointments have been scheduled yet.'}
+          </p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Appointments 
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
+              {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
+                <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
+              )}
             </h2>
           </div>
           
@@ -1019,7 +1115,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAppointments.map((apt, index) => (
+                  {paginatedAppointments.map((apt, index) => (
                     <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
                       <td className="px-6 py-4">
@@ -1064,17 +1160,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </table>
             </div>
 
-            {/* Pagination - Uses server-side totalPages */}
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="appointments"
-              />
-            </div>
+            {/* Pagination */}
+            {totalFilteredPages > 1 && (
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalFilteredPages}
+                  onPageChange={handlePageChange}
+                  totalItems={totalFilteredItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="appointments"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

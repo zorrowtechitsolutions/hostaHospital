@@ -38,15 +38,15 @@ const menu = [
     items: [
       { label: "Patients", icon: Users, path: "/patients", permissionId: 14 },
       { label: "Doctors", icon: Stethoscope, path: "/doctors", permissionId: 2 },
-      { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 7 },
+      { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 58 },
       {
         label: "Appointments",
         icon: CalendarDays,
-        permissionId: 6,
+        permissionId: 58,
         hasDropdown: true,
         dropdownItems: [
-          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 6 },
-          { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation", permissionId: 6 },
+          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 58 },
+          { label: "Consultation", icon: Stethoscope, path: "/appointments/consultation", permissionId: 58 },
         ],
       },
       { label: "Visits", icon: Activity, path: "/visits", permissionId: 9 },

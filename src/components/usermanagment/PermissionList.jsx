@@ -18,7 +18,6 @@ const PermissionList = () => {
   const navigate = useNavigate();
 
   const [mainModules, setMainModules] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const hospitalId = getHospitalId();
@@ -172,10 +171,6 @@ const PermissionList = () => {
 
   const isAllowAllChecked = (module) => module.create && module.edit && module.delete && module.view;
 
-  const filteredMainModules = mainModules.filter(module => 
-    module.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -209,10 +204,11 @@ const PermissionList = () => {
   };
 
   const handleCancel = () => {
-    if (window.confirm("Are you sure you want to discard your changes?")) {
-      showWarningToast("Changes discarded. Permissions restored to previous state.", 3000);
-      window.location.reload();
-    }
+    navigate("/roles", { 
+      state: { 
+        tab: "User Permissions" 
+      } 
+    });
   };
 
   const handleBack = () => {
@@ -229,7 +225,7 @@ const PermissionList = () => {
     </TableCell>
   );
 
-  const PermissionsTable = ({ title, modules, setter, filteredModules }) => (
+  const PermissionsTable = ({ title, modules, setter }) => (
     <Card className="mb-8">
       <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
         <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">{title}</h3>
@@ -247,8 +243,8 @@ const PermissionList = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredModules.length > 0 ? (
-              filteredModules.map((module) => (
+            {modules.length > 0 ? (
+              modules.map((module) => (
                 <tr key={module.id} className="hover:bg-gray-50 transition">
                   <TableCell><span className="text-sm font-medium text-gray-800">{module.name}</span></TableCell>
                   <PermissionCheckbox 
@@ -279,7 +275,7 @@ const PermissionList = () => {
                 </tr>
               ))
             ) : (
-              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">No modules found matching "{searchTerm}"</td></tr>
+              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">No modules found</td></tr>
             )}
           </tbody>
         </table>
@@ -318,14 +314,12 @@ const PermissionList = () => {
           <span className="text-xs text-gray-400">Last updated: {new Date().toLocaleDateString()}</span>
         </div>
 
-        <SearchBar placeholder="Search modules..." value={searchTerm} onChange={setSearchTerm} className="mb-5 w-80" />
-
         {mainModules.length === 0 && !isLoadingPermissions ? (
           <Card className="p-8 text-center">
             <p className="text-gray-500">No permissions found.</p>
           </Card>
         ) : (
-          <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} filteredModules={filteredMainModules} />
+          <PermissionsTable title="MAIN" modules={mainModules} setter={setMainModules} />
         )}
 
         <div className="flex justify-end gap-3">

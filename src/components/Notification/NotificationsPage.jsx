@@ -54,9 +54,11 @@ const NotificationsPage = () => {
   const totalNotifications = notificationsData?.total || 0;
   const totalPages = notificationsData?.totalPages || 1;
   
-  const unreadCount = notifications.filter(
+  // Get unread notifications only (same as NotificationPanel)
+  const unreadNotifications = notifications.filter(
     n => !n.hospitalReadStatus?.[hospitalId]
-  ).length;
+  );
+  const unreadCount = unreadNotifications.length;
   
   let filteredNotifications = [...notifications];
   
@@ -146,15 +148,18 @@ const NotificationsPage = () => {
     }
   };
 
+  // Updated: Mark only UNREAD notifications as read (same as NotificationPanel)
   const handleMarkAllAsRead = async () => {
     try {
       if (!hospitalId) return;
 
-      const notificationIds = notifications.map(
+      // Get only unread notification IDs (same logic as NotificationPanel)
+      const notificationIds = unreadNotifications.map(
         (notification) => notification.id
       );
 
       if (notificationIds.length === 0) {
+        showSuccessToast("No unread notifications to mark", 2000);
         return;
       }
 
@@ -171,9 +176,9 @@ const NotificationsPage = () => {
 
       await refetch();
 
-      showSuccessToast("All notifications marked as read");
+      showSuccessToast(`All ${notificationIds.length} notifications marked as read`, 2000);
     } catch {
-      showErrorToast("Failed to mark all as read");
+      showErrorToast("Failed to mark all as read", 2000);
     }
   };
 
@@ -369,6 +374,7 @@ const NotificationsPage = () => {
               </span>
             )}
           </button>
+          {/* Only show "Mark all as read" if there are unread notifications */}
           {unreadCount > 0 && (
             <Button onClick={handleMarkAllAsRead} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <CheckCheck size={16} /> Mark all as read

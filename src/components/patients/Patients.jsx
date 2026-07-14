@@ -306,9 +306,6 @@ const Patients = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
 
-  // ✅ Track if events are registered
-  const [eventsRegistered, setEventsRegistered] = useState(false);
-
   // 🔥 FIX: Get hospitalId from auth.hospitalId, NOT auth.id
   const authUser = getAuthUser();
   const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
@@ -317,7 +314,7 @@ const Patients = () => {
   // 🔥 FIX: Use hospitalId, NOT auth.id
   const hospitalId = isDoctor ? authUser?.hospitalId : authUser?.id;
 
-  // API hooks WITH QUERY PARAMETERS - using server-side pagination
+  // ✅ API hooks - fetch ALL patients (no filters sent to server)
   const { 
     data: patientsResponse, 
     isLoading: isLoadingPatients,
@@ -325,11 +322,12 @@ const Patients = () => {
     isFetching
   } = useGetPatientsQuery({
     hospitalId: hospitalId,
-    search_query: searchTerm?.trim() || undefined,
-    page: currentPage,
-    limit: itemsPerPage,
-    ...(genderFilter !== 'All' && { gender: genderFilter }),
-    ...(statusFilter !== 'All' && { status: statusFilter === 'Active' ? true : false }),
+    // ❌ NO search_query - we'll filter client-side
+    // ❌ NO gender filter - we'll filter client-side
+    // ❌ NO status filter - we'll filter client-side
+    // ✅ Fetch all patients (use a large limit or remove pagination)
+    page: 1,
+    limit: 1000, // Fetch all patients for client-side filtering
   });
 
   const [deletePatient] = useDeletePatientMutation();
@@ -339,60 +337,37 @@ const Patients = () => {
   // ✅ Register socket event listeners
   useEffect(() => {
     registerPatientEvents({
-      onPatientRegistered: async (data) => {
+      onPatientRegistered: () => {
         showSuccessToast(`New patient registered!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientUpdated: async (data) => {
+      onPatientUpdated: () => {
         showSuccessToast(`Patient updated!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientDeleted: async (data) => {
+      onPatientDeleted: () => {
         showSuccessToast(`Patient deleted!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientRecovered: async (data) => {
+      onPatientRecovered: () => {
         showSuccessToast(`Patient recovered successfully!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       }
     });
 
-    setEventsRegistered(true);
-
     return () => {
       unregisterPatientEvents();
-      setEventsRegistered(false);
     };
-  }, []);
+  }, [refetchPatients]);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerPatientEvents({
-          onPatientRegistered: async (data) => {
-            showSuccessToast(`New patient registered!`, 3000);
-            await refetchPatients();
-          },
-          onPatientUpdated: async (data) => {
-            showSuccessToast(`Patient updated!`, 3000);
-            await refetchPatients();
-          },
-          onPatientDeleted: async (data) => {
-            showSuccessToast(`Patient deleted!`, 3000);
-            await refetchPatients();
-          },
-          onPatientRecovered: async (data) => {
-            showSuccessToast(`Patient recovered successfully!`, 3000);
-            await refetchPatients();
-          }
-        });
-        setEventsRegistered(true);
-      }
+      // Re-register events if needed
     };
 
     const handleDisconnect = () => {
-      setEventsRegistered(false);
+      // Handle disconnect
     };
 
     socket.on("connect", handleConnect);
@@ -402,17 +377,15 @@ const Patients = () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [refetchPatients, eventsRegistered]);
+  }, []);
 
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('patientViewMode', viewMode);
   }, [viewMode]);
 
-  // Get patients array and pagination info from response
+  // Get patients array from response
   const allPatients = patientsResponse?.data || [];
-  const totalItems = patientsResponse?.pagination?.totalItems || 0;
-  const totalPages = patientsResponse?.pagination?.totalPages || 1;
 
   // ✅ Transform patient data with enhanced address handling
   const transformPatientData = (patients) => {
@@ -441,6 +414,53 @@ const Patients = () => {
 
   const transformedPatients = transformPatientData(allPatients);
 
+  // ✅ CLIENT-SIDE FILTERING - Apply both gender and status filters
+  const filteredPatients = useMemo(() => {
+    let result = transformedPatients;
+    
+    // ✅ Filter by search term (client-side)
+    if (searchTerm && searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      result = result.filter(patient => {
+        const name = (patient.name || '').toLowerCase();
+        const mobile = (patient.mobileNumber || '').toLowerCase();
+        const email = (patient.email || '').toLowerCase();
+        const id = String(patient.id || patient._id || '');
+        
+        return name.includes(search) || 
+               mobile.includes(search) || 
+               email.includes(search) || 
+               id.includes(search);
+      });
+    }
+    
+    // ✅ Filter by gender (client-side)
+    if (genderFilter !== 'All') {
+      result = result.filter(patient => patient.gender === genderFilter);
+    }
+    
+    // ✅ Filter by status (client-side)
+    if (statusFilter !== 'All') {
+      result = result.filter(patient => {
+        const status = getPatientStatus(patient);
+        return status === statusFilter;
+      });
+    }
+    
+    return result;
+  }, [transformedPatients, searchTerm, genderFilter, statusFilter]);
+
+  // ✅ Client-side pagination for filtered results
+  const paginatedPatients = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredPatients.slice(startIndex, endIndex);
+  }, [filteredPatients, currentPage, itemsPerPage]);
+
+  // ✅ Calculate total filtered items and pages
+  const filteredTotalItems = filteredPatients.length;
+  const filteredTotalPages = Math.ceil(filteredTotalItems / itemsPerPage);
+
   // ✅ Get unique genders from patients for filter options
   const genderOptions = useMemo(() => {
     const genders = new Set();
@@ -466,12 +486,24 @@ const Patients = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // ✅ Search handler
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const handlePageChange = useCallback((page) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= filteredTotalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [totalPages]);
+  }, [filteredTotalPages]);
 
   // Navigation handlers
   const handleViewDetails = useCallback((patient) => {
@@ -538,14 +570,6 @@ const Patients = () => {
     refetchPatients();
     showSuccessToast("Refreshed patients", 2000);
   }, [refetchPatients]);
-
-  const clearGenderFilter = useCallback(() => {
-    setGenderFilter('All');
-  }, []);
-
-  const clearStatusFilter = useCallback(() => {
-    setStatusFilter('All');
-  }, []);
 
   const handleAddAppointmentModal = useCallback((patient) => {
     if (patient.isDelete) {
@@ -649,7 +673,7 @@ const Patients = () => {
 
   // ✅ Prepare export data for Excel with formatted address
   const getExportData = useCallback(() => {
-    const patientsToExport = transformedPatients;
+    const patientsToExport = filteredPatients;
     
     return patientsToExport.map((patient) => {
       const address = patient.formattedAddress || 'N/A';
@@ -669,9 +693,9 @@ const Patients = () => {
         'Emergency Contact': patient.emergencyContact || 'N/A'
       };
     });
-  }, [transformedPatients]);
+  }, [filteredPatients]);
 
-  // ✅ Loading state with Skeleton Loader (matches Doctors style)
+  // ✅ Loading state with Skeleton Loader
   if (isLoadingPatients && !transformedPatients.length) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -727,44 +751,29 @@ const Patients = () => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Patients</h1>
-        {isDoctor && (
-          <span className="text-xs text-green-600 ml-2">
-            🔒 Filtered by hospital
-          </span>
-        )}
       </div>
 
       {/* Search and Filter */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-sm">
-            <input
-              type="text"
-              placeholder="Search by name, mobile..."
+          {/* ✅ Search Bar - Client-side search */}
+          <div className="flex-1 max-w-sm">
+            <SearchBar
+              placeholder="Search by name, mobile, email, or ID..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              onChange={handleSearchChange}
+              onClear={handleClearSearch}
+              className="w-full"
             />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-            <button className="absolute right-2 top-1.5 bg-gradient-to-r from-green-600 to-emerald-600 p-1 rounded" aria-label="Search">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
           </div>
 
-          {/* ✅ Gender Filter */}
+          {/* ✅ Gender Filter - Client-side */}
           <select
             value={genderFilter}
-            onChange={(e) => setGenderFilter(e.target.value)}
+            onChange={(e) => {
+              setGenderFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
             aria-label="Filter by gender"
           >
@@ -775,10 +784,13 @@ const Patients = () => {
             ))}
           </select>
 
-          {/* ✅ Status Filter */}
+          {/* ✅ Status Filter - Client-side */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
             aria-label="Filter by status"
           >
@@ -832,30 +844,34 @@ const Patients = () => {
         </div>
       </div>
 
-      {/* ✅ Show fetching indicator */}
-      {isFetching && transformedPatients.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-md px-4 py-2 flex items-center gap-2 animate-in slide-in-from-top-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
-          <span className="text-sm text-gray-600">Updating...</span>
-        </div>
-      )}
-
       {/* Empty State */}
-      {transformedPatients.length === 0 && !isLoadingPatients && (
+      {filteredPatients.length === 0 && !isLoadingPatients && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
           <p className="text-sm text-gray-500">
             {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
           </p>
+          {(searchTerm || genderFilter !== 'All' || statusFilter !== 'All') && (
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setGenderFilter('All');
+                setStatusFilter('All');
+              }}
+              className="mt-4 text-sm text-[#1C62A0] hover:underline"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       )}
 
-      {/* GRID VIEW - Matching Doctors Card UI */}
-      {viewMode === 'grid' && transformedPatients.length > 0 && (
+      {/* GRID VIEW */}
+      {viewMode === 'grid' && filteredPatients.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {transformedPatients.map((patient) => {
+            {paginatedPatients.map((patient) => {
               const isBlacklisted = patient.isDelete;
               const patientStatus = getPatientStatus(patient);
               
@@ -919,7 +935,6 @@ const Patients = () => {
                     {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
                   </p>
                   
-                  {/* ✅ Stats Grid - Now shows Type and Gender instead of Type and Status */}
                   <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                     <div className="text-center">
                       <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
@@ -928,10 +943,19 @@ const Patients = () => {
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
-                      <p className="text-xs font-bold text-gray-700">
-                        {patient.gender || 'N/A'}
-                      </p>
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">Status</p>
+                      <Badge
+                        variant={
+                          isBlacklisted
+                            ? "dark"
+                            : patient.isActive
+                            ? "success"
+                            : "danger"
+                        }
+                        className="text-[10px]"
+                      >
+                        {patientStatus}
+                      </Badge>
                     </div>
                   </div>
                   
@@ -957,13 +981,13 @@ const Patients = () => {
           </div>
 
           {/* Pagination for Grid View */}
-          {totalPages > 1 && (
+          {filteredTotalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={filteredTotalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalItems}
+                totalItems={filteredTotalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
                 variant="centered"
@@ -973,20 +997,15 @@ const Patients = () => {
         </>
       )}
 
-      {/* LIST VIEW - Matching Doctors List style */}
-      {viewMode === 'list' && transformedPatients.length > 0 && (
+      {/* LIST VIEW */}
+      {viewMode === 'list' && filteredPatients.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Patients
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {totalItems}
+                {filteredTotalItems}
               </span>
-              {isDoctor && (
-                <span className="text-xs text-green-600 ml-2">
-                  🔒 Filtered by hospital
-                </span>
-              )}
             </h2>
           </div>
 
@@ -1006,7 +1025,7 @@ const Patients = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {transformedPatients.map((patient) => {
+                  {paginatedPatients.map((patient) => {
                     const isBlacklisted = patient.isDelete;
                     const patientStatus = getPatientStatus(patient);
                     
@@ -1087,9 +1106,9 @@ const Patients = () => {
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={filteredTotalPages}
                 onPageChange={handlePageChange}
-                totalItems={totalItems}
+                totalItems={filteredTotalItems}
                 itemsPerPage={itemsPerPage}
                 itemLabel="patients"
               />

@@ -23,6 +23,12 @@ import { registerBookingEvents, unregisterBookingEvents } from '../../socket/boo
 // Import the export function
 import { exportToExcel } from "../../utils/excelExport";
 
+// Helper function to safely convert to string for search
+const safeToString = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
 // Helper functions for date formatting
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
@@ -83,7 +89,7 @@ const Visits = () => {
     status: "accepted",
     page: currentPage,
     limit: itemsPerPage,
-    ...(searchTerm && { search_query: searchTerm }),
+    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter })
   });
@@ -211,9 +217,79 @@ const Visits = () => {
     });
   }, [bookingsResponse]);
 
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBySearch = useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return allVisitsData;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return allVisitsData.filter(item => {
+      const searchFields = [
+        safeToString(item.visitId).toLowerCase(),
+        safeToString(item.patientName).toLowerCase(),
+        safeToString(item.patientId).toLowerCase(),
+        safeToString(item.doctorName).toLowerCase(),
+        safeToString(item.department).toLowerCase(),
+        safeToString(item.token).toLowerCase(),
+        safeToString(item.visitDate).toLowerCase(),
+        safeToString(item.startTime).toLowerCase()
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [allVisitsData, searchTerm]);
+
+  // ✅ Apply department and date filters (frontend fallback)
+  const filteredVisits = useMemo(() => {
+    let result = filteredBySearch;
+
+    // Apply department filter
+    if (departmentFilter) {
+      result = result.filter(item => 
+        safeToString(item.department).toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+
+    // Apply date filter
+    if (dateFilter) {
+      result = result.filter(item => {
+        const visitDate = item.visitDate ? new Date(item.visitDate).toISOString().split('T')[0] : '';
+        return visitDate === dateFilter;
+      });
+    }
+
+    return result;
+  }, [filteredBySearch, departmentFilter, dateFilter]);
+
+  // ✅ Get total items from filtered results
+  const totalFilteredItems = filteredVisits.length;
+  const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedVisits = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredVisits.slice(startIndex, endIndex);
+  }, [filteredVisits, currentPage, itemsPerPage]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter]);
+
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
 
   const handleRefresh = () => { 
     setSearchTerm(""); 
@@ -279,6 +355,10 @@ const Visits = () => {
   const getActiveFilterCount = () => {
     return (departmentFilter ? 1 : 0) + (dateFilter ? 1 : 0) + (searchTerm ? 1 : 0);
   };
+
+  // Check if filters are active
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = departmentFilter !== '' || dateFilter !== '';
 
   const handleViewDetails = (visit) => { 
     setSelectedVisit(visit); 
@@ -479,7 +559,7 @@ const Visits = () => {
   const activeFilterCount = getActiveFilterCount();
 
   const recentVisits = useMemo(() => {
-    return allVisitsData.slice(0, 3).map(visit => ({
+    return filteredVisits.slice(0, 3).map(visit => ({
       id: visit.id,
       patientName: visit.patientName,
       patientId: visit.patientId,
@@ -492,7 +572,7 @@ const Visits = () => {
       department: visit.department,
       token: visit.token
     }));
-  }, [allVisitsData]);
+  }, [filteredVisits]);
 
   const getAllDepartments = () => {
     return [...new Set(allVisitsData.map(v => v.department).filter(Boolean))].sort();
@@ -596,18 +676,12 @@ const Visits = () => {
       {/* Search and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Replaced custom search input with SearchBar component */}
+          {/* ✅ Using global SearchBar component */}
           <SearchBar
             placeholder="Search by Visit ID, Patient Name, Doctor, Token..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm('');
-              setCurrentPage(1);
-            }}
+            onChange={handleSearchChange}
+            onClear={handleClearSearch}
             className="flex-1 max-w-sm"
           />
         </div>
@@ -726,7 +800,7 @@ const Visits = () => {
                     <span className="text-sm font-medium text-gray-600">{visit.department}</span>
                     <button 
                       onClick={() => {
-                        const fullVisit = allVisitsData.find(v => v.id === visit.id);
+                        const fullVisit = filteredVisits.find(v => v.id === visit.id);
                         if (fullVisit) handleStartVisit(fullVisit);
                       }} 
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -742,18 +816,26 @@ const Visits = () => {
       )}
 
       {/* Visits Table */}
-      {allVisitsData.length === 0 ? (
+      {filteredVisits.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No visits found</h3>
-          <p className="text-gray-500">No approved appointments yet. Approved requests will appear here.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No visits found' : 'No visits available'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No visits match the selected filters. Try adjusting your filters.'
+              : 'No approved appointments yet. Approved requests will appear here.'}
+          </p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Visits 
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
             </h2>
           </div>
 
@@ -772,7 +854,7 @@ const Visits = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {allVisitsData.map((visit, index) => (
+                  {paginatedVisits.map((visit, index) => (
                     <tr key={visit.id || index} className="hover:bg-gray-50 border-b border-gray-100">
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{visit.visitId}</td>
                       <td className="px-6 py-4">
@@ -813,16 +895,18 @@ const Visits = () => {
             </div>
           </div>
           
-          <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={Math.max(1, totalPages)}
-              onPageChange={handlePageChange}
-              totalItems={totalItems}
-              itemsPerPage={itemsPerPage}
-              itemLabel="approved visits"
-            />
-          </div>
+          {totalFilteredPages > 1 && (
+            <div className="px-6 py-3 bg-gray-50 rounded-b-xl border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalFilteredPages}
+                onPageChange={handlePageChange}
+                totalItems={totalFilteredItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="approved visits"
+              />
+            </div>
+          )}
         </div>
       )}
 

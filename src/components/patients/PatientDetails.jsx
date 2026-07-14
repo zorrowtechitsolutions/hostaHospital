@@ -1,4 +1,4 @@
-// src/components/patients/PatientDetails.jsx - With Fixed Prescription Doctor Names and Date Formatter
+// src/components/patients/PatientDetails.jsx - With Optimistic Updates
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
@@ -28,7 +28,12 @@ import PrescriptionReportModal from "./modals/PrecriptionReportModal";
 // Import API hooks
 import { useGetPatientByIdQuery } from "../../../app/service/patients";
 import { useGetBookingsQuery } from "../../../app/service/request";
-import { useGetPrescriptionsQuery, useDeletePrescriptionMutation } from "../../../app/service/prescription";
+import { 
+  useGetPrescriptionsQuery, 
+  useDeletePrescriptionMutation,
+  useRecoverPrescriptionMutation,
+  useUpdatePrescriptionMutation
+} from "../../../app/service/prescription";
 import { useGetVitalsByPatientIdQuery, useDeleteVitalMutation } from "../../../app/service/vitals";
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 import { Loader } from "../ui";
@@ -127,6 +132,8 @@ const PatientDetails = () => {
 
   const [deletePrescription] = useDeletePrescriptionMutation();
   const [deleteVital] = useDeleteVitalMutation();
+  const [recoverPrescription] = useRecoverPrescriptionMutation();
+  const [updatePrescription] = useUpdatePrescriptionMutation();
 
   const patientData = patientResponse?.data || patientResponse || passedPatient;
 
@@ -280,6 +287,9 @@ const PatientDetails = () => {
         doctorSpecialization = "General Medicine";
       }
       
+      // Check if prescription is deleted (soft delete)
+      const isDeleted = prescription.isDelete === true || prescription.status === 'deleted';
+      
       return {
         id: prescription.id || prescription._id || index,
         type: prescription.medications?.[0]?.name || "Prescription",
@@ -290,7 +300,7 @@ const PatientDetails = () => {
         doctorSpecialization: doctorSpecialization,
         amount: prescription.amount || "N/A",
         paymentMethod: prescription.paymentMethod || "Insurance",
-        status: "Completed",
+        status: isDeleted ? "Blacklisted" : "Completed",
         fullData: prescription,
         complaint: prescription.complaint,
         advice: prescription.advice,
@@ -298,7 +308,8 @@ const PatientDetails = () => {
         vitals: prescription.vitals,
         medications: prescription.medications,
         next_consultation: prescription.next_consultation,
-        doctorId: prescription.doctorId
+        doctorId: prescription.doctorId,
+        isDelete: isDeleted
       };
     });
   }, [prescriptionsResponse, bookingResponse, doctorMap]);
@@ -603,7 +614,8 @@ const PatientDetails = () => {
       'expired': 'bg-red-100 text-red-700',
       'received': 'bg-green-100 text-green-700',
       'In Progress': 'bg-blue-100 text-blue-700',
-      'Completed': 'bg-green-100 text-green-700'
+      'Completed': 'bg-green-100 text-green-700',
+      'Blacklisted': 'bg-gray-200 text-gray-600'
     };
     return `px-2 py-1 rounded-full text-xs font-medium ${statusMap[status] || 'bg-gray-100 text-gray-700'}`;
   };
@@ -653,6 +665,94 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
+  // Handle recover prescription with fallback
+  const handleRecoverPrescription = async (prescription) => {
+    try {
+      // First try the recover endpoint
+      const result = await recoverPrescription(prescription.id).unwrap();
+      
+      // Update local state immediately
+      const updatedPrescriptions = patient.prescriptionsList.map(p => {
+        if (p.id === prescription.id) {
+          return {
+            ...p,
+            isDelete: false,
+            status: 'Completed'
+          };
+        }
+        return p;
+      });
+      
+      setPatient({
+        ...patient,
+        prescriptionsList: updatedPrescriptions
+      });
+      
+      showSuccessToast(`Prescription recovered successfully`);
+      await refetchPrescriptions();
+      await refetchPatient();
+    } catch (error) {
+      console.error('Recover endpoint error:', error);
+      
+      // If recover endpoint fails (404), try using update endpoint as fallback
+      if (error?.status === 404 || error?.originalStatus === 404) {
+        try {
+          await updatePrescription({
+            id: prescription.id,
+            data: {
+              isDelete: false,
+              status: 'completed'
+            }
+          }).unwrap();
+          
+          // Update local state immediately
+          const updatedPrescriptions = patient.prescriptionsList.map(p => {
+            if (p.id === prescription.id) {
+              return {
+                ...p,
+                isDelete: false,
+                status: 'Completed'
+              };
+            }
+            return p;
+          });
+          
+          setPatient({
+            ...patient,
+            prescriptionsList: updatedPrescriptions
+          });
+          
+          showSuccessToast(`Prescription recovered successfully`);
+          await refetchPrescriptions();
+          await refetchPatient();
+        } catch (updateError) {
+          console.error('Update fallback error:', updateError);
+          
+          // If update also fails, update local state as last resort
+          const updatedPrescriptions = patient.prescriptionsList.map(p => {
+            if (p.id === prescription.id) {
+              return {
+                ...p,
+                isDelete: false,
+                status: 'Completed'
+              };
+            }
+            return p;
+          });
+          
+          setPatient({
+            ...patient,
+            prescriptionsList: updatedPrescriptions
+          });
+          
+          showSuccessToast(`Prescription recovered (local update - backend sync pending)`);
+        }
+      } else {
+        showErrorToast(error?.data?.message || error?.error || "Failed to recover prescription");
+      }
+    }
+  };
+
   const handleSavePrescription = (prescriptionData) => {
     setShowPrescriptionModal(false);
     setSelectedPrescription(null);
@@ -692,6 +792,7 @@ const PatientDetails = () => {
     setAppointmentToEdit(null);
   };
 
+  // 👇 Updated handleDeleteClick with optimistic update for prescriptions
   const handleDeleteClick = (type, id, index, name) => {
     setDeleteConfig({
       type,
@@ -703,14 +804,44 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
+  // 👇 Updated handleConfirmDelete with optimistic updates
   const handleConfirmDelete = async () => {
     const { type, id, index } = deleteConfig;
     
     try {
       if (type === 'prescription') {
-        await deletePrescription(id).unwrap();
+        // ✅ OPTIMISTIC UPDATE: Update local state immediately
+        const updatedPrescriptions = patient.prescriptionsList.map((p, i) => {
+          if (i === index || p.id === id) {
+            return {
+              ...p,
+              isDelete: true,
+              status: 'Blacklisted'
+            };
+          }
+          return p;
+        });
+        
+        // Update local state immediately (optimistic)
+        setPatient({
+          ...patient,
+          prescriptionsList: updatedPrescriptions
+        });
+        
+        // Close modal
+        setShowDeleteModal(false);
+        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+        
+        // Show success toast
         showSuccessToast("Prescription deleted successfully");
+        
+        // Then make the API call
+        await deletePrescription(id).unwrap();
+        
+        // Refetch to sync with backend
         await refetchPrescriptions();
+        await refetchPatient();
+        
       } else if (type === 'vital') {
         await deleteVital(id).unwrap();
         showSuccessToast("Vital record deleted successfully");
@@ -741,7 +872,15 @@ const PatientDetails = () => {
         showSuccessToast("Insurance record deleted successfully");
       }
     } catch (error) {
-      showErrorToast(`Failed to delete ${type}: ${error?.data?.message || error.message}`);
+      // If API fails, revert the optimistic update
+      if (type === 'prescription') {
+        // Revert by refetching
+        await refetchPrescriptions();
+        await refetchPatient();
+        showErrorToast(`Failed to delete prescription: ${error?.data?.message || error.message}`);
+      } else {
+        showErrorToast(`Failed to delete ${type}: ${error?.data?.message || error.message}`);
+      }
     }
     
     setShowDeleteModal(false);
@@ -815,6 +954,7 @@ const PatientDetails = () => {
             patient={patient} 
             handleDeleteClick={handleDeleteClick}
             handleViewDetails={handleViewPrescriptionDetails}
+            handleRecoverClick={handleRecoverPrescription}
             openMenu={openMenu} 
             setOpenMenu={setOpenMenu} 
             getStatusBadge={getStatusBadge} 

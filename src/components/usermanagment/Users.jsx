@@ -249,6 +249,18 @@ const Users = () => {
 
   // ✅ REMOVED: handleImport function
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const handleEditUser = (user) => {
     navigate(`/edit-user/${user.userType.toLowerCase()}`);
   };
@@ -341,18 +353,12 @@ const Users = () => {
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
-            {/* ✅ Replaced custom SearchBar with UI library SearchBar */}
+            {/* ✅ Using global SearchBar component */}
             <SearchBar 
               placeholder="Search by user type..." 
               value={searchTerm} 
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              onClear={() => {
-                setSearchTerm('');
-                setCurrentPage(1);
-              }}
+              onChange={handleSearchChange}
+              onClear={handleClearSearch}
               className="w-full"
             />
           </div>
@@ -434,6 +440,9 @@ const Users = () => {
               <h2 className="text-sm font-semibold text-gray-700">
                 All Users
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredUsers.length}</span>
+                {searchTerm && filteredUsers.length > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
+                )}
               </h2>
             </div>
 

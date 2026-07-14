@@ -202,7 +202,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     page: currentPage,
     limit: itemsPerPage,
     status: "pending", // ✅ Always show pending requests
-    ...(searchTerm && { search_query: searchTerm }),
+    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
   });
@@ -291,9 +291,73 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return transformBookingsData(bookingsResponse?.data || []);
   }, [bookingsResponse]);
 
-  // ✅ Use server-side pagination data
-  const totalItems = bookingsResponse?.pagination?.totalItems || safeData.length;
-  const totalPages = bookingsResponse?.pagination?.totalPages || 1;
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBySearch = useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return safeData;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return safeData.filter(item => {
+      // Search through all relevant fields
+      const searchFields = [
+        item.formattedId?.toLowerCase() || '',
+        item.patientName?.toLowerCase() || '',
+        item.patientId?.toLowerCase() || '',
+        item.contact?.toString() || '',
+        item.doctorName?.toLowerCase() || '',
+        item.department?.toLowerCase() || '',
+        item.appointmentDate?.toString() || '',
+        item.consulting_time?.toString() || ''
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [safeData, searchTerm]);
+
+  // ✅ Apply doctor filter
+  const filteredByDoctor = useMemo(() => {
+    if (doctorId && !showAllData) {
+      return filteredBySearch.filter(item => 
+        matchesDoctor(item, doctorId, doctorName)
+      );
+    }
+    return filteredBySearch;
+  }, [filteredBySearch, doctorId, doctorName, showAllData]);
+
+  // ✅ Apply department filter (frontend fallback)
+  const filteredRequests = useMemo(() => {
+    let result = filteredByDoctor;
+
+    // Apply department filter if set
+    if (departmentFilter) {
+      result = result.filter(item => 
+        item.department?.toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+
+    // Apply date filter if set
+    if (dateFilter) {
+      result = result.filter(item => 
+        item.appointmentDate === dateFilter
+      );
+    }
+
+    return result;
+  }, [filteredByDoctor, departmentFilter, dateFilter]);
+
+  // ✅ Get total items from filtered results
+  const totalItems = filteredRequests.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedRequests = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredRequests.slice(startIndex, endIndex);
+  }, [filteredRequests, currentPage, itemsPerPage]);
 
   // Get all unique departments from the data
   const departments = useMemo(() => {
@@ -306,17 +370,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  // Filter requests for doctor view
-  const filteredRequests = useMemo(() => {
-    if (doctorId && !showAllData) {
-      return safeData.filter(item =>
-        matchesDoctor(item, doctorId, doctorName)
-      );
-    }
-    return safeData;
-  }, [safeData, doctorId, doctorName, showAllData]);
-
-  const activeFilterCount = [departmentFilter, dateFilter, searchTerm].filter(Boolean).length;
+  const activeFilterCount = [departmentFilter, dateFilter, statusFilter, searchTerm].filter(Boolean).length;
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = departmentFilter !== '' || dateFilter !== '' || statusFilter !== '';
 
   // Reset page when filters change
   useEffect(() => {
@@ -685,13 +741,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       {filteredRequests.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
-          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-          {activeFilterCount > 0 && (
-            <button onClick={clearAllFilters} className="text-blue-600 hover:text-blue-700 text-sm">
-              Clear all filters
-            </button>
-          )}
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {hasSearchTerm || hasActiveFilters ? 'No requests found' : 'No pending requests'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasSearchTerm 
+              ? `No results found for "${searchTerm}". Try adjusting your search.`
+              : hasActiveFilters
+              ? 'No requests match the selected filters. Try adjusting your filters.'
+              : 'All requests have been processed.'}
+          </p>
         </div>
       ) : (
         <div className="w-full overflow-hidden">
@@ -702,6 +761,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {totalItems}
                 </span>
+                {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">
+                    (Filtered)
+                  </span>
+                )}
               </h2>
             </div>
 
@@ -721,7 +785,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredRequests.map((item, index) => (
+                    {paginatedRequests.map((item, index) => (
                       <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
@@ -791,17 +855,19 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* Pagination - Uses server-side totalPages */}
-              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={Math.max(1, totalPages)}
-                  onPageChange={setCurrentPage}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="pending requests"
-                />
-              </div>
+              {/* Pagination - Uses client-side pagination */}
+              {totalPages > 1 && (
+                <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    itemLabel="pending requests"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

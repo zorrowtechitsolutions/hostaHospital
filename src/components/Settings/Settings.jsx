@@ -666,6 +666,7 @@ const Settings = () => {
     setEditForm(prev => ({ ...prev, cityName: name }));
   };
 
+  // Properly update working hours with deep clone
   const handleWorkingHourChange = (day, field, value) => {
     setEditForm(prev => {
       const updatedWorkingHours = { ...prev.workingHours };
@@ -680,6 +681,7 @@ const Settings = () => {
     });
   };
 
+  // Properly toggle closed status with deep clone
   const handleToggleClosed = (day) => {
     setEditForm(prev => {
       const updatedWorkingHours = { ...prev.workingHours };

@@ -246,6 +246,18 @@ const Ambulance = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // ✅ Search handler - receives value directly from SearchBar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // ✅ Clear search handler
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   // CRUD Handlers with API
   const handleAddAmbulance = async (newAmbulance) => {
     try {
@@ -371,8 +383,6 @@ const Ambulance = () => {
     }
   };
 
-  // ✅ REMOVED: handleImport function
-
   // ✅ Loading state with skeleton
   if (loading) {
     return <AmbulanceSkeleton />;
@@ -405,21 +415,14 @@ const Ambulance = () => {
       {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
-          {/* ✅ Replaced custom search input with SearchBar component */}
+          {/* ✅ Using global SearchBar component */}
           <SearchBar
             placeholder="Search by name, ID, place..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm('');
-              setCurrentPage(1);
-            }}
+            onChange={handleSearchChange}
+            onClear={handleClearSearch}
             className="flex-1 max-w-sm"
           />
-
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -455,8 +458,6 @@ const Ambulance = () => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-
-          {/* ✅ IMPORT BUTTON REMOVED */}
 
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
             <Download size={16} />
