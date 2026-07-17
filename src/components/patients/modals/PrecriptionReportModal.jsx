@@ -564,12 +564,6 @@ const PrescriptionReportModal = ({
             <p className="text-sm text-gray-500">Home &gt; Patient Details</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={handlePrint} className="p-2" title="Print Prescription">
-              <Printer size={18} />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleDownload} className="p-2" title="Download Prescription">
-              <Download size={18} />
-            </Button>
             <Button variant="ghost" size="sm" onClick={onClose} className="p-2">
               <X size={18} />
             </Button>
@@ -595,7 +589,6 @@ const PrescriptionReportModal = ({
         {/* Footer Actions */}
         <div className="flex justify-end gap-3 p-4 border-t bg-white no-print">
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button variant="primary" onClick={handlePrint}>Print</Button>
         </div>
       </div>
     </div>

@@ -443,42 +443,6 @@ const VitalsTab = ({
     }
   };
 
-  const getVitalSummary = (vital) => {
-    const metrics = [];
-    
-    if (vital.bloodPressure && vital.bloodPressure !== "null" && vital.bloodPressure !== "") 
-      metrics.push(`BP: ${vital.bloodPressure}`);
-    
-    if (vital.temperature && vital.temperature !== "null" && vital.temperature !== "") 
-      metrics.push(`${vital.temperature}°F`);
-    
-    if (vital.pulse && vital.pulse !== "null" && vital.pulse !== "") 
-      metrics.push(`Pulse: ${vital.pulse}`);
-    
-    if (vital.heartRate && vital.heartRate !== "null" && vital.heartRate !== "") 
-      metrics.push(`HR: ${vital.heartRate}`);
-    
-    if (vital.spo2 && vital.spo2 !== "null" && vital.spo2 !== "") 
-      metrics.push(`SPO2: ${vital.spo2}%`);
-    
-    if (vital.respiratoryRate && vital.respiratoryRate !== "null" && vital.respiratoryRate !== "") 
-      metrics.push(`RR: ${vital.respiratoryRate}`);
-    
-    if (vital.weight && vital.weight !== "null" && vital.weight !== "") 
-      metrics.push(`Wt: ${vital.weight}kg`);
-    
-    if (vital.height && vital.height !== "null" && vital.height !== "") 
-      metrics.push(`Ht: ${vital.height}cm`);
-    
-    if (vital.bmi && vital.bmi !== "null" && vital.bmi !== "") 
-      metrics.push(`BMI: ${vital.bmi}`);
-    
-    if (vital.bloodSugar && vital.bloodSugar !== "null" && vital.bloodSugar !== "") 
-      metrics.push(`Sugar: ${vital.bloodSugar}mg/dL`);
-    
-    return metrics.length > 0 ? metrics.join(" • ") : "No vital signs recorded";
-  };
-
   const formatDate = (item) => {
     const dateSources = [
       item.date,
@@ -590,9 +554,9 @@ const VitalsTab = ({
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
                   <th className="px-6 py-3">Date</th>
+                  <th className="px-6 py-3">Time of Vitals</th>
                   <th className="px-6 py-3">Doctor Name</th>
                   <th className="px-6 py-3">Specialization</th>
-                  <th className="px-6 py-3">Vitals Summary</th>
                   <th className="px-6 py-3 text-right w-16"></th>
                 </tr>
               </thead>
@@ -605,9 +569,9 @@ const VitalsTab = ({
                   >
                     <td className="px-6 py-4 text-gray-600">
                       {formatDate(item)}
-                      {formatTime(item) && (
-                        <span className="text-gray-400 text-xs block">{formatTime(item)}</span>
-                      )}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {formatTime(item) || "Time not available"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -625,11 +589,6 @@ const VitalsTab = ({
                       <span className="text-gray-500 text-xs">
                         {item.department}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600 max-w-md truncate" title={getVitalSummary(item)}>
-                        {getVitalSummary(item)}
-                      </div>
                     </td>
                     <td className="px-6 py-4 text-right relative action-menu-container">
                       <Button

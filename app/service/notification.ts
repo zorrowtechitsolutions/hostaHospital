@@ -118,16 +118,25 @@ export const notificationApi = api.injectEndpoints({
       providesTags: (result, error, id) => [{ type: 'Notification', id }],
     }),
 
-    getNotificationsByRole: builder.query<NotificationsResponse, { role: string; page?: number; limit?: number }>({
-      query: ({ role, page, limit }) => {
-        const queryParams = new URLSearchParams();
-        if (page) queryParams.append('page', page.toString());
-        if (limit) queryParams.append('limit', limit.toString());
-        const queryString = queryParams.toString();
-        return `/notification/role/${role}${queryString ? `?${queryString}` : ''}`;
-      },
-      providesTags: [{ type: 'Notifications', id: 'BY_ROLE' }],
-    }),
+getNotificationsByRole: builder.query<
+  NotificationsResponse,
+  { role: string; id: number; page?: number; limit?: number }
+>({
+  query: ({ role, id, page, limit }) => {
+    const queryParams = new URLSearchParams();
+
+    if (page) queryParams.append("page", page.toString());
+    if (limit) queryParams.append("limit", limit.toString());
+
+    const queryString = queryParams.toString();
+
+    return `/notification/${role}/${id}${
+      queryString ? `?${queryString}` : ""
+    }`;
+  },
+
+  providesTags: [{ type: "Notifications", id: "BY_ROLE" }],
+}),
 
     getNotificationsByHospital: builder.query<NotificationsResponse, { hospitalId: number; page?: number; limit?: number }>({
       query: ({ hospitalId, page, limit }) => {

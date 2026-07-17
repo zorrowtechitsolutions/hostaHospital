@@ -22,7 +22,8 @@ import {
   useGetHospitalByIdQuery,
   useUpdateHospitalMutation
 } from '../../../app/service/hospitalApi';
-import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
+import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
 
 // ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -35,28 +36,35 @@ const SECTION_TITLE_CLASS = 'text-lg font-semibold text-gray-900 mb-4 flex items
 const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
 const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
 
-// Helper function to get full image URL
+// ==================== HELPER FUNCTIONS ====================
+
+// ✅ EXACT SAME LOGIC AS DOCTOR PROFILE
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
-  if (imageKey.startsWith("http")) {
-    return imageKey;
+  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+    const separator = imageKey.includes('?') ? '&' : '?';
+    return `${imageKey}${separator}_t=${Date.now()}`;
   }
   
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
+  const url = getS3ImageUrl(imageKey);
+  if (!url) return null;
+  
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
 };
 
 // ==================== TOAST FUNCTIONS ====================
 const showSuccessToast = (message) => {
-  // Toast implementation
+  console.log('✅ Success:', message);
 };
 
 const showErrorToast = (message) => {
-  // Toast implementation
+  console.error('❌ Error:', message);
 };
 
 const showWarningToast = (message) => {
-  // Toast implementation
+  console.warn('⚠️ Warning:', message);
 };
 
 // ==================== SKELETON LOADER ====================
@@ -115,6 +123,93 @@ const HospitalProfile = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // ==================== SOCKET EVENT HANDLERS ====================
+  
+  // Handle hospital updated event from socket
+  const handleHospitalUpdated = (data) => {
+    console.log('🔄 Hospital updated via socket:', data);
+    
+    if (data && data.id === hospitalId) {
+      showSuccessToast('Hospital profile updated in real-time!');
+      
+      // Refresh the data
+      refetch();
+      
+      // Update form data if the hospital data matches
+      if (data.name || data.email || data.phone) {
+        setFormData(prev => ({
+          ...prev,
+          fullName: data.name || prev.fullName,
+          email: data.email || prev.email,
+          phoneNumber: data.phone || prev.phoneNumber,
+          bio: data.about || prev.bio,
+          websiteLink: data.website || prev.websiteLink,
+          occupation: data.type || prev.occupation,
+          profileImage: data.profilePicture || data.imageUrl || prev.profileImage,
+          imageUrl: data.profilePicture || data.imageUrl || prev.imageUrl,
+          imageKey: data.profilePicture || data.imageUrl || prev.imageKey,
+        }));
+      }
+    }
+  };
+
+  // Handle hospital registered event
+  const handleHospitalRegistered = (data) => {
+    console.log('🏥 New hospital registered via socket:', data);
+    showSuccessToast('New hospital registered!');
+  };
+
+  // Handle hospital deleted event
+  const handleHospitalDeleted = (data) => {
+    console.log('🗑️ Hospital deleted via socket:', data);
+    if (data && data.id === hospitalId) {
+      showWarningToast('Your hospital profile has been deleted.');
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 3000);
+    }
+  };
+
+  // Handle hospital blacklisted event
+  const handleHospitalBlacklisted = (data) => {
+    console.log('⛔ Hospital blacklisted via socket:', data);
+    if (data && data.id === hospitalId) {
+      showErrorToast('Your hospital has been blacklisted. Please contact support.');
+      setTimeout(() => {
+        logout();
+        navigate('/sign-in');
+      }, 3000);
+    }
+  };
+
+  // Handle hospital recovered event
+  const handleHospitalRecovered = (data) => {
+    console.log('🔄 Hospital recovered via socket:', data);
+    if (data && data.id === hospitalId) {
+      showSuccessToast('Your hospital has been recovered!');
+      refetch();
+    }
+  };
+
+  // Register socket events on mount
+  useEffect(() => {
+    // Register all hospital event handlers
+    registerHospitalEvents({
+      onHospitalRegistered: handleHospitalRegistered,
+      onHospitalUpdated: handleHospitalUpdated,
+      onHospitalDeleted: handleHospitalDeleted,
+      onHospitalBlacklisted: handleHospitalBlacklisted,
+      onHospitalRecovered: handleHospitalRecovered,
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unregisterHospitalEvents();
+    };
+  }, [hospitalId]); // Re-register if hospitalId changes
 
   // Handle fetch error (401 unauthorized)
   useEffect(() => {
@@ -170,6 +265,7 @@ const HospitalProfile = () => {
       if (imageKey) {
         const fullUrl = getFullImageUrl(imageKey);
         setPreviewImage(fullUrl);
+        setImageError(false);
       }
     }
   }, [hospitalData]);
@@ -185,6 +281,7 @@ const HospitalProfile = () => {
     }));
   };
 
+  // ✅ EXACT SAME IMAGE UPLOAD LOGIC AS DOCTOR PROFILE
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -206,7 +303,12 @@ const HospitalProfile = () => {
     
     try {
       setUploadProgress(30);
-      const uploaded = await uploadToS3(file, formData.imageKey || null, hospitalId);
+      const uploaded = await uploadToS3(
+        file, 
+        formData.imageKey || null, 
+        hospitalId,
+        'hospital'
+      );
       setUploadProgress(100);
       
       setEditForm(prev => ({
@@ -216,9 +318,11 @@ const HospitalProfile = () => {
         imageKey: uploaded.key
       }));
       
+      setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
-    } catch {
+    } catch (error) {
+      console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
@@ -238,6 +342,7 @@ const HospitalProfile = () => {
     setPreviewImage(null);
     setUploadProgress(0);
     setEditForm(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
+    setImageError(false);
     showSuccessToast('Image removed');
   };
 
@@ -247,6 +352,7 @@ const HospitalProfile = () => {
     resetUploadState();
   };
 
+  // ✅ EXACT SAME SAVE LOGIC AS DOCTOR PROFILE
   const handleSave = async () => {
     setIsSaving(true);
     
@@ -286,6 +392,7 @@ const HospitalProfile = () => {
       
       if (newImageUrl) {
         setPreviewImage(newImageUrl);
+        setImageError(false);
       }
       
       setIsEditing(false);
@@ -303,6 +410,7 @@ const HospitalProfile = () => {
       
       showSuccessToast('Profile updated successfully!');
       
+      // Refetch to get latest data
       refetch();
       
     } catch (error) {
@@ -325,11 +433,13 @@ const HospitalProfile = () => {
     setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
     setUploadProgress(0);
     setIsEditing(false);
+    setImageError(false);
     showWarningToast('Changes discarded');
   };
 
+  // ✅ EXACT SAME GET PROFILE IMAGE LOGIC AS DOCTOR PROFILE
   const getProfileImage = () => {
-    if (previewImage) {
+    if (previewImage && !imageError) {
       return previewImage;
     }
 
@@ -344,6 +454,7 @@ const HospitalProfile = () => {
 
   const handleImageError = (e) => {
     e.target.onerror = null;
+    setImageError(true);
     e.target.src = FALLBACK_IMAGE;
   };
 

@@ -12,12 +12,15 @@ import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
 import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
 import {
-  useGetNotificationsByHospitalQuery
+  useGetNotificationsByHospitalQuery,
+  useGetNotificationsByRoleQuery
 } from "../../app/service/notification";
-import { getHospitalId } from "../utils/auth";
+import { getHospitalId, getUserRole, getAuthUser } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
+import { socket } from '../socket/socket';
+import { registerNotificationEvents, unregisterNotificationEvents } from '../socket/notificationEvents';
 
 // ================= HELPER FUNCTIONS =================
 
@@ -84,6 +87,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [menuImageError, setMenuImageError] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isBadgeAnimating, setIsBadgeAnimating] = useState(false);
   
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
@@ -92,14 +97,28 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const hospitalId = getHospitalId();
   const userRole = user?.role || 'hospital';
+  const auth = getAuthUser();
   
   // ✅ Check if user is Hospital Admin (has access to Settings)
   const isHospitalAdmin = userRole === 'hospital';
   
   // Get user ID based on role
   const userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || hospitalId;
+
+  // Determine which query to use based on role
+  const shouldUseHospitalNotifications = userRole === "hospital" || userRole === "staff";
+  const shouldUseRoleNotifications = userRole === "doctor";
+
+  const getEntityId = () => {
+    if (userRole === "doctor") {
+      return auth?.doctorId || auth?.id || userId;
+    }
+    return null;
+  };
+
+  const entityId = getEntityId();
   
-  // Fetch data based on user role
+  // ✅ SINGLE DECLARATION - Fetch data based on user role
   const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
     userId,
     { skip: userRole !== 'hospital' || !userId }
@@ -115,11 +134,122 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     { skip: userRole !== 'staff' || !userId }
   );
   
-  const { data: notificationsData } = useGetNotificationsByHospitalQuery(
+  // Hospital-based query (for staff and hospital)
+  const hospitalQuery = useGetNotificationsByHospitalQuery(
     { hospitalId },
-    { skip: !hospitalId, pollingInterval: 10000 }
+    { 
+      skip: !shouldUseHospitalNotifications || !hospitalId,
+      pollingInterval: 30000, // Poll every 30 seconds as fallback
+    }
   );
-  
+
+  // Role-based query (for doctors only)
+  const roleQuery = useGetNotificationsByRoleQuery(
+    {
+      role: "doctor",
+      id: entityId,
+    },
+    {
+      skip: !shouldUseRoleNotifications || !entityId,
+      pollingInterval: 30000,
+    }
+  );
+
+  // Select the appropriate data source
+  const notificationsData = shouldUseHospitalNotifications 
+    ? hospitalQuery.data 
+    : roleQuery.data;
+
+  const refetch = shouldUseHospitalNotifications 
+    ? hospitalQuery.refetch 
+    : roleQuery.refetch;
+
+  // Calculate unread count function
+  const calculateUnreadCount = (notifications) => {
+    if (!notifications || !notifications.data) return 0;
+
+    return notifications.data.filter(notification => {
+      if (userRole === "staff" || userRole === "hospital") {
+        return !notification.hospitalReadStatus?.[hospitalId];
+      } else if (userRole === "doctor") {
+        return !notification.doctorReadStatus?.[entityId];
+      }
+      return false;
+    }).length;
+  };
+
+  // Update unread count when data changes
+  useEffect(() => {
+    const count = calculateUnreadCount(notificationsData);
+    
+    // Trigger animation if count increased
+    if (count > unreadCount && count > 0) {
+      setIsBadgeAnimating(true);
+      setTimeout(() => setIsBadgeAnimating(false), 500);
+    }
+    
+    setUnreadCount(count);
+  }, [notificationsData]);
+
+  // Socket event listeners for real-time updates
+  useEffect(() => {
+    const handleNotificationCreated = () => {
+      refetch();
+    };
+
+    const handleNotificationRead = () => {
+      refetch();
+    };
+
+    const handleNotificationsReadAll = () => {
+      refetch();
+      setUnreadCount(0);
+    };
+
+    const handleNotificationDeleted = () => {
+      refetch();
+    };
+
+    const handleUnreadCountUpdated = (data) => {
+      if (data && data.count !== undefined) {
+        setUnreadCount(data.count);
+      }
+    };
+
+    // Register socket events
+    registerNotificationEvents({
+      onNotificationCreated: handleNotificationCreated,
+      onNotificationRead: handleNotificationRead,
+      onNotificationDeleted: handleNotificationDeleted,
+    });
+
+    // Additional socket listeners
+    socket.on("notifications_read_all", handleNotificationsReadAll);
+    socket.on("notification_deleted", handleNotificationDeleted);
+    socket.on("unread_count_updated", handleUnreadCountUpdated);
+
+    return () => {
+      unregisterNotificationEvents();
+      socket.off("notifications_read_all", handleNotificationsReadAll);
+      socket.off("notification_deleted", handleNotificationDeleted);
+      socket.off("unread_count_updated", handleUnreadCountUpdated);
+    };
+  }, [refetch]);
+
+  // Manual refresh on visibility change (tab focus)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetch();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refetch]);
+
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
   // Determine which data source to use based on role
@@ -176,11 +306,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileImageUrl = getProfileImageUrl();
   const initials = getInitials(profileData.name);
   const gradientColor = getColorFromName(profileData.name);
-  
-  const notifications = notificationsData?.data || [];
-  const unreadCount = notifications.filter(
-    (n) => !n.hospitalReadStatus?.[hospitalId]
-  ).length;
 
   // ✅ Reset image error when profileImageUrl changes
   useEffect(() => {
@@ -404,10 +529,20 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
             aria-label="Toggle notifications"
           >
-            <Bell size={20} className="!text-white" stroke="white" />
+            <Bell 
+              size={20} 
+              className={`!text-white transition-transform duration-300 ${
+                isBadgeAnimating ? 'scale-110' : 'scale-100'
+              }`}
+              stroke="white" 
+            />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {unreadCount}
+              <span 
+                className={`absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium shadow-lg transition-all duration-300 ${
+                  isBadgeAnimating ? 'scale-125 animate-bounce' : 'scale-100'
+                }`}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
@@ -415,6 +550,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           <NotificationPanel 
             isOpen={showNotifications}
             onClose={() => setShowNotifications(false)}
+            onUnreadCountChange={(count) => {
+              setUnreadCount(count);
+            }}
           />
         </div>
 

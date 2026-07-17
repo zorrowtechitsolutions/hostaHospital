@@ -31,6 +31,8 @@ self.addEventListener("push", (event) => {
   const title = payload.notification?.title || payload.data?.title || "New Booking";
   const body = payload.notification?.body || payload.data?.body || "You have a new booking request";
 
+  console.log('📨 Notification title:', payload);
+
   const options = {
     body: body,
     vibrate: [200, 100, 200],

@@ -306,9 +306,6 @@ const Patients = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
 
-  // ✅ Track if events are registered
-  const [eventsRegistered, setEventsRegistered] = useState(false);
-
   // 🔥 FIX: Get hospitalId from auth.hospitalId, NOT auth.id
   const authUser = getAuthUser();
   const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
@@ -336,63 +333,40 @@ const Patients = () => {
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // ✅ Register socket event listeners
+  // ✅ Register socket event listeners (SAME AS DOCTORS)
   useEffect(() => {
     registerPatientEvents({
-      onPatientRegistered: async (data) => {
+      onPatientRegistered: () => {
         showSuccessToast(`New patient registered!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientUpdated: async (data) => {
+      onPatientUpdated: () => {
         showSuccessToast(`Patient updated!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientDeleted: async (data) => {
+      onPatientDeleted: () => {
         showSuccessToast(`Patient deleted!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       },
-      onPatientRecovered: async (data) => {
+      onPatientRecovered: () => {
         showSuccessToast(`Patient recovered successfully!`, 3000);
-        await refetchPatients();
+        refetchPatients();
       }
     });
 
-    setEventsRegistered(true);
-
     return () => {
       unregisterPatientEvents();
-      setEventsRegistered(false);
     };
-  }, []);
+  }, [refetchPatients]); // ✅ Add refetchPatients as dependency
 
-  // ✅ Listen for socket connection/disconnection
+  // ✅ Listen for socket connection/disconnection (SAME AS DOCTORS)
   useEffect(() => {
     const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerPatientEvents({
-          onPatientRegistered: async (data) => {
-            showSuccessToast(`New patient registered!`, 3000);
-            await refetchPatients();
-          },
-          onPatientUpdated: async (data) => {
-            showSuccessToast(`Patient updated!`, 3000);
-            await refetchPatients();
-          },
-          onPatientDeleted: async (data) => {
-            showSuccessToast(`Patient deleted!`, 3000);
-            await refetchPatients();
-          },
-          onPatientRecovered: async (data) => {
-            showSuccessToast(`Patient recovered successfully!`, 3000);
-            await refetchPatients();
-          }
-        });
-        setEventsRegistered(true);
-      }
+      // Re-register events if needed
     };
 
     const handleDisconnect = () => {
-      setEventsRegistered(false);
+      // Handle disconnect
     };
 
     socket.on("connect", handleConnect);
@@ -402,7 +376,7 @@ const Patients = () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [refetchPatients, eventsRegistered]);
+  }, []);
 
   // Save view mode to localStorage
   useEffect(() => {

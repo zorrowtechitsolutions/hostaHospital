@@ -48,13 +48,13 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
             {paginatedVisitHistory.length > 0 ? (
               paginatedVisitHistory.map((item) => (
                 <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td 
+                  <td
                     className="px-4 py-3 text-[#1C62A0] font-medium cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     {item.visitId || item.id}
                   </td>
-                  <td 
+                  <td
                     className="px-4 py-3 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
@@ -67,19 +67,19 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
                       <span className="font-medium text-gray-800">{item.doctorName}</span>
                     </div>
                   </td>
-                  <td 
+                  <td
                     className="px-4 py-3 text-gray-600 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
                     {item.department}
                   </td>
-                  <td 
+                  <td
                     className="px-4 py-3 text-gray-600 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
-                    {formatDate(item.visitDate)} {/* Changed this line */}
+                    {item.visitDate}
                   </td>
-                  <td 
+                  <td
                     className="px-4 py-3 cursor-pointer"
                     onClick={() => handleViewVisitDetails(item)}
                   >
@@ -91,8 +91,8 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setOpenMenu(openMenu === `visit-${item.id}` ? null : `visit-${item.id}`);
                           }}
                           className="p-2"
@@ -102,9 +102,13 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
                         {openMenu === `visit-${item.id}` && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleDeleteClick('visit', item.id, `Visit on ${formatDate(item.visitDate)}`); // Changed this line too
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(
+                                  'visit',
+                                  item.id,
+                                  `Visit on ${item.visitDate}`
+                                );
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"
