@@ -532,9 +532,9 @@ const DocumentsTab = ({ patient }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Documents
           <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
@@ -1116,136 +1116,147 @@ const DocumentsTab = ({ patient }) => {
       {/* ======================== */}
       {/* TABLE WITH NUMBERS */}
       {/* ======================== */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">#</th>  {/* ✅ Added # column */}
-              <th className="px-4 py-3 font-medium">Document Name</th>
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium text-right w-44">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedDocuments.length > 0 ? (
-              paginatedDocuments.map((item, index) => {
-                const hasFile = !!(item.fileKey || item.imageUrl || item.fileUrl);
-                // ✅ Calculate sequential number
-                const displayNumber = startIndex + index + 1;
+      {totalItems === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <File size={32} className="text-gray-400" />
+          </div>
+          <p className="text-gray-500">No documents found</p>
+          <p className="text-sm text-gray-400 mt-1">Click "Upload Document" to add files</p>
+        </div>
+      ) : (
+        <div className="flex flex-col min-h-[420px]">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                <tr>
+                  <th className="px-4 py-3 font-medium">#</th>  {/* ✅ Added # column */}
+                  <th className="px-4 py-3 font-medium">Document Name</th>
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium text-right w-44">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedDocuments.length > 0 ? (
+                  paginatedDocuments.map((item, index) => {
+                    const hasFile = !!(item.fileKey || item.imageUrl || item.fileUrl);
+                    // ✅ Calculate sequential number
+                    const displayNumber = startIndex + index + 1;
 
-                return (
-                  <tr
-                    key={item.id || item._id || index}
-                    className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    {/* ✅ Number column */}
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-[#1C62A0]">
-                        {displayNumber}
-                      </span>
-                    </td>
+                    return (
+                      <tr
+                        key={item.id || item._id || index}
+                        className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        {/* ✅ Number column */}
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-[#1C62A0]">
+                            {displayNumber}
+                          </span>
+                        </td>
 
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {getFileIcon(item)}
-                        <span className="font-medium text-gray-800">
-                          {item.documentName || item.name}
-                        </span>
-                      </div>
-                    </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {getFileIcon(item)}
+                            <span className="font-medium text-gray-800">
+                              {item.documentName || item.name}
+                            </span>
+                          </div>
+                        </td>
 
-                    <td className="px-4 py-3 text-gray-600 text-xs">
-                      {item.date
-                        ? new Date(item.date).toLocaleDateString()
-                        : "N/A"}
-                    </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          {item.date
+                            ? new Date(item.date).toLocaleDateString()
+                            : "N/A"}
+                        </td>
 
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={!hasFile}
-                          onClick={() => hasFile && handleViewDocument(item)}
-                          title={hasFile ? "View Document" : "No file attached"}
-                          className="p-2"
-                        >
-                          <Eye
-                            size={16}
-                            className={hasFile ? "text-blue-600 hover:text-blue-800" : "text-gray-300"}
-                          />
-                        </Button>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!hasFile}
+                              onClick={() => hasFile && handleViewDocument(item)}
+                              title={hasFile ? "View Document" : "No file attached"}
+                              className="p-2"
+                            >
+                              <Eye
+                                size={16}
+                                className={hasFile ? "text-blue-600 hover:text-blue-800" : "text-gray-300"}
+                              />
+                            </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={!hasFile}
-                          onClick={() => hasFile && handleDownloadDocument(item)}
-                          title={hasFile ? "Download Document" : "No file attached"}
-                          className="p-2"
-                        >
-                          <Download
-                            size={16}
-                            className={hasFile ? "text-blue-600 hover:text-blue-800" : "text-gray-300"}
-                          />
-                        </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!hasFile}
+                              onClick={() => hasFile && handleDownloadDocument(item)}
+                              title={hasFile ? "Download Document" : "No file attached"}
+                              className="p-2"
+                            >
+                              <Download
+                                size={16}
+                                className={hasFile ? "text-blue-600 hover:text-blue-800" : "text-gray-300"}
+                              />
+                            </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditDocument(item)}
-                          title="Edit Document"
-                          className="p-2"
-                        >
-                          <Edit2
-                            size={16}
-                            className="text-green-600 hover:text-green-800"
-                          />
-                        </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditDocument(item)}
+                              title="Edit Document"
+                              className="p-2"
+                            >
+                              <Edit2
+                                size={16}
+                                className="text-green-600 hover:text-green-800"
+                              />
+                            </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteClick(item)}
-                          title="Delete Document"
-                          className="p-2"
-                        >
-                          <Trash2
-                            size={16}
-                            className="text-red-600 hover:text-red-800"
-                          />
-                        </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteClick(item)}
+                              title="Delete Document"
+                              className="p-2"
+                            >
+                              <Trash2
+                                size={16}
+                                className="text-red-600 hover:text-red-800"
+                              />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="text-center text-gray-500 py-12">
+                      <div className="flex flex-col items-center gap-2">
+                        <File size={48} className="text-gray-300" />
+                        <p>No documents found</p>
                       </div>
                     </td>
                   </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={4} className="text-center text-gray-500 py-12">  {/* ✅ Updated colSpan to 4 */}
-                  <div className="flex flex-col items-center gap-2">
-                    <File size={48} className="text-gray-300" />
-                    <p>No documents found</p>
-                    <p className="text-xs text-gray-400">Click "Upload Document" to add files</p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-      {/* Pagination */}
-      {totalItems > 0 && totalPages > 1 && (
-        <div className="px-6 py-3 border-t bg-gray-50">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            itemLabel="documents"
-          />
+          {/* Pagination */}
+          {totalItems > 0 && totalPages > 1 && (
+            <div className="mt-auto px-6 py-3 border-t bg-gray-50">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="documents"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

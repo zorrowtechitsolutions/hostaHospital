@@ -73,64 +73,72 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
-// Doctor Action Menu Component
+// ✅ FIXED: Doctor Action Menu Component - Only shows Recover when blacklisted
 const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== doctor.id) return null;
   
+  // ✅ Check if doctor is blacklisted/deleted
+  const isBlacklisted = doctor.isDelete === true;
+  
   return (
     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-      <button 
-        onClick={() => onView(doctor)} 
-        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-        </svg>
-        View Details
-      </button>
-      <button 
-        onClick={() => onAppointment(doctor)} 
-        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        Appointment Settings
-      </button>
-      <button 
-        onClick={() => onEdit(doctor)} 
-        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-        Edit
-      </button>
-      <div className="border-t border-gray-100 my-1"></div>
-      <button 
-        onClick={() => onDelete(doctor)} 
-        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-        Delete
-      </button>
+      {!isBlacklisted && (
+        <button 
+          onClick={() => onView(doctor)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          View Details
+        </button>
+      )}
+      {!isBlacklisted && (
+        <button 
+          onClick={() => onEdit(doctor)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Edit
+        </button>
+      )}
+      {!isBlacklisted && (
+        <button 
+          onClick={() => onAppointment(doctor)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Appointment Settings
+        </button>
+      )}
+      {!isBlacklisted && <div className="border-t border-gray-100 my-1"></div>}
       
-      {doctor.isDelete && (
-        <>
-          <div className="border-t border-gray-100 my-1"></div>
-          <button
-            onClick={() => onRecover(doctor)}
-            className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Recover Doctor
-          </button>
-        </>
+      {/* ✅ Show Recover when blacklisted, Delete when active */}
+      {isBlacklisted ? (
+        <button
+          onClick={() => onRecover(doctor)}
+          className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Recover Doctor
+        </button>
+      ) : (
+        <button 
+          onClick={() => onDelete(doctor)} 
+          className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Delete
+        </button>
       )}
     </div>
   );
@@ -383,8 +391,6 @@ const Doctors = () => {
     }
   }, [totalPages]);
 
-  // ✅ REMOVED: handleImport function
-
   const handleRefresh = useCallback(() => {
     setSearchTerm('');
     setSelectedSpecialty('All');
@@ -420,8 +426,8 @@ const Doctors = () => {
   const handleRecoverDoctor = useCallback(async (doctor) => {
     try {
       await recoverDoctor(doctor.id).unwrap();
-      refetch();
       setActiveMenu(null);
+      await refetch();
       showSuccessToast(`${getDoctorName(doctor)} recovered successfully`);
     } catch (error) {
       showErrorToast(error?.data?.message || "Failed to recover doctor");
@@ -635,8 +641,6 @@ const Doctors = () => {
             </svg>
           </button>
 
-          {/* ✅ IMPORT BUTTON REMOVED */}
-
           {/* ✅ Replace Download button with ExcelExportButton */}
           <ExcelExportButton
             data={getExportData()}
@@ -687,74 +691,91 @@ const Doctors = () => {
       {viewMode === 'grid' && doctors.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {doctors.map((doctor) => (
-              <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
-                <div className="w-full flex justify-between items-start mb-4">
-                  <Badge variant="info" className="text-[10px]">
-                    {getDoctorId(doctor.id)}
-                  </Badge>
-                  <div className="relative menu-container">
+            {doctors.map((doctor) => {
+              const isBlacklisted = doctor.isDelete === true;
+              
+              return (
+                <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-full flex justify-between items-start mb-4">
+                    <Badge variant="info" className="text-[10px]">
+                      {getDoctorId(doctor.id)}
+                    </Badge>
+                    <div className="relative menu-container">
+                      <button 
+                        onClick={(e) => toggleMenu(doctor.id, e)} 
+                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                        aria-label="Actions menu"
+                      >
+                        ⋮
+                      </button>
+                      <DoctorActionMenu
+                        doctor={doctor}
+                        activeMenu={activeMenu}
+                        onView={handleViewDetails}
+                        onEdit={handleEdit}
+                        onDelete={handleDeleteClick}
+                        onAppointment={handleAppointmentManagement}
+                        onRecover={handleRecoverDoctor}
+                      />
+                    </div>
+                  </div>
+                  <div className="relative mb-3">
+                    <Avatar className="w-16 h-16">
+                      <AvatarImage
+                        src={getS3ImageUrl(doctor.imageUrl)}
+                        alt={getDoctorName(doctor)}
+                      />
+                      <AvatarFallback>
+                        {(doctor.firstName?.[0] || "D").toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                        isBlacklisted
+                          ? "bg-black"
+                          : doctor.isActive
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                  </div>
+                  <h3 
+                    onClick={() => !isBlacklisted && handleViewDetails(doctor)} 
+                    className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                  >
+                    {getDoctorName(doctor)}
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
+                  <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                    <div className="text-center">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
+                      <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">
+                        {doctor.autoDecline ? "Auto Decline" : "Appointments"}
+                      </p>
+                      <p className="text-xs font-bold text-gray-700">
+                        {getAppointmentValue(doctor)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* ✅ Only show Recover button when blacklisted - No Appointment Settings button */}
+                  {isBlacklisted && (
                     <button 
-                      onClick={(e) => toggleMenu(doctor.id, e)} 
-                      className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                      aria-label="Actions menu"
+                      onClick={() => handleRecoverDoctor(doctor)} 
+                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
                     >
-                      ⋮
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Recover
                     </button>
-                    <DoctorActionMenu
-                      doctor={doctor}
-                      activeMenu={activeMenu}
-                      onView={handleViewDetails}
-                      onEdit={handleEdit}
-                      onDelete={handleDeleteClick}
-                      onAppointment={handleAppointmentManagement}
-                      onRecover={handleRecoverDoctor}
-                    />
-                  </div>
+                  )}
                 </div>
-                <div className="relative mb-3">
-                  <Avatar className="w-16 h-16">
-                    <AvatarImage
-                      src={getS3ImageUrl(doctor.imageUrl)}
-                      alt={getDoctorName(doctor)}
-                    />
-                    <AvatarFallback>
-                      {(doctor.firstName?.[0] || "D").toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div
-                    className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
-                      doctor.isDelete
-                        ? "bg-black"
-                        : doctor.isActive
-                        ? "bg-green-500"
-                        : "bg-red-500"
-                    }`}
-                  />
-                </div>
-                <h3 
-                  onClick={() => handleViewDetails(doctor)} 
-                  className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors"
-                >
-                  {getDoctorName(doctor)}
-                </h3>
-                <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
-                <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
-                  <div className="text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
-                    <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[9px] text-gray-400 uppercase font-bold">
-                      {doctor.autoDecline ? "Auto Decline" : "Appointments"}
-                    </p>
-                    <p className="text-xs font-bold text-gray-700">
-                      {getAppointmentValue(doctor)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Pagination for Grid View */}
@@ -802,74 +823,78 @@ const Doctors = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {doctors.map((doctor) => (
-                    <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                        {getDoctorId(doctor.id)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8">
-                            <AvatarImage
-                              src={getS3ImageUrl(doctor.imageUrl)}
-                              alt={getDoctorName(doctor)}
-                            />
-                            <AvatarFallback>
-                              {(doctor.firstName?.[0] || "D").toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span 
-                            onClick={() => handleViewDetails(doctor)} 
-                            className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors"
+                  {doctors.map((doctor) => {
+                    const isBlacklisted = doctor.isDelete === true;
+                    
+                    return (
+                      <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
+                        <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                          {getDoctorId(doctor.id)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-8 h-8">
+                              <AvatarImage
+                                src={getS3ImageUrl(doctor.imageUrl)}
+                                alt={getDoctorName(doctor)}
+                              />
+                              <AvatarFallback>
+                                {(doctor.firstName?.[0] || "D").toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span 
+                              onClick={() => !isBlacklisted && handleViewDetails(doctor)} 
+                              className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                            >
+                              {getDoctorName(doctor)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
+                        <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
+                        <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
+                        <td className="px-6 py-4">
+                          <Badge
+                            variant={
+                              isBlacklisted
+                                ? "dark"
+                                : doctor.isActive
+                                ? "success"
+                                : "danger"
+                            }
+                            className="text-xs"
                           >
-                            {getDoctorName(doctor)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
-                      <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
-                      <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
-                      <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
-                      <td className="px-6 py-4">
-                        <Badge
-                          variant={
-                            doctor.isDelete
-                              ? "dark"
+                            {isBlacklisted
+                              ? "Blacklisted"
                               : doctor.isActive
-                              ? "success"
-                              : "danger"
-                          }
-                          className="text-xs"
-                        >
-                          {doctor.isDelete
-                            ? "Blacklisted"
-                            : doctor.isActive
-                            ? "Active"
-                            : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right relative menu-container">
-                        <div className="flex justify-end">
-                          <button 
-                            onClick={(e) => toggleMenu(doctor.id, e)} 
-                            className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                            aria-label="Actions menu"
-                          >
-                            ⋮
-                          </button>
-                          <DoctorActionMenu
-                            doctor={doctor}
-                            activeMenu={activeMenu}
-                            onView={handleViewDetails}
-                            onEdit={handleEdit}
-                            onDelete={handleDeleteClick}
-                            onAppointment={handleAppointmentManagement}
-                            onRecover={handleRecoverDoctor}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                              ? "Active"
+                              : "Inactive"}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right relative menu-container">
+                          <div className="flex justify-end">
+                            <button 
+                              onClick={(e) => toggleMenu(doctor.id, e)} 
+                              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                              aria-label="Actions menu"
+                            >
+                              ⋮
+                            </button>
+                            <DoctorActionMenu
+                              doctor={doctor}
+                              activeMenu={activeMenu}
+                              onView={handleViewDetails}
+                              onEdit={handleEdit}
+                              onDelete={handleDeleteClick}
+                              onAppointment={handleAppointmentManagement}
+                              onRecover={handleRecoverDoctor}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

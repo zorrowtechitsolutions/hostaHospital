@@ -17,7 +17,6 @@ const messaging = firebase.messaging();
 
 // 🔔 Background notification
 self.addEventListener("push", (event) => {
-  console.log('📨 Push event received in SW');
   
   let payload = {};
   try {

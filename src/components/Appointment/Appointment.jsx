@@ -199,7 +199,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // Helper functions
   const formatAppointmentId = (id) => {
-    if (!id) return '#APT0000';
+    if (!id) return '#APT00000';
     let numericId;
     if (typeof id === 'string') {
       const match = id.match(/\d+/);

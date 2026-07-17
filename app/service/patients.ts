@@ -304,8 +304,12 @@ export const patientsApi = api.injectEndpoints({
         };
       },
 
-      invalidatesTags: (result, error, { id }) => [{ type: "Patient", id }],
-    }),
+invalidatesTags: (result, error, { id }) => [
+  { type: "Patient", id },
+  "Patient",
+],    
+
+}),
 
     // ==============================
     // DELETE PATIENT

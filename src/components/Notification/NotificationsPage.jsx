@@ -248,6 +248,7 @@ const NotificationsPage = () => {
       showSuccessToast(`All ${notificationIds.length} notifications marked as read`, 2000);
     } catch {
       showErrorToast("Failed to mark all as read", 2000);
+      showErrorToast("Failed to mark all as read", 2000);
     }
   };
 
@@ -451,6 +452,7 @@ const NotificationsPage = () => {
               </span>
             )}
           </button>
+          {/* Only show "Mark all as read" if there are unread notifications */}
           {unreadCount > 0 && (
             <Button onClick={handleMarkAllAsRead} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
               <CheckCheck size={16} /> Mark all as read

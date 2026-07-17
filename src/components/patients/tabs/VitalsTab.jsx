@@ -529,8 +529,8 @@ const VitalsTab = ({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Vitals Records
           <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
@@ -548,8 +548,8 @@ const VitalsTab = ({
           <p className="text-sm text-gray-400 mt-1">Vitals will appear here after consultation</p>
         </div>
       ) : (
-        <>
-          <div className="overflow-x-auto">
+        <div className="flex flex-col min-h-[420px]">
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
@@ -634,7 +634,7 @@ const VitalsTab = ({
           </div>
 
           {totalItems > 0 && totalPages > 1 && (
-            <div className="px-6 py-3 border-t bg-gray-50">
+            <div className="mt-auto px-6 py-3 border-t bg-gray-50">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -645,7 +645,7 @@ const VitalsTab = ({
               />
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

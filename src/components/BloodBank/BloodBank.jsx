@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Droplet, Plus, Filter, Download, MoreVertical, Eye, 
-  Edit, RefreshCcw, Upload, Trash2, Search, LayoutGrid, List
+  Edit, RefreshCcw, Trash2, Search
 } from 'lucide-react';
 import { 
   Button, Badge, Loader, Card, Modal, SearchBar, Pagination
@@ -78,7 +78,6 @@ const BloodBankSkeleton = () => {
           <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
         </div>
         <div className="flex gap-2">
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
           <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
@@ -301,9 +300,7 @@ const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
 
 const BloodBank = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   
@@ -322,11 +319,6 @@ const BloodBank = () => {
 
   // Get hospital ID from auth
   const hospitalId = getHospitalId();
-
-  // Save view mode to localStorage
-  useEffect(() => {
-    localStorage.setItem('bloodBankViewMode', viewMode);
-  }, [viewMode]);
 
   // ✅ API Hooks - WITH hospitalId from auth
   const { 
@@ -581,49 +573,6 @@ const BloodBank = () => {
     }
   };
 
-  const handleImport = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const stock of importedData) {
-          try {
-            await createBloodBank({
-              bloodGroup: stock['Blood Group'] || stock.bloodGroup,
-              count: stock['Count (Units)'] || stock.count || 0
-            }).unwrap();
-            successCount++;
-          } catch {
-            errorCount++;
-          }
-        }
-        
-        showSuccessToast(`Successfully imported ${successCount} blood stock records! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
-        refetch();
-      } catch {
-        showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
-      }
-    };
-    
-    reader.readAsText(file);
-    event.target.value = '';
-  };
-
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (bloodGroupFilter !== 'all') count++;
-    if (searchTerm) count++;
-    return count;
-  };
-
-  const activeFilterCount = getActiveFilterCount();
-
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalFilteredPages) {
       setCurrentPage(page);
@@ -687,21 +636,6 @@ const BloodBank = () => {
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button 
-              onClick={() => setViewMode('grid')} 
-              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button 
-              onClick={() => setViewMode('list')} 
-              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-            >
-              <List size={16} />
-            </button>
-          </div>
-
           <button 
             onClick={handleRefresh} 
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
@@ -709,11 +643,6 @@ const BloodBank = () => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-
-          <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 cursor-pointer">
-            <Upload size={16} />
-          </label>
 
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
             <Download size={16} />
@@ -745,8 +674,8 @@ const BloodBank = () => {
         </div>
       )}
 
-      {/* GRID VIEW */}
-      {viewMode === 'grid' && paginatedBloodStocks.length > 0 && (
+      {/* GRID VIEW - Always shown */}
+      {paginatedBloodStocks.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {paginatedData.map((stock) => {
@@ -806,94 +735,6 @@ const BloodBank = () => {
             </div>
           )}
         </>
-      )}
-
-      {/* LIST VIEW */}
-      {viewMode === 'list' && paginatedBloodStocks.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Total Blood Stocks
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
-              {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
-                <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
-              )}
-            </h2>
-          </div>
-
-          <div className="flex flex-col min-h-[500px]">
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Stock ID</th>
-                    <th className="px-6 py-3">Blood Group</th>
-                    <th className="px-6 py-3">Available Units</th>
-                    <th className="px-6 py-3">Last Updated</th>
-                    <th className="px-6 py-3 text-right w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedData.map((stock) => (
-                    <tr key={stock.id} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                        {stock.formattedId}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                            <Droplet className="w-4 h-4 text-red-600" />
-                          </div>
-                          <span className="font-medium text-gray-800">{stock.bloodGroup}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-[#1C62A0]">{stock.count}</span>
-                        <span className="text-xs text-gray-400 ml-1">units</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{stock.lastUpdated}</td>
-                      <td className="px-6 py-4 text-right relative menu-container">
-                        <div className="flex justify-end">
-                          <button onClick={(e) => toggleMenu(stock.id, e)} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold">
-                            ⋮
-                          </button>
-                          {activeMenu === stock.id && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                              <button onClick={() => { setSelectedBloodStock(stock); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <Eye size={16} /> View Details
-                              </button>
-                              <button onClick={() => { setSelectedBloodStock(stock); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <Edit size={16} /> Edit
-                              </button>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              <button onClick={() => { setSelectedBloodStock(stock); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                                <Trash2 size={16} /> Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination - Sticks to bottom */}
-            {totalFilteredPages > 1 && (
-              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalFilteredPages}
-                  onPageChange={handlePageChange}
-                  totalItems={totalFilteredItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="blood stocks"
-                />
-              </div>
-            )}
-          </div>
-        </div>
       )}
 
       {/* Modals */}

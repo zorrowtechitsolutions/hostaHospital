@@ -131,17 +131,11 @@ export const isFCMAvailable = () => {
 // Foreground listener
 export const listenMessages = (callback) => {
   const unsubscribe = onMessage(messaging, (payload) => {
-    
-    // Play sound
-    try {
-      notificationSound.pause();
-      notificationSound.currentTime = 0;
-      notificationSound.play().catch(() => {});
-    } catch (err) {
-      // Silently handle sound error
-    }
 
-    // Trigger custom modal callback
+    console.log("FCM Payload:", payload);
+    console.log("Notification:", payload.notification);
+    console.log("Data:", payload.data);
+
     if (callback) callback(payload);
   });
 

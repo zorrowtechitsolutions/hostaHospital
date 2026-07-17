@@ -79,6 +79,47 @@ interface SpecialityResponse {
   };
 }
 
+// ============================================
+// AUTH / PASSWORD MANAGEMENT TYPES
+// ============================================
+
+export interface SendOtpData {
+  email: string;
+}
+
+export interface VerifyOtpData {
+  email: string;
+  otp: string;
+}
+
+export interface ResetPasswordData {
+  email: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordData {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface OtpResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ResetPasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ChangePasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
 export const doctorApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
@@ -97,7 +138,6 @@ export const doctorApi = api.injectEndpoints({
         // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
         // Staff should ONLY see their own hospital's data
         const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
-
 
         if (shouldFilterByHospital && auth?.id) {
           // Use hospitalId from auth for all hospital-bound users
@@ -150,6 +190,10 @@ export const doctorApi = api.injectEndpoints({
       query: (id) => `/doctor/${id}`,
       providesTags: (result, error, id) => [{ type: "Doctor", id }],
     }),
+
+    // ============================================
+    // AUTH ENDPOINTS
+    // ============================================
 
     loginDoctor: builder.mutation<DoctorAuthResponse, LoginDoctorData>({
       query: (logUser) => ({
@@ -214,6 +258,91 @@ export const doctorApi = api.injectEndpoints({
 
       invalidatesTags: ["Doctor"],
     }),
+
+    // ============================================
+    // FORGOT PASSWORD / RESET PASSWORD ENDPOINTS
+    // ============================================
+
+    sendDoctorOtp: builder.mutation<OtpResponse, SendOtpData>({
+      query: (otpData) => ({
+        url: `/doctor/auth/send-otp`,
+        method: "POST",
+        body: otpData,
+        // No authentication required
+      }),
+      transformResponse: (response: OtpResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to send OTP",
+        };
+      },
+    }),
+
+    verifyDoctorOtp: builder.mutation<OtpResponse, VerifyOtpData>({
+      query: (otpData) => ({
+        url: `/doctor/auth/verify-otp`,
+        method: "POST",
+        body: otpData,
+        // No authentication required
+      }),
+      transformResponse: (response: OtpResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Invalid OTP",
+        };
+      },
+    }),
+
+    resetDoctorPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
+      query: (resetData) => ({
+        url: `/doctor/auth/reset-password`,
+        method: "POST",
+        body: resetData,
+        // No authentication required - this endpoint is public
+      }),
+      transformResponse: (response: ResetPasswordResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to reset password",
+        };
+      },
+    }),
+
+    // ============================================
+    // CHANGE PASSWORD ENDPOINT (Requires Authentication)
+    // ============================================
+
+    changeDoctorPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
+      query: ({ currentPassword, newPassword }) => ({
+        url: `/doctor/auth/change-password`,
+        method: "PUT",
+        body: { currentPassword, newPassword },
+        // This endpoint requires authentication
+      }),
+      transformResponse: (response: ChangePasswordResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to change password",
+        };
+      },
+      invalidatesTags: ["Doctor"],
+    }),
+
+    // ============================================
+    // CRUD ENDPOINTS
+    // ============================================
 
     addNewDoctor: builder.mutation<DoctorAuthResponse, AddDoctorPayload>({
       query: ({ hospitalId, ...newDoctor }) => {
@@ -281,4 +410,9 @@ export const {
   useDeleteDoctorMutation,
   useRecoverDoctorMutation,
   useGetSpecialitiesQuery,
+  // Auth hooks
+  useSendDoctorOtpMutation,
+  useVerifyDoctorOtpMutation,
+  useResetDoctorPasswordMutation,
+  useChangeDoctorPasswordMutation,
 } = doctorApi;
