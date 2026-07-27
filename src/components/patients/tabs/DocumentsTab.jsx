@@ -37,9 +37,13 @@ const DocumentsTab = ({ patient }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const itemsPerPage = 5;
 
-  // Get auth user for userId and role
+  // Get auth user for hospitalId
   const authUser = getAuthUser();
-  const userId = authUser?.id;
+  const hospitalId = authUser?.hospitalId || authUser?.id;
+  
+  // ✅ FIX: Get patient's userId from patient object
+  const patientUserId = patient?.userId;
+  
   const userRole = authUser?.role || "documents";
 
   const { 
@@ -169,8 +173,8 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
-    if (!userId) {
-      showErrorToast("❌ User ID not found. Please log in again.");
+    if (!patientUserId) {
+      showErrorToast("❌ Patient user ID not found.");
       return;
     }
 
@@ -184,11 +188,11 @@ const DocumentsTab = ({ patient }) => {
         name: documentName.trim(),
         documentName: documentName.trim(),
         date: documentDate,
-        userId: userId,
-        uploadedById: userId,
+        userId: patient.userId,  
+        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
+        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
         role: userRole,
       };
-
 
       const createResult = await createDocument(documentData).unwrap();
 
@@ -215,14 +219,12 @@ const DocumentsTab = ({ patient }) => {
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
 
-
       const s3Result = await uploadToS3(
         selectedFile,
         fileKey,
         documentId,
         "documents"
       );
-
 
       setUploadProgress(80);
 
@@ -235,8 +237,9 @@ const DocumentsTab = ({ patient }) => {
         fileSize: formatFileSize(selectedFile.size),
         type: getFileExtension(selectedFile.name),
         contentType: selectedFile.type,
+        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
+        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
       };
-
 
       await updateDocument({
         id: documentId,
@@ -309,8 +312,8 @@ const DocumentsTab = ({ patient }) => {
       return;
     }
 
-    if (!userId) {
-      showErrorToast("❌ User ID not found. Please log in again.");
+    if (!patientUserId) {
+      showErrorToast("❌ Patient user ID not found.");
       return;
     }
 
@@ -330,8 +333,8 @@ const DocumentsTab = ({ patient }) => {
         name: editDocumentName.trim(),
         documentName: editDocumentName.trim(),
         date: editDocumentDate,
-        userId: userId,
-        uploadedById: userId,
+        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
+        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
         role: userRole,
       };
 
@@ -367,6 +370,8 @@ const DocumentsTab = ({ patient }) => {
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
           contentType: editFile.type,
+          uploadedById: patientUserId, // ✅ FIX: Use patient's userId
+          hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
         };
       }
 
@@ -658,10 +663,6 @@ const DocumentsTab = ({ patient }) => {
                   </div>
                 </div>
               )}
-
-              <div className="text-xs text-gray-400">
-                User ID: {userId || 'Not found'} • Role: {userRole || 'documents'}
-              </div>
 
               <div className="flex gap-3 pt-4">
                 <button

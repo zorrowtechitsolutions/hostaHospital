@@ -1,4 +1,5 @@
 // src/components/super-admin/Specialties.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -63,7 +64,8 @@ const ImageUpload = ({
   onImageRemove, 
   isUploading,
   label = "Speciality Image",
-  disabled = false
+  disabled = false,
+  required = false
 }) => {
   const fileInputRef = useRef(null);
 
@@ -71,13 +73,17 @@ const ImageUpload = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
     if (!file.type.startsWith('image/')) {
       showErrorToast('Please select an image file', 3000);
+      e.target.value = '';
       return;
     }
 
+    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast('Image size should be less than 5MB', 3000);
+      e.target.value = '';
       return;
     }
 
@@ -86,7 +92,10 @@ const ImageUpload = ({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <label className="block text-sm font-medium text-gray-700">
+        {label} {required && <span className="text-red-500">*</span>}
+        {!required && <span className="text-gray-400 text-xs">(Optional)</span>}
+      </label>
       
       <div className="flex items-start gap-4">
         <div className="relative w-24 h-24 flex-shrink-0">
@@ -96,15 +105,23 @@ const ImageUpload = ({
                 src={imageUrl}
                 alt="Speciality"
                 className="w-full h-full object-cover rounded-lg border border-gray-200"
+                onError={(e) => {
+                  const fallbackUrl = getS3ImageUrl(imageUrl);
+                  if (fallbackUrl && e.target.src !== fallbackUrl) {
+                    e.target.src = fallbackUrl;
+                  }
+                }}
               />
-              <button
-                type="button"
-                onClick={onImageRemove}
-                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                disabled={isUploading || disabled}
-              >
-                <X size={14} />
-              </button>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={onImageRemove}
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  disabled={isUploading}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           ) : (
             <div className="w-full h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
@@ -218,6 +235,7 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -227,10 +245,12 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       });
       setImageFile(null);
       setImagePreview(null);
+      setUploadProgress(0);
+      setIsUploading(false);
     }
   }, [isOpen]);
 
-  const handleImageChange = async (file) => {
+  const handleImageChange = (file) => {
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   };
@@ -241,17 +261,20 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       showErrorToast('Speciality name is required', 3000);
       return;
     }
 
+    setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      setIsUploading(true);
-      
       let imageKey = null;
 
       if (imageFile) {
+        setUploadProgress(30);
+        
         const uploadResult = await uploadToS3(
           imageFile,
           null,
@@ -259,15 +282,19 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
           "speciality"
         );
         imageKey = uploadResult.key;
+        
+        setUploadProgress(80);
       }
 
       const specialityData = {
-        name: formData.name,
+        name: formData.name.trim(),
         isActive: formData.isActive,
         imageUrl: imageKey
       };
 
       await onSave(specialityData);
+      
+      setUploadProgress(100);
       
       setImageFile(null);
       setImagePreview(null);
@@ -276,6 +303,7 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       showErrorToast(error?.message || 'Failed to upload image', 3000);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -297,7 +325,9 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
           onImageChange={handleImageChange}
           onImageRemove={handleImageRemove}
           isUploading={isUploading}
-          label="Speciality Image (Optional)"
+          label="Speciality Image"
+          required={false}
+          disabled={isSaving}
         />
 
         <Input
@@ -307,14 +337,37 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="Enter speciality name (e.g., Cardiology)"
           required
+          disabled={isUploading || isSaving}
         />
 
-        <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+        {isUploading && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Uploading image...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-4 border-t">
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            fullWidth
+            disabled={isUploading || isSaving}
+          >
+            Cancel
+          </Button>
           <Button 
             variant="primary" 
             onClick={handleSubmit} 
-            disabled={isSaving || isUploading} 
+            disabled={isSaving || isUploading || !formData.name.trim()} 
             loading={isSaving || isUploading} 
             fullWidth
           >
@@ -337,6 +390,7 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     if (speciality && isOpen) {
@@ -350,10 +404,12 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       setImagePreview(existingImageUrl);
       setRemoveExistingImage(false);
       setImageFile(null);
+      setUploadProgress(0);
+      setIsUploading(false);
     }
   }, [speciality, isOpen]);
 
-  const handleImageChange = async (file) => {
+  const handleImageChange = (file) => {
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setRemoveExistingImage(false);
@@ -370,25 +426,31 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   };
 
   const handleSubmit = async () => {
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       showErrorToast('Speciality name is required', 3000);
       return;
     }
 
+    setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      setIsUploading(true);
-      
       let finalImageUrl = formData.imageUrl;
       const specialityId = speciality?.id;
 
       if (removeExistingImage && formData.imageUrl) {
+        setUploadProgress(20);
         await deleteFromS3(formData.imageUrl, specialityId, "speciality");
         finalImageUrl = null;
+        setUploadProgress(40);
       }
 
       if (imageFile) {
+        setUploadProgress(50);
+        
         if (formData.imageUrl && !removeExistingImage) {
           await deleteFromS3(formData.imageUrl, specialityId, "speciality");
+          setUploadProgress(60);
         }
         
         const uploadResult = await uploadToS3(
@@ -398,15 +460,18 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
           "speciality"
         );
         finalImageUrl = uploadResult.key;
+        setUploadProgress(80);
       }
 
       const updatedData = {
-        name: formData.name,
+        name: formData.name.trim(),
         isActive: formData.isActive,
         imageUrl: finalImageUrl
       };
 
       await onSave({ ...speciality, ...updatedData });
+      
+      setUploadProgress(100);
       
       setImageFile(null);
       setImagePreview(null);
@@ -416,6 +481,7 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       showErrorToast(error?.message || 'Failed to update image', 3000);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -438,6 +504,8 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
           onImageRemove={handleImageRemove}
           isUploading={isUploading}
           label="Speciality Image"
+          required={false}
+          disabled={isSaving}
         />
 
         <Input
@@ -447,14 +515,37 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="Enter speciality name"
           required
+          disabled={isUploading || isSaving}
         />
 
-        <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+        {isUploading && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Uploading image...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-[#1C62A0] h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-4 border-t">
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            fullWidth
+            disabled={isUploading || isSaving}
+          >
+            Cancel
+          </Button>
           <Button 
             variant="primary" 
             onClick={handleSubmit} 
-            disabled={isSaving || isUploading} 
+            disabled={isSaving || isUploading || !formData.name.trim()} 
             loading={isSaving || isUploading} 
             fullWidth
           >
@@ -571,7 +662,6 @@ const Specialties = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   
-  // Set to 10 items per page
   const itemsPerPage = 10;
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -582,7 +672,6 @@ const Specialties = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -592,7 +681,6 @@ const Specialties = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // API call with pagination parameters
   const {
     data: specialitiesResponse,
     isLoading: loading,
@@ -608,12 +696,10 @@ const Specialties = () => {
   const [updateSpeciality, { isLoading: isUpdating }] = useUpdateSpecialityMutation();
   const [deleteSpeciality, { isLoading: isDeleting }] = useDeleteSpecialityMutation();
 
-  // Handle API response - support multiple response formats
   const specialities = specialitiesResponse?.data || specialitiesResponse?.results || specialitiesResponse?.items || [];
   const totalItems = specialitiesResponse?.count || specialitiesResponse?.total || specialitiesResponse?.totalCount || specialities.length;
   const totalPages = specialitiesResponse?.totalPages || specialitiesResponse?.pages || Math.ceil(totalItems / itemsPerPage) || 1;
 
-  // Register socket event listeners
   useEffect(() => {
     registerSpecialityEvents({
       onSpecialityRegistered: (data) => {
@@ -638,7 +724,6 @@ const Specialties = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
       if (!eventsRegistered) {
@@ -966,7 +1051,6 @@ const Specialties = () => {
             })}
           </div>
 
-          {/* Global Pagination Component */}
           {totalPages > 1 && (
             <Pagination
               currentPage={currentPage}

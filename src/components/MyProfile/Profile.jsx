@@ -9,15 +9,16 @@ import StaffProfile from "./StaffProfile";
 const Profile = () => {
   const { user } = useAuth();
 
-  if (user?.role === "doctor") {
-    return <DoctorProfile />;
-  }
-  
-  if (user?.role === "staff") {
-    return <StaffProfile />;
-  }
+  console.log("Profile user:", user);
 
-  return <HospitalProfile />;
+  return (
+    <div>
+
+      {user?.role === "doctor" && <DoctorProfile />}
+      {user?.role === "staff" && <StaffProfile />}
+      {user?.role === "hospital" && <HospitalProfile />}
+    </div>
+  );
 };
 
 export default Profile;

@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
+// src/Authentication/Login.jsx - COMPLETELY FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -121,10 +121,45 @@ const Login = () => {
     }
   };
 
+  // ✅ FIXED: processSuccessfulLogin with correct role extraction and staff ID handling
   const processSuccessfulLogin = (response, fcmToken, hospital = null) => {
     const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
     const roleId = response.roleId || response.data?.roleId;
     const deviceId = getDeviceId();
+    
+    // ✅ FIRST: Extract the role from the response
+    let role = 
+      response.roleDetected ||
+      response.role ||
+      response.data?.role ||
+      response.user?.role ||
+      response.userType ||
+      "hospital";
+    
+    // Debug logging for role extraction
+    console.log("🔍 ROLE EXTRACTION:", {
+      "response.roleDetected": response.roleDetected,
+      "response.role": response.role,
+      "response.data?.role": response.data?.role,
+      "response.user?.role": response.user?.role,
+      "response.userType": response.userType,
+      "initialRole": role
+    });
+    
+    // ✅ SECOND: Override for super_admin if roleId is 1
+    if (Number(roleId) === 1) {
+      role = "super_admin";
+    }
+    
+    // ✅ THIRD: Clean the role if it contains slashes
+    if (role && role.includes('/')) {
+      if (role.includes('doctor')) role = 'doctor';
+      else if (role.includes('staff')) role = 'staff';
+      else if (role.includes('hospital')) role = 'hospital';
+      else if (role.includes('super_admin')) role = 'super_admin';
+    }
+    
+    console.log("🎯 FINAL ROLE =", role);
     
     if (token) {
       localStorage.setItem("accessToken", token);
@@ -134,22 +169,7 @@ const Login = () => {
         localStorage.setItem("roleId", roleId.toString());
       }
       
-      let role = response.roleDetected || response.role || response.userType;
-      
-      if (Number(roleId) === 1) {
-        role = "super_admin";
-      }
-      
-      if (role) {
-        let cleanRole = role;
-        if (role.includes('/')) {
-          if (role.includes('doctor')) cleanRole = 'doctor';
-          else if (role.includes('staff')) cleanRole = 'staff';
-          else if (role.includes('hospital')) cleanRole = 'hospital';
-          else if (role.includes('super_admin')) cleanRole = 'super_admin';
-        }
-        localStorage.setItem("userRole", cleanRole);
-      }
+      localStorage.setItem("userRole", role);
       
       if (response.authPermission?.data) {
         localStorage.setItem("permissions", JSON.stringify(response.authPermission.data));
@@ -169,21 +189,9 @@ const Login = () => {
     }
     
     const userData = response.data || response.user || response;
-    let role = response.roleDetected || response.role || response.userType || 'hospital';
-    
-    if (Number(roleId) === 1) {
-      role = "super_admin";
-    }
-    
-    if (role && role.includes('/')) {
-      if (role.includes('doctor')) role = 'doctor';
-      else if (role.includes('staff')) role = 'staff';
-      else if (role.includes('hospital')) role = 'hospital';
-      else if (role.includes('super_admin')) role = 'super_admin';
-    }
-    
     localStorage.setItem("userData", JSON.stringify(userData));
     
+    // ✅ Build authData based on the determined role
     let authData = {
       deviceId: deviceId,
       fcmToken: fcmToken,
@@ -216,62 +224,86 @@ const Login = () => {
       authData = {
         ...authData,
         id: userData?.id,
-        doctorId: userData?.id,
+        doctorId: userData?.doctorId || response.data?.doctorId,
         roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
         name: doctorName,
         firstName: userData?.firstName,
         lastName: userData?.lastName,
         displayName: userData?.displayName,
-        email: userData?.email,
+        email: userData?.email || response.data?.email,
         phone: userData?.phone,
-        department: userData?.department,
-        specialist: userData?.specialist,
-        qualification: userData?.qualification,
-        regNo: userData?.regNo,
-        experience: userData?.experience,
-        imageUrl: userData?.imageUrl,
+        department: userData?.department || response.data?.department,
+        specialist: userData?.specialist || response.data?.specialist,
+        qualification: userData?.qualification || response.data?.qualification,
+        regNo: userData?.regNo || response.data?.regNo,
+        experience: userData?.experience || response.data?.experience,
+        imageUrl: userData?.imageUrl || response.data?.imageUrl,
         role: role,
       };
       
-      if (userData?.id) {
-        localStorage.setItem("doctorId", userData.id.toString());
+      if (userData?.doctorId || response.data?.doctorId) {
+        localStorage.setItem("doctorId", (userData?.doctorId || response.data?.doctorId).toString());
       }
       
     } else if (role === 'staff') {
+      // ✅ FIXED: Correctly handle staff ID from the response
+      // The response has: { id: 52 (auth ID), staffId: 10 (staff table ID) }
+      const authId = userData?.id || response.id;
+      const staffTableId = userData?.staffId || response.data?.staffId || response.staffId;
+      
+      console.log("🔑 STAFF ID FIX:", {
+        authId: authId,
+        staffTableId: staffTableId,
+        userData: userData
+      });
+      
       authData = {
         ...authData,
-        id: userData?.id,
-        staffId: userData?.id,
+        id: authId,                        // Auth ID (52)
+        authId: authId,                    // Explicit auth ID
+        staffId: staffTableId,             // ✅ Staff table ID (10)
         roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
         name: userData?.name || userData?.displayName || 'Staff',
-        email: userData?.email,
+        email: userData?.email || response.data?.email,
         phone: userData?.phone,
-        designation: userData?.designation,
-        staffType: userData?.staffType,
+        designation: userData?.designation || response.data?.designation,
+        staffType: userData?.staffType || response.data?.staffType,
         role: role,
       };
       
-      if (userData?.id) {
-        localStorage.setItem("staffId", userData.id.toString());
+      // ✅ Store the correct staff table ID
+      if (staffTableId) {
+        localStorage.setItem("staffId", staffTableId.toString());
+        console.log("✅ Stored staffId:", staffTableId);
+      } else {
+        console.warn("⚠️ No staffId found in response");
+      }
+      
+      // Also store auth ID separately if needed
+      if (authId) {
+        localStorage.setItem("authId", authId.toString());
       }
       
     } else {
+      // Hospital/Default role
       authData = {
         ...authData,
-        id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
+        id: userData?.id || response.id || response.data?.id || 1,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId || response.id,
         roleId: roleId,
-        hospitalId: userData?.id || userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
-        name: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
-        email: userData?.email || formData.email,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || userData?.name || response.data?.hospitalName || 'Hospital',
+        name: userData?.hospitalName || hospital?.hospitalName || userData?.name || response.data?.hospitalName || 'Hospital',
+        email: userData?.email || response.data?.email || formData.email,
         phone: userData?.phone || '',
         role: role,
       };
     }
+    
+    console.log("📦 AUTH DATA =", authData);
     
     localStorage.setItem("authData", JSON.stringify(authData));
     login(authData);
@@ -280,7 +312,7 @@ const Login = () => {
     if (role === 'super_admin') {
       welcomeMessage = `Welcome Super Admin ${authData.name}!`;
     } else if (role === 'doctor') {
-      welcomeMessage = `Welcome ${authData.name}!`;
+      welcomeMessage = `Welcome Dr. ${authData.name}!`;
     } else if (role === 'staff') {
       welcomeMessage = `Welcome ${authData.name}!`;
     } else {
@@ -303,7 +335,6 @@ const Login = () => {
     }
   };
 
-  // ✅ MAIN LOGIN HANDLER - FIXED
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -314,7 +345,6 @@ const Login = () => {
       try {
         const deviceId = getDeviceId();
         
-        // ✅ Get FCM token
         let fcmToken = null;
         
         if (isFCMAvailable()) {
@@ -325,7 +355,6 @@ const Login = () => {
           }
         }
         
-        // ✅ CORRECT: Build login payload with nested fcmToken object
         const loginPayload = {
           email: formData.email,
           password: formData.password,
@@ -335,15 +364,11 @@ const Login = () => {
             fcmToken: fcmToken
           } : undefined
         };
-
-       
         
-        // ✅ ONE API call
         const response = await loginUser(loginPayload).unwrap();
         
         const roleId = response.roleId || response.data?.roleId;
         
-        // ✅ Save FCM token to IndexedDB
         if (fcmToken) {
           try {
             await tokenManager.addFCMToken(fcmToken);
@@ -352,13 +377,11 @@ const Login = () => {
           }
         }
         
-        // ✅ Check if Super Admin
         if (Number(roleId) === 1) {
           processSuccessfulLogin(response, fcmToken, null);
           return;
         }
         
-        // ✅ Check if multiple hospitals
         if (response.hospitals && response.hospitals.length > 1) {
           setPendingResponse(response);
           setPendingFcmToken(fcmToken);
@@ -370,7 +393,6 @@ const Login = () => {
           return;
         }
         
-        // ✅ Single hospital
         const singleHospital = response.hospitals && response.hospitals.length === 1 
           ? response.hospitals[0] 
           : null;

@@ -95,7 +95,11 @@ const HospitalProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  const hospitalId = user?.id;
+  // ✅ FIXED: Get hospitalId from user object
+  // user.hospitalId is the Hospital table ID
+  // user.id is the Auth table ID
+  const hospitalId = user?.hospitalId || user?.id;
+  
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
@@ -240,6 +244,7 @@ const HospitalProfile = () => {
         hospital.address?.country
       ].filter(Boolean);
       
+      
       const locationString = locationParts.join(', ');
       
       const newFormData = {
@@ -352,7 +357,7 @@ const HospitalProfile = () => {
     resetUploadState();
   };
 
-  // ✅ EXACT SAME SAVE LOGIC AS DOCTOR PROFILE
+  // ✅ FIXED: Save with correct hospitalId
   const handleSave = async () => {
     setIsSaving(true);
     
@@ -367,6 +372,8 @@ const HospitalProfile = () => {
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
       
+      // ✅ UPDATE: Using hospitalId from user object
+      // hospitalId is already set as user?.hospitalId || user?.id
       const response = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 

@@ -57,6 +57,42 @@ export interface GetAmbulanceParams {
   skipHospitalFilter?: boolean;
 }
 
+// ================= HELPER FUNCTIONS =================
+
+// Helper: Get hospital ID from auth (returns number)
+const getHospitalIdFromAuth = (auth: any): number | null => {
+  if (!auth) return null;
+  
+  // Priority 1: Use hospitalId if available (this is the correct hospital ID)
+  if (auth.hospitalId) {
+    return Number(auth.hospitalId);
+  }
+  
+  return null;
+};
+
+// Helper: Get auth ID from auth
+const getAuthIdFromAuth = (auth: any): string | null => {
+  if (!auth) return null;
+  
+  // Priority: authId > id
+  if (auth.authId) {
+    return String(auth.authId);
+  }
+  
+  if (auth.id) {
+    return String(auth.id);
+  }
+  
+  return null;
+};
+
+// Helper: Convert string | number to number safely
+const toNumber = (value: string | number | undefined): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  return Number(value);
+};
+
 // ================= API =================
 
 export const ambulanceApi = api.injectEndpoints({
@@ -72,45 +108,38 @@ export const ambulanceApi = api.injectEndpoints({
 
         const auth = getAuthUser();
         
-        // 🔥 FIX: Include ALL roles that should be filtered by hospital
+        // Determine if user is super admin
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
-        const skipHospitalFilter = params.skipHospitalFilter === true;
-        
-        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
-        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !skipHospitalFilter;
+        const shouldSkipFilter = params.skipHospitalFilter === true;
 
-        // 🔥 FIX: Get hospital ID properly for all roles
+        // Get hospital ID using helper
         let hospitalIdToUse = null;
         
-        if (shouldFilterByHospital) {
-          // Priority: auth.hospitalId > auth.id > params.hospitalId
-          if (auth?.hospitalId) {
-            hospitalIdToUse = auth.hospitalId;
-          } else if (auth?.id) {
-            hospitalIdToUse = auth.id;
-          } else {
-            hospitalIdToUse = params.hospitalId;
+        // For non-super-admin users, always filter by hospital if they have one
+        if (!isSuperAdmin && !shouldSkipFilter) {
+          hospitalIdToUse = getHospitalIdFromAuth(auth);
+          
+          // If no hospitalId found, try params
+          if (!hospitalIdToUse && params.hospitalId) {
+            hospitalIdToUse = toNumber(params.hospitalId);
           }
           
           if (hospitalIdToUse) {
             queryParams.append("hospitalId", String(hospitalIdToUse));
           } else {
-            console.warn(`⚠️ No hospital ID found for ${auth?.role} ambulance filtering`);
+            console.warn("⚠️ No hospital ID found for filtering ambulances");
           }
         } 
         // Super Admin with specific hospital filter
         else if (isSuperAdmin && params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
-        // Use provided hospitalId if specified
+        // Use provided hospitalId if specified (for cases where we want to override)
         else if (params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        // User ID filter
+        // User ID filter (this should use authId, not hospitalId)
         if (params.userId) {
           queryParams.append("userId", String(params.userId));
         }
@@ -188,21 +217,19 @@ export const ambulanceApi = api.injectEndpoints({
       query: (data) => {
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
         
-        // 🔥 FIX: Use hospitalId for ALL roles
-        let hospitalId = data.hospitalId;
+        // Get hospital ID using helper
+        let hospitalId: number | undefined = data.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {
-          // 🔥 FIX: Priority: auth.hospitalId > auth.id for all roles
-          if (auth?.hospitalId) {
-            hospitalId = auth.hospitalId;
-          } else if (auth?.id && (isHospitalAdmin || isDoctor || isStaff)) {
-            hospitalId = auth.id;
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
           }
         }
+        
+        // Get userId (this is the authId)
         
         return {
           url: "/ambulance",
@@ -213,7 +240,6 @@ export const ambulanceApi = api.injectEndpoints({
             vehicleType: data.vehicleType,
             address: data.address,
             hospitalId: hospitalId,
-            userId: data.userId || auth?.id,
             name: data.name,
           },
         };
@@ -233,21 +259,19 @@ export const ambulanceApi = api.injectEndpoints({
       query: ({ id, data }) => {
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
         
-        // 🔥 FIX: Use hospitalId for ALL roles
-        let hospitalId = data.hospitalId;
+        // Get hospital ID using helper
+        let hospitalId: number | undefined = data.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {
-          // 🔥 FIX: Priority: auth.hospitalId > auth.id for all roles
-          if (auth?.hospitalId) {
-            hospitalId = auth.hospitalId;
-          } else if (auth?.id && (isHospitalAdmin || isDoctor || isStaff)) {
-            hospitalId = auth.id;
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
           }
         }
+        
+        // Get userId (this is the authId)
         
         return {
           url: `/ambulance/${id}`,
@@ -258,7 +282,6 @@ export const ambulanceApi = api.injectEndpoints({
             vehicleType: data.vehicleType,
             address: data.address,
             hospitalId: hospitalId,
-            userId: data.userId || auth?.id,
             name: data.name,
           },
         };

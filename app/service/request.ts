@@ -253,7 +253,6 @@ export const bookingApi = api.injectEndpoints({
           url: "/booking",
           method: "POST",
           body: {
-            userId: data.userId,
             patient_name: data.patient_name,
             patient_dob: data.patient_dob,
             patient_place: data.patient_place,

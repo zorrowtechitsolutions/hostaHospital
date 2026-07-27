@@ -82,11 +82,13 @@ export const roleApi = api.injectEndpoints({
       providesTags: ["Role"],
     }),
 
-    getRoleById: builder.query<RoleResponse, string | number>({
-      query: (id) => `/role/${id}`,
-      providesTags: (result, error, id) => [{ type: "Role", id }],
+    // Updated: Get role by ID using the new route pattern
+    getRoleById: builder.query<RoleResponse, { id: string | number; roles: string | number }>({
+      query: ({ id, roles }) => `/${id}/role/${roles}`,
+      providesTags: (result, error, { roles }) => [{ type: "Role", id: roles }],
     }),
 
+    // Updated: Create role (POST)
     createRole: builder.mutation<RoleResponse, Omit<Role, 'id' | 'hospitalId'>>({
       query: (data) => {
         const hospitalId = getHospitalId();
@@ -103,24 +105,30 @@ export const roleApi = api.injectEndpoints({
       invalidatesTags: ["Role"],
     }),
 
+    // Updated: Update role using the new route pattern
     updateRole: builder.mutation<
       RoleResponse,
       {
         id: string | number;
+        roles: string | number;
         data: Partial<Omit<Role, 'hospitalId'>>;
       }
     >({
-      query: ({ id, data }) => ({
-        url: `/role/${id}`,
+      query: ({ id, roles, data }) => ({
+        url: `/${id}/role/${roles}`,
         method: "PUT",
         body: data,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: "Role", id }],
+      invalidatesTags: (result, error, { roles }) => [{ type: "Role", id: roles }],
     }),
 
-    deleteRole: builder.mutation<{ message: string }, string | number>({
-      query: (id) => ({
-        url: `/role/${id}`,
+    // Updated: Delete role using the new route pattern
+    deleteRole: builder.mutation<
+      { message: string }, 
+      { id: string | number; roles: string | number }
+    >({
+      query: ({ id, roles }) => ({
+        url: `/${id}/role/${roles}`,
         method: "DELETE",
       }),
       invalidatesTags: ["Role"],

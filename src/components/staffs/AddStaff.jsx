@@ -24,13 +24,28 @@ import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
-import { getHospitalId, getAuthUser } from '../../utils/auth';
+import { getAuthUser } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
 
 // Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
 const STAFFS_ROUTE = '/staffs';
+
+// Helper function to get hospital ID (same pattern as AddDoctor)
+const getHospitalId = () => {
+  const storedHospitalId = localStorage.getItem('hospitalId');
+  if (storedHospitalId) {
+    return storedHospitalId;
+  }
+  
+  const authUser = getAuthUser();
+  if (authUser?.hospitalId) {
+    return authUser.hospitalId;
+  }
+  
+  return null;
+};
 
 // Static arrays moved outside component
 const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
@@ -76,7 +91,12 @@ const validateEmail = (email) => {
 
 const validatePassword = password => {
   if (!password) return 'Password is required';
-  return password.length < 8 ? 'Password must be at least 8 characters' : '';
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password must contain at least one special character';
+  return '';
 };
 
 const validateConfirmPassword = (confirmPassword, password) => {
@@ -175,6 +195,17 @@ const PasswordInput = ({
     {error && touched && (
       <p className="mt-1 text-sm text-red-500">{error}</p>
     )}
+    {name === 'password' && value && !error && (
+      <p className="text-xs text-green-600 mt-1">✓ Password is strong</p>
+    )}
+    {name === 'password' && value && error && (
+      <p className="text-xs text-red-600 mt-1">{error}</p>
+    )}
+    {name === 'password' && (
+      <p className="text-xs text-gray-400 mt-1">
+        Password must contain: 8+ chars, uppercase, lowercase, number & special character
+      </p>
+    )}
   </div>
 );
 
@@ -193,11 +224,10 @@ const AddStaff = () => {
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
-  // Get hospital ID and hospital name from auth
+  // 🔥 FIX: Get hospitalId properly (same pattern as AddDoctor)
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
-  
   
   // Fetch roles from API
   const {
@@ -206,6 +236,8 @@ const AddStaff = () => {
   } = useGetRolesQuery({
     hospitalId,
     limit: 100
+  }, {
+    skip: !hospitalId // Skip if no hospitalId
   });
   
   // Extract roles from response - include admin role (id=2) and hospital-specific roles
@@ -455,6 +487,12 @@ const AddStaff = () => {
   const handleSubmit = async () => {
     resetSubmitState();
     
+    // 🔥 FIX: Check hospitalId before submitting
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+    
     if (!validateForm()) {
       showWarningToast('Please fix the validation errors before submitting', TOAST_DURATION);
       return;
@@ -468,7 +506,6 @@ const AddStaff = () => {
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
        
-      
       const staffData = {
         name: formData.name,
         email: formData.email,
@@ -484,6 +521,7 @@ const AddStaff = () => {
         knowLanguages: formData.knowLanguages || [],
         qualification: formData.qualification || undefined,
         hospitalName: hospitalName,
+        hospitalId: hospitalId, // 🔥 FIX: Add hospitalId to staff data
         address: {
           country: formData.address.country || undefined,
           state: formData.address.state || undefined,
@@ -501,11 +539,9 @@ const AddStaff = () => {
         removeUndefined(staffData.address);
       }
 
-
       // Create staff
       const response = await createStaff(staffData).unwrap();
       const staff = response.data;
-      
       
       // Assign role permission to the created staff
       if (staff?.id && roleId) {
@@ -557,6 +593,27 @@ const AddStaff = () => {
   const isFormSubmitting = isSubmitting || isApiLoading || isAssigning;
   const isActive = formData.status === 'active';
   const isLoadingData = rolesLoading;
+
+  // 🔥 FIX: Show loading state if no hospitalId
+  if (!hospitalId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">
+            Please log in again to access this page.
+          </p>
+          <Button 
+            variant="primary" 
+            onClick={() => navigate('/login')}
+          >
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoadingData) {
     return (
@@ -706,7 +763,7 @@ const AddStaff = () => {
                   placeholder="+1 00000 00000" 
                 />
 
-                {/* Assign Role - Dynamic dropdown like AddNewUser */}
+                {/* Assign Role - Dynamic dropdown like AddDoctor */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Assign Role <span className="text-red-500">*</span>
@@ -902,7 +959,7 @@ const AddStaff = () => {
             </div>
 
             {/* Form Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button
                 type="button"
                 variant="outline"

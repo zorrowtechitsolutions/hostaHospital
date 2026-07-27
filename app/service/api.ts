@@ -17,16 +17,28 @@ interface RefreshResponse {
 
 // ✅ Define public endpoints that should NOT include Authorization header
 const publicEndpoints = [
-  "loginDoctor",
-  "loginHospital", 
-  "loginSuperAdmin",
-  "refreshDoctor",
-  "refreshHospital",
-  "refreshStaff",
-  "registerHospital",
+  // Auth endpoints
+  "login",
+  "register",
   "forgotPassword",
   "resetPassword",
   "verifyEmail",
+  "sendOtp",
+  "verifyOtp",
+  "requestHospitalOtp",
+  "verifyHospitalOtp",
+  
+  // Public hospital endpoints
+  "getAllHospitals",
+  "getHospitalById",
+  
+  // Public category endpoints
+  "getCategories",
+  "getCategoryById",
+  
+  // Health check / public info
+  "healthCheck",
+  "getPublicInfo",
 ];
 
 const baseQuery = fetchBaseQuery({
@@ -60,42 +72,24 @@ const baseQueryWithReauth: BaseQueryFn<
     const userRole = localStorage.getItem("userRole");
     
     // Determine refresh URL based on role
-    let refreshUrl = "/hospital/refresh";
+    let refreshUrl = "/auth/refresh";
     
     if (auth?.role === "doctor" || userRole === "doctor") {
-      refreshUrl = "/doctor/refresh";
+      refreshUrl = "/auth/refresh";
     } else if (auth?.role === "staff" || userRole === "staff") {
-      refreshUrl = "/staff/refresh";
+      refreshUrl = "/auth/refresh";
     } else if (auth?.role === "super_admin" || userRole === "super_admin") {
-      refreshUrl = "/super-admin/refresh";
+      refreshUrl = "/auth/refresh";
     }
 
-
-const refreshResult = await baseQuery(
-  {
-    url: refreshUrl,
-    method: "POST",
-  },
-  api,
-  extraOptions
-);
-
-
-if (refreshResult.data) {
-  const data = refreshResult.data as RefreshResponse;
-  const newToken = data.token || data.accessToken;
-
-  if (newToken) {
-
-    localStorage.setItem("accessToken", newToken);
-
-    result = await baseQuery(args, api, extraOptions);
-    return result;
-  }
-}
-
-console.error("❌ Token refresh failed");
-clearAuth();
+    const refreshResult = await baseQuery(
+      {
+        url: refreshUrl,
+        method: "POST",
+      },
+      api,
+      extraOptions
+    );
 
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
@@ -104,9 +98,7 @@ clearAuth();
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
 
-
         // ✅ Retry original request with new token
-        // Update the headers of the original request
         if (args && typeof args === 'object' && 'headers' in args) {
           args.headers = {
             ...args.headers,

@@ -1,6 +1,6 @@
 // src/app/service/documentApi.ts
 import { api } from "./api";
-import { getUserRole } from "../../src/utils/auth";
+import { getUserRole, getAuthUser } from "../../src/utils/auth";
 
 // ==============================
 // TYPES
@@ -10,7 +10,6 @@ export interface Document {
   id?: string;
   _id?: string;
   patientId: string | number;
-  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -30,7 +29,6 @@ export interface Document {
 
 export interface CreateDocumentData {
   patientId: string | number;
-  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -48,7 +46,6 @@ export interface CreateDocumentData {
 
 export interface UpdateDocumentData {
   patientId: string | number;
-  userId?: string | number | null; // ✅ ADDED
   name: string;
   date: string;
   fileKey?: string | null;
@@ -60,6 +57,7 @@ export interface UpdateDocumentData {
   role?: string | null;
   uploadedById?: string | number | null;
   contentType?: string | null;
+  hospitalId?: string | number | null; // ✅ ADDED hospitalId to UpdateDocumentData
 }
 
 export interface DocumentResponse {
@@ -71,14 +69,34 @@ export interface DocumentResponse {
 
 export interface GetDocumentsParams {
   patientId?: string | number;
+  hospitalId?: string | number; // ✅ ADDED hospitalId filter
   page?: number;
   limit?: number;
   search_query?: string;
+  skipHospitalFilter?: boolean; // ✅ ADDED skipHospitalFilter
 }
 
 // ==============================
 // HELPER FUNCTIONS
 // ==============================
+
+// Helper: Get hospital ID from auth (returns number)
+const getHospitalIdFromAuth = (auth: any): number | null => {
+  if (!auth) return null;
+  
+  // Priority 1: Use hospitalId if available (this is the correct hospital ID)
+  if (auth.hospitalId) {
+    return Number(auth.hospitalId);
+  }
+  
+  return null;
+};
+
+// Helper: Convert string | number to number safely
+const toNumber = (value: string | number | undefined): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  return Number(value);
+};
 
 const getFileExtension = (filename: string): string => {
   return filename.split('.').pop()?.toUpperCase() || '';
@@ -111,6 +129,39 @@ export const documentsApi = api.injectEndpoints({
       query: (params = {}) => {
         const queryParams = new URLSearchParams();
 
+        const auth = getAuthUser();
+        
+        // Determine if user is super admin
+        const isSuperAdmin = auth?.role === 'super-admin';
+        const shouldSkipFilter = params.skipHospitalFilter === true;
+
+        // Get hospital ID using helper
+        let hospitalIdToUse = null;
+        
+        // For non-super-admin users, always filter by hospital if they have one
+        if (!isSuperAdmin && !shouldSkipFilter) {
+          hospitalIdToUse = getHospitalIdFromAuth(auth);
+          
+          // If no hospitalId found, try params
+          if (!hospitalIdToUse && params.hospitalId) {
+            hospitalIdToUse = toNumber(params.hospitalId);
+          }
+          
+          if (hospitalIdToUse) {
+            queryParams.append("hospitalId", String(hospitalIdToUse));
+          } else {
+            console.warn("⚠️ No hospital ID found for filtering documents");
+          }
+        } 
+        // Super Admin with specific hospital filter
+        else if (isSuperAdmin && params.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
+        }
+        // Use provided hospitalId if specified (for cases where we want to override)
+        else if (params.hospitalId) {
+          queryParams.append("hospitalId", String(params.hospitalId));
+        }
+
         if (params.patientId) {
           queryParams.append("patientId", String(params.patientId));
         }
@@ -140,20 +191,64 @@ export const documentsApi = api.injectEndpoints({
     }),
 
     createDocument: builder.mutation<DocumentResponse, CreateDocumentData>({
-      query: (newDocument) => ({
-        url: "/documents",
-        method: "POST",
-        body: newDocument,
-      }),
+      query: (newDocument) => {
+        const auth = getAuthUser();
+        const isSuperAdmin = auth?.role === 'super-admin';
+        
+        // Get hospital ID using helper
+        let hospitalId: number | null = null;
+        
+        if (!isSuperAdmin) {
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
+          }
+        }
+        
+        // Use provided hospitalId if available, otherwise use from auth
+        const finalHospitalId = newDocument.hospitalId || hospitalId;
+        
+        return {
+          url: "/documents",
+          method: "POST",
+          body: {
+            ...newDocument,
+            hospitalId: finalHospitalId,
+          },
+        };
+      },
       invalidatesTags: ["Document"],
     }),
 
     updateDocument: builder.mutation<DocumentResponse, { id: string; updateData: UpdateDocumentData }>({
-      query: ({ id, updateData }) => ({
-        url: `/documents/${id}`,
-        method: "PUT",
-        body: updateData,
-      }),
+      query: ({ id, updateData }) => {
+        const auth = getAuthUser();
+        const isSuperAdmin = auth?.role === 'super-admin';
+        
+        // Get hospital ID using helper
+        let hospitalId: number | null = null;
+        
+        if (!isSuperAdmin) {
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
+          }
+        }
+        
+        // Use provided hospitalId if available, otherwise use from auth
+        const finalHospitalId = updateData.hospitalId || hospitalId;
+        
+        return {
+          url: `/documents/${id}`,
+          method: "PUT",
+          body: {
+            ...updateData,
+            hospitalId: finalHospitalId,
+          },
+        };
+      },
       invalidatesTags: (result, error, { id }) => [{ type: "Document", id }],
     }),
 
@@ -165,47 +260,54 @@ export const documentsApi = api.injectEndpoints({
       invalidatesTags: ["Document"],
     }),
 
-    // ✅ UPDATED: uploadDocumentWithFile with userId and role
+    // ✅ UPDATED: uploadDocumentWithFile with hospitalId handling
     uploadDocumentWithFile: builder.mutation<
       DocumentResponse, 
       { 
         file: File; 
         patientId: string | number; 
         documentName: string; 
-        date: string; 
+        date: string;
+        hospitalId?: string | number; // ✅ ADDED optional hospitalId
       }
     >({
-      async queryFn({ file, patientId, documentName, date }, _queryApi, _extraOptions, baseQuery) {
+      async queryFn({ file, patientId, documentName, date, hospitalId }, _queryApi, _extraOptions, baseQuery) {
         try {
+          const auth = getAuthUser();
+          const isSuperAdmin = auth?.role === 'super-admin';
           const uploadedById = getUserIdFromStorage();
           const contentType = file.type;
-          const userId = uploadedById;
+          const userRole = auth?.role || "document";
           
-          if (!userId) {
+          if (!uploadedById) {
             throw new Error("User ID is required for S3 upload. Please make sure you are logged in.");
           }
           
-          // ✅ Get user role from auth
-          const authUser = JSON.parse(localStorage.getItem("user") || "{}");
-          const userRole = authUser?.role || "document";
+          // Get hospital ID from auth if not provided
+          let finalHospitalId = hospitalId;
+          if (!isSuperAdmin && !finalHospitalId) {
+            const authHospitalId = getHospitalIdFromAuth(auth);
+            if (authHospitalId) {
+              finalHospitalId = authHospitalId;
+            }
+          }
           
           const timestamp = Date.now();
           const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const fileKey = `documents/${userId}/${timestamp}_${safeFileName}`;
+          const fileKey = `documents/${uploadedById}/${timestamp}_${safeFileName}`;
           
           const { uploadToS3 } = await import("./S3");
           
-          // ✅ Pass userId as customId and userRole as role
+          // ✅ Pass uploadedById as customId and userRole as role
           const s3Result = await uploadToS3(
             file, 
             fileKey, 
-            userId,        // ← Pass userId as customId
-            userRole       // ← Pass user role
+            uploadedById,   // ← Pass uploadedById as customId
+            userRole        // ← Pass user role
           );
           
           const documentData: CreateDocumentData = {
             patientId: patientId,
-            userId: userId, // ✅ ADDED
             name: documentName,
             date: date || new Date().toLocaleDateString(),
             fileKey: s3Result.key,
@@ -215,8 +317,9 @@ export const documentsApi = api.injectEndpoints({
             fileSize: formatFileSize(file.size),
             type: getFileExtension(file.name),
             role: userRole,
-            uploadedById: userId,
+            uploadedById: uploadedById,
             contentType: contentType,
+            hospitalId: finalHospitalId || null, // ✅ ADDED hospitalId
             uploadDate: new Date().toISOString(),
           };
 

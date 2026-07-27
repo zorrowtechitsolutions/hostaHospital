@@ -76,6 +76,8 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role || 'User';
 };
 
+// ================= MAIN COMPONENT =================
+
 const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
@@ -91,28 +93,61 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
   
   const hospitalId = getHospitalId();
-  const userRole = user?.role || 'hospital';
   
-  // ✅ Check if user is Hospital Admin (has access to Settings)
+  // ✅ Get user role and IDs from auth context and localStorage
+  const userRole = user?.role || localStorage.getItem('userRole') || 'hospital';
+  
+  // ✅ Get user ID based on role from localStorage
+  const getUserIdByRole = () => {
+    const authId = localStorage.getItem('authId');
+    const userId = localStorage.getItem('userId');
+    const hospitalIdFromStorage = localStorage.getItem('hospitalId');
+    const doctorId = localStorage.getItem('doctorId');
+    const staffId = localStorage.getItem('staffId');
+    
+    // Try to get the stored numeric ID for staff
+    const staffNumericId = localStorage.getItem('staffNumericId');
+    
+    // Parse stored user data
+    let userData = null;
+    try {
+      userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    } catch (e) {}
+    
+    // Return appropriate ID based on role
+    switch (userRole) {
+      case 'hospital':
+        return authId || userId || hospitalIdFromStorage || userData?.authId || userData?.hospitalId || userData?.id || hospitalId;
+      case 'doctor':
+        return authId || userId || doctorId || userData?.authId || userData?.id;
+      case 'staff':
+        return authId || userId || staffId || staffNumericId || userData?.authId || userData?.id;
+      case 'super_admin':
+        return authId || userId || userData?.authId || userData?.id;
+      default:
+        return authId || userId || hospitalIdFromStorage || hospitalId;
+    }
+  };
+  
+  const userId = getUserIdByRole();
+  
+  // ✅ Determine if user is Hospital Admin (has access to Settings)
   const isHospitalAdmin = userRole === 'hospital';
   
-  // Get user ID based on role
-  const userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || hospitalId;
-  
-  // Fetch data based on user role
+  // ✅ Fetch data based on user role - SKIP if no userId
   const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
     userId,
-    { skip: userRole !== 'hospital' || !userId }
+    { skip: userRole !== 'hospital' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
   const { data: doctorData, isLoading: isDoctorLoading } = useGetDoctorByIdQuery(
     userId,
-    { skip: userRole !== 'doctor' || !userId }
+    { skip: userRole !== 'doctor' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
   const { data: staffData, isLoading: isStaffLoading } = useGetStaffByIdQuery(
     userId,
-    { skip: userRole !== 'staff' || !userId }
+    { skip: userRole !== 'staff' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
   const { data: notificationsData } = useGetNotificationsByHospitalQuery(
@@ -120,46 +155,167 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     { skip: !hospitalId, pollingInterval: 10000 }
   );
   
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  // ✅ Get stored user data
+  let storedUser = {};
+  try {
+    storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  } catch (e) {}
   
-  // Determine which data source to use based on role
+  // ✅ Get user data from localStorage
+  let userDataFromStorage = {};
+  try {
+    userDataFromStorage = JSON.parse(localStorage.getItem("userData") || "{}");
+  } catch (e) {}
+  
+  // ✅ Get the correct display name based on role
+  const getDisplayName = () => {
+    // For DOCTOR role
+    if (userRole === 'doctor') {
+      const doctor = doctorData?.data || doctorData;
+      return doctor?.name || 
+             (doctor?.firstName && doctor?.lastName ? `${doctor.firstName} ${doctor.lastName}` : null) ||
+             user?.name || 
+             storedUser?.name || 
+             userDataFromStorage?.name || 
+             'Doctor';
+    }
+    
+    // For STAFF role
+    if (userRole === 'staff') {
+      const staff = staffData?.data || staffData;
+      return staff?.name || 
+             user?.name || 
+             storedUser?.name || 
+             userDataFromStorage?.name || 
+             'Staff';
+    }
+    
+    // For SUPER_ADMIN role
+    if (userRole === 'super_admin') {
+      return user?.name || 
+             storedUser?.name || 
+             userDataFromStorage?.name || 
+             'Super Admin';
+    }
+    
+    // Default: HOSPITAL role
+    const hospital = hospitalData?.data || hospitalData;
+    return user?.name || 
+           user?.hospitalName || 
+           hospital?.name || 
+           storedUser?.name || 
+           storedUser?.hospitalName || 
+           userDataFromStorage?.name || 
+           userDataFromStorage?.hospitalName || 
+           'Hospital';
+  };
+  
+  // ✅ Get the raw display name without prefix
+  const displayName = getDisplayName();
+  
+  // ✅ Create the final display title with role-based prefix
+  const getDisplayTitle = () => {
+    if (userRole === 'doctor') {
+      return `Dr. ${displayName}`;
+    } else if (userRole === 'hospital') {
+      return displayName; // Hospital name without prefix
+    } else if (userRole === 'staff') {
+      return displayName; // Staff name without prefix
+    } else if (userRole === 'super_admin') {
+      return displayName; // Super Admin without prefix
+    }
+    return displayName;
+  };
+  
+  const displayTitle = getDisplayTitle();
+  
+  // ✅ Determine which data source to use for profile
   const getProfileData = () => {
-    if (userRole === 'doctor' && doctorData) {
-      const doctor = doctorData.data || doctorData;
-      const profileImage = doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null;
+    // For DOCTOR role
+    if (userRole === 'doctor') {
+      const doctor = doctorData?.data || doctorData;
+      
+      // Get profile image from various sources
+      const profileImage = doctor?.profilePicture || 
+                          doctor?.profileImage || 
+                          doctor?.imageUrl || 
+                          doctor?.image || 
+                          user?.profilePicture || 
+                          storedUser?.profilePicture || 
+                          userDataFromStorage?.profilePicture || 
+                          null;
+      
       return {
-        name: doctor?.name || doctor?.firstName + ' ' + doctor?.lastName || user?.name || storedUser?.name || 'Doctor',
-        email: doctor?.email || user?.email || storedUser?.email || '',
+        name: displayTitle, // ✅ Use the formatted display title
+        email: doctor?.email || user?.email || storedUser?.email || userDataFromStorage?.email || '',
         profileImage: profileImage,
         role: 'doctor',
         roleLabel: 'Doctor',
-        id: doctor?.id || userId
+        id: doctor?.id || userId || doctor?.authId
       };
     }
     
-    if (userRole === 'staff' && staffData) {
-      const staff = staffData.data || staffData;
-      const profileImage = staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null;
+    // For STAFF role
+    if (userRole === 'staff') {
+      const staff = staffData?.data || staffData;
+      
+      // Get profile image from various sources
+      const profileImage = staff?.profilePicture || 
+                          staff?.profileImage || 
+                          staff?.imageUrl || 
+                          staff?.image || 
+                          user?.profilePicture || 
+                          storedUser?.profilePicture || 
+                          userDataFromStorage?.profilePicture || 
+                          null;
+      
       return {
-        name: staff?.name || user?.name || storedUser?.name || 'Staff',
-        email: staff?.email || user?.email || storedUser?.email || '',
+        name: displayTitle, // ✅ Use the formatted display title
+        email: staff?.email || user?.email || storedUser?.email || userDataFromStorage?.email || '',
         profileImage: profileImage,
         role: 'staff',
         roleLabel: 'Staff',
-        id: staff?.id || userId
+        id: staff?.id || userId || staff?.authId
       };
     }
     
-    // Default: Hospital
+    // For SUPER_ADMIN role
+    if (userRole === 'super_admin') {
+      const profileImage = user?.profilePicture || 
+                          storedUser?.profilePicture || 
+                          userDataFromStorage?.profilePicture || 
+                          null;
+      
+      return {
+        name: displayTitle, // ✅ Use the formatted display title
+        email: user?.email || storedUser?.email || userDataFromStorage?.email || '',
+        profileImage: profileImage,
+        role: 'super_admin',
+        roleLabel: 'Super Admin',
+        id: user?.id || userId
+      };
+    }
+    
+    // Default: HOSPITAL role
     const hospital = hospitalData?.data || hospitalData;
-    const profileImage = hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null;
+    
+    // Get profile image from various sources
+    const profileImage = hospital?.profilePicture || 
+                        hospital?.profileImage || 
+                        hospital?.imageUrl || 
+                        hospital?.image || 
+                        user?.profilePicture || 
+                        storedUser?.profilePicture || 
+                        userDataFromStorage?.profilePicture || 
+                        null;
+    
     return {
-      name: user?.name || user?.hospitalName || hospital?.name || storedUser?.name || storedUser?.hospitalName || 'Hospital',
-      email: user?.email || hospital?.email || storedUser?.email || '',
+      name: displayTitle, // ✅ Use the formatted display title
+      email: user?.email || hospital?.email || storedUser?.email || userDataFromStorage?.email || '',
       profileImage: profileImage,
       role: 'hospital',
       roleLabel: 'Hospital Admin',
-      id: hospital?.id || userId
+      id: hospital?.id || userId || hospital?.authId
     };
   };
   
@@ -198,30 +354,36 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     }
   };
 
-  // ✅ COMPLETE LOGOUT HANDLER - Works for all roles (Hospital, Doctor, Staff, Super Admin)
+  // ✅ COMPLETE LOGOUT HANDLER - Works for all roles
   const handleLogout = async () => {
     try {
-      // ✅ 1. Get user information from multiple sources
-      const authData = JSON.parse(localStorage.getItem('authData') || '{}');
-      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      // ✅ Get user information from multiple sources
+      let authData = {};
+      let userData = {};
+      try {
+        authData = JSON.parse(localStorage.getItem('authData') || '{}');
+        userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      } catch (e) {}
+      
       const storedUserRole = localStorage.getItem('userRole') || 'hospital';
       const storedHospitalId = localStorage.getItem('hospitalId') || '';
       
-      // ✅ 2. Determine user ID (priority: params > authData > userData > hospitalId)
-      let userId = profileData.id || authData?.id || authData?.userId || authData?.hospitalId || '';
+      // ✅ Determine user ID
+      let userId = profileData.id || 
+                   authData?.id || 
+                   authData?.authId || 
+                   authData?.hospitalId || 
+                   userData?.id || 
+                   userData?.authId || 
+                   userData?.hospitalId ||
+                   userData?.doctorId ||
+                   userData?.staffId ||
+                   storedHospitalId;
       
-      if (!userId) {
-        userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
-      }
-      
-      if (!userId) {
-        userId = storedHospitalId;
-      }
-      
-      // ✅ 3. Determine user role (priority: params > localStorage > default)
+      // ✅ Determine user role
       const role = userRole || storedUserRole || 'hospital';
       
-      // ✅ 4. Get deviceId from IndexedDB (primary source)
+      // ✅ Get deviceId
       let deviceId = null;
       try {
         const tokens = await tokenManager.getDeviceTokens();
@@ -232,53 +394,37 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
       }
       
-      // ✅ 5. Fallback to localStorage if IndexedDB fails
       if (!deviceId) {
         deviceId = getDeviceId();
       }
       
-      // ✅ 6. Check if this is a Super Admin
+      // ✅ Check if this is a Super Admin
       const isSuperAdmin = role === 'super_admin';
       
-      // ✅ 7. Log the logout request
-      console.log('📤 Logging out with:', {
-        id: userId,
-        role: role,
-        deviceId: deviceId,
-        isSuperAdmin: isSuperAdmin,
-        endpoint: isSuperAdmin ? '/hospital/g-logout' : '/hospital/logout/' + storedHospitalId
-      });
-      
-      // ✅ 8. Call logout API with proper parameters
+      // ✅ Call logout API
       const logoutParams = {
         id: userId,
         role: role,
         deviceId: deviceId,
-        useGlobalEndpoint: isSuperAdmin // Super Admin uses global endpoint
+        useGlobalEndpoint: isSuperAdmin
       };
       
-      // If not Super Admin, we can also pass the hospitalId
       if (!isSuperAdmin && storedHospitalId) {
         logoutParams.hospitalId = storedHospitalId;
       }
       
-      const result = await logoutApi(logoutParams).unwrap();
-      
-    } catch (error) {
-      console.error('❌ Logout API error:', error);
-      
-      // ✅ Even if API fails, we still need to clear local data
-      // Check if it's a network error or authentication error
-      if (error?.status === 401 || error?.status === 403) {
-        console.warn('⚠️ Authentication error during logout - likely already logged out');
+      try {
+        await logoutApi(logoutParams).unwrap();
+      } catch (error) {
+        console.error('❌ Logout API error:', error);
       }
+      
     } finally {
-      // ✅ 9. Clear IndexedDB (FCM tokens)
+      // ✅ Clear IndexedDB
       try {
         await tokenManager.deleteDatabase();
       } catch (dbError) {
         console.warn('⚠️ Could not delete database:', dbError);
-        // Try to clear tokens individually
         try {
           await tokenManager.clearAllDeviceTokens();
         } catch (e) {
@@ -286,7 +432,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         }
       }
       
-      // ✅ 10. Clear ALL localStorage items
+      // ✅ Clear ALL localStorage items
       const localStorageItems = [
         'accessToken',
         'refreshToken',
@@ -306,17 +452,19 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         'token',
         'refresh_token',
         'profilePicture',
-        'userImage'
+        'userImage',
+        'authId',
+        'userId'
       ];
       
       localStorageItems.forEach(key => {
         localStorage.removeItem(key);
       });
       
-      // ✅ 11. Clear sessionStorage
+      // ✅ Clear sessionStorage
       sessionStorage.clear();
       
-      // ✅ 12. Clear any cached data
+      // ✅ Clear caches
       if (window.caches) {
         try {
           const cacheNames = await caches.keys();
@@ -328,10 +476,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         }
       }
       
-      // ✅ 13. Auth context logout
+      // ✅ Auth context logout
       logout();
       
-      // ✅ 14. Redirect to login
+      // ✅ Redirect to login
       navigate("/sign-in", { replace: true });
     }
   };
@@ -527,7 +675,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </button>
               </div>
             </div>
-          )}
+          )} 
         </div>
       </div>
     </header>

@@ -243,6 +243,7 @@ const Register = () => {
 
   // Extract categories from response
   const categories = categoriesResponse?.data || [];
+  console.log(categoriesResponse);
   
   // State for selected category
   const [selectedCategory, setSelectedCategory] = useState(null);

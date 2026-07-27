@@ -1,4 +1,3 @@
-// src/components/patients/EditPatient.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -125,7 +124,24 @@ const EditPatient = () => {
   
   const numericId = id ? Number(id) : null;
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id;
+  
+  // 🔥 FIX: Get hospitalId properly
+  const getHospitalId = () => {
+    // Priority 1: Check localStorage
+    const storedHospitalId = localStorage.getItem('hospitalId');
+    if (storedHospitalId) {
+      return storedHospitalId;
+    }
+    
+    // Priority 2: Check auth.hospitalId
+    if (authUser?.hospitalId) {
+      return authUser.hospitalId;
+    }
+    
+    return null;
+  };
+  
+  const hospitalId = getHospitalId();
   
   const { 
     data: patientResponse, 

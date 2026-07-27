@@ -131,10 +131,23 @@ const SuperUserPermissions = () => {
     setIsModalOpen(true);
   };
 
+  // ✅ FIXED: Create permission with proper array payload structure
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const result = await createPermission(formData).unwrap();
+      // ✅ Transform formData to match backend expectations
+      const payload = {
+        permissions: [
+          {
+            module: formData.module,
+            action: formData.action,
+          },
+        ],
+      };
+
+      console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
+
+      const result = await createPermission(payload).unwrap();
       
       socket.emit("permission_event", {
         event: "PERMISSION_REGISTERED",
@@ -150,6 +163,7 @@ const SuperUserPermissions = () => {
       setIsModalOpen(false);
       refetch();
     } catch (error) {
+      console.error('❌ Create error:', error);
       showErrorToast(error?.data?.message || 'Failed to create permission');
     }
   };
@@ -304,7 +318,7 @@ const SuperUserPermissions = () => {
                 name="module"
                 value={formData.module}
                 onChange={handleInputChange}
-                placeholder="e.g., users, products, orders"
+                placeholder="e.g., dashboard, users, products"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />

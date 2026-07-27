@@ -29,6 +29,29 @@ const getS3ImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
+// 🔥 FIX: Enhanced helper function to get hospital ID (same pattern as AddPatient)
+const getHospitalId = () => {
+  // Priority 1: Check localStorage
+  const storedHospitalId = localStorage.getItem('hospitalId');
+  if (storedHospitalId) {
+    return storedHospitalId;
+  }
+  
+  // Priority 2: Check auth.hospitalId
+  const authUser = getAuthUser();
+  if (authUser?.hospitalId) {
+    return authUser.hospitalId;
+  }
+  
+  return null;
+};
+
+// 🔥 FIX: Enhanced helper function to get auth ID
+const getAuthId = () => {
+  const authUser = getAuthUser();
+  return authUser?.id || authUser?.userId || authUser?._id || null;
+};
+
 // ✅ Helper function to format address
 const formatAddress = (address) => {
   if (!address) return 'N/A';
@@ -238,15 +261,37 @@ const Doctors = () => {
 
   const [recoverDoctor] = useRecoverDoctorMutation();
 
-  // 🔥 FIX: Get the authenticated user
+  // 🔥 FIX: Get the authenticated user using the helper
   const auth = getAuthUser();
   
-  // 🔥 FIX: Check for doctor role as well (roleId 46 for doctors)
+  // 🔥 FIX: Get hospital ID using the helper function (same pattern as AddPatient)
+  const hospitalId = getHospitalId();
+  const authId = getAuthId();
+
+  // 🔥 Log the IDs for debugging
+  useEffect(() => {
+    console.log('🔍 Auth User:', auth);
+    console.log('🔍 Auth ID:', authId);
+    console.log('🏥 Hospital ID:', hospitalId);
+    console.log('🔍 Role:', auth?.role);
+    console.log('🔍 Role ID:', auth?.roleId);
+  }, [auth, authId, hospitalId]);
+
+  // 🔥 FIX: Check for roles correctly
   const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
   const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-  const shouldFilterByHospital = isHospitalAdmin || isDoctor;
+  const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
+  const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
+  const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
 
-  // 🔥 FIX: Build query params with hospital filter for doctors and hospital admins
+  // 🔥 Log the IDs being used
+  useEffect(() => {
+    console.log('🏥 Hospital ID used for filtering:', hospitalId);
+    console.log('👤 Auth ID:', authId);
+    console.log('🔍 Should filter by hospital:', shouldFilterByHospital);
+  }, [hospitalId, authId, shouldFilterByHospital]);
+
+  // 🔥 FIX: Build query params with hospital filter for all hospital-bound users
   const queryParams = {
     search_query: searchTerm?.trim() ? searchTerm : undefined,
     speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
@@ -255,12 +300,20 @@ const Doctors = () => {
     limit: itemsPerPage
   };
 
-  // 🔥 CRITICAL FIX: If user is a doctor OR hospital admin, ALWAYS filter by their hospital ID
+  // 🔥 CRITICAL FIX: If user is a doctor, staff, OR hospital admin, ALWAYS filter by their hospital ID
   if (shouldFilterByHospital) {
-    const hospitalId = auth?.hospitalId || auth?.id;
+    // Use hospitalId from auth or localStorage
     if (hospitalId) {
-      queryParams.hospitalId = hospitalId;
+      queryParams.hospitalId = String(hospitalId);
+      console.log('✅ Filtering doctors by hospitalId:', hospitalId);
+    } else {
+      console.warn('⚠️ No hospitalId found for hospital-bound user');
     }
+  }
+
+  // 🔥 For Super Admin, allow filtering by hospitalId if provided
+  if (isSuperAdmin && hospitalId) {
+    queryParams.hospitalId = String(hospitalId);
   }
 
   // API Query with hospital filter
@@ -276,8 +329,16 @@ const Doctors = () => {
   useEffect(() => {
     if (response?.data) {
       const uniqueHospitalIds = new Set(response.data.map(d => d.hospitalId));
+      console.log('📊 Total doctors:', response.data.length);
+      console.log('🏥 Unique hospital IDs in results:', Array.from(uniqueHospitalIds));
       if (uniqueHospitalIds.size > 1) {
         console.warn("⚠️ WARNING: Multiple hospitals detected in results!");
+      }
+      // Log first doctor to see structure
+      if (response.data.length > 0) {
+        console.log('📋 First doctor:', response.data[0]);
+        console.log('📋 Doctor authId:', response.data[0].authId);
+        console.log('📋 Doctor hospitalId:', response.data[0].hospitalId);
       }
     }
   }, [response]);
@@ -326,8 +387,11 @@ const Doctors = () => {
       ...doctor,
       imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
       hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
+      // Ensure authId is preserved
+      authId: doctor.authId || doctor.userId || doctor.id,
+      hospitalId: doctor.hospitalId || hospitalId,
     }));
-  }, [response?.data]);
+  }, [response?.data, hospitalId]);
 
   // Get unique departments from API response
   const departments = useMemo(() => {
@@ -464,6 +528,7 @@ const Doctors = () => {
       
       return {
         'Doctor ID': getDoctorId(doctor.id),
+        'Auth ID': doctor.authId || 'N/A',
         'Name': getDoctorName(doctor),
         'Department': getDepartmentDisplay(doctor),
         'Specialty': doctor.specialist || doctor.specialty || 'N/A',
@@ -477,7 +542,8 @@ const Doctors = () => {
         'Gender': doctor.gender || 'N/A',
         'Address': formattedAddress,
         'Display Name': doctor.displayName || 'N/A',
-        'Hospital': doctor.hospitalName || 'N/A'
+        'Hospital': doctor.hospitalName || 'N/A',
+        'Hospital ID': doctor.hospitalId || 'N/A'
       };
     });
   }, [doctors]);
@@ -537,6 +603,7 @@ const Doctors = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+
       {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
@@ -813,6 +880,7 @@ const Doctors = () => {
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                   <tr>
                     <th className="px-6 py-3">Doctor ID</th>
+                    <th className="px-6 py-3">Auth ID</th>
                     <th className="px-6 py-3">Doctor Name</th>
                     <th className="px-6 py-3">Department</th>
                     <th className="px-6 py-3">Qualification</th>
@@ -830,6 +898,9 @@ const Doctors = () => {
                       <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
                         <td className="px-6 py-4 text-[#1C62A0] font-medium">
                           {getDoctorId(doctor.id)}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 text-xs font-mono">
+                          {doctor.authId || 'N/A'}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">

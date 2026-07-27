@@ -1,4 +1,3 @@
-// src/components/patients/AddPatient.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -17,7 +16,7 @@ import { useCreatePatientMutation } from '../../../app/service/patients';
 import { Country, State, City } from 'country-state-city';
 import { getAuthUser } from '../../utils/auth';
 
-// SearchableDropdown Component
+// SearchableDropdown Component (keep as is)
 const SearchableDropdown = ({ 
   label, 
   options, 
@@ -123,7 +122,52 @@ const AddPatient = () => {
   const navigate = useNavigate();
   
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id;
+  
+  // 🔥 FIX: Get hospitalId properly
+  const getHospitalId = () => {
+    // Priority 1: Check localStorage
+    const storedHospitalId = localStorage.getItem('hospitalId');
+    if (storedHospitalId) {
+      return storedHospitalId;
+    }
+    
+    // Priority 2: Check auth.hospitalId
+    if (authUser?.hospitalId) {
+      return authUser.hospitalId;
+    }
+    
+    return null;
+  };
+  
+  // ✅ NEW: Get hospital name
+  const getHospitalName = () => {
+    // Priority 1: Check localStorage
+    const storedHospitalName = localStorage.getItem('hospitalName');
+    if (storedHospitalName) {
+      return storedHospitalName;
+    }
+    
+    // Priority 2: Check auth.hospitalName
+    if (authUser?.hospitalName) {
+      return authUser.hospitalName;
+    }
+    
+    // Priority 3: Check hospital data in localStorage
+    try {
+      const hospitalData = localStorage.getItem('hospitalData');
+      if (hospitalData) {
+        const parsed = JSON.parse(hospitalData);
+        return parsed.name || parsed.hospitalName || null;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    
+    return null;
+  };
+  
+  const hospitalId = getHospitalId();
+  const hospitalName = getHospitalName();
 
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   
@@ -288,6 +332,7 @@ const AddPatient = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
+  // ✅ UPDATED: Prepare patient data with hospital name
   const preparePatientData = () => {
     const patientData = {
       name: formData.fullName,
@@ -303,6 +348,7 @@ const AddPatient = () => {
         pincode: Number(formData.pincode || 0)
       },
       hospitalId: hospitalId,
+      hospitalName: hospitalName, // ✅ ADDED: Include hospital name in payload
     };
 
     if (formData.bloodGroup) patientData.bloodGroup = formData.bloodGroup;
@@ -340,6 +386,10 @@ const AddPatient = () => {
       
       try {
         const patientData = preparePatientData();
+        
+        // ✅ Log the payload to verify hospitalName is included
+        console.log('📤 Sending patient data with hospital name:', patientData);
+        
         await createPatient(patientData).unwrap();
         
         showSuccessToast(
