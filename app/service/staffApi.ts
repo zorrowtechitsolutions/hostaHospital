@@ -1,7 +1,7 @@
-// app/service/staffApi.ts
+// src/app/service/staffApi.ts
 
 import { api } from "./api";
-import { getHospitalId, getAuthUser } from "../../src/utils/auth";
+import { getAuthUser, JwtPayload } from "../../src/utils/auth";
 
 // ================= TYPES =================
 
@@ -15,6 +15,8 @@ export interface StaffAddress {
 
 export interface Staff {
   id?: number;
+  authId?: string;
+  userId?: string;
   name: string;
   email: string;
   password?: string;
@@ -44,6 +46,7 @@ export interface StaffResponse {
   message: string;
   data?: Staff | Staff[];
   token?: string;
+  accessToken?: string;
   refreshToken?: string;
   pagination?: {
     totalItems: number;
@@ -51,6 +54,9 @@ export interface StaffResponse {
     currentPage: number;
     itemsPerPage: number;
   };
+  authId?: string;
+  hospitalId?: string;
+  role?: string;
 }
 
 export interface GetStaffParams {
@@ -71,7 +77,6 @@ export interface GetStaffParams {
   skipHospitalFilter?: boolean;
 }
 
-// Password Reset Request Types
 export interface ResetPasswordRequest {
   email: string;
   otp: string;
@@ -82,14 +87,17 @@ export interface SendOtpRequest {
   email: string;
 }
 
-export interface ChangePasswordRequest {
-  staffId: number;
+export interface ChangePasswordData {
   currentPassword: string;
   newPassword: string;
-  confirmPassword: string;
 }
 
-// Login Types
+export interface ChangePasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -105,7 +113,6 @@ export interface VerifyOtpRequest {
   otp: string;
 }
 
-// Create Staff Data Type
 export interface CreateStaffData {
   name: string;
   email: string;
@@ -128,6 +135,125 @@ export interface CreateStaffData {
   status?: string;
 }
 
+// ============================================
+// HELPER: Store dual IDs in localStorage
+// ============================================
+
+const storeStaffIds = (response: StaffResponse) => {
+  const token = response.token || response.accessToken;
+  if (token) {
+    localStorage.setItem("accessToken", token);
+  }
+  if (response.refreshToken) {
+    localStorage.setItem("refreshToken", response.refreshToken);
+  }
+
+  const staff = response.data as Staff;
+  
+  let authId = response.authId || '';
+  
+  if (!authId && staff) {
+    authId = staff.authId || staff.userId || String(staff.id || '');
+  }
+  
+  if (authId) {
+    localStorage.setItem("authId", authId);
+    localStorage.setItem("userId", authId);
+    localStorage.setItem("staffId", authId);
+  }
+
+  let hospitalId = response.hospitalId || '';
+  
+  if (!hospitalId && staff?.hospitalId) {
+    hospitalId = String(staff.hospitalId);
+  }
+  
+  if (hospitalId) {
+    localStorage.setItem("hospitalId", hospitalId);
+  }
+
+  const role = response.role || 'staff';
+  localStorage.setItem("userRole", role);
+
+  const userData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    id: staff?.id || authId,
+    name: staff?.name || '',
+    email: staff?.email || '',
+    role: role,
+  };
+  localStorage.setItem("userData", JSON.stringify(userData));
+  
+  const authData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    id: staff?.id || authId,
+    role: role,
+  };
+  localStorage.setItem("authData", JSON.stringify(authData));
+
+  console.log('✅ Staff IDs stored:', { authId, hospitalId });
+};
+
+// ============================================
+// HELPER: Get current user with proper IDs from JWT
+// ============================================
+
+const getCurrentUser = (): JwtPayload | null => {
+  const auth = getAuthUser();
+  if (!auth) return null;
+  return auth;
+};
+
+// ============================================
+// HELPER: Get hospitalId from JWT or localStorage
+// ============================================
+
+const getHospitalId = (): string | null => {
+  const auth = getAuthUser();
+  
+  if (auth?.hospitalId) {
+    return String(auth.hospitalId);
+  }
+  
+  const hospitalId = localStorage.getItem('hospitalId');
+  if (hospitalId) {
+    return hospitalId;
+  }
+  
+  return null;
+};
+
+// ============================================
+// HELPER: Get authId (user ID) from JWT or localStorage
+// ============================================
+
+const getAuthId = (): string | null => {
+  const auth = getAuthUser();
+  
+  if (auth?.id) {
+    return String(auth.id);
+  }
+  
+  const authId = localStorage.getItem('authId');
+  if (authId) {
+    return authId;
+  }
+  
+  return null;
+};
+
+// ============================================
+// HELPER: Get stored IDs from localStorage
+// ============================================
+
+const getStoredIds = () => {
+  const authId = localStorage.getItem('authId') || '';
+  const hospitalId = localStorage.getItem('hospitalId') || '';
+  return { authId, hospitalId };
+};
+
 // ================= API =================
 
 export const staffApi = api.injectEndpoints({
@@ -139,39 +265,23 @@ export const staffApi = api.injectEndpoints({
       GetStaffParams | void
     >({
       query: (params) => {
+        const auth = getCurrentUser();
         const queryParams = new URLSearchParams();
-        const auth = getAuthUser();
         
-        // 🎯 ROLE DEFINITIONS - ALL users should be filtered by hospital
-        const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
         const shouldSkipFilter = params?.skipHospitalFilter === true;
+        const shouldFilterByHospital = !shouldSkipFilter;
 
-        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
-        // Staff should ONLY see their own hospital's data
-        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
-
-        // Super Admin with specific hospital filter
-        if (isSuperAdmin && params?.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
-        } 
-        // Doctors, Hospital Admins, and Staff - filter by their hospital
-        else if (shouldFilterByHospital) {
-          const hospitalId = getHospitalId() || auth?.id || auth?.hospitalId;
+        if (shouldFilterByHospital) {
+          const hospitalId = getHospitalId();
           if (hospitalId) {
             queryParams.append("hospitalId", String(hospitalId));
           } else {
             console.warn("⚠️ No hospital ID found for filtering");
           }
-        }
-        // Use provided hospitalId if available
-        else if (params?.hospitalId) {
+        } else if (params?.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-        } 
+        }
 
-        // Other filters
         if (params?.name) queryParams.append("name", params.name);
         if (params?.gender) queryParams.append("gender", params.gender);
         if (params?.phone) queryParams.append("phone", params.phone);
@@ -183,7 +293,6 @@ export const staffApi = api.injectEndpoints({
         if (params?.search_query) queryParams.append("search_query", params.search_query);
         if (params?.includeDeleted) queryParams.append("includeDeleted", String(params.includeDeleted));
 
-        // Pagination
         if (params?.page) queryParams.append("page", String(params.page));
         if (params?.limit) queryParams.append("limit", String(params.limit));
 
@@ -211,15 +320,15 @@ export const staffApi = api.injectEndpoints({
       CreateStaffData
     >({
       query: (data) => {
-        const auth = getAuthUser();
-        const isSuperAdmin = auth?.role === 'super-admin';
+        const auth = getCurrentUser();
+        const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
         
         let hospitalId = data.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {
-          hospitalId = Number(getHospitalId());
+          const defaultHospitalId = getHospitalId();
+          hospitalId = defaultHospitalId ? Number(defaultHospitalId) : undefined;
         }
-        
         
         return {
           url: "/staff",
@@ -288,15 +397,12 @@ export const staffApi = api.injectEndpoints({
       LoginRequest
     >({
       query: (data) => ({
-        url: "/staff/login",
+        url: "/auth/login",
         method: "POST",
         body: data,
       }),
       transformResponse: (response: StaffResponse) => {
-        const token = response.token;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
+        storeStaffIds(response);
         return response;
       },
     }),
@@ -307,10 +413,14 @@ export const staffApi = api.injectEndpoints({
       LoginPhoneRequest
     >({
       query: (data) => ({
-        url: "/staff/login/phone",
+        url: "/auth/login/phone",
         method: "POST",
         body: data,
       }),
+      transformResponse: (response: StaffResponse) => {
+        storeStaffIds(response);
+        return response;
+      },
     }),
 
     // ================= VERIFY OTP =================
@@ -319,15 +429,12 @@ export const staffApi = api.injectEndpoints({
       VerifyOtpRequest
     >({
       query: (data) => ({
-        url: "/staff/otp",
+        url: "/auth/otp",
         method: "POST",
         body: data,
       }),
       transformResponse: (response: StaffResponse) => {
-        const token = response.token;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
+        storeStaffIds(response);
         return response;
       },
     }),
@@ -338,12 +445,11 @@ export const staffApi = api.injectEndpoints({
       void
     >({
       query: () => ({
-        url: "/staff/refresh",
+        url: "/auth/refresh",
         method: "POST",
       }),
       transformResponse: (response: StaffResponse) => {
-        
-        const token = response.token;
+        const token = response.token || response.accessToken;
         if (token) {
           localStorage.setItem("accessToken", token);
         } else {
@@ -354,6 +460,13 @@ export const staffApi = api.injectEndpoints({
           localStorage.setItem("refreshToken", response.refreshToken);
         }
         
+        if (response.authId) {
+          localStorage.setItem("authId", response.authId);
+        }
+        if (response.hospitalId) {
+          localStorage.setItem("hospitalId", response.hospitalId);
+        }
+        
         return response;
       },
       invalidatesTags: ["Staff"],
@@ -362,19 +475,53 @@ export const staffApi = api.injectEndpoints({
     // ================= LOGOUT =================
     logoutStaff: builder.mutation<
       { message: string },
-      void
+      { deviceId?: string } | void
     >({
-      query: () => ({
-        url: "/staff/logout",
-        method: "POST",
-      }),
+      query: (params) => {
+        const { authId } = getStoredIds();
+        
+        let url = `/auth/logout/${authId || 'unknown'}`;
+        let body: any = {
+          deviceId: params?.deviceId || localStorage.getItem('deviceId') || '',
+        };
+        
+        return {
+          url: url,
+          method: "POST",
+          body: body,
+        };
+      },
       onQueryStarted: async (_arg, { queryFulfilled }) => {
         try {
           await queryFulfilled;
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
         } catch (error) {
           console.error("Logout error:", error);
+        } finally {
+          const localStorageItems = [
+            'accessToken',
+            'refreshToken',
+            'roleId',
+            'userRole',
+            'userData',
+            'authData',
+            'permissions',
+            'deviceId',
+            'hospitalId',
+            'authId',
+            'userId',
+            'doctorId',
+            'staffId',
+            'staffNumericId',
+            'user',
+            'token',
+            'refresh_token'
+          ];
+          
+          localStorageItems.forEach(key => {
+            localStorage.removeItem(key);
+          });
+          
+          sessionStorage.clear();
         }
       },
     }),
@@ -385,7 +532,7 @@ export const staffApi = api.injectEndpoints({
       SendOtpRequest
     >({
       query: (data) => ({
-        url: "/staff/auth/send-otp",
+        url: "/auth/send-otp",
         method: "POST",
         body: data,
       }),
@@ -400,14 +547,23 @@ export const staffApi = api.injectEndpoints({
       }
     >({
       query: (data) => ({
-        url: "/staff/auth/verify-otp",
+        url: "/auth/verify-otp",
         method: "POST",
         body: data,
       }),
       transformResponse: (response: StaffResponse) => {
-        const token = response.token;
+        const token = response.token || response.accessToken;
         if (token) {
           localStorage.setItem("accessToken", token);
+        }
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+        }
+        if (response.authId) {
+          localStorage.setItem("authId", response.authId);
+        }
+        if (response.hospitalId) {
+          localStorage.setItem("hospitalId", response.hospitalId);
         }
         return response;
       },
@@ -419,27 +575,33 @@ export const staffApi = api.injectEndpoints({
       ResetPasswordRequest
     >({
       query: (data) => ({
-        url: "/staff/auth/reset-password",
+        url: "/auth/reset-password",
         method: "POST",
         body: data,
       }),
     }),
 
     // ================= CHANGE PASSWORD (with current password) =================
-    changeStaffPassword: builder.mutation<
-      { success: boolean; message: string },
-      ChangePasswordRequest
-    >({
-      query: (data) => ({
-        url: "/staff/auth/change-password",
-        method: "PUT",
-        body: {
-          staffId: data.staffId,
-          currentPassword: data.currentPassword,
-          newPassword: data.newPassword,
-          confirmPassword: data.confirmPassword,
-        },
-      }),
+    // Updated to match doctor implementation
+    changeStaffPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
+      query: ({ currentPassword, newPassword }) => {
+        const authId = getAuthId(); // Using helper function like doctor API
+        return {
+          url: `/auth/change-password/${authId}`,
+          method: "PUT",
+          body: { currentPassword, newPassword },
+        };
+      },
+      transformResponse: (response: ChangePasswordResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to change password",
+        };
+      },
+      invalidatesTags: ["Staff"], // Changed from "Hospital" to "Staff"
     }),
   }),
 });
@@ -464,7 +626,7 @@ export const {
   
   // PUT
   useUpdateStaffMutation,
-  useChangeStaffPasswordMutation,
+  useChangeStaffPasswordMutation, // Make sure this is exported
   useRecoverStaffMutation,
   
   // DELETE

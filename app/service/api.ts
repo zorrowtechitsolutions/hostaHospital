@@ -55,7 +55,15 @@ const baseQueryWithReauth: BaseQueryFn<
 
   // ✅ Handle 401 Unauthorized - Token expired
   if (result.error?.status === 401) {
-    // Get user role to determine refresh endpoint
+    // ✅ Step 2: Check if user is already logged out
+    const token = getToken();
+    
+    // User already logged out - don't attempt refresh
+    if (!token) {
+      return result;
+    }
+
+    // ✅ Step 3: Get user role to determine refresh endpoint
     const auth = getAuthUser();
     const userRole = localStorage.getItem("userRole");
     
@@ -70,40 +78,24 @@ const baseQueryWithReauth: BaseQueryFn<
       refreshUrl = "/super-admin/refresh";
     }
 
+    // ✅ Attempt to refresh token
+    const refreshResult = await baseQuery(
+      {
+        url: refreshUrl,
+        method: "POST",
+      },
+      api,
+      extraOptions
+    );
 
-const refreshResult = await baseQuery(
-  {
-    url: refreshUrl,
-    method: "POST",
-  },
-  api,
-  extraOptions
-);
-
-
-if (refreshResult.data) {
-  const data = refreshResult.data as RefreshResponse;
-  const newToken = data.token || data.accessToken;
-
-  if (newToken) {
-
-    localStorage.setItem("accessToken", newToken);
-
-    result = await baseQuery(args, api, extraOptions);
-    return result;
-  }
-}
-
-console.error("❌ Token refresh failed");
-clearAuth();
-
+    // ✅ Step 4: If refresh succeeds
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
+        // Store new token
         localStorage.setItem("accessToken", newToken);
-
 
         // ✅ Retry original request with new token
         // Update the headers of the original request
@@ -119,12 +111,9 @@ clearAuth();
       }
     }
 
-    // ❌ Refresh failed - clear auth and return error
+    // ✅ Step 5: If refresh fails - clear auth and return error
     console.error("❌ Token refresh failed, logging out...");
     clearAuth();
-
-    // Dispatch logout action if needed
-    // api.dispatch(logout());
 
     return {
       error: {

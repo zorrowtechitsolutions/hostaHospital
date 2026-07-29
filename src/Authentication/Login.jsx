@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETE FIXED VERSION
+// src/Authentication/Login.jsx - WITH SKELETON LOADING (Neutral Colors)
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -13,6 +13,53 @@ import logo from "../assets/logo.jpeg";
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
 
+// ✅ Skeleton Loader Component for Login (Neutral Colors - Matching Doctor Skeleton)
+const LoginSkeletonLoader = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="h-20 w-20 rounded-2xl bg-gray-200 animate-pulse border-2 border-blue-100"></div>
+          </div>
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mx-auto mb-2"></div>
+          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mx-auto"></div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          {/* Logo/Icon Placeholder */}
+          <div className="flex justify-center mb-6">
+            <div className="h-16 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+          </div>
+
+          {/* Email Field Skeleton */}
+          <div className="space-y-2 mb-4">
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+          </div>
+
+          {/* Password Field Skeleton */}
+          <div className="space-y-2 mb-6">
+            <div className="flex justify-between">
+              <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-3 w-28 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+          </div>
+
+          {/* Submit Button Skeleton - Neutral gray like Doctor skeleton */}
+          <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+
+          {/* Footer Links Skeleton */}
+          <div className="mt-6 flex justify-center">
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -20,6 +67,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   
   const [showHospitalSelect, setShowHospitalSelect] = useState(false);
   const [hospitalOptions, setHospitalOptions] = useState([]);
@@ -38,6 +86,7 @@ const Login = () => {
 
   const isLoading = isLoginLoading || isSubmitting;
 
+  // ✅ Simulate initial loading for skeleton
   useEffect(() => {
     const initDB = async () => {
       try {
@@ -45,10 +94,20 @@ const Login = () => {
         const deviceId = getDeviceId();
       } catch (error) {
         console.error('❌ Failed to initialize IndexedDB:', error);
+      } finally {
+        // ✅ Hide skeleton after initialization (or after a minimum time)
+        setTimeout(() => {
+          setIsInitialLoading(false);
+        }, 500);
       }
     };
     initDB();
   }, []);
+
+  // ✅ Show skeleton while initializing
+  if (isInitialLoading) {
+    return <LoginSkeletonLoader />;
+  }
 
   const validateField = (name, value) => {
     switch (name) {
@@ -111,6 +170,8 @@ const Login = () => {
       processSuccessfulLogin(response, fcmToken, selectedHospital);
       
     } catch (error) {
+      localStorage.clear();
+      
       let errorMessage = "Invalid email or password. Please try again.";
       if (error.data?.message) {
         errorMessage = error.data.message;
@@ -126,6 +187,36 @@ const Login = () => {
     const roleId = response.roleId || response.data?.roleId;
     const deviceId = getDeviceId();
     
+    let role = 
+      response.roleDetected ||
+      response.role ||
+      response.data?.role ||
+      response.user?.role ||
+      response.userType ||
+      "hospital";
+    
+    console.log("🔍 ROLE EXTRACTION:", {
+      "response.roleDetected": response.roleDetected,
+      "response.role": response.role,
+      "response.data?.role": response.data?.role,
+      "response.user?.role": response.user?.role,
+      "response.userType": response.userType,
+      "initialRole": role
+    });
+    
+    if (Number(roleId) === 1) {
+      role = "super_admin";
+    }
+    
+    if (role && role.includes('/')) {
+      if (role.includes('doctor')) role = 'doctor';
+      else if (role.includes('staff')) role = 'staff';
+      else if (role.includes('hospital')) role = 'hospital';
+      else if (role.includes('super_admin')) role = 'super_admin';
+    }
+    
+    console.log("🎯 FINAL ROLE =", role);
+    
     if (token) {
       localStorage.setItem("accessToken", token);
       localStorage.setItem("deviceId", deviceId);
@@ -134,22 +225,7 @@ const Login = () => {
         localStorage.setItem("roleId", roleId.toString());
       }
       
-      let role = response.roleDetected || response.role || response.userType;
-      
-      if (Number(roleId) === 1) {
-        role = "super_admin";
-      }
-      
-      if (role) {
-        let cleanRole = role;
-        if (role.includes('/')) {
-          if (role.includes('doctor')) cleanRole = 'doctor';
-          else if (role.includes('staff')) cleanRole = 'staff';
-          else if (role.includes('hospital')) cleanRole = 'hospital';
-          else if (role.includes('super_admin')) cleanRole = 'super_admin';
-        }
-        localStorage.setItem("userRole", cleanRole);
-      }
+      localStorage.setItem("userRole", role);
       
       if (response.authPermission?.data) {
         localStorage.setItem("permissions", JSON.stringify(response.authPermission.data));
@@ -169,19 +245,6 @@ const Login = () => {
     }
     
     const userData = response.data || response.user || response;
-    let role = response.roleDetected || response.role || response.userType || 'hospital';
-    
-    if (Number(roleId) === 1) {
-      role = "super_admin";
-    }
-    
-    if (role && role.includes('/')) {
-      if (role.includes('doctor')) role = 'doctor';
-      else if (role.includes('staff')) role = 'staff';
-      else if (role.includes('hospital')) role = 'hospital';
-      else if (role.includes('super_admin')) role = 'super_admin';
-    }
-    
     localStorage.setItem("userData", JSON.stringify(userData));
     
     let authData = {
@@ -216,62 +279,81 @@ const Login = () => {
       authData = {
         ...authData,
         id: userData?.id,
-        doctorId: userData?.id,
+        doctorId: userData?.doctorId || response.data?.doctorId,
         roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
         name: doctorName,
         firstName: userData?.firstName,
         lastName: userData?.lastName,
         displayName: userData?.displayName,
-        email: userData?.email,
+        email: userData?.email || response.data?.email,
         phone: userData?.phone,
-        department: userData?.department,
-        specialist: userData?.specialist,
-        qualification: userData?.qualification,
-        regNo: userData?.regNo,
-        experience: userData?.experience,
-        imageUrl: userData?.imageUrl,
+        department: userData?.department || response.data?.department,
+        specialist: userData?.specialist || response.data?.specialist,
+        qualification: userData?.qualification || response.data?.qualification,
+        regNo: userData?.regNo || response.data?.regNo,
+        experience: userData?.experience || response.data?.experience,
+        imageUrl: userData?.imageUrl || response.data?.imageUrl,
         role: role,
       };
       
-      if (userData?.id) {
-        localStorage.setItem("doctorId", userData.id.toString());
+      if (userData?.doctorId || response.data?.doctorId) {
+        localStorage.setItem("doctorId", (userData?.doctorId || response.data?.doctorId).toString());
       }
       
     } else if (role === 'staff') {
+      const authId = userData?.id || response.id;
+      const staffTableId = userData?.staffId || response.data?.staffId || response.staffId;
+      
+      console.log("🔑 STAFF ID FIX:", {
+        authId: authId,
+        staffTableId: staffTableId,
+        userData: userData
+      });
+      
       authData = {
         ...authData,
-        id: userData?.id,
-        staffId: userData?.id,
+        id: authId,
+        authId: authId,
+        staffId: staffTableId,
         roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
         name: userData?.name || userData?.displayName || 'Staff',
-        email: userData?.email,
+        email: userData?.email || response.data?.email,
         phone: userData?.phone,
-        designation: userData?.designation,
-        staffType: userData?.staffType,
+        designation: userData?.designation || response.data?.designation,
+        staffType: userData?.staffType || response.data?.staffType,
         role: role,
       };
       
-      if (userData?.id) {
-        localStorage.setItem("staffId", userData.id.toString());
+      if (staffTableId) {
+        localStorage.setItem("staffId", staffTableId.toString());
+        console.log("✅ Stored staffId:", staffTableId);
+      } else {
+        console.warn("⚠️ No staffId found in response");
+      }
+      
+      if (authId) {
+        localStorage.setItem("authId", authId.toString());
       }
       
     } else {
       authData = {
         ...authData,
-        id: userData?.id || userData?.hospitalId || hospital?.hospitalId || 1,
+        id: userData?.id || response.id || response.data?.id || 1,
+        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId || response.id,
         roleId: roleId,
-        hospitalId: userData?.id || userData?.hospitalId || hospital?.hospitalId,
-        hospitalName: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
-        name: userData?.name || userData?.hospitalName || hospital?.hospitalName || 'Hospital',
-        email: userData?.email || formData.email,
+        hospitalName: userData?.hospitalName || hospital?.hospitalName || userData?.name || response.data?.hospitalName || 'Hospital',
+        name: userData?.hospitalName || hospital?.hospitalName || userData?.name || response.data?.hospitalName || 'Hospital',
+        email: userData?.email || response.data?.email || formData.email,
         phone: userData?.phone || '',
         role: role,
       };
     }
+    
+    console.log("📦 AUTH DATA =", authData);
     
     localStorage.setItem("authData", JSON.stringify(authData));
     login(authData);
@@ -280,7 +362,7 @@ const Login = () => {
     if (role === 'super_admin') {
       welcomeMessage = `Welcome Super Admin ${authData.name}!`;
     } else if (role === 'doctor') {
-      welcomeMessage = `Welcome ${authData.name}!`;
+      welcomeMessage = `Welcome Dr. ${authData.name}!`;
     } else if (role === 'staff') {
       welcomeMessage = `Welcome ${authData.name}!`;
     } else {
@@ -303,7 +385,6 @@ const Login = () => {
     }
   };
 
-  // ✅ MAIN LOGIN HANDLER - FIXED
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -314,7 +395,6 @@ const Login = () => {
       try {
         const deviceId = getDeviceId();
         
-        // ✅ Get FCM token
         let fcmToken = null;
         
         if (isFCMAvailable()) {
@@ -325,7 +405,6 @@ const Login = () => {
           }
         }
         
-        // ✅ CORRECT: Build login payload with nested fcmToken object
         const loginPayload = {
           email: formData.email,
           password: formData.password,
@@ -335,15 +414,11 @@ const Login = () => {
             fcmToken: fcmToken
           } : undefined
         };
-
-       
         
-        // ✅ ONE API call
         const response = await loginUser(loginPayload).unwrap();
         
         const roleId = response.roleId || response.data?.roleId;
         
-        // ✅ Save FCM token to IndexedDB
         if (fcmToken) {
           try {
             await tokenManager.addFCMToken(fcmToken);
@@ -352,13 +427,11 @@ const Login = () => {
           }
         }
         
-        // ✅ Check if Super Admin
         if (Number(roleId) === 1) {
           processSuccessfulLogin(response, fcmToken, null);
           return;
         }
         
-        // ✅ Check if multiple hospitals
         if (response.hospitals && response.hospitals.length > 1) {
           setPendingResponse(response);
           setPendingFcmToken(fcmToken);
@@ -370,13 +443,14 @@ const Login = () => {
           return;
         }
         
-        // ✅ Single hospital
         const singleHospital = response.hospitals && response.hospitals.length === 1 
           ? response.hospitals[0] 
           : null;
         processSuccessfulLogin(response, fcmToken, singleHospital);
         
       } catch (error) {
+        localStorage.clear();
+        
         console.error('❌ Login error:', error);
         let errorMessage = "Invalid email or password. Please try again.";
         

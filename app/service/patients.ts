@@ -1,4 +1,4 @@
-// app/service/patients.ts - Fixed with hospital ID handling for ALL roles
+// app/service/patients.ts - Fixed with proper authId vs hospitalId handling
 
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
@@ -31,6 +31,7 @@ export interface Patient {
   guardianRelation?: string | null;
   addressLine: string;
   location: Location;
+  hospitalName?: string;
   hospitalId: string | number;
   email?: string;
   userId: string | number;
@@ -60,6 +61,7 @@ export interface CreatePatientData {
   addressLine: string;
   location: Location;
   hospitalId: string | number;
+  hospitalName?: string;
   email?: string;
   userId: string | number;
   profileImage?: string | null;
@@ -109,6 +111,40 @@ export interface GetPatientsParams {
 }
 
 // ==============================
+// HELPER: Get hospital ID from auth
+// ==============================
+
+const getHospitalIdFromAuth = (auth: any): string | number | null => {
+  if (!auth) return null;
+  
+  // Priority 1: Use hospitalId if available (this is the correct hospital ID)
+  if (auth.hospitalId) {
+    return auth.hospitalId;
+  }
+  
+  return null;
+};
+
+// ==============================
+// HELPER: Get auth ID from auth
+// ==============================
+
+const getAuthIdFromAuth = (auth: any): string | null => {
+  if (!auth) return null;
+  
+  // Priority: authId > id
+  if (auth.authId) {
+    return auth.authId;
+  }
+  
+  if (auth.id) {
+    return auth.id;
+  }
+  
+  return null;
+};
+
+// ==============================
 // PATIENTS API
 // ==============================
 
@@ -124,43 +160,35 @@ export const patientsApi = api.injectEndpoints({
         const auth = getAuthUser();
         const queryParams = new URLSearchParams();
 
-        // 🔥 FIX: Include ALL roles that should be filtered by hospital
+        // Determine if user is super admin
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
         const shouldSkipFilter = params.skipHospitalFilter === true;
-        
-        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
-        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
 
-        // 🔥 FIX: Get hospital ID properly for all roles
+        // Get hospital ID using helper
         let hospitalIdToUse = null;
         
-        if (shouldFilterByHospital) {
-          // Priority: auth.hospitalId > auth.id > params.hospitalId
-          if (auth?.hospitalId) {
-            hospitalIdToUse = auth.hospitalId;
-          } else if (auth?.id) {
-            hospitalIdToUse = auth.id;
-          } else {
+        // For non-super-admin users, always filter by hospital if they have one
+        if (!isSuperAdmin && !shouldSkipFilter) {
+          hospitalIdToUse = getHospitalIdFromAuth(auth);
+          
+          // If no hospitalId found, try params
+          if (!hospitalIdToUse) {
             hospitalIdToUse = params.hospitalId;
+          }
+          
+          if (hospitalIdToUse) {
+            queryParams.append("hospitalId", String(hospitalIdToUse));
+          } else {
+            console.warn("⚠️ No hospital ID found for filtering patients");
           }
         } 
         // Super Admin with specific hospital filter
         else if (isSuperAdmin && params.hospitalId) {
-          hospitalIdToUse = params.hospitalId;
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
-        // Use provided hospitalId if available
+        // Use provided hospitalId if specified (for cases where we want to override)
         else if (params.hospitalId) {
-          hospitalIdToUse = params.hospitalId;
-        }
-
-        // Apply the hospital filter if we have a valid ID
-        if (hospitalIdToUse && !shouldSkipFilter) {
-          queryParams.append("hospitalId", String(hospitalIdToUse));
-        } else if (shouldFilterByHospital) {
-          console.warn("⚠️ No hospital ID found for filtering patients");
+          queryParams.append("hospitalId", String(params.hospitalId));
         }
         
         // Search query
@@ -241,21 +269,18 @@ export const patientsApi = api.injectEndpoints({
       query: (newPatient) => {
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
         
-        // 🔥 FIX: Use hospitalId for ALL roles
+        // Get hospital ID using helper
         let hospitalId = newPatient.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {
-          // 🔥 FIX: Priority: auth.hospitalId > auth.id for all roles
-          if (auth?.hospitalId) {
-            hospitalId = auth.hospitalId;
-          } else if (auth?.id && (isHospitalAdmin || isDoctor || isStaff)) {
-            hospitalId = auth.id;
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
           }
         }
+        
         
         return {
           url: "/patients",
@@ -278,21 +303,18 @@ export const patientsApi = api.injectEndpoints({
       query: ({ id, updatePatient }) => {
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3; // ✅ ADDED staff role
         
-        // 🔥 FIX: Use hospitalId for ALL roles
+        // Get hospital ID using helper
         let hospitalId = updatePatient.hospitalId;
         
         if (!hospitalId && !isSuperAdmin) {
-          // 🔥 FIX: Priority: auth.hospitalId > auth.id for all roles
-          if (auth?.hospitalId) {
-            hospitalId = auth.hospitalId;
-          } else if (auth?.id && (isHospitalAdmin || isDoctor || isStaff)) {
-            hospitalId = auth.id;
+          // Try to get from auth
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
           }
         }
+        
         
         return {
           url: `/patients/${id}`,
@@ -304,12 +326,11 @@ export const patientsApi = api.injectEndpoints({
         };
       },
 
-invalidatesTags: (result, error, { id }) => [
-  { type: "Patient", id },
-  "Patient",
-],    
-
-}),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Patient", id },
+        "Patient",
+      ],    
+    }),
 
     // ==============================
     // DELETE PATIENT

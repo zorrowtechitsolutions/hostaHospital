@@ -418,6 +418,23 @@ const AddDoctor = () => {
   const [addNewDoctor] = useAddNewDoctorMutation();
   const [assignPermissions] = useAssignPermissionsMutation();
   
+  // 🔥 FIX: Get hospitalId properly (same pattern as AddPatient)
+  const getHospitalId = () => {
+    // Priority 1: Check localStorage
+    const storedHospitalId = localStorage.getItem('hospitalId');
+    if (storedHospitalId) {
+      return storedHospitalId;
+    }
+    
+    // Priority 2: Check auth.hospitalId
+    const authUser = getAuthUser();
+    if (authUser?.hospitalId) {
+      return authUser.hospitalId;
+    }
+    
+    return null;
+  };
+  
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
@@ -425,6 +442,8 @@ const AddDoctor = () => {
   const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery({
     hospitalId,
     limit: 100
+  }, {
+    skip: !hospitalId // Skip if no hospitalId
   });
   
   const rolesList = [
@@ -784,6 +803,7 @@ const AddDoctor = () => {
       imageKey: formData.imageKey || undefined,
       roleId: Number(formData.roleId),
       hospitalName: hospitalName,
+      hospitalId: hospitalId, // 🔥 FIX: Add hospitalId to doctor data
     };
 
     if (formData.registrationNumber) {
@@ -811,6 +831,12 @@ const AddDoctor = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // 🔥 FIX: Check hospitalId before submitting
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
     
     const touchedFields = {};
     REQUIRED_FIELDS.forEach(field => touchedFields[field] = true);
@@ -869,6 +895,27 @@ const AddDoctor = () => {
   };
 
   const handleGoBack = () => navigate('/doctors');
+
+  // 🔥 FIX: Show loading state if no hospitalId
+  if (!hospitalId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">
+            Please log in again to access this page.
+          </p>
+          <Button 
+            variant="primary" 
+            onClick={() => navigate('/login')}
+          >
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (rolesLoading) {
     return (

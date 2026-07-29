@@ -1,4 +1,4 @@
-// src/components/patients/tabs/LabResultsTab.jsx - Show Blacklisted Items
+// src/components/patients/tabs/LabResultsTab.jsx
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle, Image as ImageIcon, RotateCcw } from "lucide-react";
@@ -233,7 +233,9 @@ const LabResultsTab = ({ patient }) => {
   const authUser = getAuthUser();
   const hospitalId = authUser?.id || authUser?.hospitalId;
   const hospitalName = authUser?.hospitalName || authUser?.name || authUser?.hospital || '';
-  const userId = authUser?.id;
+  
+  // ✅ FIX: Get patient's userId from patient object
+  const patientUserId = patient?.userId;
 
   // RTK Query hooks
   const { 
@@ -370,8 +372,8 @@ const LabResultsTab = ({ patient }) => {
       return;
     }
 
-    if (!userId) {
-      showErrorToast("❌ User ID not found. Please log in again.");
+    if (!patientUserId) {
+      showErrorToast("❌ Patient user ID not found.");
       return;
     }
 
@@ -379,10 +381,11 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
+      // ✅ FIX: Use patientUserId instead of userId
       const labResultData = {
         patientId: patient.id,
         patientName: patient.name || patient.displayName || '',
-        userId: userId,
+        userId: patientUserId, // <-- FIX: Use patient's userId
         hospitalId: hospitalId || null,
         hospitalName: hospitalName,
         department: department.trim(),
@@ -433,7 +436,7 @@ const LabResultsTab = ({ patient }) => {
         fileSize: formatFileSize(selectedFile.size),
         type: getFileExtension(selectedFile.name),
         contentType: selectedFile.type,
-        uploadedById: userId,
+        uploadedById: patientUserId, // Use patientUserId here as well
         role: "labresults",
       };
 
@@ -527,8 +530,8 @@ const LabResultsTab = ({ patient }) => {
       return;
     }
 
-    if (!userId) {
-      showErrorToast("❌ User ID not found. Please log in again.");
+    if (!patientUserId) {
+      showErrorToast("❌ Patient user ID not found.");
       return;
     }
 
@@ -542,10 +545,11 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
+      // ✅ FIX: Use patientUserId instead of userId
       let updateData = {
         patientId: patient.id,
         patientName: patient.name || patient.displayName || '',
-        userId: userId,
+        userId: patientUserId, // <-- FIX: Use patient's userId
         hospitalId: hospitalId || null,
         hospitalName: hospitalName,
         department: editDepartment.trim(),
@@ -583,7 +587,7 @@ const LabResultsTab = ({ patient }) => {
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
           contentType: editFile.type,
-          uploadedById: userId,
+          uploadedById: patientUserId, // Use patientUserId here as well
           role: "labresults",
         };
       }
@@ -949,7 +953,6 @@ const LabResultsTab = ({ patient }) => {
                   <option value="pending">Pending</option>
                   <option value="received">Received</option>
                   <option value="progress">In Progress</option>
-                  <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>

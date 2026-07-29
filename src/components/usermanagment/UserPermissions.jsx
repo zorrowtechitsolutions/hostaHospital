@@ -405,6 +405,7 @@ const UserPermissions = () => {
   const updateNewRoleField = updateRoleField(setNewRole);
   const updateEditRoleField = updateRoleField(setEditRole);
 
+  // ✅ UPDATED: Handle create role - no changes needed as create uses /role endpoint
   const handleNewRoleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
@@ -433,6 +434,7 @@ const UserPermissions = () => {
     }
   }, [newRole, createRole, refetch]);
 
+  // ✅ UPDATED: Handle edit role - now requires hospitalId and roleId
   const handleEditRoleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
@@ -444,7 +446,8 @@ const UserPermissions = () => {
     try {
       setIsSubmitting(true);
       await updateRole({
-        id: selectedRole?.id,
+        id: hospitalId, // The hospital ID
+        roles: selectedRole?.id, // The role ID
         data: {
           name: editRole.name,
           description: editRole.description,
@@ -461,8 +464,9 @@ const UserPermissions = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [editRole, selectedRole, updateRole, refetch]);
+  }, [editRole, selectedRole, updateRole, refetch, hospitalId]);
 
+  // ✅ UPDATED: Handle delete role - now requires hospitalId and roleId
   const handleDeleteRole = useCallback(async () => {
     if (isAdminRole(roleToDelete)) {
       showWarningToast("Admin role cannot be deleted");
@@ -472,7 +476,10 @@ const UserPermissions = () => {
 
     try {
       setIsSubmitting(true);
-      await deleteRole(roleToDelete?.id).unwrap();
+      await deleteRole({
+        id: hospitalId, // The hospital ID
+        roles: roleToDelete?.id // The role ID
+      }).unwrap();
       await refetch();
       
       showDeleteToast(`Role "${roleToDelete?.name}" deleted successfully!`);
@@ -483,7 +490,7 @@ const UserPermissions = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [roleToDelete, deleteRole, refetch]);
+  }, [roleToDelete, deleteRole, refetch, hospitalId]);
 
   const handleOpenEditModal = useCallback((role) => {
     setSelectedRole(role);

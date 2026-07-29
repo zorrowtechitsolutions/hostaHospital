@@ -1,4 +1,4 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version
+// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version with authId/hospitalId
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -17,9 +17,32 @@ import {
 } from "../../../app/service/doctorApi";
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
-import { getHospitalId, getAuthUser } from '../../utils/auth';
+import { getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+
+// 🔥 FIX: Enhanced helper function to get hospital ID (same pattern as AddPatient)
+const getHospitalId = () => {
+  // Priority 1: Check localStorage
+  const storedHospitalId = localStorage.getItem('hospitalId');
+  if (storedHospitalId) {
+    return storedHospitalId;
+  }
+  
+  // Priority 2: Check auth.hospitalId
+  const authUser = getAuthUser();
+  if (authUser?.hospitalId) {
+    return authUser.hospitalId;
+  }
+  
+  return null;
+};
+
+// 🔥 FIX: Enhanced helper function to get auth ID
+const getAuthId = () => {
+  const authUser = getAuthUser();
+  return authUser?.id || authUser?.userId || authUser?._id || null;
+};
 
 // FIX: Enhanced helper function to get full image URL with cache-busting
 const getFullImageUrl = (imageKey) => {
@@ -434,21 +457,25 @@ const EditDoctor = () => {
   // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  // Get hospital ID and hospital name from auth
+  // 🔥 FIX: Get IDs using the helper functions (same pattern as AddPatient)
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
+  const authId = getAuthId();
   const hospitalName = authUser?.name || '';
+
   
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
-  // Fetch roles from API
+  // 🔥 FIX: Fetch roles with proper hospitalId (skip if no hospitalId)
   const {
     data: rolesData,
     isLoading: rolesLoading,
   } = useGetRolesQuery({
-    hospitalId,
+    hospitalId: hospitalId || undefined,
     limit: 100
+  }, {
+    skip: !hospitalId // Skip if no hospitalId
   });
   
   // Extract roles from response - include admin role (id=2) and hospital-specific roles
@@ -597,6 +624,13 @@ const EditDoctor = () => {
     if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-700';
   };
+
+  // 🔥 FIX: Check if hospitalId exists and show error if not
+  useEffect(() => {
+    if (!hospitalId) {
+      console.warn('⚠️ No hospital ID found. Please log in again.');
+    }
+  }, [hospitalId]);
 
   // ✅ FIX: Reset everything when doctor ID changes or component mounts
   useEffect(() => {
@@ -950,6 +984,12 @@ const EditDoctor = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // 🔥 Validate hospitalId exists (same as AddPatient)
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -980,6 +1020,8 @@ const EditDoctor = () => {
         isActive: formData.isActive,
         roleId: roleId,
         hospitalName: hospitalName,
+        // 🔥 FIX: Explicitly include hospitalId in the update (same as AddPatient)
+        hospitalId: Number(hospitalId),
         address: {
           country: formData.countryName,
           state: formData.stateName,
@@ -1011,6 +1053,13 @@ const EditDoctor = () => {
             has_break: true,
           })),
       };
+
+      console.log('📤 Updating doctor data:', {
+        ...updatedDoctorData,
+        hospitalId: hospitalId,
+        authId: authId,
+        password: updatedDoctorData.password ? '[REDACTED]' : 'Not changing'
+      });
 
       if (formData.appointmentCount && formData.appointmentCount !== '') {
         updatedDoctorData.appoimentCount = Number(formData.appointmentCount);
@@ -1051,6 +1100,7 @@ const EditDoctor = () => {
           ]
         };
         
+        console.log('📤 Assigning permissions:', payload);
         await assignPermissions(payload).unwrap();
       }
 
@@ -1066,7 +1116,11 @@ const EditDoctor = () => {
 
     } catch (error) {
       console.error("Update Error:", error);
-      showErrorToast(error.data?.message || "Failed to update doctor");
+      if (error.status === 409) {
+        showErrorToast('Email already exists! Please use a different email address.');
+      } else {
+        showErrorToast(error.data?.message || "Failed to update doctor");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1076,6 +1130,27 @@ const EditDoctor = () => {
     navigate('/doctors');
   };
 
+  // 🔥 FIX: Show error state if no hospitalId (same as AddPatient)
+  if (!hospitalId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">
+            Please log in again to access this page.
+          </p>
+          <Button 
+            variant="primary" 
+            onClick={() => navigate('/login')}
+          >
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Loading states - Show skeleton while form is initializing
   if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading doctor data..." />;
@@ -1084,7 +1159,7 @@ const EditDoctor = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
           <div className="bg-red-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-red-600" />
           </div>
@@ -1101,7 +1176,7 @@ const EditDoctor = () => {
   if (!doctor && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
           <div className="bg-yellow-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-yellow-600" />
           </div>
@@ -1240,6 +1315,10 @@ const EditDoctor = () => {
                       <span className="text-sm text-gray-500">Doctor ID:</span>
                       <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
                         #{String(doctor?.id || doctorId).padStart(4, '0')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
                       </span>
                     </div>
                   </div>

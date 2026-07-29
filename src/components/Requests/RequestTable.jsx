@@ -52,14 +52,28 @@ const formatRequestId = (id) => {
 
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
-  const birthDate = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
+  try {
+    // Handle different date formats (DD/MM/YYYY or YYYY-MM-DD)
+    let birthDate;
+    if (dob.includes('/')) {
+      const parts = dob.split('/');
+      birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
+    } else {
+      birthDate = new Date(dob);
+    }
+    
+    if (isNaN(birthDate.getTime())) return "N/A";
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  } catch (error) {
+    return "N/A";
   }
-  return age;
 };
 
 const transformBookingsData = (bookingList) => {
@@ -72,7 +86,7 @@ const transformBookingsData = (bookingList) => {
     const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
 
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
-    const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
+    const rawTime = booking.consulting_time || booking.open || booking.consulting_time || "N/A";
 
     return {
       id: bookingId,
@@ -210,154 +224,47 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
 
-  // Register socket event listeners
-  useEffect(() => {
-    registerBookingEvents({
-      onBookingRegistered: async () => {
-        showSuccessToast(`New booking registered!`, 3000);
-        await refetch();
-      },
-      onBookingUpdated: async () => {
-        showSuccessToast(`Booking updated!`, 3000);
-        await refetch();
-      },
-      onBookingCancelled: async () => {
-        showSuccessToast(`Booking cancelled!`, 3000);
-        await refetch();
-      },
-      onBookingAccepted: async () => {
-        showSuccessToast(`Booking accepted!`, 3000);
-        await refetch();
-      },
-      onBookingCompleted: async () => {
-        showSuccessToast(`Booking completed!`, 3000);
-        await refetch();
-      }
-    });
-
-    setEventsRegistered(true);
-
-    return () => {
-      unregisterBookingEvents();
-      setEventsRegistered(false);
-    };
-  }, [refetch]);
-
-  // Socket connection handlers
-  useEffect(() => {
-    const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerBookingEvents({
-          onBookingRegistered: async () => {
-            showSuccessToast(`New booking registered!`, 3000);
-            await refetch();
-          },
-          onBookingUpdated: async () => {
-            showSuccessToast(`Booking updated!`, 3000);
-            await refetch();
-          },
-          onBookingCancelled: async () => {
-            showSuccessToast(`Booking cancelled!`, 3000);
-            await refetch();
-          },
-          onBookingAccepted: async () => {
-            showSuccessToast(`Booking accepted!`, 3000);
-            await refetch();
-          },
-          onBookingCompleted: async () => {
-            showSuccessToast(`Booking completed!`, 3000);
-            await refetch();
-          }
-        });
-        setEventsRegistered(true);
-      }
-    };
-
-    const handleDisconnect = () => {
-      setEventsRegistered(false);
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-    };
-  }, [refetch, eventsRegistered]);
+  // ✅ Get pagination info from API response
+  const paginationInfo = useMemo(() => ({
+    totalItems: bookingsResponse?.pagination?.totalItems || 0,
+    totalPages: bookingsResponse?.pagination?.totalPages || 1,
+    currentPage: bookingsResponse?.pagination?.currentPage || 1,
+    hasNextPage: bookingsResponse?.pagination?.hasNextPage || false,
+    hasPreviousPage: bookingsResponse?.pagination?.hasPreviousPage || false,
+  }), [bookingsResponse]);
 
   // Transform API response
   const safeData = useMemo(() => {
     return transformBookingsData(bookingsResponse?.data || []);
   }, [bookingsResponse]);
 
-  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
-  const filteredBySearch = useMemo(() => {
-    // If no search term or search term is too short, return all data
-    if (!searchTerm || searchTerm.trim().length < 2) {
-      return safeData;
-    }
-
-    const searchLower = searchTerm.toLowerCase().trim();
-    
-    return safeData.filter(item => {
-      // Search through all relevant fields
-      const searchFields = [
-        item.formattedId?.toLowerCase() || '',
-        item.patientName?.toLowerCase() || '',
-        item.patientId?.toLowerCase() || '',
-        item.contact?.toString() || '',
-        item.doctorName?.toLowerCase() || '',
-        item.department?.toLowerCase() || '',
-        item.appointmentDate?.toString() || '',
-        item.consulting_time?.toString() || ''
-      ];
-
-      return searchFields.some(field => field.includes(searchLower));
-    });
-  }, [safeData, searchTerm]);
-
-  // ✅ Apply doctor filter
-  const filteredByDoctor = useMemo(() => {
-    if (doctorId && !showAllData) {
-      return filteredBySearch.filter(item => 
-        matchesDoctor(item, doctorId, doctorName)
-      );
-    }
-    return filteredBySearch;
-  }, [filteredBySearch, doctorId, doctorName, showAllData]);
-
-  // ✅ Apply department filter (frontend fallback)
+  // ✅ Apply frontend filters (for display purposes only)
   const filteredRequests = useMemo(() => {
-    let result = filteredByDoctor;
+    let result = safeData;
 
-    // Apply department filter if set
-    if (departmentFilter) {
+    // Apply department filter if set (only if API doesn't support it)
+    if (departmentFilter && !bookingsResponse?.pagination) {
       result = result.filter(item => 
         item.department?.toLowerCase() === departmentFilter.toLowerCase()
       );
     }
 
-    // Apply date filter if set
-    if (dateFilter) {
+    // Apply date filter if set (only if API doesn't support it)
+    if (dateFilter && !bookingsResponse?.pagination) {
       result = result.filter(item => 
         item.appointmentDate === dateFilter
       );
     }
 
+    // Apply doctor filter
+    if (doctorId && !showAllData) {
+      result = result.filter(item => 
+        matchesDoctor(item, doctorId, doctorName)
+      );
+    }
+
     return result;
-  }, [filteredByDoctor, departmentFilter, dateFilter]);
-
-  // ✅ Get total items from filtered results
-  const totalItems = filteredRequests.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-  // ✅ Paginate the filtered results
-  const paginatedRequests = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredRequests.slice(startIndex, endIndex);
-  }, [filteredRequests, currentPage, itemsPerPage]);
+  }, [safeData, departmentFilter, dateFilter, doctorId, doctorName, showAllData, bookingsResponse]);
 
   // Get all unique departments from the data
   const departments = useMemo(() => {
@@ -578,6 +485,82 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
 
   const showDoctorBanner = doctorId && !showAllData;
 
+  // Register socket event listeners
+  useEffect(() => {
+    registerBookingEvents({
+      onBookingRegistered: async () => {
+        showSuccessToast(`New booking registered!`, 3000);
+        await refetch();
+      },
+      onBookingUpdated: async () => {
+        showSuccessToast(`Booking updated!`, 3000);
+        await refetch();
+      },
+      onBookingCancelled: async () => {
+        showSuccessToast(`Booking cancelled!`, 3000);
+        await refetch();
+      },
+      onBookingAccepted: async () => {
+        showSuccessToast(`Booking accepted!`, 3000);
+        await refetch();
+      },
+      onBookingCompleted: async () => {
+        showSuccessToast(`Booking completed!`, 3000);
+        await refetch();
+      }
+    });
+
+    setEventsRegistered(true);
+
+    return () => {
+      unregisterBookingEvents();
+      setEventsRegistered(false);
+    };
+  }, [refetch]);
+
+  // Socket connection handlers
+  useEffect(() => {
+    const handleConnect = () => {
+      if (!eventsRegistered) {
+        registerBookingEvents({
+          onBookingRegistered: async () => {
+            showSuccessToast(`New booking registered!`, 3000);
+            await refetch();
+          },
+          onBookingUpdated: async () => {
+            showSuccessToast(`Booking updated!`, 3000);
+            await refetch();
+          },
+          onBookingCancelled: async () => {
+            showSuccessToast(`Booking cancelled!`, 3000);
+            await refetch();
+          },
+          onBookingAccepted: async () => {
+            showSuccessToast(`Booking accepted!`, 3000);
+            await refetch();
+          },
+          onBookingCompleted: async () => {
+            showSuccessToast(`Booking completed!`, 3000);
+            await refetch();
+          }
+        });
+        setEventsRegistered(true);
+      }
+    };
+
+    const handleDisconnect = () => {
+      setEventsRegistered(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+    };
+  }, [refetch, eventsRegistered]);
+
   if (loading) {
     return <SkeletonLoader />;
   }
@@ -599,7 +582,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 Showing requests for: <span className="font-semibold">{doctorName}</span>
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                Total requests: {filteredRequests.length}
+                Total requests: {paginationInfo.totalItems}
               </p>
             </div>
             <button
@@ -617,7 +600,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <div>
             <p className="text-sm text-gray-700">
               <span className="font-medium">Showing all doctors' requests</span>
-              <span className="text-gray-500 ml-2">Total: {filteredRequests.length} requests</span>
+              <span className="text-gray-500 ml-2">Total: {paginationInfo.totalItems} requests</span>
             </p>
           </div>
           <button
@@ -759,11 +742,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Pending Requests
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                  {totalItems}
+                  {paginationInfo.totalItems}
                 </span>
-                {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
+                {(hasSearchTerm || hasActiveFilters) && filteredRequests.length > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
-                    (Filtered)
+                    (Showing {filteredRequests.length})
                   </span>
                 )}
               </h2>
@@ -785,7 +768,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {paginatedRequests.map((item, index) => (
+                    {filteredRequests.map((item, index) => (
                       <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
@@ -855,14 +838,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* Pagination - Uses client-side pagination */}
-              {totalPages > 1 && (
+              {/* ✅ Pagination - Using server-side pagination from API */}
+              {paginationInfo.totalPages > 1 && (
                 <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                   <Pagination
                     currentPage={currentPage}
-                    totalPages={totalPages}
+                    totalPages={paginationInfo.totalPages}
                     onPageChange={setCurrentPage}
-                    totalItems={totalItems}
+                    totalItems={paginationInfo.totalItems}
                     itemsPerPage={itemsPerPage}
                     itemLabel="pending requests"
                   />

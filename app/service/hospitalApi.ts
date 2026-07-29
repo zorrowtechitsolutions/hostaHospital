@@ -1,4 +1,5 @@
-// hospitalApi.ts - COMPLETE VERSION with Working Hours Support
+// hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT
+// All working-hours conversion logic moved to JSX
 
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
@@ -19,6 +20,8 @@ export interface WorkingHours {
 
 export interface Hospital {
   id: string;
+  authId?: string;
+  userId?: string;
   name: string;
   email: string;
   phone?: string;
@@ -67,7 +70,6 @@ export interface OtpData {
   otp: string;
 }
 
-// ✅ UPDATED RegisterData interface with new fields
 export interface RegisterData {
   name: string;
   email: string;
@@ -86,8 +88,8 @@ export interface RegisterData {
   longitude?: number;
   about?: string;
   workingHours?: WorkingHours;
-  workingHourType?: string;  // ✅ Added
-  workingHoursData?: any[];  // ✅ Added for API-formatted data
+  workingHourType?: string;
+  workingHoursData?: any[];
 }
 
 export interface ChangePasswordData {
@@ -151,6 +153,9 @@ export interface AuthResponse {
   role?: string;
   roleDetected?: string;
   hospitals?: any[];
+  authId?: string;
+  hospitalId?: string;
+  id?: string;
 }
 
 export interface HospitalListResponse {
@@ -171,9 +176,9 @@ export interface GetHospitalsParams {
   limit?: number;
 }
 
-// User data interface for localStorage
 export interface UserData {
   id?: string;
+  authId?: string;
   hospitalId?: string;
   doctorId?: string;
   staffId?: string;
@@ -183,117 +188,147 @@ export interface UserData {
   [key: string]: any;
 }
 
-// Auth data interface for localStorage
 export interface AuthData {
   id?: string;
-  userId?: string;
+  authId?: string;
   hospitalId?: string;
   role?: string;
   [key: string]: any;
 }
 
-// Logout Parameters
 export interface LogoutParams {
   deviceId?: string;
   role?: string;
-  id?: string;
+  authId?: string;
   hospitalId?: string;
   useGlobalEndpoint?: boolean;
 }
 
 // ============================================
-// WORKING HOURS HELPER FUNCTIONS (Internal)
+// TYPE GUARD FUNCTIONS
 // ============================================
 
-/**
- * Convert "10:00" to "10:00 AM" format
- */
-const convertTo12HourFormat = (time: string | undefined): string => {
-  if (!time) return '09:00 AM';
-  
-  // If already in 12-hour format, return as is
-  if (time.includes('AM') || time.includes('PM')) {
-    return time;
-  }
-  
-  const parts = time.split(':');
-  if (parts.length < 2) return '09:00 AM';
-  
-  const hours = parseInt(parts[0], 10);
-  const minutes = parts[1] || '00';
-  
-  if (isNaN(hours)) return '09:00 AM';
-  
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+const isHospital = (data: any): data is Hospital => {
+  return !!data && typeof data === 'object' && 'authId' in data;
 };
 
-/**
- * Convert "10:00 AM" to "10:00" format
- */
-const convertTo24HourFormat = (time: string | undefined): string => {
-  if (!time) return '09:00';
-  
-  // If already in 24-hour format, return as is
-  if (!time.includes('AM') && !time.includes('PM')) {
-    return time;
-  }
-  
-  const parts = time.split(' ');
-  if (parts.length < 2) return '09:00';
-  
-  const timePart = parts[0];
-  const period = parts[1];
-  const timeParts = timePart.split(':');
-  
-  if (timeParts.length < 2) return '09:00';
-  
-  let hours = parseInt(timeParts[0], 10);
-  const minutes = timeParts[1] || '00';
-  
-  if (isNaN(hours)) return '09:00';
-  
-  if (period === 'PM' && hours !== 12) {
-    hours += 12;
-  } else if (period === 'AM' && hours === 12) {
-    hours = 0;
-  }
-  
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-};
-
-/**
- * Map frontend working hours object to API array format
- */
-const mapFrontendToApiWorkingHours = (frontendHours: WorkingHours | null | undefined): any[] => {
-  if (!frontendHours) return [];
-  
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  
-  return days.map(day => {
-    const dayData = frontendHours[day as keyof WorkingHours];
-    return {
-      day: day,
-      is_holiday: dayData?.closed || false,
-      opening_time: convertTo24HourFormat(dayData?.open || '09:00 AM'),
-      closing_time: convertTo24HourFormat(dayData?.close || '06:00 PM'),
-    };
-  });
+const isSuperAdmin = (data: any): data is SuperAdmin => {
+  return !!data && typeof data === 'object' && 'role' in data && !('authId' in data);
 };
 
 // ============================================
-// API ENDPOINTS
+// HELPER: Store dual IDs in localStorage
+// ============================================
+
+const storeUserIds = (response: AuthResponse) => {
+  const token = response.token || response.accessToken;
+  if (token) {
+    localStorage.setItem("accessToken", token);
+  }
+  if (response.refreshToken) {
+    localStorage.setItem("refreshToken", response.refreshToken);
+  }
+  if (response.roleId !== undefined) {
+    localStorage.setItem("roleId", String(response.roleId));
+  }
+
+  // Extract and store authId (from Auth table)
+  let authId = response.authId || '';
+  
+  if (!authId && response.user?.id) {
+    authId = response.user.id.toString();
+  }
+  
+  if (!authId && response.data) {
+    if (isHospital(response.data)) {
+      authId = response.data.authId || response.data.userId || '';
+    }
+  }
+  
+  if (!authId && response.hospital) {
+    authId = response.hospital.authId || response.hospital.userId || '';
+  }
+  
+  if (!authId && response.id) {
+    authId = response.id.toString();
+  }
+  
+  if (authId) {
+    localStorage.setItem("authId", authId);
+    localStorage.setItem("userId", authId);
+  }
+
+  // Extract and store hospitalId (from Hospital table)
+  let hospitalId = response.hospitalId || '';
+  
+  if (!hospitalId && response.hospital?.id) {
+    hospitalId = response.hospital.id;
+  }
+  
+  if (!hospitalId && response.data) {
+    if (isHospital(response.data)) {
+      hospitalId = response.data.id || '';
+    }
+  }
+  
+  // Ensure hospitalId is a string
+  hospitalId = hospitalId?.toString() || '';
+  
+  if (hospitalId) {
+    localStorage.setItem("hospitalId", hospitalId);
+  }
+
+  if (response.role) {
+    localStorage.setItem("userRole", response.role);
+  }
+
+  const userData: UserData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    name: response.hospital?.name || 
+          (isHospital(response.data) ? response.data.name : '') ||
+          response.user?.name || 
+          '',
+    email: response.hospital?.email || 
+           (isHospital(response.data) ? response.data.email : '') ||
+           response.user?.email || 
+           '',
+    role: response.role || 'hospital',
+  };
+  
+  localStorage.setItem("userData", JSON.stringify(userData));
+  
+  const authData: AuthData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    role: response.role || 'hospital',
+  };
+  
+  localStorage.setItem("authData", JSON.stringify(authData));
+
+  console.log('✅ IDs stored:', { authId, hospitalId });
+};
+
+const getStoredIds = () => {
+  const authId = localStorage.getItem('authId') || '';
+  const hospitalId = localStorage.getItem('hospitalId') || '';
+  return { authId, hospitalId };
+};
+
+// ============================================
+// ✅ API ENDPOINTS - Clean RESTful routes
 // ============================================
 
 export const hospitalApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
     // ============================================
-    // ✅ REGISTER - Hospital Registration (UPDATED)
+    // ✅ REGISTER - /hospital (POST)
+    // NO conversion logic - JSX already prepared the payload
     // ============================================
     register: builder.mutation<AuthResponse, RegisterData>({
       query: (hospitalData) => {
+        // Use the data as-is - JSX already formatted it correctly
         const body: any = {
           name: hospitalData.name,
           email: hospitalData.email,
@@ -301,6 +336,7 @@ export const hospitalApi = api.injectEndpoints({
           phone: hospitalData.phone,
         };
         
+        // Optional fields
         if (hospitalData.address) body.address = hospitalData.address;
         if (hospitalData.type) body.type = hospitalData.type;
         if (hospitalData.emergencyContact) body.emergencyContact = hospitalData.emergencyContact;
@@ -308,11 +344,11 @@ export const hospitalApi = api.injectEndpoints({
         if (hospitalData.longitude) body.longitude = hospitalData.longitude;
         if (hospitalData.about) body.about = hospitalData.about;
         
-        // ✅ NEW: Send ONLY the selected working hours type data
+        // Working Hours - JSX already built the correct structure
         const workingHourType = hospitalData.workingHourType || 'normal';
         
         if (hospitalData.workingHoursData && hospitalData.workingHoursData.length > 0) {
-          // Send ONLY the selected type based on workingHourType
+          // Send only the selected type's data
           if (workingHourType === 'normal') {
             body.working_hours_general = hospitalData.workingHoursData;
             body.working_hours_clinic = [];
@@ -326,14 +362,8 @@ export const hospitalApi = api.injectEndpoints({
             body.working_hours_general = [];
             body.working_hours_clinic = [];
           }
-        } else if (hospitalData.workingHours) {
-          // Fallback: use the old method if workingHoursData is not provided
-          const apiWorkingHours = mapFrontendToApiWorkingHours(hospitalData.workingHours);
-          body.working_hours_general = apiWorkingHours;
-          body.working_hours_clinic = apiWorkingHours;
-          body.working_hours_clinic_nobreak = apiWorkingHours;
         } else {
-          // Send empty arrays if no working hours data
+          // Fallback - empty arrays
           body.working_hours_general = [];
           body.working_hours_clinic = [];
           body.working_hours_clinic_nobreak = [];
@@ -346,20 +376,14 @@ export const hospitalApi = api.injectEndpoints({
         };
       },
       transformResponse: (response: AuthResponse) => {
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-        }
+        storeUserIds(response);
         return response;
       },
       invalidatesTags: ["Hospital"],
     }),
 
     // ============================================
-    // ✅ SINGLE LOGIN ROUTE - Handles ALL users including Super Admin
+    // ✅ LOGIN - /auth/login
     // ============================================
     login: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => {
@@ -375,22 +399,13 @@ export const hospitalApi = api.injectEndpoints({
         }
 
         return {
-          url: `/hospital/g-login`,
+          url: `/auth/login`,
           method: "POST",
           body: payload,
         };
       },
       transformResponse: (response: AuthResponse) => {
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-        }
-        if (response.roleId !== undefined) {
-          localStorage.setItem("roleId", String(response.roleId));
-        }
+        storeUserIds(response);
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
@@ -407,7 +422,7 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     requestHospitalOtp: builder.mutation<{ message: string }, PhoneLoginData>({
       query: (phoneData) => ({
-        url: `/hospital/login/phone`,
+        url: `/auth/login/phone`,
         method: "POST",
         body: phoneData,
       }),
@@ -415,15 +430,12 @@ export const hospitalApi = api.injectEndpoints({
 
     verifyHospitalOtp: builder.mutation<AuthResponse, OtpData>({
       query: (otpData) => ({
-        url: `/hospital/otp`,
+        url: `/auth/otp`,
         method: "POST",
         body: otpData,
       }),
       transformResponse: (response: AuthResponse) => {
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
+        storeUserIds(response);
         return response;
       },
       invalidatesTags: ["Hospital"],
@@ -434,7 +446,7 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     refreshToken: builder.mutation<AuthResponse, void>({
       query: () => ({
-        url: `/hospital/refresh`,
+        url: `/auth/refresh`,
         method: "POST",
       }),
       transformResponse: (response: AuthResponse) => {
@@ -447,80 +459,45 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // ✅ COMPLETE LOGOUT - Handles ALL user types
+    // ✅ LOGOUT - FIXED
     // ============================================
     logout: builder.mutation<{ message: string; success?: boolean }, LogoutParams | void>({
       query: (params) => {
-        let hospitalId = localStorage.getItem('hospitalId') || '';
-        let userRole = localStorage.getItem('userRole') || 'hospital';
-        let userId = params?.id || '';
-        let userData: UserData = {};
-        let authData: AuthData = {};
+        let { authId, hospitalId } = getStoredIds();
         
-        try {
-          const parsedUserData = JSON.parse(localStorage.getItem('userData') || '{}');
-          userData = parsedUserData as UserData;
-        } catch (e) {
-          // Silent fail
-        }
+        if (params?.authId) authId = params.authId;
+        if (params?.hospitalId) hospitalId = params.hospitalId;
         
-        try {
-          const parsedAuthData = JSON.parse(localStorage.getItem('authData') || '{}');
-          authData = parsedAuthData as AuthData;
-        } catch (e) {
-          // Silent fail
-        }
-        
-        if (!hospitalId) {
-          hospitalId = authData?.hospitalId || authData?.id || '';
-        }
-        
-        if (!userId) {
-          userId = authData?.id || authData?.userId || authData?.hospitalId || '';
-        }
-        
-        if (!userId) {
-          userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
-        }
-        
-        if (!userId) {
+        // Fallback: try to get authId from localStorage
+        if (!authId) {
           try {
-            const user = JSON.parse(localStorage.getItem('user') || '{}') as UserData;
-            userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || '';
-          } catch (e) {
-            // Silent fail
-          }
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}') as UserData;
+            authId = userData.authId || userData.id || '';
+          } catch (e) {}
         }
         
-        if (!userId) {
-          userId = hospitalId;
+        if (!authId) {
+          try {
+            const authData = JSON.parse(localStorage.getItem('authData') || '{}') as AuthData;
+            authId = authData.authId || authData.id || '';
+          } catch (e) {}
         }
         
-        const role = params?.role || userRole || 'hospital';
-        const deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
-        const useGlobalEndpoint = params?.useGlobalEndpoint !== undefined 
-          ? params.useGlobalEndpoint 
-          : (role === 'super_admin');
+        // Get role from localStorage
+        const role = params?.role || localStorage.getItem('userRole') || 'hospital';
         
-        let url = '';
-        let body: any = {};
+        // Get deviceId
+        const deviceId = params?.deviceId || localStorage.getItem('deviceId') || '';
         
-        if (useGlobalEndpoint && role === 'super_admin') {
-          url = `/users/logout/${userId}`;
-          body = { deviceId: deviceIdValue };
-        } else if (role === 'doctor') {
-          const doctorId = params?.id || userId || '';
-          url = `/doctor/logout/${doctorId}`;
-          body = { deviceId: deviceIdValue };
-        } else if (role === 'staff') {
-          const staffId = params?.id || userId || '';
-          url = `/staff/logout/${staffId}`;
-          body = { deviceId: deviceIdValue };
-        } else {
-          const hospitalIdValue = params?.hospitalId || hospitalId || userId || '';
-          url = `/hospital/logout/${hospitalIdValue}`;
-          body = { deviceId: deviceIdValue };
-        }
+        // Build URL with authId
+        let url = `/auth/logout/${authId || 'unknown'}`;
+        
+        // ✅ FIX: Send all required fields in the body
+        let body: any = {
+          id: Number(authId),      // Convert to number as backend expects
+          role: role,                    // Include role
+          deviceId: deviceId             // Include deviceId
+        };
         
         return {
           url: url,
@@ -530,113 +507,11 @@ export const hospitalApi = api.injectEndpoints({
       },
       onQueryStarted: async (params, { queryFulfilled }) => {
         try {
-          let hospitalId = localStorage.getItem('hospitalId') || '';
-          let userRole = localStorage.getItem('userRole') || 'hospital';
-          let userId = params?.id || '';
-          let userData: UserData = {};
-          let authData: AuthData = {};
-          
-          try {
-            const parsedUserData = JSON.parse(localStorage.getItem('userData') || '{}');
-            userData = parsedUserData as UserData;
-          } catch (e) {
-            // Silent fail
-          }
-          
-          try {
-            const parsedAuthData = JSON.parse(localStorage.getItem('authData') || '{}');
-            authData = parsedAuthData as AuthData;
-          } catch (e) {
-            // Silent fail
-          }
-          
-          if (!hospitalId) {
-            hospitalId = authData?.hospitalId || authData?.id || '';
-          }
-          
-          if (!userId) {
-            userId = authData?.id || authData?.userId || authData?.hospitalId || '';
-          }
-          
-          if (!userId) {
-            userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
-          }
-          
-          if (!userId) {
-            try {
-              const user = JSON.parse(localStorage.getItem('user') || '{}') as UserData;
-              userId = user?.id || user?.hospitalId || user?.doctorId || user?.staffId || '';
-            } catch (e) {
-              // Silent fail
-            }
-          }
-          
-          if (!userId) {
-            userId = hospitalId;
-          }
-          
-          const role = params?.role || userRole || 'hospital';
-          let deviceIdValue = params?.deviceId || localStorage.getItem('deviceId') || '';
-          
-          if (!deviceIdValue) {
-            try {
-              const tokens = await tokenManager.getDeviceTokens();
-              if (tokens && tokens.length > 0) {
-                deviceIdValue = tokens[0].deviceId;
-              }
-            } catch (error) {
-              // Silent fail
-            }
-          }
-          
-          const useGlobalEndpoint = params?.useGlobalEndpoint !== undefined 
-            ? params.useGlobalEndpoint 
-            : (role === 'super_admin');
-          
-          let url = '';
-          let body: any = {};
-          
-          if (useGlobalEndpoint && role === 'super_admin') {
-            url = `/users/logout/${userId}`;
-            body = { deviceId: deviceIdValue };
-          } else if (role === 'doctor') {
-            const doctorId = params?.id || userId || '';
-            url = `/doctor/logout/${doctorId}`;
-            body = { deviceId: deviceIdValue };
-          } else if (role === 'staff') {
-            const staffId = params?.id || userId || '';
-            url = `/staff/logout/${staffId}`;
-            body = { deviceId: deviceIdValue };
-          } else {
-            const hospitalIdValue = params?.hospitalId || hospitalId || userId || '';
-            url = `/hospital/logout/${hospitalIdValue}`;
-            body = { deviceId: deviceIdValue };
-          }
-          
           await queryFulfilled;
-          
         } catch (error) {
-          if (error && typeof error === 'object' && 'status' in error) {
-            const err = error as { status?: number };
-            if (err.status === 401 || err.status === 403) {
-              // Authentication error during logout - likely already logged out
-            }
-          }
+          console.error('Logout error:', error);
         } finally {
-          try {
-            if (tokenManager && typeof tokenManager.deleteDatabase === 'function') {
-              await tokenManager.deleteDatabase();
-            }
-          } catch (dbError) {
-            try {
-              if (tokenManager && typeof tokenManager.clearAllDeviceTokens === 'function') {
-                await tokenManager.clearAllDeviceTokens();
-              }
-            } catch (e) {
-              // Silent fail
-            }
-          }
-          
+          // Clear all localStorage items
           const localStorageItems = [
             'accessToken',
             'refreshToken',
@@ -647,6 +522,8 @@ export const hospitalApi = api.injectEndpoints({
             'permissions',
             'deviceId',
             'hospitalId',
+            'authId',
+            'userId',
             'hospitalInfo',
             'superAdminId',
             'doctorId',
@@ -664,6 +541,12 @@ export const hospitalApi = api.injectEndpoints({
           });
           
           sessionStorage.clear();
+          
+          try {
+            if (tokenManager && typeof tokenManager.deleteDatabase === 'function') {
+              await tokenManager.deleteDatabase();
+            }
+          } catch (dbError) {}
         }
       },
     }),
@@ -672,11 +555,14 @@ export const hospitalApi = api.injectEndpoints({
     // CHANGE PASSWORD
     // ============================================
     changePassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
-      query: ({ currentPassword, newPassword }) => ({
-        url: `/hospital/auth/change-password`,
-        method: "PUT",
-        body: { currentPassword, newPassword },
-      }),
+      query: ({ currentPassword, newPassword }) => {
+        const authId = localStorage.getItem('authId') || '';
+        return {
+          url: `/auth/change-password/${authId}`,
+          method: "PUT",
+          body: { currentPassword, newPassword },
+        };
+      },
       transformResponse: (response: ChangePasswordResponse) => {
         return response;
       },
@@ -694,7 +580,7 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     sendOtp: builder.mutation<OtpResponse, SendOtpData>({
       query: (otpData) => ({
-        url: `/hospital/auth/send-otp`,
+        url: `/auth/send-otp`,
         method: "POST",
         body: otpData,
       }),
@@ -711,7 +597,7 @@ export const hospitalApi = api.injectEndpoints({
 
     verifyOtp: builder.mutation<OtpResponse, VerifyOtpData>({
       query: (otpData) => ({
-        url: `/hospital/auth/verify-otp`,
+        url: `/auth/verify-otp`,
         method: "POST",
         body: otpData,
       }),
@@ -728,9 +614,9 @@ export const hospitalApi = api.injectEndpoints({
 
     resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
       query: (resetData) => ({
-        url: `/hospital/auth/reset-password`,
+        url: `/auth/reset-password`,
         method: "POST",
-        body: resetData,
+        body: resetData, // { email, newPassword }
       }),
       transformResponse: (response: ResetPasswordResponse) => {
         return response;
@@ -744,8 +630,10 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // HOSPITAL MANAGEMENT
+    // ✅ HOSPITAL OPERATIONS - Clean RESTful routes
     // ============================================
+    
+    // Get all hospitals - /hospital
     getAllHospitals: builder.query<HospitalListResponse | Hospital[], GetHospitalsParams | void>({
       query: (params) => {
         const queryParams = new URLSearchParams();
@@ -789,8 +677,12 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    getHospitalById: builder.query<{ data?: Hospital } | Hospital, string>({
-      query: (id) => `/hospital/${id}`,
+    // Get hospital by ID - /hospital/:id
+    getHospitalById: builder.query<Hospital, string>({
+      query: (id) => ({
+        url: `/hospital/${id}`,
+        method: "GET",
+      }),
       providesTags: (result, error, id) => [{ type: "Hospital", id }],
       transformResponse: (response: { data?: Hospital } | Hospital) => {
         if (response && 'data' in response && response.data) {
@@ -800,71 +692,26 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    addNewHospital: builder.mutation<AuthResponse, RegisterData>({
-      query: (newHospital) => {
-        const body: any = {
-          name: newHospital.name,
-          email: newHospital.email,
-          password: newHospital.password,
-          phone: newHospital.phone,
-        };
-        
-        if (newHospital.address) body.address = newHospital.address;
-        if (newHospital.type) body.type = newHospital.type;
-        if (newHospital.emergencyContact) body.emergencyContact = newHospital.emergencyContact;
-        if (newHospital.latitude) body.latitude = newHospital.latitude;
-        if (newHospital.longitude) body.longitude = newHospital.longitude;
-        if (newHospital.about) body.about = newHospital.about;
-        
-        // ✅ NEW: Send ONLY the selected working hours type data
-        const workingHourType = newHospital.workingHourType || 'normal';
-        
-        if (newHospital.workingHoursData && newHospital.workingHoursData.length > 0) {
-          if (workingHourType === 'normal') {
-            body.working_hours_general = newHospital.workingHoursData;
-            body.working_hours_clinic = [];
-            body.working_hours_clinic_nobreak = [];
-          } else if (workingHourType === 'clinic') {
-            body.working_hours_clinic = newHospital.workingHoursData;
-            body.working_hours_general = [];
-            body.working_hours_clinic_nobreak = [];
-          } else if (workingHourType === 'clinic-break') {
-            body.working_hours_clinic_nobreak = newHospital.workingHoursData;
-            body.working_hours_general = [];
-            body.working_hours_clinic = [];
-          }
-        } else if (newHospital.workingHours) {
-          // Fallback: use the old method
-          const apiWorkingHours = mapFrontendToApiWorkingHours(newHospital.workingHours);
-          body.working_hours_general = apiWorkingHours;
-          body.working_hours_clinic = apiWorkingHours;
-          body.working_hours_clinic_nobreak = apiWorkingHours;
-        } else {
-          body.working_hours_general = [];
-          body.working_hours_clinic = [];
-          body.working_hours_clinic_nobreak = [];
-        }
-        
+    // Get current hospital - /hospital/current
+    getCurrentHospital: builder.query<Hospital, void>({
+      query: () => {
+        const hospitalId = localStorage.getItem('hospitalId') || '';
         return {
-          url: `/hospital`,
-          method: "POST",
-          body: body,
+          url: `/hospital/${hospitalId}`,
+          method: "GET",
         };
       },
-      transformResponse: (response: AuthResponse) => {
-        const token = response.token || response.accessToken;
-        if (token) {
-          localStorage.setItem("accessToken", token);
+      providesTags: ["Hospital"],
+      transformResponse: (response: { data?: Hospital } | Hospital) => {
+        if (response && 'data' in response && response.data) {
+          return response.data;
         }
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-        }
-        return response;
+        return response as Hospital;
       },
-      invalidatesTags: ["Hospital"],
     }),
 
-    // ✅ UPDATED: Include workingHours in the update with proper API format
+    // ✅ UPDATE Hospital - /hospital/:id (PUT)
+    // NO conversion logic - JSX already prepared the payload
     updateHospital: builder.mutation<Hospital, { id: string; updateHospital: any }>({
       query: ({ id, updateHospital }) => {
         const body: any = {
@@ -878,10 +725,10 @@ export const hospitalApi = api.injectEndpoints({
           body.address = updateHospital.address;
         }
         
-        // ✅ NEW: Handle working hours update based on type
+        // Working Hours - JSX already built the correct structure
+        const workingHourType = updateHospital.workingHourType || 'normal';
+        
         if (updateHospital.workingHoursData && updateHospital.workingHoursData.length > 0) {
-          const workingHourType = updateHospital.workingHourType || 'normal';
-          
           if (workingHourType === 'normal') {
             body.working_hours_general = updateHospital.workingHoursData;
             body.working_hours_clinic = [];
@@ -895,15 +742,8 @@ export const hospitalApi = api.injectEndpoints({
             body.working_hours_general = [];
             body.working_hours_clinic = [];
           }
-        } else if (updateHospital.workingHours) {
-          // Fallback: use the old method
-          const apiWorkingHours = mapFrontendToApiWorkingHours(updateHospital.workingHours);
-          body.working_hours_general = apiWorkingHours;
-          body.working_hours_clinic = apiWorkingHours;
-          body.working_hours_clinic_nobreak = apiWorkingHours;
         }
         
-        // Include any other fields that might be in the update
         if (updateHospital.emergencyContact) body.emergencyContact = updateHospital.emergencyContact;
         if (updateHospital.latitude !== undefined) body.latitude = updateHospital.latitude;
         if (updateHospital.longitude !== undefined) body.longitude = updateHospital.longitude;
@@ -927,6 +767,7 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
+    // DELETE Hospital - /hospital/:id (DELETE)
     deleteHospital: builder.mutation<{ message: string }, string>({
       query: (id) => ({
         url: `/hospital/${id}`,
@@ -935,6 +776,7 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
+    // RECOVER Hospital - /hospital/recover/:id
     recoverHospital: builder.mutation<
       { success: boolean; message: string; data?: Hospital },
       string
@@ -965,8 +807,8 @@ export const hospitalApi = api.injectEndpoints({
 // ============================================
 
 export const {
-  // Auth hooks
-  useRegisterMutation,
+  // Auth hooks 
+  useRegisterMutation,  
   useLoginMutation,
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
@@ -982,7 +824,7 @@ export const {
   // Hospital management hooks
   useGetAllHospitalsQuery,
   useGetHospitalByIdQuery,
-  useAddNewHospitalMutation,
+  useGetCurrentHospitalQuery,
   useUpdateHospitalMutation,
   useDeleteHospitalMutation,
   useRecoverHospitalMutation,

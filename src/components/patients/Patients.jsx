@@ -1,4 +1,3 @@
-// src/components/patients/Patients.jsx - With Enhanced Address Handling, Skeleton Loader & Filter Box - Card UI aligned with Doctors
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -306,13 +305,29 @@ const Patients = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
 
-  // 🔥 FIX: Get hospitalId from auth.hospitalId, NOT auth.id
+  // 🔥 FIX: Get hospitalId properly from auth
   const authUser = getAuthUser();
   const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
   const isHospitalAdmin = authUser?.role === 'hospital' || authUser?.roleId === 2;
+  const isStaff = authUser?.role === 'staff' || authUser?.roleId === 3;
   
-  // 🔥 FIX: Use hospitalId, NOT auth.id
-  const hospitalId = isDoctor ? authUser?.hospitalId : authUser?.id;
+  // ✅ CRITICAL FIX: Get hospitalId from localStorage or auth.hospitalId only
+  const getHospitalId = () => {
+    // Priority 1: Check localStorage
+    const storedHospitalId = localStorage.getItem('hospitalId');
+    if (storedHospitalId) {
+      return storedHospitalId;
+    }
+    
+    // Priority 2: Check auth.hospitalId
+    if (authUser?.hospitalId) {
+      return authUser.hospitalId;
+    }
+    
+    return null;
+  };
+  
+  const hospitalId = getHospitalId();
 
   // ✅ API hooks - fetch ALL patients (no filters sent to server)
   const { 
@@ -322,10 +337,6 @@ const Patients = () => {
     isFetching
   } = useGetPatientsQuery({
     hospitalId: hospitalId,
-    // ❌ NO search_query - we'll filter client-side
-    // ❌ NO gender filter - we'll filter client-side
-    // ❌ NO status filter - we'll filter client-side
-    // ✅ Fetch all patients (use a large limit or remove pagination)
     page: 1,
     limit: 1000, // Fetch all patients for client-side filtering
   });
@@ -867,7 +878,7 @@ const Patients = () => {
         </div>
       )}
 
-      {/* GRID VIEW */}
+      {/* GRID VIEW - UPDATED: Removed Status, Added Gender */}
       {viewMode === 'grid' && filteredPatients.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -935,6 +946,7 @@ const Patients = () => {
                     {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
                   </p>
                   
+                  {/* UPDATED: Removed Status, Added Gender */}
                   <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                     <div className="text-center">
                       <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
@@ -943,19 +955,10 @@ const Patients = () => {
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">Status</p>
-                      <Badge
-                        variant={
-                          isBlacklisted
-                            ? "dark"
-                            : patient.isActive
-                            ? "success"
-                            : "danger"
-                        }
-                        className="text-[10px]"
-                      >
-                        {patientStatus}
-                      </Badge>
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
+                      <p className="text-xs font-bold text-gray-700">
+                        {patient.gender || 'N/A'}
+                      </p>
                     </div>
                   </div>
                   

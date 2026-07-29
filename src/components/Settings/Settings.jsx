@@ -1,4 +1,4 @@
-// src/components/Settings/Settings.jsx - WITHOUT TODAY HIGHLIGHT
+// src/components/Settings/Settings.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -347,7 +347,8 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
-  const hospitalId = user?.id;
+  // ✅ FIXED: Use hospitalId instead of id
+  const hospitalId = user?.hospitalId;
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
@@ -802,7 +803,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              {/* ✅ Working Hours - WITHOUT Today Highlight */}
+              {/* Working Hours - WITHOUT TODAY Highlight */}
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">

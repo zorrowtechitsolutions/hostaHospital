@@ -1,6 +1,6 @@
 // src/app/service/doctorApi.ts
 import { api } from "./api";
-import { getAuthUser } from "../../src/utils/auth";
+import { getAuthUser, JwtPayload } from "../../src/utils/auth";
 
 // ==============================
 // TYPES
@@ -8,6 +8,8 @@ import { getAuthUser } from "../../src/utils/auth";
 
 export interface Doctor {
   id?: string;
+  authId?: string;        // User ID from Auth table
+  userId?: string;        // Alias for authId
   name: string;
   email: string;
   password?: string;
@@ -44,6 +46,9 @@ export interface DoctorAuthResponse {
   data?: Doctor;
   message?: string;
   error?: string;
+  authId?: string;
+  hospitalId?: string;
+  role?: string;
 }
 
 export interface GetDoctorsParams {
@@ -120,38 +125,148 @@ export interface ChangePasswordResponse {
   error?: string;
 }
 
+// ============================================
+// HELPER: Store dual IDs in localStorage
+// ============================================
+
+const storeDoctorIds = (response: DoctorAuthResponse) => {
+  const token = response.token || response.accessToken;
+  if (token) {
+    localStorage.setItem("accessToken", token);
+  }
+  if (response.refreshToken) {
+    localStorage.setItem("refreshToken", response.refreshToken);
+  }
+
+  const doctor = response.doctor || response.data;
+  
+  let authId = response.authId || '';
+  
+  if (!authId && doctor) {
+    authId = doctor.authId || doctor.userId || doctor.id || '';
+  }
+  
+  if (authId) {
+    localStorage.setItem("authId", authId);
+    localStorage.setItem("userId", authId);
+    localStorage.setItem("doctorId", authId);
+  }
+
+  let hospitalId = response.hospitalId || '';
+  
+  if (!hospitalId && doctor?.hospitalId) {
+    hospitalId = String(doctor.hospitalId);
+  }
+  
+  if (hospitalId) {
+    localStorage.setItem("hospitalId", hospitalId);
+  }
+
+  const role = response.role || 'doctor';
+  localStorage.setItem("userRole", role);
+
+  const userData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    id: doctor?.id || authId,
+    name: doctor?.name || '',
+    email: doctor?.email || '',
+    role: role,
+  };
+  localStorage.setItem("userData", JSON.stringify(userData));
+  
+  const authData = {
+    authId: authId,
+    hospitalId: hospitalId,
+    id: doctor?.id || authId,
+    role: role,
+  };
+  localStorage.setItem("authData", JSON.stringify(authData));
+
+  console.log('✅ Doctor IDs stored:', { authId, hospitalId });
+};
+
+// ============================================
+// HELPER: Get current user with proper IDs from JWT
+// ============================================
+
+const getCurrentUser = (): JwtPayload | null => {
+  const auth = getAuthUser();
+  if (!auth) return null;
+  return auth;
+};
+
+// ============================================
+// HELPER: Get hospitalId from JWT or localStorage
+// ============================================
+
+const getHospitalId = (): string | null => {
+  const auth = getAuthUser();
+  
+  if (auth?.hospitalId) {
+    return String(auth.hospitalId);
+  }
+  
+  const hospitalId = localStorage.getItem('hospitalId');
+  if (hospitalId) {
+    return hospitalId;
+  }
+  
+  return null;
+};
+
+// ============================================
+// HELPER: Get authId (user ID) from JWT or localStorage
+// ============================================
+
+const getAuthId = (): string | null => {
+  const auth = getAuthUser();
+  
+  if (auth?.id) {
+    return String(auth.id);
+  }
+  
+  const authId = localStorage.getItem('authId');
+  if (authId) {
+    return authId;
+  }
+  
+  return null;
+};
+
+// ============================================
+// HELPER: Get stored IDs from localStorage
+// ============================================
+
+const getStoredIds = () => {
+  const authId = localStorage.getItem('authId') || '';
+  const hospitalId = localStorage.getItem('hospitalId') || '';
+  return { authId, hospitalId };
+};
+
 export const doctorApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
+    // ============================================
+    // GET DOCTORS - /doctor with hospital filtering
+    // ============================================
     getDoctors: builder.query({
       query: (params: GetDoctorsParams = {}) => {
-        const auth = getAuthUser();
+        const auth = getCurrentUser();
         const queryParams = new URLSearchParams();
 
-        // 🎯 ROLE DEFINITIONS - ALL users should be filtered by hospital
-        const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-        const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-        const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
-        const isSuperAdmin = auth?.role === 'super-admin';
         const shouldSkipFilter = params.skipHospitalFilter === true;
-        
-        // 🔥 FIX: Filter by hospital for ALL hospital-bound users (Doctors, Hospital Admins, AND Staff)
-        // Staff should ONLY see their own hospital's data
-        const shouldFilterByHospital = (isHospitalAdmin || isDoctor || isStaff) && !shouldSkipFilter;
+        const shouldFilterByHospital = !shouldSkipFilter;
 
-        if (shouldFilterByHospital && auth?.id) {
-          // Use hospitalId from auth for all hospital-bound users
-          const hospitalId = auth?.hospitalId || auth?.id;
-          queryParams.append("hospitalId", String(hospitalId));
-        } else if (isSuperAdmin && params.hospitalId) {
-          // Super Admin can filter by specific hospital
+        if (shouldFilterByHospital) {
+          const hospitalId = getHospitalId();
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+          }
+        } else if (params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
-        } else if (params.hospitalId && !shouldFilterByHospital) {
-          // Use provided hospitalId if user is not hospital-bound
-          queryParams.append("hospitalId", String(params.hospitalId));
-        } 
+        }
 
-        // Add other filters
         if (params.name) {
           queryParams.append("name", params.name);
         }
@@ -168,7 +283,6 @@ export const doctorApi = api.injectEndpoints({
           queryParams.append("search_query", params.search_query);
         }
 
-        // Always add pagination
         queryParams.append("page", String(params.page || 1));
         queryParams.append("limit", String(params.limit || 10));
 
@@ -178,23 +292,27 @@ export const doctorApi = api.injectEndpoints({
       providesTags: ["Doctor"],
     }),
 
+    // ============================================
+    // GET SPECIALITIES - /speciality
+    // ============================================
     getSpecialities: builder.query<SpecialityResponse, void>({
       query: () => {
-        const queryParams = new URLSearchParams();
-        return `/speciality?${queryParams.toString()}`;
+        return `/speciality`;
       },
       providesTags: ["speciality"],
     }),
 
+    // ============================================
+    // GET DOCTOR BY ID - /doctor/:id
+    // ============================================
     getDoctorById: builder.query<DoctorAuthResponse, string>({
       query: (id) => `/doctor/${id}`,
       providesTags: (result, error, id) => [{ type: "Doctor", id }],
     }),
 
     // ============================================
-    // AUTH ENDPOINTS
+    // LOGIN DOCTOR - /doctor/login
     // ============================================
-
     loginDoctor: builder.mutation<DoctorAuthResponse, LoginDoctorData>({
       query: (logUser) => ({
         url: "/doctor/login",
@@ -203,39 +321,70 @@ export const doctorApi = api.injectEndpoints({
       }),
 
       transformResponse: (response: DoctorAuthResponse) => {
-        const token = response.token || response.accessToken;
-
-        if (token) {
-          localStorage.setItem("accessToken", token);
-        }
-
-        if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
-        }
-
+        storeDoctorIds(response);
         return response;
       },
 
       invalidatesTags: ["Doctor"],
     }),
 
-    logoutDoctor: builder.mutation<{ message: string }, { hospitalId: string }>({
-      query: ({ hospitalId }) => ({
-        url: `/doctor/logout/${hospitalId}`,
-        method: "PUT",
-      }),
+    // ============================================
+    // LOGOUT DOCTOR - /doctor/logout/:authId
+    // ============================================
+    logoutDoctor: builder.mutation<{ message: string }, { deviceId?: string } | void>({
+      query: (params) => {
+        const { authId } = getStoredIds();
+        
+        let url = `/doctor/logout/${authId || 'unknown'}`;
+        let body: any = {
+          deviceId: params?.deviceId || localStorage.getItem('deviceId') || '',
+        };
+        
+        return {
+          url: url,
+          method: "POST",
+          body: body,
+        };
+      },
 
       onQueryStarted: async (_arg, { queryFulfilled }) => {
         try {
           await queryFulfilled;
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
         } catch (error) {
-          // Error handled silently
+          console.error('Logout error:', error);
+        } finally {
+          const localStorageItems = [
+            'accessToken',
+            'refreshToken',
+            'roleId',
+            'userRole',
+            'userData',
+            'authData',
+            'permissions',
+            'deviceId',
+            'hospitalId',
+            'authId',
+            'userId',
+            'doctorId',
+            'staffId',
+            'staffNumericId',
+            'user',
+            'token',
+            'refresh_token'
+          ];
+          
+          localStorageItems.forEach(key => {
+            localStorage.removeItem(key);
+          });
+          
+          sessionStorage.clear();
         }
       },
     }),
 
+    // ============================================
+    // REFRESH DOCTOR TOKEN
+    // ============================================
     refreshDoctor: builder.mutation<DoctorAuthResponse, void>({
       query: () => ({
         url: "/doctor/refresh",
@@ -244,15 +393,12 @@ export const doctorApi = api.injectEndpoints({
 
       transformResponse: (response: DoctorAuthResponse) => {
         const token = response.token || response.accessToken;
-
         if (token) {
           localStorage.setItem("accessToken", token);
         }
-
         if (response.refreshToken) {
           localStorage.setItem("refreshToken", response.refreshToken);
         }
-
         return response;
       },
 
@@ -260,15 +406,13 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // FORGOT PASSWORD / RESET PASSWORD ENDPOINTS
+    // SEND OTP - /doctor/auth/send-otp
     // ============================================
-
     sendDoctorOtp: builder.mutation<OtpResponse, SendOtpData>({
       query: (otpData) => ({
-        url: `/doctor/auth/send-otp`,
+        url: `auth/send-otp`,
         method: "POST",
         body: otpData,
-        // No authentication required
       }),
       transformResponse: (response: OtpResponse) => {
         return response;
@@ -281,12 +425,14 @@ export const doctorApi = api.injectEndpoints({
       },
     }),
 
+    // ============================================
+    // VERIFY OTP - /doctor/auth/verify-otp
+    // ============================================
     verifyDoctorOtp: builder.mutation<OtpResponse, VerifyOtpData>({
       query: (otpData) => ({
-        url: `/doctor/auth/verify-otp`,
+        url: `auth/verify-otp`,
         method: "POST",
         body: otpData,
-        // No authentication required
       }),
       transformResponse: (response: OtpResponse) => {
         return response;
@@ -299,12 +445,14 @@ export const doctorApi = api.injectEndpoints({
       },
     }),
 
+    // ============================================
+    // RESET PASSWORD - /doctor/auth/reset-password
+    // ============================================
     resetDoctorPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
       query: (resetData) => ({
-        url: `/doctor/auth/reset-password`,
+        url: `auth/reset-password`,
         method: "POST",
         body: resetData,
-        // No authentication required - this endpoint is public
       }),
       transformResponse: (response: ResetPasswordResponse) => {
         return response;
@@ -318,16 +466,17 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // CHANGE PASSWORD ENDPOINT (Requires Authentication)
+    // CHANGE PASSWORD - /doctor/auth/change-password/:authId
     // ============================================
-
     changeDoctorPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
-      query: ({ currentPassword, newPassword }) => ({
-        url: `/doctor/auth/change-password`,
-        method: "PUT",
-        body: { currentPassword, newPassword },
-        // This endpoint requires authentication
-      }),
+      query: ({ currentPassword, newPassword }) => {
+        const authId = getAuthId();
+        return {
+          url: `auth/change-password/${authId}`,
+          method: "PUT",
+          body: { currentPassword, newPassword },
+        };
+      },
       transformResponse: (response: ChangePasswordResponse) => {
         return response;
       },
@@ -341,26 +490,29 @@ export const doctorApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // CRUD ENDPOINTS
+    // ADD NEW DOCTOR - /doctor (POST)
     // ============================================
-
     addNewDoctor: builder.mutation<DoctorAuthResponse, AddDoctorPayload>({
       query: ({ hospitalId, ...newDoctor }) => {
-        const auth = getAuthUser();
+        const auth = getCurrentUser();
+        const defaultHospitalId = getHospitalId();
 
         return {
           url: "/doctor",
           method: "POST",
           body: {
             ...newDoctor,
-            hospitalId: hospitalId ?? auth?.id,
-            hospitalName: newDoctor.hospitalName ?? auth?.name ?? "",
+            hospitalId: hospitalId ?? defaultHospitalId ?? auth?.id,
+            hospitalName: newDoctor.hospitalName ?? auth?.hospitalName ?? "",
           },
         };
       },
       invalidatesTags: ["Doctor"],
     }),
 
+    // ============================================
+    // UPDATE DOCTOR - /doctor/:id (PUT)
+    // ============================================
     updateDoctor: builder.mutation<Doctor, { id: string; updateDoctor: Partial<Doctor> }>({
       query: ({ id, updateDoctor }) => ({
         url: `/doctor/${id}`,
@@ -373,6 +525,9 @@ export const doctorApi = api.injectEndpoints({
       ],
     }),
 
+    // ============================================
+    // DELETE DOCTOR - /doctor/:id (DELETE)
+    // ============================================
     deleteDoctor: builder.mutation<{ message: string }, string>({
       query: (doctorId) => ({
         url: `/doctor/${doctorId}`,
@@ -384,6 +539,9 @@ export const doctorApi = api.injectEndpoints({
       ],
     }),
 
+    // ============================================
+    // RECOVER DOCTOR - /doctor/recover/:id
+    // ============================================
     recoverDoctor: builder.mutation<{ message: string }, string>({
       query: (doctorId) => ({
         url: `/doctor/recover/${doctorId}`,
@@ -410,7 +568,6 @@ export const {
   useDeleteDoctorMutation,
   useRecoverDoctorMutation,
   useGetSpecialitiesQuery,
-  // Auth hooks
   useSendDoctorOtpMutation,
   useVerifyDoctorOtpMutation,
   useResetDoctorPasswordMutation,

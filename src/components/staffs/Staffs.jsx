@@ -53,6 +53,27 @@ import { exportToExcel } from "../../utils/excelExport";
 import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
 
+// Helper function to get hospital ID
+const getHospitalId = () => {
+  const storedHospitalId = localStorage.getItem('hospitalId');
+  if (storedHospitalId) {
+    return storedHospitalId;
+  }
+  
+  const authUser = getAuthUser();
+  if (authUser?.hospitalId) {
+    return authUser.hospitalId;
+  }
+  
+  return null;
+};
+
+// Helper function to get auth ID
+const getAuthId = () => {
+  const authUser = getAuthUser();
+  return authUser?.id || authUser?.userId || authUser?._id || null;
+};
+
 // FIX: Enhanced getS3ImageUrl with cache-busting
 const getS3ImageUrlWithCache = (imageKey) => {
   if (!imageKey) return null;
@@ -86,14 +107,21 @@ const Staffs = () => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
 
-  // 🔥 Get authenticated user to check role
+  // Get authenticated user
   const auth = getAuthUser();
-  const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
-  const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
-  const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
   
-  // 🔥 FIX: Staff now included in hospital filter
-  const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
+  // Get hospital ID using helper
+  const hospitalId = getHospitalId();
+  const authId = getAuthId();
+
+  // Log for debugging
+  useEffect(() => {
+    console.log('🔍 Auth User:', auth);
+    console.log('🔍 Auth ID:', authId);
+    console.log('🏥 Hospital ID:', hospitalId);
+    console.log('🔍 Role:', auth?.role);
+    console.log('🔍 Role ID:', auth?.roleId);
+  }, [auth, authId, hospitalId]);
 
   // Debounce search term
   useEffect(() => {
@@ -109,13 +137,8 @@ const Staffs = () => {
     setCurrentPage(1);
   }, [debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // API Hooks with pagination parameters
-  const {
-    data: staffApiResponse,
-    isLoading: loading,
-    refetch,
-    isFetching
-  } = useGetStaffQuery({
+  // Build query params with hospital filter
+  const queryParams = {
     search_query: debouncedSearchTerm?.trim() || undefined,
     designation: designationFilter !== 'all' ? designationFilter : undefined,
     gender: genderFilter !== 'all' ? genderFilter : undefined,
@@ -123,7 +146,23 @@ const Staffs = () => {
     date: dateFilter || undefined,
     page: currentPage,
     limit: itemsPerPage
-  });
+  };
+
+  // Always filter by hospital for all users
+  if (hospitalId) {
+    queryParams.hospitalId = String(hospitalId);
+    console.log('✅ Filtering staff by hospitalId:', hospitalId);
+  } else {
+    console.warn('⚠️ No hospitalId found for filtering');
+  }
+
+  // API Hooks with pagination parameters
+  const {
+    data: staffApiResponse,
+    isLoading: loading,
+    refetch,
+    isFetching
+  } = useGetStaffQuery(queryParams);
 
   const [deleteStaff] = useDeleteStaffMutation();
   const [recoverStaff] = useRecoverStaffMutation();
@@ -291,7 +330,7 @@ const Staffs = () => {
   const allStaffsData = transformStaffData(staffApiResponse?.data || []);
   const totalItemsFromApi = staffApiResponse?.pagination?.totalItems || 0;
 
-  // ✅ Apply frontend search AND filter filtering
+  // Apply frontend search AND filter filtering
   const filteredStaffsData = useMemo(() => {
     let filtered = allStaffsData;
 
@@ -356,11 +395,11 @@ const Staffs = () => {
     return filtered;
   }, [allStaffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // ✅ Use filtered data for display
+  // Use filtered data for display
   const staffsData = filteredStaffsData;
   const totalItems = staffsData.length;
 
-  // ✅ Get unique hospitals (should only be 1 for staff now)
+  // Get unique hospitals
   const uniqueHospitals = useMemo(() => {
     const hospitals = new Set();
     staffsData.forEach(staff => {
@@ -371,7 +410,7 @@ const Staffs = () => {
     return Array.from(hospitals);
   }, [staffsData]);
 
-  // ✅ Pagination for filtered data
+  // Pagination for filtered data
   const paginatedStaffsData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -449,8 +488,6 @@ const Staffs = () => {
       showErrorToast("Failed to export data. Please try again.", 3000);
     }
   };
-
-  // ✅ REMOVED: handleImport function
 
   const handleViewDetails = (staff) => {
     if (staff.isDelete) {
@@ -758,9 +795,8 @@ const Staffs = () => {
           </div>
           <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
           
-          
-          {/* ✅ Show warning if multiple hospitals (shouldn't happen for staff now) */}
-          {isStaff && uniqueHospitals.length > 1 && (
+          {/* Show warning if multiple hospitals */}
+          {uniqueHospitals.length > 1 && (
             <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -789,7 +825,6 @@ const Staffs = () => {
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
-            {/* ✅ IMPORT BUTTON REMOVED */}
             <Button variant="outline" size="sm" onClick={handleExport} title="Export to Excel">
               <Download size={16} />
             </Button>
