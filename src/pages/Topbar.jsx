@@ -12,12 +12,15 @@ import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
 import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
 import {
-  useGetNotificationsByHospitalQuery
+  useGetNotificationsByHospitalQuery,
+  useGetNotificationsByRoleQuery
 } from "../../app/service/notification";
-import { getHospitalId } from "../utils/auth";
+import { getHospitalId, getUserRole, getAuthUser } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
+import { socket } from '../socket/socket';
+import { registerNotificationEvents, unregisterNotificationEvents } from '../socket/notificationEvents';
 
 // ================= HELPER FUNCTIONS =================
 
@@ -86,6 +89,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [menuImageError, setMenuImageError] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isBadgeAnimating, setIsBadgeAnimating] = useState(false);
   
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
@@ -121,7 +126,14 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       case 'doctor':
         return authId || userId || doctorId || userData?.authId || userData?.id;
       case 'staff':
-        return authId || userId || staffId || staffNumericId || userData?.authId || userData?.id;
+  return (
+    staffId ||
+    userData?.staffId ||
+    staffNumericId ||
+    authId ||
+    userId ||
+    userData?.id
+  ); 
       case 'super_admin':
         return authId || userId || userData?.authId || userData?.id;
       default:
@@ -150,9 +162,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     { skip: userRole !== 'staff' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
-  const { data: notificationsData } = useGetNotificationsByHospitalQuery(
+  // Hospital-based query (for staff and hospital)
+  const hospitalQuery = useGetNotificationsByHospitalQuery(
     { hospitalId },
-    { skip: !hospitalId, pollingInterval: 10000 }
+    { 
+      pollingInterval: 30000, // Poll every 30 seconds as fallback
+    }
   );
   
   // ✅ Get stored user data
@@ -332,11 +347,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileImageUrl = getProfileImageUrl();
   const initials = getInitials(profileData.name);
   const gradientColor = getColorFromName(profileData.name);
-  
-  const notifications = notificationsData?.data || [];
-  const unreadCount = notifications.filter(
-    (n) => !n.hospitalReadStatus?.[hospitalId]
-  ).length;
 
   // ✅ Reset image error when profileImageUrl changes
   useEffect(() => {
@@ -552,10 +562,20 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
             aria-label="Toggle notifications"
           >
-            <Bell size={20} className="!text-white" stroke="white" />
+            <Bell 
+              size={20} 
+              className={`!text-white transition-transform duration-300 ${
+                isBadgeAnimating ? 'scale-110' : 'scale-100'
+              }`}
+              stroke="white" 
+            />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {unreadCount}
+              <span 
+                className={`absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium shadow-lg transition-all duration-300 ${
+                  isBadgeAnimating ? 'scale-125 animate-bounce' : 'scale-100'
+                }`}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
@@ -563,6 +583,9 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           <NotificationPanel 
             isOpen={showNotifications}
             onClose={() => setShowNotifications(false)}
+            onUnreadCountChange={(count) => {
+              setUnreadCount(count);
+            }}
           />
         </div>
 

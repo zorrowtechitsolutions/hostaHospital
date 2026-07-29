@@ -1,4 +1,4 @@
-// src/Authentication/Login.jsx - COMPLETELY FIXED VERSION
+// src/Authentication/Login.jsx - WITH SKELETON LOADING (Neutral Colors)
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -13,6 +13,53 @@ import logo from "../assets/logo.jpeg";
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
 
+// ✅ Skeleton Loader Component for Login (Neutral Colors - Matching Doctor Skeleton)
+const LoginSkeletonLoader = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="h-20 w-20 rounded-2xl bg-gray-200 animate-pulse border-2 border-blue-100"></div>
+          </div>
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mx-auto mb-2"></div>
+          <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mx-auto"></div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          {/* Logo/Icon Placeholder */}
+          <div className="flex justify-center mb-6">
+            <div className="h-16 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+          </div>
+
+          {/* Email Field Skeleton */}
+          <div className="space-y-2 mb-4">
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+          </div>
+
+          {/* Password Field Skeleton */}
+          <div className="space-y-2 mb-6">
+            <div className="flex justify-between">
+              <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-3 w-28 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+          </div>
+
+          {/* Submit Button Skeleton - Neutral gray like Doctor skeleton */}
+          <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
+
+          {/* Footer Links Skeleton */}
+          <div className="mt-6 flex justify-center">
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -20,6 +67,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   
   const [showHospitalSelect, setShowHospitalSelect] = useState(false);
   const [hospitalOptions, setHospitalOptions] = useState([]);
@@ -38,6 +86,7 @@ const Login = () => {
 
   const isLoading = isLoginLoading || isSubmitting;
 
+  // ✅ Simulate initial loading for skeleton
   useEffect(() => {
     const initDB = async () => {
       try {
@@ -45,10 +94,20 @@ const Login = () => {
         const deviceId = getDeviceId();
       } catch (error) {
         console.error('❌ Failed to initialize IndexedDB:', error);
+      } finally {
+        // ✅ Hide skeleton after initialization (or after a minimum time)
+        setTimeout(() => {
+          setIsInitialLoading(false);
+        }, 500);
       }
     };
     initDB();
   }, []);
+
+  // ✅ Show skeleton while initializing
+  if (isInitialLoading) {
+    return <LoginSkeletonLoader />;
+  }
 
   const validateField = (name, value) => {
     switch (name) {
@@ -111,6 +170,8 @@ const Login = () => {
       processSuccessfulLogin(response, fcmToken, selectedHospital);
       
     } catch (error) {
+      localStorage.clear();
+      
       let errorMessage = "Invalid email or password. Please try again.";
       if (error.data?.message) {
         errorMessage = error.data.message;
@@ -121,13 +182,11 @@ const Login = () => {
     }
   };
 
-  // ✅ FIXED: processSuccessfulLogin with correct role extraction and staff ID handling
   const processSuccessfulLogin = (response, fcmToken, hospital = null) => {
     const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
     const roleId = response.roleId || response.data?.roleId;
     const deviceId = getDeviceId();
     
-    // ✅ FIRST: Extract the role from the response
     let role = 
       response.roleDetected ||
       response.role ||
@@ -136,7 +195,6 @@ const Login = () => {
       response.userType ||
       "hospital";
     
-    // Debug logging for role extraction
     console.log("🔍 ROLE EXTRACTION:", {
       "response.roleDetected": response.roleDetected,
       "response.role": response.role,
@@ -146,12 +204,10 @@ const Login = () => {
       "initialRole": role
     });
     
-    // ✅ SECOND: Override for super_admin if roleId is 1
     if (Number(roleId) === 1) {
       role = "super_admin";
     }
     
-    // ✅ THIRD: Clean the role if it contains slashes
     if (role && role.includes('/')) {
       if (role.includes('doctor')) role = 'doctor';
       else if (role.includes('staff')) role = 'staff';
@@ -191,7 +247,6 @@ const Login = () => {
     const userData = response.data || response.user || response;
     localStorage.setItem("userData", JSON.stringify(userData));
     
-    // ✅ Build authData based on the determined role
     let authData = {
       deviceId: deviceId,
       fcmToken: fcmToken,
@@ -248,8 +303,6 @@ const Login = () => {
       }
       
     } else if (role === 'staff') {
-      // ✅ FIXED: Correctly handle staff ID from the response
-      // The response has: { id: 52 (auth ID), staffId: 10 (staff table ID) }
       const authId = userData?.id || response.id;
       const staffTableId = userData?.staffId || response.data?.staffId || response.staffId;
       
@@ -261,9 +314,9 @@ const Login = () => {
       
       authData = {
         ...authData,
-        id: authId,                        // Auth ID (52)
-        authId: authId,                    // Explicit auth ID
-        staffId: staffTableId,             // ✅ Staff table ID (10)
+        id: authId,
+        authId: authId,
+        staffId: staffTableId,
         roleId: roleId,
         hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
         hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
@@ -275,7 +328,6 @@ const Login = () => {
         role: role,
       };
       
-      // ✅ Store the correct staff table ID
       if (staffTableId) {
         localStorage.setItem("staffId", staffTableId.toString());
         console.log("✅ Stored staffId:", staffTableId);
@@ -283,13 +335,11 @@ const Login = () => {
         console.warn("⚠️ No staffId found in response");
       }
       
-      // Also store auth ID separately if needed
       if (authId) {
         localStorage.setItem("authId", authId.toString());
       }
       
     } else {
-      // Hospital/Default role
       authData = {
         ...authData,
         id: userData?.id || response.id || response.data?.id || 1,
@@ -399,6 +449,8 @@ const Login = () => {
         processSuccessfulLogin(response, fcmToken, singleHospital);
         
       } catch (error) {
+        localStorage.clear();
+        
         console.error('❌ Login error:', error);
         let errorMessage = "Invalid email or password. Please try again.";
         

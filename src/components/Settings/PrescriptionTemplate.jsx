@@ -19,6 +19,18 @@ import { useCreatePrescriptionMutation } from "../../../app/service/prescription
 
 import { getHospitalId } from "../../utils/auth";
 
+// Import toast functions
+import { 
+  showSuccessToast, 
+  showErrorToast, 
+  showWarningToast, 
+  showInfoToast,
+  showDeleteToast,
+  showUpdateToast,
+  showSaveToast,
+  showAddToast
+} from "../ui/Toast";
+
 // Component for rendering different block types
 const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTextChange, isEditable }) => {
   const blockStyle = {
@@ -519,7 +531,10 @@ const PrescriptionTemplate = () => {
 
   // Generic block creator
   const addBlock = (type) => {
-    if (!isEditMode) return;
+    if (!isEditMode) {
+      showWarningToast("Enter edit mode to add blocks");
+      return;
+    }
     
     const defaultStyles = {
       textAlign: "left",
@@ -585,34 +600,39 @@ const PrescriptionTemplate = () => {
     
     setItems((prev) => [...prev, block]);
     setSelectedItemId(block.id);
+    showAddToast(`${type.charAt(0).toUpperCase() + type.slice(1)} block added successfully`);
   };
 
   const deleteItem = (id) => {
-    if (!isEditMode) return;
+    if (!isEditMode) {
+      showWarningToast("Enter edit mode to delete blocks");
+      return;
+    }
     
     const protectedTypes = ["patientGrid", "medicinesTable"];
     const itemToDelete = items.find((item) => item.id === id);
     
     if (itemToDelete && protectedTypes.includes(itemToDelete.type)) {
-      alert("This block cannot be deleted!");
+      showWarningToast("This block cannot be deleted!");
       return;
     }
     
     if (window.confirm(`Delete this ${itemToDelete?.type || "block"}?`)) {
       setItems((prev) => prev.filter((item) => item.id !== id));
       if (selectedItemId === id) setSelectedItemId(null);
+      showDeleteToast(`${itemToDelete?.type || "Block"} deleted successfully`);
     }
   };
 
   const deleteSelectedItem = () => {
     if (!isEditMode) {
-      alert("Enter edit mode to delete blocks");
+      showWarningToast("Enter edit mode to delete blocks");
       return;
     }
     if (selectedItemId) {
       deleteItem(selectedItemId);
     } else {
-      alert("Select a block to delete");
+      showWarningToast("Select a block to delete");
     }
   };
 
@@ -640,8 +660,10 @@ const PrescriptionTemplate = () => {
           id: customTemplate.id,
           data: payload,
         }).unwrap();
+        showUpdateToast("Custom template updated successfully!");
       } else {
         result = await createPrescriptionTemplate(payload).unwrap();
+        showSaveToast("Custom template created successfully!");
       }
       
       await refetchTemplates();
@@ -652,9 +674,8 @@ const PrescriptionTemplate = () => {
       setSelectedItemId(null);
       setTimeout(() => setSaved(false), 2000);
       
-      alert(customTemplate ? "Custom template updated successfully!" : "Custom template created successfully!");
     } catch (error) {
-      alert(`Save failed: ${error?.data?.message || error?.message}`);
+      showErrorToast(`Save failed: ${error?.data?.message || error?.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -713,10 +734,10 @@ const PrescriptionTemplate = () => {
       if (result.success) {
         setCurrentPrescription(result.data);
         setIsModalOpen(true);
-        alert("Prescription created successfully!");
+        showSuccessToast("Prescription created successfully!");
       }
     } catch (error) {
-      alert("Failed to create prescription: " + (error?.data?.message || error?.message));
+      showErrorToast("Failed to create prescription: " + (error?.data?.message || error?.message));
     }
   };
 
@@ -742,6 +763,7 @@ const PrescriptionTemplate = () => {
       }
       setIsEditMode(true);
       setActiveTab("custom");
+      showInfoToast("Edit mode enabled. You can now customize your template.");
     } else {
       if (window.confirm("Exit without saving changes?")) {
         setIsEditMode(false);
@@ -781,13 +803,17 @@ const PrescriptionTemplate = () => {
           );
           setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
         }
+        showInfoToast("Edit mode disabled. Changes were not saved.");
       }
     }
   };
 
   const exportPDF = async () => {
     const input = document.getElementById("customTemplateCanvas");
-    if (!input) return;
+    if (!input) {
+      showErrorToast("Template canvas not found");
+      return;
+    }
     try {
       const canvas = await html2canvas(input, { scale: 2 });
       const imgData = canvas.toDataURL("image/png");
@@ -796,8 +822,9 @@ const PrescriptionTemplate = () => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       pdf.save("prescription.pdf");
+      showSuccessToast("PDF exported successfully!");
     } catch {
-      alert("PDF export failed");
+      showErrorToast("PDF export failed");
     }
   };
 
@@ -807,6 +834,7 @@ const PrescriptionTemplate = () => {
       setItems(defaultTemplate.design);
       setCustomCanvasBg(defaultTemplate.bgColor);
       setSelectedItemId(null);
+      showInfoToast("Template reset to default");
     }
   };
 

@@ -410,7 +410,7 @@ export const doctorApi = api.injectEndpoints({
     // ============================================
     sendDoctorOtp: builder.mutation<OtpResponse, SendOtpData>({
       query: (otpData) => ({
-        url: `/doctor/auth/send-otp`,
+        url: `auth/send-otp`,
         method: "POST",
         body: otpData,
       }),
@@ -430,7 +430,7 @@ export const doctorApi = api.injectEndpoints({
     // ============================================
     verifyDoctorOtp: builder.mutation<OtpResponse, VerifyOtpData>({
       query: (otpData) => ({
-        url: `/doctor/auth/verify-otp`,
+        url: `auth/verify-otp`,
         method: "POST",
         body: otpData,
       }),
@@ -450,7 +450,7 @@ export const doctorApi = api.injectEndpoints({
     // ============================================
     resetDoctorPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
       query: (resetData) => ({
-        url: `/doctor/auth/reset-password`,
+        url: `auth/reset-password`,
         method: "POST",
         body: resetData,
       }),
@@ -472,7 +472,7 @@ export const doctorApi = api.injectEndpoints({
       query: ({ currentPassword, newPassword }) => {
         const authId = getAuthId();
         return {
-          url: `/doctor/auth/change-password/${authId}`,
+          url: `auth/change-password/${authId}`,
           method: "PUT",
           body: { currentPassword, newPassword },
         };

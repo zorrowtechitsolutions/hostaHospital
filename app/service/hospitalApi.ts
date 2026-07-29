@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE CLEAN VERSION
+// hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT
 // All working-hours conversion logic moved to JSX
 
 import { api } from "./api";
@@ -459,7 +459,7 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // LOGOUT
+    // ✅ LOGOUT - FIXED
     // ============================================
     logout: builder.mutation<{ message: string; success?: boolean }, LogoutParams | void>({
       query: (params) => {
@@ -468,6 +468,7 @@ export const hospitalApi = api.injectEndpoints({
         if (params?.authId) authId = params.authId;
         if (params?.hospitalId) hospitalId = params.hospitalId;
         
+        // Fallback: try to get authId from localStorage
         if (!authId) {
           try {
             const userData = JSON.parse(localStorage.getItem('userData') || '{}') as UserData;
@@ -482,11 +483,21 @@ export const hospitalApi = api.injectEndpoints({
           } catch (e) {}
         }
         
+        // Get role from localStorage
         const role = params?.role || localStorage.getItem('userRole') || 'hospital';
+        
+        // Get deviceId
         const deviceId = params?.deviceId || localStorage.getItem('deviceId') || '';
         
+        // Build URL with authId
         let url = `/auth/logout/${authId || 'unknown'}`;
-        let body: any = { deviceId };
+        
+        // ✅ FIX: Send all required fields in the body
+        let body: any = {
+          id: Number(authId),      // Convert to number as backend expects
+          role: role,                    // Include role
+          deviceId: deviceId             // Include deviceId
+        };
         
         return {
           url: url,
@@ -500,6 +511,7 @@ export const hospitalApi = api.injectEndpoints({
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
+          // Clear all localStorage items
           const localStorageItems = [
             'accessToken',
             'refreshToken',
@@ -601,14 +613,11 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordData>({
-      query: (resetData) => {
-        const authId = localStorage.getItem('authId') || '';
-        return {
-          url: `/auth/reset-password/${authId}`,
-          method: "POST",
-          body: resetData,
-        };
-      },
+      query: (resetData) => ({
+        url: `/auth/reset-password`,
+        method: "POST",
+        body: resetData, // { email, newPassword }
+      }),
       transformResponse: (response: ResetPasswordResponse) => {
         return response;
       },

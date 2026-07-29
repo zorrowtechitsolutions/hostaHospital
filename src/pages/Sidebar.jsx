@@ -41,18 +41,18 @@ const menu = [
     items: [
       { label: "Patients", icon: Users, path: "/patients", permissionId: 14 },
       { label: "Doctors", icon: Stethoscope, path: "/doctors", permissionId: 2 },
-      { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 58 },
+      { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 34 },
       {
         label: "Appointments",
         icon: CalendarDays,
-        permissionId: 58,
+        permissionId: 34,
         hasDropdown: true,
         dropdownItems: [
-          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 58 },
+          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 34 },
         ],
       },
-      { label: "Visits", icon: Activity, path: "/visits", permissionId: 9 },
-      { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 46 },
+      { label: "Visits", icon: Activity, path: "/visits", permissionId: 34 },
+      { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 30 },
       { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
     ],
   },
@@ -67,25 +67,25 @@ const menu = [
         label: "Settings",
         icon: Settings,
         path: "/settings",
-        permissionId: 52,
+        permissionId: 58,
       },
       {
         label: "User Management",
         icon: UserCog,
-        permissionId: 50,
+        permissionId: 58,
         hasDropdown: true,
         dropdownItems: [
           {
             label: "Users",
             icon: Users,
             path: "/users",
-            permissionId: 50,
+            permissionId: 58,
           },
           {
             label: "Group Permission",
             icon: ShieldCheck,
             path: "/roles",
-            permissionId: 51,
+            permissionId: 58,
           },
         ],
       },
@@ -113,7 +113,6 @@ export default function Sidebar({ sidebarOpen }) {
     const userId = localStorage.getItem('userId');
     const doctorId = localStorage.getItem('doctorId');
     const staffId = localStorage.getItem('staffId');
-    const staffNumericId = localStorage.getItem('staffNumericId');
     
     let userData = {};
     try {
@@ -126,7 +125,7 @@ export default function Sidebar({ sidebarOpen }) {
       case 'doctor':
         return authId || userId || doctorId || userData?.authId || userData?.id;
       case 'staff':
-        return authId || userId || staffId || staffNumericId || userData?.authId || userData?.id;
+        return staffId || staffNumericId || userData?.authId || userData?.id;
       case 'super_admin':
         return authId || userId || userData?.authId || userData?.id;
       default:

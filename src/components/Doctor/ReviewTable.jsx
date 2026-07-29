@@ -6,6 +6,8 @@ import { useGetReviewsQuery } from "../../../app/service/review";
 import { socket } from '../../socket/socket';
 import { registerRatingEvents, unregisterRatingEvents } from '../../socket/ratingEvents';
 import { registerReviewEvents, unregisterReviewEvents } from '../../socket/reviewEvents';
+import { getHospitalId } from "../../utils/auth";
+
 
 const ReviewCard = ({ review }) => {
   const renderStars = (rating) => {
@@ -97,19 +99,24 @@ const ReviewTable = ({
   const [filterRating, setFilterRating] = useState("all");
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const {
-    data: reviewsResponse,
-    isLoading,
-    error,
-    refetch,
-  } = useGetReviewsQuery();
 
-  const reviews = (reviewsResponse?.data || []).filter((review) => {
-    if (isHospitalReview) {
-      return review.hospitalId;
-    }
-    return String(review.doctorId) === String(doctorId);
-  });
+const {
+  data: reviewsResponse,
+  isLoading,
+  error,
+  refetch,
+} = useGetReviewsQuery(
+  isHospitalReview
+    ? { hospitalId: getHospitalId() }
+    : { doctorId }
+);
+
+  console.log("API Response:", reviewsResponse);
+console.log("Reviews Array:", reviewsResponse?.data);
+
+const reviews = reviewsResponse?.data || [];
+const totalReviews = reviews.length;
+
 
   const registerEvents = (refetchFn) => {
     registerRatingEvents({
@@ -163,7 +170,6 @@ const ReviewTable = ({
     };
   }, [refetch, eventsRegistered]);
 
-  const totalReviews = reviews.length;
   const averageRating = totalReviews > 0 
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews)
     : 0;

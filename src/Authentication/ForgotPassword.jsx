@@ -1,7 +1,7 @@
 // src/Authentication/ForgotPassword.jsx
 import React, { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Mail, ArrowLeft, CheckCircle, AlertCircle, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Mail, ArrowLeft, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
 import { 
@@ -9,22 +9,10 @@ import {
   useVerifyOtpMutation, 
   useResetPasswordMutation 
 } from '../../app/service/hospitalApi';
-import { 
-  useSendDoctorOtpMutation, 
-  useVerifyDoctorOtpMutation, 
-  useResetDoctorPasswordMutation 
-} from '../../app/service/doctorApi';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   
-  // Get user type from URL query parameter or state
-  const searchParams = new URLSearchParams(location.search);
-  const userTypeFromUrl = searchParams.get('type') || 'hospital';
-  const userTypeFromState = location.state?.userType || 'hospital';
-  
-  const [userType, setUserType] = useState(userTypeFromUrl || userTypeFromState);
   const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Reset Password
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -38,54 +26,10 @@ const ForgotPassword = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // Hospital API hooks
-  const [sendHospitalOtp, { isLoading: isSendingHospitalOtp }] = useSendOtpMutation();
-  const [verifyHospitalOtp, { isLoading: isVerifyingHospitalOtp }] = useVerifyOtpMutation();
-  const [resetHospitalPassword, { isLoading: isResettingHospitalPassword }] = useResetPasswordMutation();
-  
-  // Doctor API hooks
-  const [sendDoctorOtp, { isLoading: isSendingDoctorOtp }] = useSendDoctorOtpMutation();
-  const [verifyDoctorOtp, { isLoading: isVerifyingDoctorOtp }] = useVerifyDoctorOtpMutation();
-  const [resetDoctorPassword, { isLoading: isResettingDoctorPassword }] = useResetDoctorPasswordMutation();
-
-  // Determine which API to use based on userType
-  const isDoctor = userType === 'doctor';
-  
-  const sendOtp = isDoctor ? sendDoctorOtp : sendHospitalOtp;
-  const verifyOtp = isDoctor ? verifyDoctorOtp : verifyHospitalOtp;
-  const resetPassword = isDoctor ? resetDoctorPassword : resetHospitalPassword;
-  
-  const isSendingOtp = isDoctor ? isSendingDoctorOtp : isSendingHospitalOtp;
-  const isVerifyingOtp = isDoctor ? isVerifyingDoctorOtp : isVerifyingHospitalOtp;
-  const isResettingPassword = isDoctor ? isResettingDoctorPassword : isResettingHospitalPassword;
-
-  // Get user type label for display
-  const getUserTypeLabel = () => {
-    return isDoctor ? 'Doctor' : 'Hospital';
-  };
-
-  const getPlaceholder = () => {
-    return isDoctor ? 'doctor@example.com' : 'hospital@example.com';
-  };
-
-  // Handle user type toggle
-  const handleUserTypeToggle = () => {
-    const newType = isDoctor ? 'hospital' : 'doctor';
-    setUserType(newType);
-    setError('');
-    setEmail('');
-    setOtp('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setStep(1);
-    
-    // Update URL without reload
-    const newSearchParams = new URLSearchParams(location.search);
-    newSearchParams.set('type', newType);
-    navigate(`${location.pathname}?${newSearchParams.toString()}`, { replace: true });
-    
-    showWarningToast(`Switched to ${newType === 'doctor' ? 'Doctor' : 'Hospital'} account`, 3000);
-  };
+  // Auth API hooks (unified for both hospital and doctor)
+  const [sendOtp, { isLoading: isSendingOtp }] = useSendOtpMutation();
+  const [verifyOtp, { isLoading: isVerifyingOtp }] = useVerifyOtpMutation();
+  const [resetPassword, { isLoading: isResettingPassword }] = useResetPasswordMutation();
 
   // Validate email
   const validateEmail = (emailValue) => {
@@ -224,18 +168,16 @@ const ForgotPassword = () => {
       
       // Redirect to login after 2 seconds
       setTimeout(() => {
-        navigate('/sign-in', { state: { userType } });
+        navigate('/sign-in');
       }, 2000);
       
     } catch (error) {
       // Handle 401 error specifically
       if (error?.status === 401) {
         // This might happen if the token is invalid or expired
-        // Since this is a public endpoint, we should clear any stale tokens
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         
-        // Show a more specific message
         setError('Session expired. Please try resetting your password again.');
         showWarningToast('⚠️ Please try again. Your session may have expired.', 4000);
         
@@ -265,47 +207,6 @@ const ForgotPassword = () => {
         <p className="text-sm text-gray-500 mt-2">
           Enter your registered email address and we'll send you an OTP to reset your password.
         </p>
-        
-        {/* User Type Toggle */}
-        <div className="mt-4 flex items-center justify-center gap-3">
-          <span className="text-sm font-medium text-gray-700">Account Type:</span>
-          <button
-            type="button"
-            onClick={handleUserTypeToggle}
-            className={`
-              relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[#154A7D] focus:ring-offset-2
-              ${isDoctor ? 'bg-[#154A7D]' : 'bg-gray-300'}
-            `}
-            role="switch"
-            aria-checked={isDoctor}
-          >
-            <span className="sr-only">Toggle user type</span>
-            <span
-              className={`
-                inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform duration-300
-                ${isDoctor ? 'translate-x-7' : 'translate-x-1'}
-              `}
-            />
-          </button>
-          <div className="flex items-center gap-2">
-            <User className={`h-4 w-4 ${!isDoctor ? 'text-[#154A7D]' : 'text-gray-400'}`} />
-            <span className={`text-sm font-medium ${!isDoctor ? 'text-[#154A7D]' : 'text-gray-500'}`}>
-              Hospital
-            </span>
-            <span className="text-gray-300 mx-1">|</span>
-            <Stethoscope className={`h-4 w-4 ${isDoctor ? 'text-[#154A7D]' : 'text-gray-400'}`} />
-            <span className={`text-sm font-medium ${isDoctor ? 'text-[#154A7D]' : 'text-gray-500'}`}>
-              Doctor
-            </span>
-          </div>
-        </div>
-        
-        {/* Current active type indicator */}
-        <div className="mt-2">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            {isDoctor ? '👨‍⚕️ Doctor' : '🏥 Hospital'} Account
-          </span>
-        </div>
       </div>
       
       {error && <Alert type="error" message={error} />}
@@ -313,7 +214,7 @@ const ForgotPassword = () => {
       <Input
         label="Email Address"
         type="email"
-        placeholder={getPlaceholder()}
+        placeholder="your@email.com"
         value={email}
         onChange={(e) => {
           setEmail(e.target.value);
@@ -331,13 +232,12 @@ const ForgotPassword = () => {
         disabled={isSendingOtp}
         loading={isSendingOtp}
       >
-        {isSendingOtp ? 'Sending OTP...' : `Send Reset OTP (${getUserTypeLabel()})`}
+        {isSendingOtp ? 'Sending OTP...' : 'Send Reset OTP'}
       </Button>
       
       <div className="text-center">
         <Link 
           to="/sign-in" 
-          state={{ userType }}
           className="text-sm text-[#154A7D] hover:text-[#0e3a61] inline-flex items-center gap-1"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -357,9 +257,6 @@ const ForgotPassword = () => {
         <h3 className="text-lg font-semibold text-gray-900">Verify OTP</h3>
         <p className="text-sm text-gray-500 mt-2">
           We've sent a 6-digit verification code to <strong>{email}</strong>
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          ({getUserTypeLabel()} Account)
         </p>
       </div>
       
@@ -425,7 +322,7 @@ const ForgotPassword = () => {
         </div>
         <h3 className="text-lg font-semibold text-gray-900">Reset Password</h3>
         <p className="text-sm text-gray-500 mt-2">
-          Create a new password for your {getUserTypeLabel()} account
+          Create a new password for your account
         </p>
       </div>
       

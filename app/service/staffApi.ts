@@ -1,4 +1,4 @@
-// app/service/staffApi.ts
+// src/app/service/staffApi.ts
 
 import { api } from "./api";
 import { getAuthUser, JwtPayload } from "../../src/utils/auth";
@@ -87,11 +87,15 @@ export interface SendOtpRequest {
   email: string;
 }
 
-export interface ChangePasswordRequest {
-  staffId: number;
+export interface ChangePasswordData {
   currentPassword: string;
   newPassword: string;
-  confirmPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
 }
 
 export interface LoginRequest {
@@ -393,7 +397,7 @@ export const staffApi = api.injectEndpoints({
       LoginRequest
     >({
       query: (data) => ({
-        url: "/staff/login",
+        url: "/auth/login",
         method: "POST",
         body: data,
       }),
@@ -409,7 +413,7 @@ export const staffApi = api.injectEndpoints({
       LoginPhoneRequest
     >({
       query: (data) => ({
-        url: "/staff/login/phone",
+        url: "/auth/login/phone",
         method: "POST",
         body: data,
       }),
@@ -425,7 +429,7 @@ export const staffApi = api.injectEndpoints({
       VerifyOtpRequest
     >({
       query: (data) => ({
-        url: "/staff/otp",
+        url: "/auth/otp",
         method: "POST",
         body: data,
       }),
@@ -441,7 +445,7 @@ export const staffApi = api.injectEndpoints({
       void
     >({
       query: () => ({
-        url: "/staff/refresh",
+        url: "/auth/refresh",
         method: "POST",
       }),
       transformResponse: (response: StaffResponse) => {
@@ -476,7 +480,7 @@ export const staffApi = api.injectEndpoints({
       query: (params) => {
         const { authId } = getStoredIds();
         
-        let url = `/staff/logout/${authId || 'unknown'}`;
+        let url = `/auth/logout/${authId || 'unknown'}`;
         let body: any = {
           deviceId: params?.deviceId || localStorage.getItem('deviceId') || '',
         };
@@ -528,7 +532,7 @@ export const staffApi = api.injectEndpoints({
       SendOtpRequest
     >({
       query: (data) => ({
-        url: "/staff/auth/send-otp",
+        url: "/auth/send-otp",
         method: "POST",
         body: data,
       }),
@@ -543,7 +547,7 @@ export const staffApi = api.injectEndpoints({
       }
     >({
       query: (data) => ({
-        url: "/staff/auth/verify-otp",
+        url: "/auth/verify-otp",
         method: "POST",
         body: data,
       }),
@@ -571,30 +575,33 @@ export const staffApi = api.injectEndpoints({
       ResetPasswordRequest
     >({
       query: (data) => ({
-        url: "/staff/auth/reset-password",
+        url: "/auth/reset-password",
         method: "POST",
         body: data,
       }),
     }),
 
     // ================= CHANGE PASSWORD (with current password) =================
-    changeStaffPassword: builder.mutation<
-      { success: boolean; message: string },
-      ChangePasswordRequest
-    >({
-      query: (data) => {
-        const authId = getAuthId();
+    // Updated to match doctor implementation
+    changeStaffPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
+      query: ({ currentPassword, newPassword }) => {
+        const authId = getAuthId(); // Using helper function like doctor API
         return {
-          url: `/staff/auth/change-password/${authId || data.staffId}`,
+          url: `/auth/change-password/${authId}`,
           method: "PUT",
-          body: {
-            staffId: data.staffId,
-            currentPassword: data.currentPassword,
-            newPassword: data.newPassword,
-            confirmPassword: data.confirmPassword,
-          },
+          body: { currentPassword, newPassword },
         };
       },
+      transformResponse: (response: ChangePasswordResponse) => {
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Failed to change password",
+        };
+      },
+      invalidatesTags: ["Staff"], // Changed from "Hospital" to "Staff"
     }),
   }),
 });
@@ -619,7 +626,7 @@ export const {
   
   // PUT
   useUpdateStaffMutation,
-  useChangeStaffPasswordMutation,
+  useChangeStaffPasswordMutation, // Make sure this is exported
   useRecoverStaffMutation,
   
   // DELETE

@@ -345,7 +345,7 @@ const Patients = () => {
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // ✅ Register socket event listeners
+  // ✅ Register socket event listeners (SAME AS DOCTORS)
   useEffect(() => {
     registerPatientEvents({
       onPatientRegistered: () => {
@@ -369,9 +369,9 @@ const Patients = () => {
     return () => {
       unregisterPatientEvents();
     };
-  }, [refetchPatients]);
+  }, [refetchPatients]); // ✅ Add refetchPatients as dependency
 
-  // ✅ Listen for socket connection/disconnection
+  // ✅ Listen for socket connection/disconnection (SAME AS DOCTORS)
   useEffect(() => {
     const handleConnect = () => {
       // Re-register events if needed

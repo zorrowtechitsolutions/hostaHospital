@@ -1,20 +1,21 @@
-// src/components/NotificationsPage.jsx
+// src/components/NotificationsPage.jsx (Updated for Staff)
 import React, { useState, useEffect } from 'react';
-import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, CheckCircle, Eye } from 'lucide-react';
+import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   useGetNotificationsByHospitalQuery,
+  useGetNotificationsByRoleQuery,
   useMarkAllNotificationsAsReadByHospitalMutation,
+  useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
   useUpdateNotificationMutation,
   useDeleteNotificationsByHospitalMutation,
 } from '../../../app/service/notification';
-import { getHospitalId, getUserRole } from '../../utils/auth';
+import { getHospitalId, getUserRole, getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Pagination } from '../ui/Pagination';
 import { Button, Card, Badge } from '../ui';
-
 import { socket } from '../../socket/socket';
 import { registerNotificationEvents, unregisterNotificationEvents } from '../../socket/notificationEvents';
 
@@ -28,24 +29,73 @@ const NotificationsPage = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   
-  const hospitalId = getHospitalId();
+  const auth = getAuthUser();
   const userRole = getUserRole();
+  const hospitalId = getHospitalId();
 
-  const { 
-    data: notificationsData, 
-    isLoading, 
-    error,
-    refetch,
-    isFetching
-  } = useGetNotificationsByHospitalQuery({
-    hospitalId: hospitalId,
-    page: currentPage,
-    limit: itemsPerPage,
-  }, {
-    skip: !hospitalId,
-  });
+  // ✅ STAFF and HOSPITAL use hospital-based notifications
+  // ✅ DOCTOR uses role-based notifications
+  const shouldUseHospitalNotifications = userRole === "hospital" || userRole === "staff";
+  const shouldUseRoleNotifications = userRole === "doctor";
 
-  const [markAllAsRead] = useMarkAllNotificationsAsReadByHospitalMutation();
+  const getEntityId = () => {
+    if (userRole === "doctor") {
+      return auth?.doctorId || auth?.id;
+    }
+    return null;
+  };
+
+  const entityId = getEntityId();
+
+  // ✅ Hospital-based query (for staff and hospital)
+  const hospitalQuery = useGetNotificationsByHospitalQuery(
+    {
+      hospitalId: hospitalId,
+      page: currentPage,
+      limit: itemsPerPage,
+    },
+    {
+      skip: !shouldUseHospitalNotifications || !hospitalId,
+    }
+  );
+
+  // ✅ Role-based query (for doctors only)
+  const roleQuery = useGetNotificationsByRoleQuery(
+    {
+      role: "doctor",
+      id: entityId,
+      page: currentPage,
+      limit: itemsPerPage,
+    },
+    {
+      skip: !shouldUseRoleNotifications || !entityId,
+    }
+  );
+
+  // Select the appropriate data source
+  const notificationsData = shouldUseHospitalNotifications 
+    ? hospitalQuery.data 
+    : roleQuery.data;
+  
+  const isLoading = shouldUseHospitalNotifications 
+    ? hospitalQuery.isLoading 
+    : roleQuery.isLoading;
+  
+  const error = shouldUseHospitalNotifications 
+    ? hospitalQuery.error 
+    : roleQuery.error;
+  
+  const refetch = shouldUseHospitalNotifications 
+    ? hospitalQuery.refetch 
+    : roleQuery.refetch;
+  
+  const isFetching = shouldUseHospitalNotifications 
+    ? hospitalQuery.isFetching 
+    : roleQuery.isFetching;
+
+  // Mutations
+  const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
+  const [markAllAsReadRole] = useMarkAllNotificationsAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
   const [deleteAllNotifications] = useDeleteNotificationsByHospitalMutation();
   const [updateNotification] = useUpdateNotificationMutation();
@@ -53,34 +103,47 @@ const NotificationsPage = () => {
   let notifications = notificationsData?.data || [];
   const totalNotifications = notificationsData?.total || 0;
   const totalPages = notificationsData?.totalPages || 1;
-  
-  // Get unread notifications only (same as NotificationPanel)
-  const unreadNotifications = notifications.filter(
-    n => !n.hospitalReadStatus?.[hospitalId]
-  );
+
+  // ✅ Check if notification is unread based on role
+  const isNotificationUnread = (notification) => {
+    if (userRole === "staff" || userRole === "hospital") {
+      return !notification.hospitalReadStatus?.[hospitalId];
+    } else if (userRole === "doctor") {
+      return !notification.doctorReadStatus?.[entityId];
+    }
+    return false;
+  };
+
+  // Get unread notifications
+  const getUnreadNotifications = () => {
+    return notifications.filter(notification => isNotificationUnread(notification));
+  };
+
+  const unreadNotifications = getUnreadNotifications();
   const unreadCount = unreadNotifications.length;
-  
+
+  // Filter notifications
   let filteredNotifications = [...notifications];
-  
+
   if (typeFilter !== 'all') {
     filteredNotifications = filteredNotifications.filter(n => n.type === typeFilter);
   }
-  
+
   if (statusFilter !== 'all') {
-    const isReadStatus = statusFilter === 'read';
     filteredNotifications = filteredNotifications.filter(n => {
-      const isUnread = !n.hospitalReadStatus?.[hospitalId];
+      const isUnread = isNotificationUnread(n);
       return statusFilter === 'read' ? !isUnread : isUnread;
     });
   }
 
+  // Socket events
   useEffect(() => {
     registerNotificationEvents({
-      onNotificationCreated: (data) => {
+      onNotificationCreated: () => {
         refetch();
         showSuccessToast("New notification received!", 2000);
       },
-      onNotificationRead: (data) => {
+      onNotificationRead: () => {
         refetch();
       }
     });
@@ -104,36 +167,40 @@ const NotificationsPage = () => {
   }, []);
 
   useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {};
-
-    socket.onAny(handleAnyEvent);
-
-    return () => {
-      socket.offAny(handleAnyEvent);
-    };
-  }, []);
-
-  useEffect(() => {
     setCurrentPage(1);
   }, [typeFilter, statusFilter]);
 
+  // ✅ Mark as read
   const handleMarkAsRead = async (notificationId) => {
     try {
-      await updateNotification({
-        id: notificationId,
-        body: {
+      let updateBody = {};
+
+      if (userRole === "staff" || userRole === "hospital") {
+        updateBody = {
           hospitalReadStatus: {
             [hospitalId]: true
           }
-        }
+        };
+      } else if (userRole === "doctor") {
+        updateBody = {
+          doctorReadStatus: {
+            [entityId]: true
+          }
+        };
+      }
+
+      await updateNotification({
+        id: notificationId,
+        body: updateBody
       }).unwrap();
-      
+
       socket.emit("notification_read", {
         notificationId: notificationId,
         hospitalId: hospitalId,
-        userId: userRole
+        userId: userRole === "doctor" ? entityId : hospitalId,
+        userRole: userRole
       });
-      
+
       await refetch();
       showSuccessToast("Notification marked as read", 2000);
     } catch {
@@ -142,46 +209,50 @@ const NotificationsPage = () => {
   };
 
   const handleNotificationClick = (notification) => {
-    const isUnread = !notification.hospitalReadStatus?.[hospitalId];
-    if (isUnread) {
+    if (isNotificationUnread(notification)) {
       handleMarkAsRead(notification.id);
     }
   };
 
-  // Updated: Mark only UNREAD notifications as read (same as NotificationPanel)
+  // ✅ Mark all as read
   const handleMarkAllAsRead = async () => {
     try {
-      if (!hospitalId) return;
-
-      // Get only unread notification IDs (same logic as NotificationPanel)
-      const notificationIds = unreadNotifications.map(
-        (notification) => notification.id
-      );
-
-      if (notificationIds.length === 0) {
+      if (!unreadNotifications.length) {
         showSuccessToast("No unread notifications to mark", 2000);
         return;
       }
 
-      await markAllAsRead({
-        hospitalId: Number(hospitalId),
-        notificationIds,
-      }).unwrap();
+      const notificationIds = unreadNotifications.map(n => n.id);
+
+      if (userRole === "staff" || userRole === "hospital") {
+        await markAllAsReadHospital({
+          hospitalId: Number(hospitalId),
+          notificationIds,
+        }).unwrap();
+      } else if (userRole === "doctor") {
+        await markAllAsReadRole({
+          role: "doctor",
+          userId: entityId,
+          notificationIds,
+        }).unwrap();
+      }
 
       socket.emit("notifications_read_all", {
         hospitalId: hospitalId,
-        userId: userRole,
+        userId: userRole === "doctor" ? entityId : hospitalId,
+        userRole: userRole,
         count: notificationIds.length
       });
 
       await refetch();
-
       showSuccessToast(`All ${notificationIds.length} notifications marked as read`, 2000);
     } catch {
+      showErrorToast("Failed to mark all as read", 2000);
       showErrorToast("Failed to mark all as read", 2000);
     }
   };
 
+  // Delete handlers
   const handleDeleteClick = (id, e) => {
     e.stopPropagation();
     setSelectedNotificationId(id);
@@ -196,25 +267,33 @@ const NotificationsPage = () => {
   const confirmDelete = async () => {
     try {
       if (selectedNotificationId === 'all') {
-        await deleteAllNotifications(hospitalId).unwrap();
-        
+        if (userRole === "hospital" || userRole === "staff") {
+          // ✅ Staff and hospital can delete all hospital notifications
+          await deleteAllNotifications(hospitalId).unwrap();
+        } else {
+          // Doctor deletes individually
+          for (const notification of notifications) {
+            await deleteNotification(notification.id).unwrap();
+          }
+        }
+
         socket.emit("notifications_deleted_all", {
           hospitalId: hospitalId,
-          userId: userRole
+          userId: userRole === "doctor" ? entityId : hospitalId,
+          userRole: userRole
         });
-        
+
         showSuccessToast('All notifications deleted successfully');
-        if (filteredNotifications.length === 1 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-        }
       } else {
         await deleteNotification(selectedNotificationId).unwrap();
-        
+
         socket.emit("notification_deleted", {
           notificationId: selectedNotificationId,
-          hospitalId: hospitalId
+          hospitalId: hospitalId,
+          userId: userRole === "doctor" ? entityId : hospitalId,
+          userRole: userRole
         });
-        
+
         if (filteredNotifications.length === 1 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
@@ -285,11 +364,10 @@ const NotificationsPage = () => {
     }
   };
 
-  const activeFilterCount = getActiveFilterCount();
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        {/* Loading skeleton */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -363,14 +441,14 @@ const NotificationsPage = () => {
           <button
             onClick={() => setShowFilters(prev => !prev)}
             className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
+              showFilters || getActiveFilterCount() > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
             } hover:bg-gray-50`}
             title="Toggle Filters"
           >
             <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
+            {getActiveFilterCount() > 0 && !showFilters && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
+                {getActiveFilterCount()}
               </span>
             )}
           </button>
@@ -397,9 +475,9 @@ const NotificationsPage = () => {
               </div>
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
+                {getActiveFilterCount() > 0 && (
                   <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
+                    {getActiveFilterCount()} Active Filter{getActiveFilterCount() !== 1 ? "s" : ""}
                   </span>
                 )}
               </div>
@@ -463,7 +541,7 @@ const NotificationsPage = () => {
             <div className="divide-y divide-gray-100">
               {filteredNotifications.map((notif) => {
                 const typeInfo = getTypeInfo(notif.type);
-                const isUnread = !notif.hospitalReadStatus?.[hospitalId];
+                const isUnread = isNotificationUnread(notif);
                 
                 return (
                   <div
