@@ -382,9 +382,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
   // Log for debugging
   if (error) {
     console.error("Notification Error:", error);
-    console.log("User Role:", userRole);
-    console.log("Entity ID:", entityId);
-    console.log("Hospital ID:", hospitalId);
   }
 
   if (!isOpen) return null;
