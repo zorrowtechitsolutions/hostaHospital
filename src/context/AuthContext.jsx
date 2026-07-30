@@ -11,29 +11,17 @@ export const useAuth = () => {
   return context;
 };
 
-// Helper function to check if token is expired
-const isTokenExpired = (token) => {
-  if (!token) return true;
-  
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp * 1000 < Date.now();
-  } catch (error) {
-    return true;
-  }
-};
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuth = () => {
       const token = localStorage.getItem('accessToken');
       const authData = localStorage.getItem('authData');
       
-      if (token && !isTokenExpired(token)) {
+      if (token) {
         setIsAuthenticated(true);
         
         if (authData) {
@@ -44,6 +32,7 @@ export const AuthProvider = ({ children }) => {
               isAuthenticated: true
             });
           } catch (error) {
+            // If authData is corrupted, try to parse from token
             try {
               const payload = JSON.parse(atob(token.split('.')[1]));
               setUser({
@@ -61,6 +50,7 @@ export const AuthProvider = ({ children }) => {
             }
           }
         } else {
+          // No authData, try to parse from token
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             setUser({
@@ -78,10 +68,6 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } else {
-        if (token && isTokenExpired(token)) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('authData');
-        }
         setIsAuthenticated(false);
         setUser(null);
       }
@@ -90,20 +76,6 @@ export const AuthProvider = ({ children }) => {
     };
     
     checkAuth();
-    
-    // Check token expiry every 5 minutes
-    const interval = setInterval(() => {
-      const token = localStorage.getItem('accessToken');
-      if (token && isTokenExpired(token)) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('authData');
-        setIsAuthenticated(false);
-        setUser(null);
-        window.location.href = '/sign-in';
-      }
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   const login = (userData) => {

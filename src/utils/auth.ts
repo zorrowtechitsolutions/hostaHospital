@@ -192,5 +192,4 @@ export const clearAuth = (): void => {
   localStorage.removeItem("refreshToken");
   sessionStorage.clear();
   
-  window.location.href = "/sign-in";
 };

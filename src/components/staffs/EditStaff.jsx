@@ -1,4 +1,4 @@
-// src/components/staffs/EditStaff.jsx - With Password Fields in Basic Info (no separate tab)
+// src/components/staffs/EditStaff.jsx - Complete Fixed Version with Password Change Integration
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
@@ -25,7 +25,6 @@ import {
 import {
   useGetStaffByIdQuery,
   useUpdateStaffMutation,
-  useDeleteStaffMutation,
   useChangeStaffPasswordMutation  // ✅ Import the password change hook
 } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
@@ -707,13 +706,19 @@ const EditStaff = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ Updated handleSubmit with password change API integration
+  // ✅ CORRECTED handleSubmit with proper password change API integration (same as EditDoctor)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // 🔥 Validate hospitalId exists (same as EditDoctor)
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
+    // ✅ Validate password confirmation if password is provided
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showErrorToast('❌ Passwords do not match!');
       return;
     }
 
@@ -761,10 +766,10 @@ const EditStaff = () => {
         ...updatedStaffData,
         hospitalId: hospitalId,
         authId: authId,
-        password: updatedStaffData.password ? '[REDACTED]' : 'Not changing'
+        password: formData.password ? '[REDACTED]' : 'Not changing'
       });
 
-      // ✅ Step 1: Update staff basic info
+      // ✅ STEP 1: Update staff basic info
       await updateStaff({
         id: String(staffId),
         data: updatedStaffData,
@@ -772,44 +777,18 @@ const EditStaff = () => {
         authId: authId
       }).unwrap();
 
-      // ✅ Step 2: Change password if a new password is provided
+      // ✅ STEP 2: Change password only if a new password is provided
       if (formData.password) {
-        try {
-          console.log('🔑 Changing password for staff:', staffId);
-          
-          // Note: For staff password change, we need the current password.
-          // Since the staff admin might not know the current password, 
-          // we use a special endpoint that doesn't require current password
-          // OR we can prompt the admin to enter the current password.
-          
-          // Option A: If your backend supports admin-initiated password change
-          // without current password (recommended for admin use case)
-          await changeStaffPassword({
-            staffId: Number(staffId),
-            currentPassword: formData.currentPassword, // Leave empty for admin-initiated change
-            newPassword: formData.password,
-            confirmPassword: formData.confirmPassword,
-          }).unwrap();
-          
-          showSuccessToast('Password updated successfully!', 3000);
-          
-        } catch (passwordError) {
-          console.error('Password change error:', passwordError);
-          
-          // If the API requires current password, prompt the user to enter it
-          // Or handle the error appropriately
-          if (passwordError?.status === 400 || passwordError?.data?.message?.includes('current')) {
-            showWarningToast('Current password verification failed. Please provide the current password.', 5000);
-            
-            // You could add a modal here to collect current password
-            // For now, we'll show an error and continue
-          } else {
-            throw new Error('Failed to update password: ' + (passwordError?.data?.message || 'Unknown error'));
-          }
-        }
+        console.log('🔑 Changing password for staff:', staffId);
+        await changeStaffPassword({
+          staffId: String(staffId),  // ✅ Use String() as required by API
+          newPassword: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }).unwrap();
+        console.log('✅ Password changed successfully');
       }
 
-      // ✅ Step 3: Update role permission if roleId exists
+      // ✅ STEP 3: Update role permission if roleId exists
       if (roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
@@ -827,6 +806,7 @@ const EditStaff = () => {
         await assignPermissions(payload).unwrap();
       }
 
+      // FIX: Force image refresh after update
       setImageRefreshKey(Date.now());
       await refetch();
 

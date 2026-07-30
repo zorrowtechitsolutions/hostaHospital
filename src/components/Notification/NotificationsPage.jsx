@@ -1,4 +1,4 @@
-// src/components/NotificationsPage.jsx (Updated for Staff)
+// src/components/NotificationsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -33,11 +33,6 @@ const NotificationsPage = () => {
   const userRole = getUserRole();
   const hospitalId = getHospitalId();
 
-  // ✅ STAFF and HOSPITAL use hospital-based notifications
-  // ✅ DOCTOR uses role-based notifications
-  const shouldUseHospitalNotifications = userRole === "hospital" || userRole === "staff";
-  const shouldUseRoleNotifications = userRole === "doctor";
-
   const getEntityId = () => {
     if (userRole === "doctor") {
       return auth?.doctorId || auth?.id;
@@ -47,7 +42,7 @@ const NotificationsPage = () => {
 
   const entityId = getEntityId();
 
-  // ✅ Hospital-based query (for staff and hospital)
+  // ✅ Hospital-based query (for hospital and staff only)
   const hospitalQuery = useGetNotificationsByHospitalQuery(
     {
       hospitalId: hospitalId,
@@ -55,11 +50,12 @@ const NotificationsPage = () => {
       limit: itemsPerPage,
     },
     {
-      skip: !shouldUseHospitalNotifications || !hospitalId,
+      skip: !hospitalId || (userRole !== "hospital" && userRole !== "staff"),
+      refetchOnMountOrArgChange: true,
     }
   );
 
-  // ✅ Role-based query (for doctors only)
+  // ✅ Role-based query (for doctor only)
   const roleQuery = useGetNotificationsByRoleQuery(
     {
       role: "doctor",
@@ -68,30 +64,96 @@ const NotificationsPage = () => {
       limit: itemsPerPage,
     },
     {
-      skip: !shouldUseRoleNotifications || !entityId,
+      skip: userRole !== "doctor" || !entityId,
+      refetchOnMountOrArgChange: true,
     }
   );
 
-  // Select the appropriate data source
-  const notificationsData = shouldUseHospitalNotifications 
-    ? hospitalQuery.data 
-    : roleQuery.data;
-  
-  const isLoading = shouldUseHospitalNotifications 
-    ? hospitalQuery.isLoading 
-    : roleQuery.isLoading;
-  
-  const error = shouldUseHospitalNotifications 
-    ? hospitalQuery.error 
-    : roleQuery.error;
-  
-  const refetch = shouldUseHospitalNotifications 
-    ? hospitalQuery.refetch 
-    : roleQuery.refetch;
-  
-  const isFetching = shouldUseHospitalNotifications 
-    ? hospitalQuery.isFetching 
-    : roleQuery.isFetching;
+  // ✅ Notification selection logic based on role
+  const staffNotifications = roleQuery.data?.data || [];
+  const hospitalNotifications = hospitalQuery.data?.data || [];
+
+  let notifications = [];
+
+  if (userRole === "hospital") {
+    notifications = hospitalNotifications;
+  } else if (userRole === "doctor") {
+    notifications = roleQuery.data?.data || [];
+  } else if (userRole === "staff") {
+    notifications = [
+      ...staffNotifications,
+      ...hospitalNotifications,
+    ].filter(
+      (n, index, self) =>
+        index === self.findIndex(item => item.id === n.id)
+    );
+  }
+
+  // ✅ Update loading based on role
+  const isLoading = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.isLoading;
+    } else if (userRole === "doctor") {
+      return roleQuery.isLoading;
+    } else if (userRole === "staff") {
+      return hospitalQuery.isLoading || roleQuery.isLoading;
+    }
+    return false;
+  };
+
+  // ✅ Update error based on role
+  const error = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.error;
+    } else if (userRole === "doctor") {
+      return roleQuery.error;
+    } else if (userRole === "staff") {
+      return hospitalQuery.error || roleQuery.error;
+    }
+    return null;
+  };
+
+  // ✅ Update refetch based on role
+  const refetch = () => {
+    if (userRole === "hospital") {
+      hospitalQuery.refetch();
+    } else if (userRole === "doctor") {
+      roleQuery.refetch();
+    } else if (userRole === "staff") {
+      hospitalQuery.refetch();
+      roleQuery.refetch();
+    }
+  };
+
+  const isFetching = hospitalQuery.isFetching || roleQuery.isFetching;
+
+  // Get total notifications based on role
+  const totalNotifications = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.data?.total || 0;
+    } else if (userRole === "doctor") {
+      return roleQuery.data?.total || 0;
+    } else if (userRole === "staff") {
+      // For staff, total is combined from both queries
+      const staffTotal = roleQuery.data?.total || 0;
+      const hospitalTotal = hospitalQuery.data?.total || 0;
+      // Since we're merging, total is approximate
+      return notifications.length;
+    }
+    return 0;
+  };
+
+  const totalPages = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.data?.totalPages || 1;
+    } else if (userRole === "doctor") {
+      return roleQuery.data?.totalPages || 1;
+    } else if (userRole === "staff") {
+      // For staff, we need to calculate pages from merged data
+      return Math.ceil(notifications.length / itemsPerPage) || 1;
+    }
+    return 1;
+  };
 
   // Mutations
   const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
@@ -99,10 +161,6 @@ const NotificationsPage = () => {
   const [deleteNotification] = useDeleteNotificationMutation();
   const [deleteAllNotifications] = useDeleteNotificationsByHospitalMutation();
   const [updateNotification] = useUpdateNotificationMutation();
-
-  let notifications = notificationsData?.data || [];
-  const totalNotifications = notificationsData?.total || 0;
-  const totalPages = notificationsData?.totalPages || 1;
 
   // ✅ Check if notification is unread based on role
   const isNotificationUnread = (notification) => {
@@ -248,7 +306,6 @@ const NotificationsPage = () => {
       showSuccessToast(`All ${notificationIds.length} notifications marked as read`, 2000);
     } catch {
       showErrorToast("Failed to mark all as read", 2000);
-      showErrorToast("Failed to mark all as read", 2000);
     }
   };
 
@@ -364,7 +421,7 @@ const NotificationsPage = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading()) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
         {/* Loading skeleton */}
@@ -458,7 +515,7 @@ const NotificationsPage = () => {
               <CheckCheck size={16} /> Mark all as read
             </Button>
           )}
-          {totalNotifications > 0 && (
+          {totalNotifications() > 0 && (
             <Button variant="danger" onClick={handleDeleteAllClick} className="flex items-center gap-2">
               <Trash2 size={16} /> Delete All
             </Button>
@@ -613,9 +670,9 @@ const NotificationsPage = () => {
             <div className="mt-auto px-6 py-3 bg-white border-t border-gray-100">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={totalPages()}
                 onPageChange={setCurrentPage}
-                totalItems={totalNotifications}
+                totalItems={totalNotifications()}
                 itemsPerPage={itemsPerPage}
                 itemLabel="notifications"
               />

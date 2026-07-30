@@ -103,16 +103,31 @@ export default function Sidebar({ sidebarOpen }) {
   const { user } = useAuth();
   const [openDropdowns, setOpenDropdowns] = useState({});
   
-  // ✅ Get user role and IDs
+  // Get user role and IDs
   const userRole = user?.role || localStorage.getItem('userRole') || 'hospital';
   const hospitalId = localStorage.getItem('hospitalId') || '';
   
-  // ✅ Get user ID based on role
+  // ✅ FIXED: Get correct user ID based on role (matching TopBar logic)
   const getUserIdByRole = () => {
+    // Get from user object first (same as TopBar)
+    const userIdFromUser = 
+      userRole === 'doctor' 
+        ? (user?.doctorId || user?.id) 
+        : userRole === 'staff'
+        ? (user?.staffId || user?.id) 
+        : (user?.id || hospitalId);
+    
+    // If we have a valid ID from user object, use it
+    if (userIdFromUser && userIdFromUser !== 'undefined' && userIdFromUser !== 'null') {
+      return userIdFromUser;
+    }
+    
+    // Fallback to localStorage
     const authId = localStorage.getItem('authId');
     const userId = localStorage.getItem('userId');
     const doctorId = localStorage.getItem('doctorId');
     const staffId = localStorage.getItem('staffId');
+    const staffNumericId = localStorage.getItem('staffNumericId');
     
     let userData = {};
     try {
@@ -123,9 +138,9 @@ export default function Sidebar({ sidebarOpen }) {
       case 'hospital':
         return authId || userId || hospitalId || userData?.authId || userData?.hospitalId || userData?.id;
       case 'doctor':
-        return authId || userId || doctorId || userData?.authId || userData?.id;
+        return authId || userId || doctorId || userData?.authId || userData?.doctorId || userData?.id;
       case 'staff':
-        return staffId || staffNumericId || userData?.authId || userData?.id;
+        return authId || userId || staffId || staffNumericId || userData?.authId || userData?.staffId || userData?.id;
       case 'super_admin':
         return authId || userId || userData?.authId || userData?.id;
       default:
@@ -135,23 +150,23 @@ export default function Sidebar({ sidebarOpen }) {
   
   const userId = getUserIdByRole();
   
-  // ✅ Fetch data based on user role
-  const { data: hospitalData } = useGetHospitalByIdQuery(
+  // Fetch data based on user role
+  const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
     userId,
     { skip: userRole !== 'hospital' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
-  const { data: doctorData } = useGetDoctorByIdQuery(
+  const { data: doctorData, isLoading: isDoctorLoading } = useGetDoctorByIdQuery(
     userId,
     { skip: userRole !== 'doctor' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
-  const { data: staffData } = useGetStaffByIdQuery(
+  const { data: staffData, isLoading: isStaffLoading } = useGetStaffByIdQuery(
     userId,
     { skip: userRole !== 'staff' || !userId || userId === 'undefined' || userId === 'null' }
   );
   
-  // ✅ Get user data from localStorage as fallback
+  // Get user data from localStorage as fallback
   let userDataFromStorage = {};
   try {
     userDataFromStorage = JSON.parse(localStorage.getItem('userData') || '{}');
@@ -162,27 +177,44 @@ export default function Sidebar({ sidebarOpen }) {
     storedUser = JSON.parse(localStorage.getItem('user') || '{}');
   } catch (e) {}
   
-  // ✅ Get the correct display name based on role
+  // ✅ Get the correct display name based on role (matching TopBar logic)
   const getDisplayName = () => {
     // For DOCTOR role
     if (userRole === 'doctor') {
       const doctor = doctorData?.data || doctorData;
-      return doctor?.name || 
-             (doctor?.firstName && doctor?.lastName ? `${doctor.firstName} ${doctor.lastName}` : null) ||
-             user?.name || 
-             userDataFromStorage?.name || 
-             storedUser?.name || 
-             'Doctor';
+      
+      // ✅ FIXED: Get doctor name with proper fallbacks including doctorName
+      const doctorName = 
+        doctor?.doctorName ||     // ✅ Your API returns this
+        doctor?.displayName ||
+        doctor?.name ||
+        (doctor?.firstName && doctor?.lastName ? `${doctor.firstName} ${doctor.lastName}`.trim() : null) ||
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}`.trim() : null) ||
+        user?.name ||
+        storedUser?.name ||
+        userDataFromStorage?.name ||
+        'Doctor';
+      
+      return doctorName;
     }
     
     // For STAFF role
     if (userRole === 'staff') {
       const staff = staffData?.data || staffData;
-      return staff?.name || 
-             user?.name || 
-             userDataFromStorage?.name || 
-             storedUser?.name || 
-             'Staff';
+      
+      // ✅ FIXED: Get staff name with proper fallbacks including staffName
+      const staffName =
+        staff?.staffName ||       // ✅ Your API returns this
+        staff?.displayName ||
+        staff?.name ||
+        (staff?.firstName && staff?.lastName ? `${staff.firstName} ${staff.lastName}`.trim() : null) ||
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}`.trim() : null) ||
+        user?.name ||
+        storedUser?.name ||
+        userDataFromStorage?.name ||
+        'Staff';
+      
+      return staffName;
     }
     
     // For SUPER_ADMIN role
@@ -195,22 +227,32 @@ export default function Sidebar({ sidebarOpen }) {
     
     // Default: HOSPITAL role
     const hospital = hospitalData?.data || hospitalData;
-    return user?.name || 
-           user?.hospitalName || 
-           hospital?.name || 
-           userDataFromStorage?.name || 
-           userDataFromStorage?.hospitalName || 
-           storedUser?.name || 
-           storedUser?.hospitalName || 
-           'Hospital';
+    
+    const hospitalName = 
+      hospital?.displayName ||
+      hospital?.name ||
+      hospital?.hospitalName ||
+      user?.name ||
+      user?.hospitalName ||
+      userDataFromStorage?.name ||
+      userDataFromStorage?.hospitalName ||
+      storedUser?.name ||
+      storedUser?.hospitalName ||
+      'Hospital';
+    
+    return hospitalName;
   };
   
-  // ✅ Get the raw display name without prefix
+  // Get the raw display name
   const displayName = getDisplayName();
   
-  // ✅ Create the final display title with role-based prefix
+  // Create the final display title with role-based prefix
   const getDisplayTitle = () => {
     if (userRole === 'doctor') {
+      // Check if name already has "Dr." prefix to avoid duplication
+      if (displayName && displayName.startsWith('Dr.')) {
+        return displayName;
+      }
       return `Dr. ${displayName}`;
     } else if (userRole === 'hospital') {
       return displayName; // Hospital name without prefix
@@ -226,6 +268,7 @@ export default function Sidebar({ sidebarOpen }) {
 
   const toggleDropdown = (label) => {
     setOpenDropdowns((prev) => ({
+      ...prev,
       [label]: !prev[label],
     }));
   };

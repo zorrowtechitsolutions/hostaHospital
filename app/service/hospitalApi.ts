@@ -556,9 +556,8 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     changePassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
       query: ({ currentPassword, newPassword }) => {
-        const authId = localStorage.getItem('authId') || '';
         return {
-          url: `/auth/change-password/${authId}`,
+          url: `/auth/change-password`,
           method: "PUT",
           body: { currentPassword, newPassword },
         };
