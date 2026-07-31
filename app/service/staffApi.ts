@@ -88,8 +88,9 @@ export interface SendOtpRequest {
 }
 
 export interface ChangePasswordData {
-  currentPassword: string;
+  staffId: string;
   newPassword: string;
+  confirmPassword?: string;
 }
 
 export interface ChangePasswordResponse {
@@ -583,28 +584,22 @@ export const staffApi = api.injectEndpoints({
 
     // ================= CHANGE PASSWORD (with current password) =================
     // Updated to match doctor implementation
-    changeStaffPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
-      query: ({ currentPassword, newPassword }) => {
-        const authId = getAuthId(); // Using helper function like doctor API
-        return {
-          url: `/auth/change-password/${authId}`,
-          method: "PUT",
-          body: { currentPassword, newPassword },
-        };
-      },
-      transformResponse: (response: ChangePasswordResponse) => {
-        return response;
-      },
-      transformErrorResponse: (response: { status: number; data?: any }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || "Failed to change password",
-        };
-      },
-      invalidatesTags: ["Staff"], // Changed from "Hospital" to "Staff"
+    changeStaffPassword: builder.mutation<
+      ChangePasswordResponse,
+      ChangePasswordData
+    >({
+      query: ({ staffId, newPassword, confirmPassword }) => ({
+        url: `/staff/internal/${staffId}/password`,
+        method: "PUT",
+        body: {
+          newPassword,
+          confirmPassword,
+        },
+      }),
+      invalidatesTags: ["Staff"],
     }),
-  }),
-});
+  })
+})
 
 // ================= EXPORT HOOKS =================
 
@@ -626,7 +621,7 @@ export const {
   
   // PUT
   useUpdateStaffMutation,
-  useChangeStaffPasswordMutation, // Make sure this is exported
+  useChangeStaffPasswordMutation,
   useRecoverStaffMutation,
   
   // DELETE

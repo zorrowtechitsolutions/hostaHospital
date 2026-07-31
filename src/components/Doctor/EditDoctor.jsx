@@ -1,4 +1,4 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version with authId/hospitalId
+// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version with authId/hospitalId and password change
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -15,6 +15,7 @@ import {
   useUpdateDoctorMutation,
   useGetSpecialitiesQuery
 } from "../../../app/service/doctorApi";
+import { useChangeDoctorPasswordMutation } from "../../../app/service/doctorApi"; // ✅ ADD THIS IMPORT
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
@@ -511,6 +512,9 @@ const EditDoctor = () => {
   // FIX: Add state to force image refresh
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   
+  // ✅ ADD: Password change mutation hook
+  const [changeDoctorPassword] = useChangeDoctorPasswordMutation();
+  
   // Form state
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -981,12 +985,19 @@ const EditDoctor = () => {
     showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
   }, [formData.bookingOpen]);
 
+  // ✅ UPDATED: handleSubmit with password change
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // 🔥 Validate hospitalId exists (same as AddPatient)
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
+    // ✅ Validate password confirmation if password is provided
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showErrorToast('❌ Passwords do not match!');
       return;
     }
 
@@ -1077,16 +1088,24 @@ const EditDoctor = () => {
         };
       }
 
-      if (formData.password) {
-        updatedDoctorData.password = formData.password;
-      }
-
+      // ✅ STEP 1: Update doctor data
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
 
-      // Update role permission if roleId exists
+      // ✅ STEP 2: Change password if provided
+      if (formData.password) {
+        console.log('🔑 Changing password for doctor:', doctorId);
+        await changeDoctorPassword({
+          doctorId: String(doctorId),
+          newPassword: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }).unwrap();
+        console.log('✅ Password changed successfully');
+      }
+
+      // ✅ STEP 3: Update role permission if roleId exists
       if (roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
@@ -1129,27 +1148,7 @@ const EditDoctor = () => {
   const handleGoBack = () => {
     navigate('/doctors');
   };
-
-  // 🔥 FIX: Show error state if no hospitalId (same as AddPatient)
-  if (!hospitalId) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
-          <div className="text-red-500 text-5xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
-          <p className="text-gray-600 mb-4">
-            Please log in again to access this page.
-          </p>
-          <Button 
-            variant="primary" 
-            onClick={() => navigate('/login')}
-          >
-            Go to Login
-          </Button>
-        </div>
-      </div>
-    );
-  }
+          
 
   // Loading states - Show skeleton while form is initializing
   if (isLoading || rolesLoading) {

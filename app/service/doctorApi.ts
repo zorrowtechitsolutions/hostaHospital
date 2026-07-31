@@ -102,9 +102,10 @@ export interface ResetPasswordData {
   newPassword: string;
 }
 
-export interface ChangePasswordData {
-  currentPassword: string;
+interface ChangePasswordData {
+  doctorId: string;
   newPassword: string;
+  confirmPassword: string;
 }
 
 export interface OtpResponse {
@@ -468,26 +469,20 @@ export const doctorApi = api.injectEndpoints({
     // ============================================
     // CHANGE PASSWORD - /doctor/auth/change-password/:authId
     // ============================================
-    changeDoctorPassword: builder.mutation<ChangePasswordResponse, ChangePasswordData>({
-      query: ({ currentPassword, newPassword }) => {
-        const authId = getAuthId();
-        return {
-          url: `auth/change-password/${authId}`,
-          method: "PUT",
-          body: { currentPassword, newPassword },
-        };
-      },
-      transformResponse: (response: ChangePasswordResponse) => {
-        return response;
-      },
-      transformErrorResponse: (response: { status: number; data?: any }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || "Failed to change password",
-        };
-      },
-      invalidatesTags: ["Doctor"],
-    }),
+    changeDoctorPassword: builder.mutation<
+  ChangePasswordResponse,
+  ChangePasswordData
+>({
+  query: ({ doctorId, newPassword, confirmPassword }) => ({
+    url: `/doctor/internal/${doctorId}/password`,
+    method: "PUT",
+    body: {
+      newPassword,
+      confirmPassword,
+    },
+  }),
+  invalidatesTags: ["Doctor"],
+}),
 
     // ============================================
     // ADD NEW DOCTOR - /doctor (POST)

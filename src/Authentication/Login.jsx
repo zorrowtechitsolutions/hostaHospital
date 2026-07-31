@@ -303,41 +303,65 @@ const Login = () => {
       }
       
     } else if (role === 'staff') {
-      const authId = userData?.id || response.id;
-      const staffTableId = userData?.staffId || response.data?.staffId || response.staffId;
-      
-      console.log("🔑 STAFF ID FIX:", {
-        authId: authId,
-        staffTableId: staffTableId,
-        userData: userData
-      });
-      
-      authData = {
-        ...authData,
-        id: authId,
-        authId: authId,
-        staffId: staffTableId,
-        roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
-        name: userData?.name || userData?.displayName || 'Staff',
-        email: userData?.email || response.data?.email,
-        phone: userData?.phone,
-        designation: userData?.designation || response.data?.designation,
-        staffType: userData?.staffType || response.data?.staffType,
-        role: role,
-      };
-      
-      if (staffTableId) {
-        localStorage.setItem("staffId", staffTableId.toString());
-        console.log("✅ Stored staffId:", staffTableId);
-      } else {
-        console.warn("⚠️ No staffId found in response");
-      }
-      
-      if (authId) {
-        localStorage.setItem("authId", authId.toString());
-      }
+  const authId = userData?.id || response.id;
+  const staffTableId =
+    userData?.staffId ||
+    response.data?.staffId ||
+    response.staffId;
+
+  const staffName =
+    userData?.staffName ||
+    userData?.displayName ||
+    userData?.name ||
+    `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
+    "Staff";
+
+  console.log("🔑 STAFF ID FIX:", {
+    authId,
+    staffTableId,
+    staffName,
+    userData,
+  });
+
+  authData = {
+    ...authData,
+    id: authId,
+    authId: authId,
+    staffId: staffTableId,
+    roleId: roleId,
+    hospitalId:
+      userData?.hospitalId ||
+      hospital?.hospitalId ||
+      response.data?.hospitalId,
+    hospitalName:
+      userData?.hospitalName ||
+      hospital?.hospitalName ||
+      response.data?.hospitalName,
+
+    // ✅ Fixed
+    name: staffName,
+    displayName: staffName,
+
+    email: userData?.email || response.data?.email,
+    phone: userData?.phone,
+    designation:
+      userData?.designation || response.data?.designation,
+    staffType:
+      userData?.staffType || response.data?.staffType,
+    role: role,
+  };
+
+  if (staffTableId) {
+    localStorage.setItem("staffId", staffTableId.toString());
+    console.log("✅ Stored staffId:", staffTableId);
+  } else {
+    console.warn("⚠️ No staffId found in response");
+  }
+
+  if (authId) {
+    localStorage.setItem("authId", authId.toString());
+  }
+
       
     } else {
       authData = {

@@ -47,54 +47,84 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   const entityId = getEntityId();
 
-  // ✅ Hospital-based query (for hospital only)
+  // ✅ Hospital-based query (for hospital and staff only)
   const hospitalQuery = useGetNotificationsByHospitalQuery(
     {
-      hospitalId: hospitalId,
+      hospitalId,
     },
     {
-      skip: userRole !== "hospital" || !hospitalId,
+      skip: !hospitalId || (userRole !== "hospital" && userRole !== "staff"),
       refetchOnMountOrArgChange: true,
     }
   );
 
-  // ✅ Role-based query (for doctors and staff)
+  // ✅ Role-based query (for doctor and staff only)
   const roleQuery = useGetNotificationsByRoleQuery(
     {
-      role: userRole, // "doctor" or "staff"
+      role: userRole,
       id: entityId,
     },
     {
-      skip: (userRole !== "doctor" && userRole !== "staff") || !entityId,
+      skip: userRole !== "doctor" && userRole !== "staff",
       refetchOnMountOrArgChange: true,
     }
   );
 
-  // Select the appropriate data source
-  let notificationsData;
-  let isLoading;
-  let error;
-  let refetch;
+  // ✅ Notification selection logic based on role
+  const staffNotifications = roleQuery.data?.data || [];
+  const hospitalNotifications = hospitalQuery.data?.data || [];
+
+  let notifications = [];
 
   if (userRole === "hospital") {
-    // Hospital uses hospital-based query
-    notificationsData = hospitalQuery.data;
-    isLoading = hospitalQuery.isLoading;
-    error = hospitalQuery.error;
-    refetch = hospitalQuery.refetch;
-  } else if (userRole === "doctor" || userRole === "staff") {
-    // Doctor and staff use role-based query
-    notificationsData = roleQuery.data;
-    isLoading = roleQuery.isLoading;
-    error = roleQuery.error;
-    refetch = roleQuery.refetch;
-  } else {
-    // Fallback
-    notificationsData = null;
-    isLoading = false;
-    error = { message: "Unknown user role" };
-    refetch = () => {};
+    notifications = hospitalNotifications;
+  } else if (userRole === "doctor") {
+    notifications = roleQuery.data?.data || [];
+  } else if (userRole === "staff") {
+    notifications = [
+      ...staffNotifications,
+      ...hospitalNotifications,
+    ].filter(
+      (n, index, self) =>
+        index === self.findIndex(item => item.id === n.id)
+    );
   }
+
+  // ✅ Update loading based on role
+  const isLoading = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.isLoading;
+    } else if (userRole === "doctor") {
+      return roleQuery.isLoading;
+    } else if (userRole === "staff") {
+      return hospitalQuery.isLoading || roleQuery.isLoading;
+    }
+    return false;
+  };
+
+  // ✅ Update error based on role
+  const error = () => {
+    if (userRole === "hospital") {
+      return hospitalQuery.error;
+    } else if (userRole === "doctor") {
+      return roleQuery.error;
+    } else if (userRole === "staff") {
+      return hospitalQuery.error || roleQuery.error;
+    }
+    return null;
+  };
+
+  // ✅ Update refetch based on role
+  const refetch = () => {
+    if (userRole === "hospital") {
+      hospitalQuery.refetch();
+    } else if (userRole === "doctor") {
+      roleQuery.refetch();
+    } else if (userRole === "staff") {
+      hospitalQuery.refetch();
+      roleQuery.refetch();
+    }
+  };
 
   // Mutations
   const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
@@ -102,8 +132,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
   const [deleteNotification] = useDeleteNotificationMutation();
   const [updateNotification] = useUpdateNotificationMutation();
 
-  const notifications = notificationsData?.data || [];
-  
   // ✅ Filter unread based on user role
   const unreadNotifications = notifications.filter(notification => {
     if (userRole === "hospital") {
@@ -380,8 +408,12 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
   };
 
   // Log for debugging
-  if (error) {
-    console.error("Notification Error:", error);
+  const currentError = error();
+  if (currentError) {
+    console.error("Notification Error:", currentError);
+    console.log("User Role:", userRole);
+    console.log("Entity ID:", entityId);
+    console.log("Hospital ID:", hospitalId);
   }
 
   if (!isOpen) return null;
@@ -417,16 +449,16 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
         {/* Notifications List */}
         <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
-          {isLoading ? (
+          {isLoading() ? (
             <div className="px-5 py-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-3"></div>
               <p className="text-gray-500 dark:text-gray-400">Loading notifications...</p>
             </div>
-          ) : error ? (
+          ) : currentError ? (
             <div className="px-5 py-8 text-center">
               <p className="text-red-500 dark:text-red-400">Error loading notifications</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {error?.data?.message || error?.message || 'Please try again'}
+                {currentError?.data?.message || currentError?.message || 'Please try again'}
               </p>
               <p className="text-xs text-gray-400 mt-2">
                 Role: {userRole} | ID: {entityId || 'Not found'}

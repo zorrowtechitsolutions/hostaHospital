@@ -129,15 +129,19 @@ export const isFCMAvailable = () => {
 };
 
 // Foreground listener
+// Foreground listener
 export const listenMessages = (callback) => {
-  const unsubscribe = onMessage(messaging, (payload) => {
-
+  return onMessage(messaging, async (payload) => {
     console.log("FCM Payload:", payload);
-    console.log("Notification:", payload.notification);
-    console.log("Data:", payload.data);
+
+    try {
+      notificationSound.currentTime = 0;
+      await notificationSound.play();
+      console.log("✅ Custom notification sound played");
+    } catch (err) {
+      console.error("❌ Audio play failed:", err);
+    }
 
     if (callback) callback(payload);
   });
-
-  return unsubscribe;
 };

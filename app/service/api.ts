@@ -12,13 +12,11 @@ import { getToken, clearAuth, getAuthUser } from "../../src/utils/auth";
 interface RefreshResponse {
   token?: string;
   accessToken?: string;
-  refreshToken?: string;
 }
 
-// ✅ Define public endpoints that should NOT include Authorization header
 const publicEndpoints = [
   "loginDoctor",
-  "loginHospital", 
+  "loginHospital",
   "loginSuperAdmin",
   "refreshDoctor",
   "refreshHospital",
@@ -35,7 +33,6 @@ const baseQuery = fetchBaseQuery({
   prepareHeaders: (headers, { endpoint }) => {
     const token = getToken();
 
-    // ✅ Only add Authorization header for non-public endpoints
     if (token && !publicEndpoints.includes(endpoint as string)) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -53,32 +50,25 @@ const baseQueryWithReauth: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  // ✅ Handle 401 Unauthorized - Token expired
   if (result.error?.status === 401) {
-    // ✅ Step 2: Check if user is already logged out
-    const token = getToken();
-    
-    // User already logged out - don't attempt refresh
-    if (!token) {
-      return result;
-    }
-
-    // ✅ Step 3: Get user role to determine refresh endpoint
     const auth = getAuthUser();
     const userRole = localStorage.getItem("userRole");
-    
-    // Determine refresh URL based on role
+
     let refreshUrl = "/hospital/refresh";
-    
+
     if (auth?.role === "doctor" || userRole === "doctor") {
       refreshUrl = "/doctor/refresh";
     } else if (auth?.role === "staff" || userRole === "staff") {
       refreshUrl = "/staff/refresh";
-    } else if (auth?.role === "super_admin" || userRole === "super_admin") {
+    } else if (
+      auth?.role === "super_admin" ||
+      userRole === "super_admin"
+    ) {
       refreshUrl = "/super-admin/refresh";
     }
 
-    // ✅ Attempt to refresh token
+    console.log("🔄 Refresh URL:", refreshUrl);
+
     const refreshResult = await baseQuery(
       {
         url: refreshUrl,
@@ -88,31 +78,24 @@ const baseQueryWithReauth: BaseQueryFn<
       extraOptions
     );
 
-    // ✅ Step 4: If refresh succeeds
+    console.log("✅ Refresh Result:", refreshResult);
+
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
-        // Store new token
+        console.log("✅ New Access Token received");
+
         localStorage.setItem("accessToken", newToken);
 
-        // ✅ Retry original request with new token
-        // Update the headers of the original request
-        if (args && typeof args === 'object' && 'headers' in args) {
-          args.headers = {
-            ...args.headers,
-            'Authorization': `Bearer ${newToken}`,
-          };
-        }
-
         result = await baseQuery(args, api, extraOptions);
+
         return result;
       }
     }
 
-    // ✅ Step 5: If refresh fails - clear auth and return error
-    console.error("❌ Token refresh failed, logging out...");
+    console.error("❌ Refresh failed");
     clearAuth();
 
     return {
@@ -157,7 +140,7 @@ export const api = createApi({
     "Reviews",
     "Category",
     "emailEnquiry",
-    "Users"
+    "Users",
   ],
   endpoints: () => ({}),
 });
