@@ -40,7 +40,10 @@ const baseQuery = fetchBaseQuery({
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    headers.set("Content-Type", "application/json");
+    // ✅ Only set Content-Type if not already set (for FormData support)
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
 
     return headers;
   },
@@ -51,80 +54,64 @@ const baseQueryWithReauth: BaseQueryFn<
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
+  console.log("➡️ Request:", args);
+  
   let result = await baseQuery(args, api, extraOptions);
+  
+  console.log("⬅️ Result:", result);
 
-  // ✅ Handle 401 Unauthorized - Token expired
+  // Only refresh on 401
   if (result.error?.status === 401) {
-    // Get user role to determine refresh endpoint
     const auth = getAuthUser();
     const userRole = localStorage.getItem("userRole");
-    
-    // Determine refresh URL based on role
-    let refreshUrl = "/hospital/refresh";
-    
+
+    let refreshUrl = "/auth/refresh";
+
     if (auth?.role === "doctor" || userRole === "doctor") {
-      refreshUrl = "/doctor/refresh";
+      refreshUrl = "/auth/refresh";
     } else if (auth?.role === "staff" || userRole === "staff") {
-      refreshUrl = "/staff/refresh";
-    } else if (auth?.role === "super_admin" || userRole === "super_admin") {
-      refreshUrl = "/super-admin/refresh";
+      refreshUrl = "/auth/refresh";
+    } else if (
+      auth?.role === "super_admin" ||
+      userRole === "super_admin"
+    ) {
+      refreshUrl = "/auth/refresh";
     }
 
+    console.log("🔄 Access token expired. Refreshing...");
+    console.log("Refresh URL:", refreshUrl);
 
-const refreshResult = await baseQuery(
-  {
-    url: refreshUrl,
-    method: "POST",
-  },
-  api,
-  extraOptions
-);
+    const refreshResult = await baseQuery(
+      {
+        url: refreshUrl,
+        method: "POST",
+      },
+      api,
+      extraOptions
+    );
 
-
-if (refreshResult.data) {
-  const data = refreshResult.data as RefreshResponse;
-  const newToken = data.token || data.accessToken;
-
-  if (newToken) {
-
-    localStorage.setItem("accessToken", newToken);
-
-    result = await baseQuery(args, api, extraOptions);
-    return result;
-  }
-}
-
-console.error("❌ Token refresh failed");
-clearAuth();
+    console.log("Refresh Result:", refreshResult);
 
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
+
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
 
+        console.log("✅ New Access Token Stored");
 
-        // ✅ Retry original request with new token
-        // Update the headers of the original request
-        if (args && typeof args === 'object' && 'headers' in args) {
-          args.headers = {
-            ...args.headers,
-            'Authorization': `Bearer ${newToken}`,
-          };
-        }
-
+        // Retry original request
         result = await baseQuery(args, api, extraOptions);
+
         return result;
       }
     }
 
-    // ❌ Refresh failed - clear auth and return error
-    console.error("❌ Token refresh failed, logging out...");
-    clearAuth();
+    console.log("❌ Refresh Failed");
 
-    // Dispatch logout action if needed
-    // api.dispatch(logout());
+    clearAuth();
 
     return {
       error: {

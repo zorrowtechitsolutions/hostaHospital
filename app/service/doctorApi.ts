@@ -388,7 +388,7 @@ export const doctorApi = api.injectEndpoints({
     // ============================================
     refreshDoctor: builder.mutation<DoctorAuthResponse, void>({
       query: () => ({
-        url: "/doctor/refresh",
+        url: "/auth/refresh",
         method: "POST",
       }),
 
@@ -474,7 +474,7 @@ export const doctorApi = api.injectEndpoints({
   ChangePasswordData
 >({
   query: ({ doctorId, newPassword, confirmPassword }) => ({
-    url: `/doctor/internal/${doctorId}/password`,
+    url: `/doctor/auth/change-password/${doctorId}`,
     method: "PUT",
     body: {
       newPassword,

@@ -589,11 +589,11 @@ export const staffApi = api.injectEndpoints({
       ChangePasswordData
     >({
       query: ({ staffId, newPassword, confirmPassword }) => ({
-        url: `/staff/internal/${staffId}/password`,
+        url: `/staff/auth/change-password/${staffId}`,
         method: "PUT",
         body: {
           newPassword,
-          confirmPassword,
+          confirmPassword,  
         },
       }),
       invalidatesTags: ["Staff"],
