@@ -1,5 +1,5 @@
 // src/components/staff/Staffs.jsx - Staff sees only their hospital
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -12,7 +12,13 @@ import {
   RefreshCcw,
   Upload,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  LayoutGrid,
+  List,
+  Calendar,
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react';
 
 import {
@@ -85,6 +91,118 @@ const getS3ImageUrlWithCache = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
+// ✅ Staff Action Menu Component
+const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelete, onRecover }) => {
+  if (activeMenu !== staff.id) return null;
+  
+  return (
+    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+      {!staff.isDelete && (
+        <button 
+          onClick={() => onView(staff)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Eye className="w-4 h-4" />
+          View Details
+        </button>
+      )}
+      {!staff.isDelete && (
+        <button 
+          onClick={() => onEdit(staff)} 
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Edit className="w-4 h-4" />
+          Edit
+        </button>
+      )}
+      {!staff.isDelete && <div className="border-t border-gray-100 my-1"></div>}
+      
+      {staff.isDelete ? (
+        <button
+          onClick={() => onRecover(staff)}
+          className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Recover Staff
+        </button>
+      ) : (
+        <button 
+          onClick={() => onDelete(staff)} 
+          className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      )}
+    </div>
+  );
+});
+
+// ✅ Skeleton Loader Component
+const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[...Array(8)].map((_, index) => (
+          <div key={index} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm">
+            <div className="w-full flex justify-between items-start mb-4">
+              <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-7 h-7 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+            <div className="relative mb-3">
+              <div className="w-16 h-16 rounded-full bg-gray-200 animate-pulse"></div>
+            </div>
+            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-4"></div>
+            <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+              <div className="text-center">
+                <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
+                <div className="h-4 w-12 bg-gray-200 rounded animate-pulse mx-auto"></div>
+              </div>
+              <div className="text-center">
+                <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
+                <div className="h-4 w-12 bg-gray-200 rounded animate-pulse mx-auto"></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+        <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100">
+            <tr>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(itemsPerPage)].map((_, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const Staffs = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -92,6 +210,10 @@ const Staffs = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    // Load view mode from localStorage
+    return localStorage.getItem('staffViewMode') || 'grid';
+  });
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [staffToDelete, setStaffToDelete] = useState(null);
@@ -106,6 +228,7 @@ const Staffs = () => {
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+  const [activeMenu, setActiveMenu] = useState(null);
 
   // Get authenticated user
   const auth = getAuthUser();
@@ -114,14 +237,11 @@ const Staffs = () => {
   const hospitalId = getHospitalId();
   const authId = getAuthId();
 
-  // Log for debugging
+  // Save view mode to localStorage
   useEffect(() => {
-    console.log('🔍 Auth User:', auth);
-    console.log('🔍 Auth ID:', authId);
-    console.log('🏥 Hospital ID:', hospitalId);
-    console.log('🔍 Role:', auth?.role);
-    console.log('🔍 Role ID:', auth?.roleId);
-  }, [auth, authId, hospitalId]);
+    localStorage.setItem('staffViewMode', viewMode);
+  }, [viewMode]);
+
 
   // Debounce search term
   useEffect(() => {
@@ -137,6 +257,17 @@ const Staffs = () => {
     setCurrentPage(1);
   }, [debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
+  // Handle click outside for menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (activeMenu !== null && !event.target.closest('.menu-container')) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenu]);
+
   // Build query params with hospital filter
   const queryParams = {
     search_query: debouncedSearchTerm?.trim() || undefined,
@@ -151,7 +282,6 @@ const Staffs = () => {
   // Always filter by hospital for all users
   if (hospitalId) {
     queryParams.hospitalId = String(hospitalId);
-    console.log('✅ Filtering staff by hospitalId:', hospitalId);
   } else {
     console.warn('⚠️ No hospitalId found for filtering');
   }
@@ -496,6 +626,7 @@ const Staffs = () => {
     }
     setSelectedStaff(staff);
     setShowDetailsModal(true);
+    setActiveMenu(null);
   };
 
   const handleEditStaff = (staff) => {
@@ -505,11 +636,13 @@ const Staffs = () => {
     }
     const encodedId = encodeURIComponent(staff.id);
     navigate(`/edit-staff/${encodedId}`, { state: { staff } });
+    setActiveMenu(null);
   };
 
   const handleDeleteClick = (staff) => {
     setStaffToDelete(staff);
     setShowDeleteModal(true);
+    setActiveMenu(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -533,6 +666,7 @@ const Staffs = () => {
       showSuccessToast(`${staff.name} recovered successfully!`, 2000);
       refetch();
       setImageRefreshKey(Date.now());
+      setActiveMenu(null);
     } catch {
       showErrorToast('Failed to recover staff member', 3000);
     }
@@ -548,6 +682,11 @@ const Staffs = () => {
       !!dateFilter,
       !!searchTerm
     ].filter(Boolean).length;
+
+  const toggleMenu = useCallback((id, e) => {
+    e.stopPropagation();
+    setActiveMenu(prevActive => prevActive === id ? null : id);
+  }, []);
 
   // StaffDetailsModal
   const StaffDetailsModal = ({ staff, onClose }) => {
@@ -653,63 +792,6 @@ const Staffs = () => {
     );
   };
 
-  // RowActionMenu
-  const RowActionMenu = ({ staff }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
-    
-    useEffect(() => {
-      const handleClickOutside = (e) => {
-        if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-    
-    return (
-      <div className="relative inline-block" ref={menuRef}>
-        <Button variant="ghost" size="sm" onClick={() => setShowMenu(prev => !prev)} className="p-2">
-          <MoreVertical size={18} />
-        </Button>
-        {showMenu && (
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {!staff.isDelete && (
-              <>
-                <button 
-                  onClick={() => { handleViewDetails(staff); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-                >
-                  <Eye size={16} /> View Details
-                </button>
-                <button 
-                  onClick={() => { handleEditStaff(staff); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Edit size={16} /> Edit
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button 
-                  onClick={() => { handleDeleteClick(staff); setShowMenu(false); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
-              </>
-            )}
-            {staff.isDelete && (
-              <button 
-                onClick={() => { handleRecoverStaff(staff); setShowMenu(false); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100 rounded-lg"
-              >
-                <RotateCcw size={16} /> Recover Staff
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const activeFilterCount = getActiveFilterCount();
 
   // Check if we should show the "No results" message
@@ -720,61 +802,7 @@ const Staffs = () => {
 
   // Skeleton Loading State
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-          <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
-        </div>
-
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
-          </div>
-          <div className="flex gap-2">
-            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-            <div className="w-28 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100">
-                <tr>
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                    <th key={i} className="px-6 py-3">
-                      <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
-                      <td key={j} className="px-6 py-4">
-                        <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
+    return <StaffSkeletonLoader viewMode={viewMode} itemsPerPage={itemsPerPage} />;
   }
 
   return (
@@ -822,6 +850,24 @@ const Staffs = () => {
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
+            {/* View Mode Toggle */}
+            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+              <button 
+                onClick={() => setViewMode('grid')} 
+                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="Grid view"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="List view"
+              >
+                <List size={16} />
+              </button>
+            </div>
+
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
@@ -915,7 +961,7 @@ const Staffs = () => {
           </div>
         )}
 
-        {/* Staff Table */}
+        {/* Empty State */}
         {!hasResults ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -929,8 +975,131 @@ const Staffs = () => {
                 ? 'No staff match the selected filters. Try adjusting your filters.'
                 : 'Start by adding a new staff member.'}
             </p>
+            {(isSearchActive || hasActiveFilters) && (
+              <button 
+                onClick={clearAllFilters}
+                className="mt-4 text-sm text-[#1C62A0] hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
+        ) : viewMode === 'grid' ? (
+          /* ✅ GRID VIEW - Removed duplicate action button */
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {paginatedStaffsData.map((staff) => {
+                const isBlacklisted = staff.isDelete;
+                const imageUrl = getStaffImageUrl(staff);
+                
+                return (
+                  <div 
+                    key={staff.id} 
+                    className={`bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow ${
+                      isBlacklisted ? 'opacity-75' : ''
+                    }`}
+                  >
+                    <div className="w-full flex justify-between items-start mb-4">
+                      <Badge variant="info" className="text-[10px]">
+                        {staff.formattedId}
+                      </Badge>
+                      <div className="relative menu-container">
+                        <button 
+                          onClick={(e) => toggleMenu(staff.id, e)} 
+                          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                          aria-label="Actions menu"
+                        >
+                          ⋮
+                        </button>
+                        <StaffActionMenu
+                          staff={staff}
+                          activeMenu={activeMenu}
+                          onView={handleViewDetails}
+                          onEdit={handleEditStaff}
+                          onDelete={handleDeleteClick}
+                          onRecover={handleRecoverStaff}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="relative mb-3">
+                      <Avatar className="w-16 h-16">
+                        <AvatarImage 
+                          src={imageUrl || undefined} 
+                          alt={staff.name} 
+                        />
+                        <AvatarFallback className={`text-sm font-medium ${
+                          isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
+                        }`}>
+                          {staff.name?.charAt(0)?.toUpperCase() || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div
+                        className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                          isBlacklisted
+                            ? "bg-black"
+                            : staff.isActive
+                            ? "bg-green-500"
+                            : "bg-red-500"
+                        }`}
+                      />
+                    </div>
+                    
+                    <h3 
+                      onClick={() => !isBlacklisted && handleViewDetails(staff)} 
+                      className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                    >
+                      {staff.name}
+                    </h3>
+                    <p className="text-[11px] text-gray-500">
+                      {staff.designation || 'N/A'}
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mt-4">
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
+                        <p className="text-xs font-bold text-gray-700">
+                          {staff.gender || 'N/A'}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Status</p>
+                        <Badge
+                          variant={
+                            isBlacklisted
+                              ? "secondary"
+                              : staff.isActive
+                              ? "success"
+                              : "danger"
+                          }
+                          className="text-[10px]"
+                        >
+                          {isBlacklisted ? 'Blacklisted' : staff.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination for Grid View */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="staffs"
+                  variant="centered"
+                />
+              </div>
+            )}
+          </>
         ) : (
+          /* ✅ LIST VIEW */
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
@@ -962,37 +1131,41 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedStaffsData.map((staff, index) => {
+                    {paginatedStaffsData.map((staff) => {
                       const imageUrl = getStaffImageUrl(staff);
+                      const isBlacklisted = staff.isDelete;
                       
                       return (
                         <tr 
-                          key={staff.id || index} 
+                          key={staff.id} 
                           className={`hover:bg-gray-50 border-b border-gray-100 ${
-                            staff.isDelete ? 'bg-gray-50' : ''
+                            isBlacklisted ? 'bg-gray-50' : ''
                           }`}
                         >
                           <td className={`px-6 py-4 font-medium ${
-                            staff.isDelete ? 'text-gray-500' : 'text-[#1C62A0]'
+                            isBlacklisted ? 'text-gray-500' : 'text-[#1C62A0]'
                           }`}>
                             {staff.formattedId}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="w-10 h-10">
+                              <Avatar className="w-8 h-8">
                                 <AvatarImage 
                                   src={imageUrl || undefined} 
                                   alt={staff.name} 
                                 />
                                 <AvatarFallback className={`text-sm font-medium ${
-                                  staff.isDelete ? 'bg-gray-200 text-gray-500' : ''
+                                  isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
                                 }`}>
                                   {staff.name?.charAt(0)?.toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className={`font-medium ${
-                                staff.isDelete ? 'text-gray-500' : 'text-gray-800'
-                              }`}>
+                              <span 
+                                onClick={() => !isBlacklisted && handleViewDetails(staff)}
+                                className={`font-medium ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''} ${
+                                  isBlacklisted ? 'text-gray-500' : 'text-gray-800'
+                                }`}
+                              >
                                 {staff.name}
                               </span>
                             </div>
@@ -1004,7 +1177,7 @@ const Staffs = () => {
                           <td className="px-6 py-4">
                             <Badge
                               variant={
-                                staff.isDelete
+                                isBlacklisted
                                   ? 'secondary'
                                   : staff.isActive
                                   ? 'success'
@@ -1012,16 +1185,30 @@ const Staffs = () => {
                               }
                               className="text-xs"
                             >
-                              {staff.isDelete
+                              {isBlacklisted
                                 ? 'Blacklisted'
                                 : staff.isActive
                                 ? 'Active'
                                 : 'Inactive'}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-6 py-4 text-right relative menu-container">
                             <div className="flex justify-end">
-                              <RowActionMenu staff={staff} />
+                              <button 
+                                onClick={(e) => toggleMenu(staff.id, e)} 
+                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                                aria-label="Actions menu"
+                              >
+                                ⋮
+                              </button>
+                              <StaffActionMenu
+                                staff={staff}
+                                activeMenu={activeMenu}
+                                onView={handleViewDetails}
+                                onEdit={handleEditStaff}
+                                onDelete={handleDeleteClick}
+                                onRecover={handleRecoverStaff}
+                              />
                             </div>
                           </td>
                         </tr>

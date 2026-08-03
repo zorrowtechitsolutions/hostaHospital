@@ -268,14 +268,6 @@ const Doctors = () => {
   const hospitalId = getHospitalId();
   const authId = getAuthId();
 
-  // 🔥 Log the IDs for debugging
-  useEffect(() => {
-    console.log('🔍 Auth User:', auth);
-    console.log('🔍 Auth ID:', authId);
-    console.log('🏥 Hospital ID:', hospitalId);
-    console.log('🔍 Role:', auth?.role);
-    console.log('🔍 Role ID:', auth?.roleId);
-  }, [auth, authId, hospitalId]);
 
   // 🔥 FIX: Check for roles correctly
   const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
@@ -284,12 +276,6 @@ const Doctors = () => {
   const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
   const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
 
-  // 🔥 Log the IDs being used
-  useEffect(() => {
-    console.log('🏥 Hospital ID used for filtering:', hospitalId);
-    console.log('👤 Auth ID:', authId);
-    console.log('🔍 Should filter by hospital:', shouldFilterByHospital);
-  }, [hospitalId, authId, shouldFilterByHospital]);
 
   // 🔥 FIX: Build query params with hospital filter for all hospital-bound users
   const queryParams = {
@@ -305,7 +291,6 @@ const Doctors = () => {
     // Use hospitalId from auth or localStorage
     if (hospitalId) {
       queryParams.hospitalId = String(hospitalId);
-      console.log('✅ Filtering doctors by hospitalId:', hospitalId);
     } else {
       console.warn('⚠️ No hospitalId found for hospital-bound user');
     }
@@ -329,16 +314,8 @@ const Doctors = () => {
   useEffect(() => {
     if (response?.data) {
       const uniqueHospitalIds = new Set(response.data.map(d => d.hospitalId));
-      console.log('📊 Total doctors:', response.data.length);
-      console.log('🏥 Unique hospital IDs in results:', Array.from(uniqueHospitalIds));
       if (uniqueHospitalIds.size > 1) {
         console.warn("⚠️ WARNING: Multiple hospitals detected in results!");
-      }
-      // Log first doctor to see structure
-      if (response.data.length > 0) {
-        console.log('📋 First doctor:', response.data[0]);
-        console.log('📋 Doctor authId:', response.data[0].authId);
-        console.log('📋 Doctor hospitalId:', response.data[0].hospitalId);
       }
     }
   }, [response]);

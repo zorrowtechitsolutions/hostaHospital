@@ -195,14 +195,6 @@ const Login = () => {
       response.userType ||
       "hospital";
     
-    console.log("🔍 ROLE EXTRACTION:", {
-      "response.roleDetected": response.roleDetected,
-      "response.role": response.role,
-      "response.data?.role": response.data?.role,
-      "response.user?.role": response.user?.role,
-      "response.userType": response.userType,
-      "initialRole": role
-    });
     
     if (Number(roleId) === 1) {
       role = "super_admin";
@@ -215,7 +207,6 @@ const Login = () => {
       else if (role.includes('super_admin')) role = 'super_admin';
     }
     
-    console.log("🎯 FINAL ROLE =", role);
     
     if (token) {
       localStorage.setItem("accessToken", token);
@@ -270,23 +261,40 @@ const Login = () => {
       }
       
     } else if (role === 'doctor') {
-      const doctorName = userData?.displayName || 
-                         (userData?.firstName && userData?.lastName 
-                           ? `${userData.firstName} ${userData.lastName}`.trim() 
-                           : userData?.name) || 
-                         'Doctor';
-      
+      // ✅ FIXED: Doctor block now matches Staff pattern exactly
+      const authId = userData?.id || response.id;
+      const doctorTableId =
+        userData?.doctorId ||
+        response.data?.doctorId ||
+        response.doctorId;
+
+      const doctorName =
+        userData?.doctorName ||
+        userData?.displayName ||
+        userData?.name ||
+        `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
+        "Doctor";
+
+
       authData = {
         ...authData,
-        id: userData?.id,
-        doctorId: userData?.doctorId || response.data?.doctorId,
+        id: authId,
+        authId: authId,
+        doctorId: doctorTableId,
         roleId: roleId,
-        hospitalId: userData?.hospitalId || hospital?.hospitalId || response.data?.hospitalId,
-        hospitalName: userData?.hospitalName || hospital?.hospitalName || response.data?.hospitalName,
+        hospitalId:
+          userData?.hospitalId ||
+          hospital?.hospitalId ||
+          response.data?.hospitalId,
+        hospitalName:
+          userData?.hospitalName ||
+          hospital?.hospitalName ||
+          response.data?.hospitalName,
+
+        // ✅ Fixed - Same as Staff
         name: doctorName,
-        firstName: userData?.firstName,
-        lastName: userData?.lastName,
-        displayName: userData?.displayName,
+        displayName: doctorName,
+
         email: userData?.email || response.data?.email,
         phone: userData?.phone,
         department: userData?.department || response.data?.department,
@@ -297,71 +305,69 @@ const Login = () => {
         imageUrl: userData?.imageUrl || response.data?.imageUrl,
         role: role,
       };
-      
-      if (userData?.doctorId || response.data?.doctorId) {
-        localStorage.setItem("doctorId", (userData?.doctorId || response.data?.doctorId).toString());
+
+      if (doctorTableId) {
+        localStorage.setItem("doctorId", doctorTableId.toString());
+      } else {
+        console.warn("⚠️ No doctorId found in response");
+      }
+
+      if (authId) {
+        localStorage.setItem("authId", authId.toString());
       }
       
     } else if (role === 'staff') {
-  const authId = userData?.id || response.id;
-  const staffTableId =
-    userData?.staffId ||
-    response.data?.staffId ||
-    response.staffId;
+      const authId = userData?.id || response.id;
+      const staffTableId =
+        userData?.staffId ||
+        response.data?.staffId ||
+        response.staffId;
 
-  const staffName =
-    userData?.staffName ||
-    userData?.displayName ||
-    userData?.name ||
-    `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
-    "Staff";
+      const staffName =
+        userData?.staffName ||
+        userData?.displayName ||
+        userData?.name ||
+        `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
+        "Staff";
 
-  console.log("🔑 STAFF ID FIX:", {
-    authId,
-    staffTableId,
-    staffName,
-    userData,
-  });
 
-  authData = {
-    ...authData,
-    id: authId,
-    authId: authId,
-    staffId: staffTableId,
-    roleId: roleId,
-    hospitalId:
-      userData?.hospitalId ||
-      hospital?.hospitalId ||
-      response.data?.hospitalId,
-    hospitalName:
-      userData?.hospitalName ||
-      hospital?.hospitalName ||
-      response.data?.hospitalName,
+      authData = {
+        ...authData,
+        id: authId,
+        authId: authId,
+        staffId: staffTableId,
+        roleId: roleId,
+        hospitalId:
+          userData?.hospitalId ||
+          hospital?.hospitalId ||
+          response.data?.hospitalId,
+        hospitalName:
+          userData?.hospitalName ||
+          hospital?.hospitalName ||
+          response.data?.hospitalName,
 
-    // ✅ Fixed
-    name: staffName,
-    displayName: staffName,
+        // ✅ Fixed
+        name: staffName,
+        displayName: staffName,
 
-    email: userData?.email || response.data?.email,
-    phone: userData?.phone,
-    designation:
-      userData?.designation || response.data?.designation,
-    staffType:
-      userData?.staffType || response.data?.staffType,
-    role: role,
-  };
+        email: userData?.email || response.data?.email,
+        phone: userData?.phone,
+        designation:
+          userData?.designation || response.data?.designation,
+        staffType:
+          userData?.staffType || response.data?.staffType,
+        role: role,
+      };
 
-  if (staffTableId) {
-    localStorage.setItem("staffId", staffTableId.toString());
-    console.log("✅ Stored staffId:", staffTableId);
-  } else {
-    console.warn("⚠️ No staffId found in response");
-  }
+      if (staffTableId) {
+        localStorage.setItem("staffId", staffTableId.toString());
+      } else {
+        console.warn("⚠️ No staffId found in response");
+      }
 
-  if (authId) {
-    localStorage.setItem("authId", authId.toString());
-  }
-
+      if (authId) {
+        localStorage.setItem("authId", authId.toString());
+      }
       
     } else {
       authData = {
@@ -377,7 +383,6 @@ const Login = () => {
       };
     }
     
-    console.log("📦 AUTH DATA =", authData);
     
     localStorage.setItem("authData", JSON.stringify(authData));
     login(authData);
@@ -386,7 +391,7 @@ const Login = () => {
     if (role === 'super_admin') {
       welcomeMessage = `Welcome Super Admin ${authData.name}!`;
     } else if (role === 'doctor') {
-      welcomeMessage = `Welcome Dr. ${authData.name}!`;
+      welcomeMessage = `Welcome  ${authData.name}!`;
     } else if (role === 'staff') {
       welcomeMessage = `Welcome ${authData.name}!`;
     } else {

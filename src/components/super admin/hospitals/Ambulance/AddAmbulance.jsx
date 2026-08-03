@@ -21,7 +21,6 @@ const ambulanceTypes = [
 ];
 
 const AddAmbulance = () => {
-  console.log("ADD AMBULANCE PAGE LOADED");
   const navigate = useNavigate();
   const location = useLocation();
   const hospitalId = location.state?.hospitalId;
@@ -125,7 +124,6 @@ const AddAmbulance = () => {
   };
 
   const handleCountryChange = (code, name) => {
-    console.log("Country selected:", { code, name });
     setCountryCode(code);
     setFormData(prev => ({
       ...prev,
@@ -138,7 +136,6 @@ const AddAmbulance = () => {
   };
 
   const handleStateChange = (code, name) => {
-    console.log("State selected:", { code, name });
     setStateCode(code);
     setFormData(prev => ({
       ...prev,
@@ -149,7 +146,6 @@ const AddAmbulance = () => {
   };
 
   const handleCityChange = (name) => {
-    console.log("City/District selected:", name);
     setFormData(prev => ({
       ...prev,
       address: { ...prev.address, district: name, place: '', pincode: '' }
@@ -158,7 +154,6 @@ const AddAmbulance = () => {
   };
 
   const validateForm = () => {
-    console.log("Validating form...");
     const newErrors = {};
     
     const serviceNameError = validateServiceName(formData.serviceName);
@@ -191,19 +186,13 @@ const AddAmbulance = () => {
       'address.pincode': true
     });
     
-    console.log("Validation errors:", newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    console.log("===== SUBMIT AMBULANCE =====");
-    console.log("Current form data:", formData);
-    console.log("Hospital ID from location:", hospitalId);
     
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
-      console.log("Validation failed. First error field:", firstErrorField);
-      console.log("All errors:", errors);
       
       const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
       if (errorElement) {
@@ -213,7 +202,6 @@ const AddAmbulance = () => {
       return;
     }
 
-    console.log("Form validation passed!");
 
     try {
       const ambulanceData = {
@@ -233,22 +221,9 @@ const AddAmbulance = () => {
         ambulanceData.hospitalId = Number(hospitalId);
       }
 
-      console.log("===== FINAL PAYLOAD TO BE SENT =====");
-      console.log("Ambulance data:", JSON.stringify(ambulanceData, null, 2));
-      console.log("Payload details:");
-      console.log("  - serviceName:", ambulanceData.serviceName);
-      console.log("  - phone:", ambulanceData.phone);
-      console.log("  - vehicleType:", ambulanceData.vehicleType);
-      console.log("  - address:", ambulanceData.address);
-      console.log("  - hospitalId:", ambulanceData.hospitalId || 'Not provided (will use auth)');
-      console.log("  - event: AMBULANCE_REGISTERED (automatically added in API service)");
-      console.log("====================================");
 
       const response = await createAmbulance(ambulanceData).unwrap();
       
-      console.log("===== API RESPONSE =====");
-      console.log("Success response:", response);
-      console.log("========================");
       
       showSuccessToast(`${formData.serviceName} has been added successfully!`, 3000);
       

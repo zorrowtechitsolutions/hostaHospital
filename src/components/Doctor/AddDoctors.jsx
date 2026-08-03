@@ -451,8 +451,12 @@ const AddDoctor = () => {
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
-
+const { data: specialitiesData, isLoading: isLoadingSpecialities } =
+  useGetSpecialitiesQuery({
+    page: 1,
+    limit: 1000, // or a sufficiently large number
+  });
+  
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({

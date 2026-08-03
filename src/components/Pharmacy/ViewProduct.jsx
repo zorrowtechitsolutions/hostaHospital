@@ -9,14 +9,11 @@ const ViewProduct = () => {
 useEffect(() => {
   const saved = JSON.parse(localStorage.getItem("products")) || [];
 
-  console.log("All products:", saved);
-  console.log("URL ID:", id);
 
   const found = saved.find(
     (p) => p.id.replace("#", "") === id
   );
 
-  console.log("FOUND:", found);
 
   setProduct(found);
 }, [id]);

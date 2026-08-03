@@ -681,7 +681,6 @@ const AddHospital = () => {
         workingHoursData: apiWorkingHours
       };
 
-      console.log('Submitting hospital data:', hospitalData);
 
       try {
         const response = await register(hospitalData).unwrap();

@@ -1,6 +1,6 @@
 // src/components/NotificationsPage.jsx
 import React, { useState, useEffect } from 'react';
-import { Bell, Trash2, CheckCheck, ArrowLeft, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
+import { Bell, Trash2, CheckCheck, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -10,7 +10,6 @@ import {
   useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
   useUpdateNotificationMutation,
-  useDeleteNotificationsByHospitalMutation,
 } from '../../../app/service/notification';
 import { getHospitalId, getUserRole, getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -134,10 +133,6 @@ const NotificationsPage = () => {
     } else if (userRole === "doctor") {
       return roleQuery.data?.total || 0;
     } else if (userRole === "staff") {
-      // For staff, total is combined from both queries
-      const staffTotal = roleQuery.data?.total || 0;
-      const hospitalTotal = hospitalQuery.data?.total || 0;
-      // Since we're merging, total is approximate
       return notifications.length;
     }
     return 0;
@@ -149,7 +144,6 @@ const NotificationsPage = () => {
     } else if (userRole === "doctor") {
       return roleQuery.data?.totalPages || 1;
     } else if (userRole === "staff") {
-      // For staff, we need to calculate pages from merged data
       return Math.ceil(notifications.length / itemsPerPage) || 1;
     }
     return 1;
@@ -159,7 +153,6 @@ const NotificationsPage = () => {
   const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
   const [markAllAsReadRole] = useMarkAllNotificationsAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
-  const [deleteAllNotifications] = useDeleteNotificationsByHospitalMutation();
   const [updateNotification] = useUpdateNotificationMutation();
 
   // ✅ Check if notification is unread based on role
@@ -309,14 +302,23 @@ const NotificationsPage = () => {
     }
   };
 
-  // Delete handlers
-  const handleDeleteClick = (id, e) => {
-    e.stopPropagation();
-    setSelectedNotificationId(id);
-    setShowDeleteConfirm(true);
+  // ✅ Delete single notification
+  const handleDelete = async (id) => {
+    try {
+      await deleteNotification(id).unwrap();
+      showSuccessToast("Notification deleted successfully", 2000);
+      refetch();
+    } catch (error) {
+      showErrorToast("Failed to delete notification", 2000);
+    }
   };
 
+  // Delete all handler
   const handleDeleteAllClick = () => {
+    if (notifications.length === 0) {
+      showSuccessToast("No notifications to delete", 2000);
+      return;
+    }
     setSelectedNotificationId('all');
     setShowDeleteConfirm(true);
   };
@@ -324,15 +326,11 @@ const NotificationsPage = () => {
   const confirmDelete = async () => {
     try {
       if (selectedNotificationId === 'all') {
-        if (userRole === "hospital" || userRole === "staff") {
-          // ✅ Staff and hospital can delete all hospital notifications
-          await deleteAllNotifications(hospitalId).unwrap();
-        } else {
-          // Doctor deletes individually
-          for (const notification of notifications) {
-            await deleteNotification(notification.id).unwrap();
-          }
-        }
+        // Delete all notifications one by one
+        const deletePromises = notifications.map(notification => 
+          deleteNotification(notification.id).unwrap()
+        );
+        await Promise.all(deletePromises);
 
         socket.emit("notifications_deleted_all", {
           hospitalId: hospitalId,
@@ -340,7 +338,7 @@ const NotificationsPage = () => {
           userRole: userRole
         });
 
-        showSuccessToast('All notifications deleted successfully');
+        showSuccessToast('All notifications deleted successfully', 2000);
       } else {
         await deleteNotification(selectedNotificationId).unwrap();
 
@@ -358,8 +356,8 @@ const NotificationsPage = () => {
       await refetch();
       setShowDeleteConfirm(false);
       setSelectedNotificationId(null);
-    } catch {
-      showErrorToast('Failed to delete notification');
+    } catch (error) {
+      showErrorToast('Failed to delete notification(s)', 2000);
     }
   };
 
@@ -650,13 +648,17 @@ const NotificationsPage = () => {
                             </div>
                           </div>
                           
+                          {/* Delete button */}
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button
-                              onClick={(e) => handleDeleteClick(notif.id, e)}
-                              className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-200 transition-all"
-                              title="Delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(notif.id);
+                              }}
+                              className="p-2 text-red-500 hover:text-red-700 transition-colors duration-200"
+                              title="Delete notification"
                             >
-                              <Trash2 size={16} className="text-gray-400 hover:text-red-500" />
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </div>
@@ -681,6 +683,7 @@ const NotificationsPage = () => {
         </Card>
       )}
 
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-96">

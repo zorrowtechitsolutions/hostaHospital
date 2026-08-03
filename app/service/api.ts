@@ -54,11 +54,9 @@ const baseQueryWithReauth: BaseQueryFn<
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
-  console.log("➡️ Request:", args);
   
   let result = await baseQuery(args, api, extraOptions);
   
-  console.log("⬅️ Result:", result);
 
   // Only refresh on 401
   if (result.error?.status === 401) {
@@ -78,8 +76,6 @@ const baseQueryWithReauth: BaseQueryFn<
       refreshUrl = "/auth/refresh";
     }
 
-    console.log("🔄 Access token expired. Refreshing...");
-    console.log("Refresh URL:", refreshUrl);
 
     const refreshResult = await baseQuery(
       {
@@ -90,7 +86,6 @@ const baseQueryWithReauth: BaseQueryFn<
       extraOptions
     );
 
-    console.log("Refresh Result:", refreshResult);
 
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
@@ -100,7 +95,6 @@ const baseQueryWithReauth: BaseQueryFn<
       if (newToken) {
         localStorage.setItem("accessToken", newToken);
 
-        console.log("✅ New Access Token Stored");
 
         // Retry original request
         result = await baseQuery(args, api, extraOptions);
@@ -109,7 +103,6 @@ const baseQueryWithReauth: BaseQueryFn<
       }
     }
 
-    console.log("❌ Refresh Failed");
 
     clearAuth();
 

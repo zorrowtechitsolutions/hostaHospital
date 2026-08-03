@@ -145,7 +145,6 @@ const SuperUserPermissions = () => {
         ],
       };
 
-      console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
 
       const result = await createPermission(payload).unwrap();
       

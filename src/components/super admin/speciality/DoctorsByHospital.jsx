@@ -23,10 +23,7 @@ const DoctorsByHospital = () => {
   const specialityName = location.state?.specialityName;
   const specialityId = location.state?.specialityId;
 
-  console.log('===== DOCTORS PAGE =====');
-  console.log('hospitalId:', hospitalId);
-  console.log('specialityName:', specialityName);
-  console.log('hospitalName from state:', hospitalNameFromState);
+
 
   // Fetch hospital details if name wasn't passed in state
   const { data: hospitalData, isLoading: isLoadingHospital } = useGetHospitalByIdQuery(hospitalId, {
@@ -56,10 +53,6 @@ const DoctorsByHospital = () => {
   const doctors = doctorsData?.data || [];
   const totalItems = doctors.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-  console.log('Doctors API Response:', doctorsData);
-  console.log('Doctors array:', doctors);
-  console.log('Total doctors:', totalItems);
 
   const isLoading = isLoadingDoctors || isLoadingHospital;
 

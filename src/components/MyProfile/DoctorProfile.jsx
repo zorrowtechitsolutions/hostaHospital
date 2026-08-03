@@ -41,15 +41,12 @@ const getFullImageUrl = (imageKey) => {
 
 // ==================== TOAST FUNCTIONS ====================
 const showSuccessToast = (message) => {
-  console.log('✅ Success:', message);
 };
 
 const showErrorToast = (message) => {
-  console.error('❌ Error:', message);
 };
 
 const showWarningToast = (message) => {
-  console.warn('⚠️ Warning:', message);
 };
 
 // ==================== SKELETON LOADER ====================

@@ -16,6 +16,7 @@ import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus } from 'lucide-
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
+import { useGetCategoryQuery } from '../../../app/service/category';
 
 import { socket } from '../../socket/socket';
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
@@ -45,11 +46,6 @@ const DAYS = [
   { key: 'friday', label: 'Friday' },
   { key: 'saturday', label: 'Saturday' },
   { key: 'sunday', label: 'Sunday' },
-];
-
-const HOSPITAL_TYPES = [
-  'Allopathy', 'Homeopathy', 'Ayurveda', 'Unani', 
-  'Physiotherapy', 'Mental Health', 'Laboratory', 'Other'
 ];
 
 // ✅ Convert "10:00" to "10:00 AM" with proper validation
@@ -347,12 +343,22 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('General');
   const location = useLocation();
 
-  // ✅ FIXED: Use hospitalId instead of id
   const hospitalId = user?.hospitalId;
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
   const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
+
+  // ✅ Fetch categories for hospital types
+  const { 
+    data: categoriesData, 
+    isLoading: isLoadingCategories, 
+    error: categoriesError 
+  } = useGetCategoryQuery({
+    isActive: true,
+    parentCategoryId: null,
+    limit: 100
+  });
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
@@ -389,6 +395,13 @@ const Settings = () => {
   const states = State.getStatesOfCountry(editForm.countryCode);
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
   const isFormSaving = isSaving || isUpdating;
+
+  // ✅ Extract categories for hospital types - KEEP AS OBJECTS
+  const hospitalTypes = categoriesData?.data 
+    ? (Array.isArray(categoriesData.data) 
+        ? categoriesData.data 
+        : [categoriesData.data])
+    : [];
 
   // Register socket event listeners for hospital events
   useEffect(() => {
@@ -487,13 +500,19 @@ const Settings = () => {
   // ✅ Properly handle working hours from API
   useEffect(() => {
     if (hospitalData) {
-      
       const hospital = hospitalData.data || hospitalData;
+      
+      // Handle hospital type - extract the name string
+      let hospitalType = hospital.type || hospital.hospitalType || '';
+      // If it's an object for some reason, extract the name
+      if (typeof hospitalType === 'object' && hospitalType !== null) {
+        hospitalType = hospitalType.name || hospitalType._id || '';
+      }
       
       setHospitalInfo({
         name: hospital.name || '',
         email: hospital.email || '',
-        hospitalType: hospital.type || '',
+        hospitalType: hospitalType,
         mobileNumber: hospital.phone || '',
         createdDate: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'N/A',
         lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
@@ -532,11 +551,13 @@ const Settings = () => {
           cityName: hospital.address.district || '',
           pincode: hospital.address.pincode?.toString() || '',
           workingHours: normalizedHours,
+          hospitalType: hospitalType,
         }));
       } else {
         setEditForm(prev => ({
           ...prev,
           workingHours: normalizedHours,
+          hospitalType: hospitalType,
         }));
       }
     }
@@ -551,10 +572,11 @@ const Settings = () => {
     setIsSaving(true);
     
     try {
+      // ✅ Simply use the category name directly - NO ID LOOKUP
       const updateData = {
         name: editForm.name,
         email: editForm.email,
-        type: editForm.hospitalType,
+        type: editForm.hospitalType, // This is the category name string
         phone: editForm.mobileNumber,
         address: {
           country: editForm.countryName,
@@ -566,12 +588,10 @@ const Settings = () => {
         workingHours: editForm.workingHours
       };
       
-      
       const result = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 
       }).unwrap();
-      
       
       socket.emit("hospital_event", {
         event: "HOSPITAL_UPDATED",
@@ -631,7 +651,7 @@ const Settings = () => {
       ...prev,
       name: hospitalInfo.name,
       email: hospitalInfo.email,
-      hospitalType: hospitalInfo.hospitalType,
+      hospitalType: hospitalInfo.hospitalType, // This is the name string
       mobileNumber: hospitalInfo.mobileNumber,
       workingHours: workingHours,
     }));
@@ -853,20 +873,33 @@ const Settings = () => {
                 <Input label="Hospital Name" name="name" value={editForm.name} onChange={handleInputChange} required />
                 <Input label="Email Address" name="email" type="email" value={editForm.email} onChange={handleInputChange} required />
                 
+                {/* ✅ Dynamic Hospital Type dropdown using categories from API - USING NAME AS VALUE */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Hospital Type *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Hospital Type *
+                  </label>
                   <select
                     name="hospitalType"
                     value={editForm.hospitalType}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
                     required
+                    disabled={isLoadingCategories}
                   >
-                    <option value="">Select hospital type</option>
-                    {HOSPITAL_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
+                    <option value="">
+                      {isLoadingCategories ? 'Loading categories...' : 'Select hospital type'}
+                    </option>
+                    {hospitalTypes.map(category => (
+                      <option key={category.id || category._id} value={category.name}>
+                        {category.name}
+                      </option>
                     ))}
                   </select>
+                  {categoriesError && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Failed to load categories. Using defaults.
+                    </p>
+                  )}
                 </div>
                 
                 <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />

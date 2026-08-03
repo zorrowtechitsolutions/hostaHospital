@@ -1065,13 +1065,6 @@ const EditDoctor = () => {
           })),
       };
 
-      console.log('📤 Updating doctor data:', {
-        ...updatedDoctorData,
-        hospitalId: hospitalId,
-        authId: authId,
-        password: updatedDoctorData.password ? '[REDACTED]' : 'Not changing'
-      });
-
       if (formData.appointmentCount && formData.appointmentCount !== '') {
         updatedDoctorData.appoimentCount = Number(formData.appointmentCount);
       }
@@ -1096,13 +1089,11 @@ const EditDoctor = () => {
 
       // ✅ STEP 2: Change password if provided
       if (formData.password) {
-        console.log('🔑 Changing password for doctor:', doctorId);
         await changeDoctorPassword({
           doctorId: String(doctorId),
           newPassword: formData.password,
           confirmPassword: formData.confirmPassword,
         }).unwrap();
-        console.log('✅ Password changed successfully');
       }
 
       // ✅ STEP 3: Update role permission if roleId exists
@@ -1119,7 +1110,6 @@ const EditDoctor = () => {
           ]
         };
         
-        console.log('📤 Assigning permissions:', payload);
         await assignPermissions(payload).unwrap();
       }
 
