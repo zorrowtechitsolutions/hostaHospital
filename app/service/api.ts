@@ -37,7 +37,10 @@ const baseQuery = fetchBaseQuery({
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    headers.set("Content-Type", "application/json");
+    // ✅ Only set Content-Type if not already set (for FormData support)
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
 
     return headers;
   },
@@ -48,26 +51,32 @@ const baseQueryWithReauth: BaseQueryFn<
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
+  console.log("➡️ Request:", args);
+  
   let result = await baseQuery(args, api, extraOptions);
+  
+  console.log("⬅️ Result:", result);
 
+  // Only refresh on 401
   if (result.error?.status === 401) {
     const auth = getAuthUser();
     const userRole = localStorage.getItem("userRole");
 
-    let refreshUrl = "/hospital/refresh";
+    let refreshUrl = "/auth/refresh";
 
     if (auth?.role === "doctor" || userRole === "doctor") {
-      refreshUrl = "/doctor/refresh";
+      refreshUrl = "/auth/refresh";
     } else if (auth?.role === "staff" || userRole === "staff") {
-      refreshUrl = "/staff/refresh";
+      refreshUrl = "/auth/refresh";
     } else if (
       auth?.role === "super_admin" ||
       userRole === "super_admin"
     ) {
-      refreshUrl = "/super-admin/refresh";
+      refreshUrl = "/auth/refresh";
     }
 
-    console.log("🔄 Refresh URL:", refreshUrl);
+    console.log("🔄 Access token expired. Refreshing...");
+    console.log("Refresh URL:", refreshUrl);
 
     const refreshResult = await baseQuery(
       {
@@ -78,10 +87,11 @@ const baseQueryWithReauth: BaseQueryFn<
       extraOptions
     );
 
-    console.log("✅ Refresh Result:", refreshResult);
+    console.log("Refresh Result:", refreshResult);
 
     if (refreshResult.data) {
       const data = refreshResult.data as RefreshResponse;
+
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
@@ -89,13 +99,17 @@ const baseQueryWithReauth: BaseQueryFn<
 
         localStorage.setItem("accessToken", newToken);
 
+        console.log("✅ New Access Token Stored");
+
+        // Retry original request
         result = await baseQuery(args, api, extraOptions);
 
         return result;
       }
     }
 
-    console.error("❌ Refresh failed");
+    console.log("❌ Refresh Failed");
+
     clearAuth();
 
     return {
