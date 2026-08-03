@@ -142,16 +142,7 @@ export const isSuperAdmin = (): boolean => {
 // ================= AUTH CHECK =================
 
 export const isAuthenticated = (): boolean => {
-  const token = getToken();
-  if (!token) return false;
-
-  try {
-    const decoded = decodeToken(token);
-    if (!decoded) return false;
-    return decoded.exp * 1000 >= Date.now();
-  } catch {
-    return false;
-  }
+  return !!getToken();
 };
 
 // ================= TOKEN EXPIRY CHECK =================
@@ -178,7 +169,8 @@ export const isTokenExpired = (): boolean => {
 // ================= CLEAR ALL AUTH DATA =================
 
 export const clearAuth = (): void => {
-  clearToken();
+  console.trace("🚨 clearAuth called");
+    clearToken();
   localStorage.removeItem("authData");
   localStorage.removeItem("permissions");
   localStorage.removeItem("userData");
@@ -189,7 +181,6 @@ export const clearAuth = (): void => {
   localStorage.removeItem("doctorId");
   localStorage.removeItem("staffId");
   localStorage.removeItem("superAdminId");
-  localStorage.removeItem("refreshToken");
   sessionStorage.clear();
   
 };

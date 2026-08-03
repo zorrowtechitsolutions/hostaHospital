@@ -12,13 +12,11 @@ import { getToken, clearAuth, getAuthUser } from "../../src/utils/auth";
 interface RefreshResponse {
   token?: string;
   accessToken?: string;
-  refreshToken?: string;
 }
 
-// ✅ Define public endpoints that should NOT include Authorization header
 const publicEndpoints = [
   "loginDoctor",
-  "loginHospital", 
+  "loginHospital",
   "loginSuperAdmin",
   "refreshDoctor",
   "refreshHospital",
@@ -35,7 +33,6 @@ const baseQuery = fetchBaseQuery({
   prepareHeaders: (headers, { endpoint }) => {
     const token = getToken();
 
-    // ✅ Only add Authorization header for non-public endpoints
     if (token && !publicEndpoints.includes(endpoint as string)) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -93,6 +90,8 @@ const baseQueryWithReauth: BaseQueryFn<
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
+        console.log("✅ New Access Token received");
+
         localStorage.setItem("accessToken", newToken);
 
 
@@ -148,7 +147,7 @@ export const api = createApi({
     "Reviews",
     "Category",
     "emailEnquiry",
-    "Users"
+    "Users",
   ],
   endpoints: () => ({}),
 });
