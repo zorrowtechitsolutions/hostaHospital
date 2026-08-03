@@ -31,9 +31,9 @@ export const registerDoctorEvents = (handlers = {}) => {
         handlers.onDoctorPasswordReset?.(payload.data);
         break;
 
-      case "DOCTOR_PASSWORD_CHANGED":
-        handlers.onDoctorPasswordChanged?.(payload.data);
-        break;
+      case "DOCTOR_PASSWORD_CHANGED_BY_ADMIN":
+  handlers.onDoctorPasswordChangedByAdmin?.(payload.data);
+  break;
 
       default:
         // Unknown event - silently ignore
@@ -62,8 +62,8 @@ export const registerDoctorEvents = (handlers = {}) => {
     handlers.onDoctorPasswordReset?.(data);
   });
 
-  socket.on("DOCTOR_PASSWORD_CHANGED", (data) => {
-    handlers.onDoctorPasswordChanged?.(data);
+  socket.on("DOCTOR_PASSWORD_CHANGED_BY_ADMIN", (data) => {
+    handlers.onDoctorPasswordChangedByAdmin?.(data);
   });
 };
 
@@ -78,7 +78,7 @@ export const unregisterDoctorEvents = () => {
   socket.off("DOCTOR_DELETED");
   socket.off("DOCTOR_RECOVERED");
   socket.off("DOCTOR_PASSWORD_RESET");
-  socket.off("DOCTOR_PASSWORD_CHANGED");
+  socket.off("DOCTOR_PASSWORD_CHANGED_BY_ADMIN");
   
   // Remove onAny listener if it exists
   if (onAnyListener) {

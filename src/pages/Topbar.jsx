@@ -1,4 +1,4 @@
-// src/components/layout/TopBar.jsx - FIXED doctor/staff ID handling
+// src/components/layout/TopBar.jsx - FIXED with socket integration
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -18,6 +18,10 @@ import { getHospitalId } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
+import { initSocket, socket } from '../socket/socket';
+import { registerHospitalEvents, unregisterHospitalEvents } from '../socket/hospitalEvents';
+import { registerDoctorEvents, unregisterDoctorEvents } from '../socket/doctorEvents';
+import { registerStaffEvents, unregisterStaffEvents } from '../socket/staffEvents';
 
 // ================= HELPER FUNCTIONS =================
 
@@ -96,7 +100,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   // Check if user is Hospital Admin (has access to Settings)
   const isHospitalAdmin = userRole === 'hospital';
   
-  // ✅ FIXED: Get correct user ID based on role - using authId for API requests
+  // Get correct user ID based on role - using authId for API requests
   const userId =
     userRole === "doctor"
       ? (user?.authId || user?.id || localStorage.getItem("authId"))
@@ -134,9 +138,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       
       const profileImage = doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null;
       
-      // ✅ FIXED: Get doctor name with proper fallbacks including doctorName
       const doctorName = 
-        doctor?.doctorName ||     // ✅ Your API returns this
+        doctor?.doctorName ||
         doctor?.displayName ||
         doctor?.name ||
         (doctor?.firstName && doctor?.lastName ? `${doctor.firstName} ${doctor.lastName}`.trim() : null) ||
@@ -160,9 +163,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       
       const profileImage = staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null;
       
-      // ✅ FIXED: Get staff name with proper fallbacks including staffName
       const staffName =
-        staff?.staffName ||       // ✅ Your API returns this
+        staff?.staffName ||
         staff?.displayName ||
         staff?.name ||
         (staff?.firstName && staff?.lastName ? `${staff.firstName} ${staff.lastName}`.trim() : null) ||
@@ -231,6 +233,125 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     setMenuImageError(false);
   }, [profileImageUrl]);
 
+  // SOCKET INTEGRATION: Initialize socket and register events
+  useEffect(() => {
+    // Initialize socket connection
+    const socketInstance = initSocket();
+    
+    // Define event handlers based on user role
+    const eventHandlers = {
+      onHospitalRegistered: (data) => {
+        // Refresh data or show notification
+      },
+      onHospitalUpdated: (data) => {
+        // Refresh data or show notification
+      },
+      onHospitalDeleted: (data) => {
+        // Handle deletion
+      },
+      onHospitalBlacklisted: (data) => {
+        // Handle blacklist
+      },
+      onHospitalRecovered: (data) => {
+        // Handle recovery
+      },
+      onDoctorRegistered: (data) => {
+        // Refresh data or show notification
+      },
+      onDoctorUpdated: (data) => {
+        // Refresh data or show notification
+      },
+      onDoctorDeleted: (data) => {
+        // Handle deletion
+      },
+      onDoctorRecovered: (data) => {
+        // Handle recovery
+      },
+      onDoctorPasswordReset: (data) => {
+        // Handle password reset
+      },
+      onDoctorPasswordChanged: (data) => {
+        // Handle password change
+      },
+      onStaffRegistered: (data) => {
+        // Refresh data or show notification
+      },
+      onStaffUpdated: (data) => {
+        // Refresh data or show notification
+      },
+      onStaffDeleted: (data) => {
+        // Handle deletion
+      },
+      onStaffRecovered: (data) => {
+        // Handle recovery
+      },
+      onStaffPasswordReset: (data) => {
+        // Handle password reset
+      },
+      onStaffPasswordChanged: (data) => {
+        // Handle password change
+      }
+    };
+
+    // Register events based on user role
+    if (userRole === 'hospital') {
+      registerHospitalEvents(eventHandlers);
+    } else if (userRole === 'doctor') {
+      registerDoctorEvents(eventHandlers);
+    } else if (userRole === 'staff') {
+      registerStaffEvents(eventHandlers);
+    }
+
+    // Join the appropriate room
+    if (userId) {
+      const room = userRole === 'hospital' ? `hospital_${userId}` : 
+                   userRole === 'doctor' ? `doctor_${userId}` :
+                   `staff_${userId}`;
+      socket.emit('join-room', room);
+    }
+
+    // Cleanup function
+    return () => {
+      // Unregister events based on user role
+      if (userRole === 'hospital') {
+        unregisterHospitalEvents();
+      } else if (userRole === 'doctor') {
+        unregisterDoctorEvents();
+      } else if (userRole === 'staff') {
+        unregisterStaffEvents();
+      }
+      
+      // Leave the room
+      if (userId) {
+        const room = userRole === 'hospital' ? `hospital_${userId}` : 
+                     userRole === 'doctor' ? `doctor_${userId}` :
+                     `staff_${userId}`;
+        socket.emit('leave-room', room);
+      }
+      
+      // Disconnect socket on unmount
+      socket.disconnect();
+    };
+  }, [userRole, userId]); // Re-run when role or userId changes
+
+  // Handle socket reconnection
+  useEffect(() => {
+    const handleReconnect = () => {
+      if (userId) {
+        const room = userRole === 'hospital' ? `hospital_${userId}` : 
+                     userRole === 'doctor' ? `doctor_${userId}` :
+                     `staff_${userId}`;
+        socket.emit('join-room', room);
+      }
+    };
+
+    socket.on('reconnect', handleReconnect);
+
+    return () => {
+      socket.off('reconnect', handleReconnect);
+    };
+  }, [userId, userRole]);
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -268,7 +389,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           deviceId = tokens[0].deviceId;
         }
       } catch (error) {
-        console.warn('⚠️ Could not get deviceId from IndexedDB:', error);
+        // Could not get deviceId from IndexedDB
       }
       
       if (!deviceId) {
@@ -291,20 +412,18 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       await logoutApi(logoutParams).unwrap();
       
     } catch (error) {
-      console.error('❌ Logout API error:', error);
-      
+      // Logout API error - silently handle
       if (error?.status === 401 || error?.status === 403) {
-        console.warn('⚠️ Authentication error during logout - likely already logged out');
+        // Authentication error during logout - likely already logged out
       }
     } finally {
       try {
         await tokenManager.deleteDatabase();
       } catch (dbError) {
-        console.warn('⚠️ Could not delete database:', dbError);
         try {
           await tokenManager.clearAllDeviceTokens();
         } catch (e) {
-          console.warn('⚠️ Could not clear tokens:', e);
+          // Could not clear tokens
         }
       }
       
@@ -343,7 +462,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             caches.delete(name);
           });
         } catch (e) {
-          console.warn('⚠️ Could not clear caches:', e);
+          // Could not clear caches
         }
       }
       

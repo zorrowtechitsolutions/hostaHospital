@@ -25,14 +25,14 @@ import {
 import {
   useGetStaffByIdQuery,
   useUpdateStaffMutation,
-  useChangeStaffPasswordMutation  // ✅ Import the password change hook
+  useChangeStaffPasswordMutation
 } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// 🔥 FIX: Enhanced helper function to get hospital ID (same pattern as EditDoctor)
+// Helper function to get hospital ID
 const getHospitalId = () => {
   const storedHospitalId = localStorage.getItem('hospitalId');
   if (storedHospitalId) {
@@ -47,13 +47,13 @@ const getHospitalId = () => {
   return null;
 };
 
-// 🔥 FIX: Enhanced helper function to get auth ID (same pattern as EditDoctor)
+// Helper function to get auth ID
 const getAuthId = () => {
   const authUser = getAuthUser();
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// FIX: Enhanced helper function to get full image URL with cache-busting
+// Helper function to get full image URL with cache-busting
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
@@ -64,7 +64,7 @@ const getFullImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// Lazy Image Component with Intersection Observer - same as EditDoctor
+// Lazy Image Component with Intersection Observer
 const LazyProfileImage = ({ imageKey, name, onLoad, onError, refreshKey }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,7 +131,7 @@ const LazyProfileImage = ({ imageKey, name, onLoad, onError, refreshKey }) => {
   );
 };
 
-// Form Section Skeleton Loader - same as EditDoctor
+// Form Section Skeleton Loader
 const FormSectionSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="h-8 w-40 bg-gray-200 rounded"></div>
@@ -146,7 +146,7 @@ const FormSectionSkeleton = () => (
   </div>
 );
 
-// Profile Section Skeleton - same as EditDoctor
+// Profile Section Skeleton
 const ProfileSectionSkeleton = () => (
   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg animate-pulse">
     <div className="w-24 h-24 bg-gray-200 rounded-full"></div>
@@ -158,7 +158,7 @@ const ProfileSectionSkeleton = () => (
   </div>
 );
 
-// Centered Loader Component - same as EditDoctor
+// Centered Loader Component
 const CenteredLoader = ({ text = "Loading..." }) => (
   <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
     <div className="text-center">
@@ -168,7 +168,7 @@ const CenteredLoader = ({ text = "Loading..." }) => (
   </div>
 );
 
-// Status Toggle Component - same as EditDoctor
+// Status Toggle Component
 const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
   const isActive = status;
 
@@ -215,7 +215,7 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
   );
 });
 
-// Password Input Component - same as EditDoctor
+// Password Input Component
 const PasswordInput = ({ 
   label, 
   name, 
@@ -292,10 +292,10 @@ const EditStaff = () => {
   const { id: paramId } = useParams();
   const location = useLocation();
   
-  // Clean the ID (same as EditDoctor)
+  // Clean the ID
   const staffId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  // 🔥 FIX: Get IDs using the helper functions (same pattern as EditDoctor)
+  // Get IDs using the helper functions
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const authId = getAuthId();
@@ -304,7 +304,7 @@ const EditStaff = () => {
   // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
-  // 🔥 FIX: Fetch roles with proper hospitalId (skip if no hospitalId)
+  // Fetch roles with proper hospitalId
   const {
     data: rolesData,
     isLoading: rolesLoading,
@@ -331,13 +331,13 @@ const EditStaff = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // 🔥 FIX: Add the missing state for language dropdown
+  // State for language dropdown
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   
-  // FIX: Add state to force image refresh
+  // State to force image refresh
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   
-  // Form state - consistent with EditDoctor pattern, includes password fields
+  // Form state
   const [formData, setFormData] = useState({
     profileImage: null,
     imageUrl: null,
@@ -374,10 +374,10 @@ const EditStaff = () => {
   
   const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
   
-  // ✅ Add the password change hook
+  // Password change hook
   const [changeStaffPassword, { isLoading: isPasswordChanging }] = useChangeStaffPasswordMutation();
 
-  // Extract staff from response (handles different response structures like EditDoctor)
+  // Extract staff from response
   const staff = staffResponse?.data?.staff || staffResponse?.staff || staffResponse?.data || staffResponse;
 
   // Helper function to format staff ID
@@ -393,13 +393,13 @@ const EditStaff = () => {
     return `#SF${String(numericId).padStart(4, '0')}`;
   };
 
-  // Get role name by ID for display (same as EditDoctor)
+  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name (same as EditDoctor)
+  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
     const roleName = getRoleNameById(roleId);
     const roleNameLower = roleName?.toLowerCase();
@@ -414,14 +414,14 @@ const EditStaff = () => {
   const states = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
   const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
 
-  // 🔥 FIX: Check if hospitalId exists and show error if not (same as EditDoctor)
+  // Check if hospitalId exists
   useEffect(() => {
     if (!hospitalId) {
-      console.warn('⚠️ No hospital ID found. Please log in again.');
+      // No hospital ID found
     }
   }, [hospitalId]);
 
-  // ✅ FIX: Reset everything when staff ID changes or component mounts (same as EditDoctor)
+  // Reset everything when staff ID changes
   useEffect(() => {
     setFormInitialized(false);
     setFormData({
@@ -461,9 +461,9 @@ const EditStaff = () => {
     return () => {
       setFormInitialized(false);
     };
-  }, [staffId]); // Runs when staffId changes (same as EditDoctor)
+  }, [staffId]);
 
-  // Initialize form with staff data (same pattern as EditDoctor)
+  // Initialize form with staff data
   useEffect(() => {
     if (staff && staff.id && !formInitialized) {
       // Get image key from staff
@@ -515,7 +515,7 @@ const EditStaff = () => {
     }
   }, [staff, formInitialized]);
 
-  // ✅ FIXED: handleImageUpload with explicit staff ID and role (same as EditDoctor)
+  // handleImageUpload with explicit staff ID and role
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -536,12 +536,11 @@ const EditStaff = () => {
     try {
       setUploadProgress(30);
       
-      // ✅ FIX: Pass the staff ID and role explicitly (same as EditDoctor)
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null,
-        Number(staffId),  // ✅ Pass staff ID explicitly
-        "staff"           // ✅ Pass role explicitly
+        Number(staffId),
+        "staff"
       );
       
       setUploadProgress(100);
@@ -553,13 +552,11 @@ const EditStaff = () => {
         imageKey: uploaded.key
       }));
       
-      // FIX: Force image refresh after upload
       setImageRefreshKey(Date.now());
       
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 3000);
     } catch (error) {
-      console.error("Upload error details:", error);
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
@@ -598,7 +595,7 @@ const EditStaff = () => {
     showSuccessToast('Image removed', 2000);
   };
 
-  // Language handlers (same as EditDoctor)
+  // Language handlers
   const handleLanguageSelect = useCallback((languageValue) => {
     setFormData(prev => {
       const currentLanguages = [...prev.knowLanguages];
@@ -622,7 +619,13 @@ const EditStaff = () => {
     return lang ? lang.label : value;
   };
 
+  // handleFieldChange with event object protection
   const handleFieldChange = useCallback((field, value) => {
+    // Prevent event/object from being stored
+    if (value && typeof value === "object" && value.target) {
+      value = value.target.value;
+    }
+
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -637,7 +640,7 @@ const EditStaff = () => {
     showSuccessToast(`Staff status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
   }, [formData.isActive]);
 
-  // Password validation (same as EditDoctor pattern)
+  // Password validation
   const validatePassword = (password) => {
     if (!password) return '';
     if (password.length < 8) return 'Password must be at least 8 characters';
@@ -654,7 +657,7 @@ const EditStaff = () => {
     return '';
   };
 
-  // Form validation (same as EditDoctor pattern)
+  // Form validation
   const validateField = (name, value) => {
     switch (name) {
       case 'name':
@@ -706,17 +709,17 @@ const EditStaff = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ CORRECTED handleSubmit with proper password change API integration (same as EditDoctor)
+  // handleSubmit with proper password change API integration
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 🔥 Validate hospitalId exists (same as EditDoctor)
+    // Validate hospitalId exists
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
     }
 
-    // ✅ Validate password confirmation if password is provided
+    // Validate password confirmation if password is provided
     if (formData.password && formData.password !== formData.confirmPassword) {
       showErrorToast('❌ Passwords do not match!');
       return;
@@ -762,8 +765,7 @@ const EditStaff = () => {
         }
       };
 
-
-      // ✅ STEP 1: Update staff basic info
+      // STEP 1: Update staff basic info
       await updateStaff({
         id: String(staffId),
         data: updatedStaffData,
@@ -771,16 +773,16 @@ const EditStaff = () => {
         authId: authId
       }).unwrap();
 
-      // ✅ STEP 2: Change password only if a new password is provided
+      // STEP 2: Change password only if a new password is provided
       if (formData.password) {
         await changeStaffPassword({
-          staffId: String(staffId),  // ✅ Use String() as required by API
+          staffId: String(staffId),
           newPassword: formData.password,
           confirmPassword: formData.confirmPassword,
         }).unwrap();
       }
 
-      // ✅ STEP 3: Update role permission if roleId exists
+      // STEP 3: Update role permission if roleId exists
       if (roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
@@ -797,7 +799,7 @@ const EditStaff = () => {
         await assignPermissions(payload).unwrap();
       }
 
-      // FIX: Force image refresh after update
+      // Force image refresh after update
       setImageRefreshKey(Date.now());
       await refetch();
 
@@ -826,7 +828,6 @@ const EditStaff = () => {
       }, 1500);
 
     } catch (error) {
-      console.error("Update Error:", error);
       if (error.status === 409) {
         showErrorToast('Email already exists! Please use a different email address.');
       } else if (error.status === 400 && error.data?.message?.includes('password')) {
@@ -847,7 +848,7 @@ const EditStaff = () => {
     refetch();
   };
 
-  // 🔥 FIX: Show error state if no hospitalId (same as EditDoctor)
+  // Show error state if no hospitalId
   if (!hospitalId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -868,7 +869,7 @@ const EditStaff = () => {
     );
   }
 
-  // Loading states - Show skeleton while form is initializing (same as EditDoctor)
+  // Loading states
   if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading staff data..." />;
   }
@@ -955,7 +956,7 @@ const EditStaff = () => {
         <form onSubmit={handleSubmit}>
           <Card>
             <div className="p-6 space-y-6">
-              {/* Profile Image Section with Lazy Loading - same as EditDoctor */}
+              {/* Profile Image Section with Lazy Loading */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="relative">
@@ -1061,7 +1062,7 @@ const EditStaff = () => {
                 />
               </div>
 
-              {/* Assign Role - Dynamic dropdown (same as EditDoctor) */}
+              {/* Assign Role - Dynamic dropdown */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Assign Role <span className="text-red-500">*</span>
@@ -1153,7 +1154,7 @@ const EditStaff = () => {
                 />
               </div>
 
-              {/* Languages Multi-select - same as EditDoctor */}
+              {/* Languages Multi-select */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
                   Known Languages
@@ -1207,7 +1208,7 @@ const EditStaff = () => {
                 </div>
               </div>
 
-              {/* Account Details Section - Same as EditDoctor with Password fields */}
+              {/* Account Details Section with Password fields */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1259,7 +1260,7 @@ const EditStaff = () => {
                 </p>
               </div>
 
-              {/* Address Section - same as EditDoctor */}
+              {/* Address Section */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                 <div className="space-y-5">
@@ -1309,7 +1310,7 @@ const EditStaff = () => {
                 </div>
               </div>
 
-              {/* Status Toggle - same as EditDoctor */}
+              {/* Status Toggle */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <StatusToggle 
                   status={formData.isActive} 

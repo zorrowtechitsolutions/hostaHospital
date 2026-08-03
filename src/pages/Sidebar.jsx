@@ -79,7 +79,7 @@ const menu = [
             label: "Users",
             icon: Users,
             path: "/users",
-            permissionId: 58,
+            permissionId: 63,
           },
           {
             label: "Group Permission",

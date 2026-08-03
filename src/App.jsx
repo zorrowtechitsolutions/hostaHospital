@@ -543,7 +543,7 @@ function App() {
                 <Route 
                   path="/users" 
                   element={
-                    <ProtectedRoute permissionId={78}> {/* users view */}
+                    <ProtectedRoute permissionId={58}> {/* users view */}
                       <Users />
                     </ProtectedRoute>
                   } 
@@ -551,7 +551,7 @@ function App() {
                 <Route 
                   path="/add-user" 
                   element={
-                    <ProtectedRoute permissionId={77}> {/* users create */}
+                    <ProtectedRoute permissionId={58}> {/* users create */}
                       <AddNewUser />
                     </ProtectedRoute>
                   } 
@@ -559,7 +559,7 @@ function App() {
                 <Route 
                   path="/edit-user/:id" 
                   element={
-                    <ProtectedRoute permissionId={79}> {/* users edit */}
+                    <ProtectedRoute permissionId={58}> {/* users edit */}
                       <EditUser />
                     </ProtectedRoute>
                   } 

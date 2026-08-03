@@ -30,7 +30,7 @@ export const Select = ({
         <select
           name={name}
           value={value || ''}
-          onChange={onChange}
+          onChange={(e) => onChange?.(e.target.value)}
           onBlur={onBlur}
           className={`
             w-full px-3 py-2 border rounded-lg 

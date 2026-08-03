@@ -342,7 +342,7 @@ const Doctors = () => {
       onDoctorPasswordReset: () => {
         showSuccessToast(`Doctor password reset initiated!`, 3000);
       },
-      onDoctorPasswordChanged: () => {
+      onDoctorPasswordChangedByAdmin: () => {
         showSuccessToast(`Doctor password changed successfully!`, 3000);
       }
     });
