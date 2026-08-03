@@ -194,7 +194,6 @@ const storeStaffIds = (response: StaffResponse) => {
   };
   localStorage.setItem("authData", JSON.stringify(authData));
 
-  console.log('✅ Staff IDs stored:', { authId, hospitalId });
 };
 
 // ============================================

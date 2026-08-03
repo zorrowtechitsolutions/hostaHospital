@@ -340,13 +340,11 @@ const DocumentsTab = ({ patient }) => {
 
       // ✅ If a new file is selected, upload to S3
       if (editFile) {
-        console.log("📤 Uploading file to S3 for document:", documentId);
         
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
 
-        console.log("📁 File Key:", fileKey);
 
         setUploadProgress(20);
 
@@ -357,7 +355,6 @@ const DocumentsTab = ({ patient }) => {
           "documents"
         );
 
-        console.log("✅ S3 Upload Result:", s3Result);
 
         setUploadProgress(70);
 
@@ -375,7 +372,6 @@ const DocumentsTab = ({ patient }) => {
         };
       }
 
-      console.log("📄 UPDATE PAYLOAD:", JSON.stringify(updateData, null, 2));
 
       await updateDocument({
         id: documentId,

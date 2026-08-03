@@ -622,7 +622,6 @@ const EditHospital = () => {
       workingHoursData: apiWorkingHours
     };
 
-    console.log('Updating hospital with working hours:', updateData);
 
     try {
       await updateHospital(updateData).unwrap();

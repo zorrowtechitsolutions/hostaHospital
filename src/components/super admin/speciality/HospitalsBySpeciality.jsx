@@ -24,11 +24,6 @@ const HospitalsBySpeciality = () => {
   const specialityName = location.state?.specialityName;
   const specialityId = location.state?.specialityId || id;
 
-  console.log('===== HOSPITALS PAGE DEBUG =====');
-  console.log('specialityName from state:', specialityName);
-  console.log('specialityId from state/params:', specialityId);
-  console.log('================================');
-
   // Step 1: Get ALL doctors by speciality name - WITH REFETCH FORCED
   const { 
     data: doctorsData, 
@@ -61,11 +56,9 @@ const HospitalsBySpeciality = () => {
   useEffect(() => {
     const processData = async () => {
       if (!doctorsData || isLoadingDoctors) {
-        console.log('Waiting for doctors data...');
         return;
       }
       if (!hospitalsData || isLoadingHospitals) {
-        console.log('Waiting for hospitals data...');
         return;
       }
 
@@ -73,12 +66,8 @@ const HospitalsBySpeciality = () => {
         // Get doctors array
         const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
         
-        console.log('===== PROCESSING DATA =====');
-        console.log('Doctors count:', doctors.length);
-        console.log('Doctors raw data:', doctors);
         
         if (doctors.length === 0) {
-          console.log('No doctors found for speciality:', specialityName);
           setHospitals([]);
           return;
         }
@@ -86,8 +75,6 @@ const HospitalsBySpeciality = () => {
         // Get hospitals array
         const allHospitals = hospitalsData?.data || hospitalsData?.hospitals || hospitalsData || [];
         
-        console.log('Total hospitals available:', allHospitals.length);
-        console.log('Hospitals list:', allHospitals.map(h => ({ id: h.id, name: h.name })));
         
         // Get unique hospital IDs from doctors (convert to Number for proper comparison)
         const uniqueHospitalIds = [...new Set(
@@ -96,12 +83,6 @@ const HospitalsBySpeciality = () => {
             .map(doctor => Number(doctor.hospitalId))
         )];
         
-        console.log('Unique Hospital IDs from doctors:', uniqueHospitalIds);
-        
-        // Log each doctor's hospitalId for debugging
-        doctors.forEach(doctor => {
-          console.log(`Doctor ${doctor.id}: hospitalId = ${doctor.hospitalId} (${typeof doctor.hospitalId})`);
-        });
         
         // Match hospitals (convert both to Number for comparison)
         const matchedHospitals = allHospitals
@@ -111,8 +92,6 @@ const HospitalsBySpeciality = () => {
             doctorsCount: doctors.filter(d => Number(d.hospitalId) === Number(hospital.id)).length
           }));
         
-        console.log('Matched Hospitals:', matchedHospitals.map(h => ({ id: h.id, name: h.name, doctorsCount: h.doctorsCount })));
-        console.log(`Found ${matchedHospitals.length} matching hospitals`);
         
         setHospitals(matchedHospitals);
         
@@ -139,7 +118,6 @@ const HospitalsBySpeciality = () => {
   const totalPages = Math.ceil(filteredHospitals.length / itemsPerPage);
 
   const handleHospitalClick = (hospital) => {
-    console.log('Hospital clicked:', hospital.name, 'ID:', hospital.id);
     navigate(`/super-admin/hospital/${hospital.id}/doctors`, {
       state: {
         hospitalId: hospital.id,
@@ -152,7 +130,6 @@ const HospitalsBySpeciality = () => {
 
   // Manual refresh button handler
   const handleRefresh = () => {
-    console.log('Manual refresh triggered');
     refetchDoctors();
     refetchHospitals();
     showErrorToast('Refreshing data...', 2000);

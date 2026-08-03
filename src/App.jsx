@@ -26,6 +26,7 @@ import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
 import { initSocket } from './socket/socket';
+
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
 const PatientDetails = lazy(() => import("./components/patients/PatientDetails"));
@@ -320,11 +321,11 @@ function App() {
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 
-                {/* Doctor routes with permission checks */}
+                {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
                 <Route 
                   path="/doctors" 
                   element={
-                    <ProtectedRoute permissionId={2}>
+                    <ProtectedRoute permissionId={2}> {/* view */}
                       <Doctors />
                     </ProtectedRoute>
                   } 
@@ -332,7 +333,7 @@ function App() {
                 <Route 
                   path="/add-doctor" 
                   element={
-                    <ProtectedRoute permissionId={3}>
+                    <ProtectedRoute permissionId={1}> {/* create */}
                       <AddDoctor />
                     </ProtectedRoute>
                   } 
@@ -340,7 +341,7 @@ function App() {
                 <Route 
                   path="/edit-doctor/:id" 
                   element={
-                    <ProtectedRoute permissionId={4}>
+                    <ProtectedRoute permissionId={3}> {/* edit */}
                       <EditDoctor />
                     </ProtectedRoute>
                   } 
@@ -348,17 +349,17 @@ function App() {
                 <Route 
                   path="/doctor/:id" 
                   element={
-                    <ProtectedRoute permissionId={5}>
+                    <ProtectedRoute permissionId={2}> {/* view */}
                       <ViewDoctor />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Patient routes with permission checks */}
+                {/* Patient routes with permission checks - IDs from CSV: patient module (13-16) */}
                 <Route 
                   path="/patients" 
                   element={
-                    <ProtectedRoute >
+                    <ProtectedRoute permissionId={14}> {/* view */}
                       <Patients />
                     </ProtectedRoute>
                   } 
@@ -366,7 +367,7 @@ function App() {
                 <Route 
                   path="/add-patient" 
                   element={
-                    <ProtectedRoute >
+                    <ProtectedRoute permissionId={13}> {/* create */}
                       <AddPatient />
                     </ProtectedRoute>
                   } 
@@ -374,7 +375,7 @@ function App() {
                 <Route 
                   path="/edit-patient/:id" 
                   element={
-                    <ProtectedRoute >
+                    <ProtectedRoute permissionId={15}> {/* edit */}
                       <EditPatientModal />
                     </ProtectedRoute>
                   } 
@@ -382,17 +383,17 @@ function App() {
                 <Route 
                   path="/patients/:id" 
                   element={
-                    <ProtectedRoute >
+                    <ProtectedRoute permissionId={14}> {/* view */}
                       <PatientDetails />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Staff routes with permission checks */}
+                {/* Staff routes with permission checks - IDs from CSV: staff module (9-12) */}
                 <Route 
                   path="/staffs" 
                   element={
-                    <ProtectedRoute permissionId={10}>
+                    <ProtectedRoute permissionId={10}> {/* view */}
                       <Staffs />
                     </ProtectedRoute>
                   } 
@@ -400,7 +401,7 @@ function App() {
                 <Route 
                   path="/add-staff" 
                   element={
-                    <ProtectedRoute permissionId={11}>
+                    <ProtectedRoute permissionId={9}> {/* create */}
                       <AddStaff />
                     </ProtectedRoute>
                   } 
@@ -408,17 +409,17 @@ function App() {
                 <Route 
                   path="/edit-staff/:id" 
                   element={
-                    <ProtectedRoute permissionId={12}>
+                    <ProtectedRoute permissionId={11}> {/* edit */}
                       <EditStaff />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Lab routes with permission checks */}
+                {/* Lab routes with permission checks - IDs from CSV: lab module (21-24) and labresult module (81-84) */}
                 <Route 
                   path="/lab/results" 
                   element={
-                    <ProtectedRoute permissionId={22}>
+                    <ProtectedRoute permissionId={82}> {/* labresult view */}
                       <AllLabResults />
                     </ProtectedRoute>
                   } 
@@ -426,7 +427,7 @@ function App() {
                 <Route 
                   path="/lab/tests" 
                   element={
-                    <ProtectedRoute permissionId={22}>
+                    <ProtectedRoute permissionId={82}> {/* labresult view */}
                       <LabTests />
                     </ProtectedRoute>
                   } 
@@ -434,7 +435,7 @@ function App() {
                 <Route 
                   path="/lab/results/add" 
                   element={
-                    <ProtectedRoute permissionId={22}>
+                    <ProtectedRoute permissionId={81}> {/* labresult create */}
                       <AddEditLabResults />
                     </ProtectedRoute>
                   } 
@@ -442,7 +443,7 @@ function App() {
                 <Route 
                   path="/lab/results/edit/:id" 
                   element={
-                    <ProtectedRoute permissionId={22}>
+                    <ProtectedRoute permissionId={83}> {/* labresult edit */}
                       <AddEditLabResults />
                     </ProtectedRoute>
                   } 
@@ -450,45 +451,134 @@ function App() {
                 <Route 
                   path="/laboratory" 
                   element={
-                    <ProtectedRoute permissionId={22}>
+                    <ProtectedRoute permissionId={22}> {/* lab view */}
                       <LaboratoryRegistrationForm />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Ambulance route */}
+                {/* Ambulance route - IDs from CSV: ambulance module (29-32) */}
                 <Route 
                   path="/ambulance" 
                   element={
-                    <ProtectedRoute permissionId={46}>
+                    <ProtectedRoute permissionId={30}> {/* ambulance view */}
                       <Ambulance />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Blood Bank route */}
+                {/* Blood Bank route - IDs from CSV: blood_bank module (25-28) */}
                 <Route 
                   path="/blood" 
                   element={
-                    <ProtectedRoute permissionId={26}>
+                    <ProtectedRoute permissionId={26}> {/* blood_bank view */}
                       <BloodBank />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Other protected routes without specific permission IDs */}
+                {/* Pharmacy route - IDs from CSV: pharmacy module (53-56) */}
+                <Route 
+                  path="/pharmacy" 
+                  element={
+                    <ProtectedRoute permissionId={54}> {/* pharmacy view */}
+                      <Pharmacy />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/product/:id" 
+                  element={
+                    <ProtectedRoute permissionId={54}> {/* pharmacy view */}
+                      <ViewProduct />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Appointment/Consultation routes - IDs from CSV: booking module (33-36) */}
+                <Route 
+                  path="/appointments/consultation" 
+                  element={
+                    <ProtectedRoute permissionId={34}> {/* booking view */}
+                      <Consultation />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/appointments/medical-history" 
+                  element={
+                    <ProtectedRoute permissionId={34}> {/* booking view */}
+                      <ViewMedicalHistory />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/appointments" 
+                  element={
+                    <ProtectedRoute permissionId={34}> {/* booking view */}
+                      <Appointments />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Role & Permission routes - IDs from CSV: role module (57-60) and permission module (61-64) */}
+                <Route 
+                  path="/roles" 
+                  element={
+                    <ProtectedRoute permissionId={58}> {/* role view */}
+                      <UserPermissions/>
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/permissions/:roleId" 
+                  element={
+                    <ProtectedRoute permissionId={58}> {/* role view */}
+                      <PermissionList />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* User management routes - IDs from CSV: users module (77-80) */}
+                <Route 
+                  path="/users" 
+                  element={
+                    <ProtectedRoute permissionId={78}> {/* users view */}
+                      <Users />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-user" 
+                  element={
+                    <ProtectedRoute permissionId={77}> {/* users create */}
+                      <AddNewUser />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/edit-user/:id" 
+                  element={
+                    <ProtectedRoute permissionId={79}> {/* users edit */}
+                      <EditUser />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Visits - IDs from CSV: visits module */}
+                <Route 
+                  path="/visits" 
+                  element={
+                    <ProtectedRoute permissionId={34}> {/* booking view */}
+                      <Visits />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Requests - No specific permission needed */}
                 <Route path="/requests" element={<RequestsTable />} />
-                <Route path="/pharmacy" element={<Pharmacy />} />
-                <Route path="/product/:id" element={<ViewProduct />} />
-                <Route path="/appointments/consultation" element={<Consultation />} />
-                <Route path="/appointments/medical-history" element={<ViewMedicalHistory />} />
-                <Route path="/roles" element={<UserPermissions/>} />
-                <Route path="/permissions/:roleId" element={<PermissionList />} /> 
-                <Route path="/users" element={<Users />} /> 
-                <Route path="/add-user" element={<AddNewUser />} />
-                <Route path="/edit-user/:id" element={<EditUser />} />
-                <Route path="/visits" element={<Visits />} />
-                <Route path="/appointments" element={<Appointments />} />
+                
+                {/* Email templates - IDs from CSV: email module */}
                 <Route path="/email" element={<EmailTemplates />} />
                 
                 {/* Catch all route */}

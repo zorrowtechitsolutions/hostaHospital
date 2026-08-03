@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx - With proper role-based user data
+// src/components/Sidebar.jsx - With proper role-based user data using authId
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -107,14 +107,14 @@ export default function Sidebar({ sidebarOpen }) {
   const userRole = user?.role || localStorage.getItem('userRole') || 'hospital';
   const hospitalId = localStorage.getItem('hospitalId') || '';
   
-  // ✅ FIXED: Get correct user ID based on role (matching TopBar logic)
+  // ✅ FIXED: Get correct user ID based on role - using authId for API requests
   const getUserIdByRole = () => {
     // Get from user object first (same as TopBar)
     const userIdFromUser = 
       userRole === 'doctor' 
-        ? (user?.doctorId || user?.id) 
+        ? (user?.authId || user?.id || localStorage.getItem("authId")) 
         : userRole === 'staff'
-        ? (user?.staffId || user?.id) 
+        ? (user?.authId || user?.id || localStorage.getItem("authId")) 
         : (user?.id || hospitalId);
     
     // If we have a valid ID from user object, use it
@@ -253,7 +253,7 @@ export default function Sidebar({ sidebarOpen }) {
       if (displayName && displayName.startsWith('Dr.')) {
         return displayName;
       }
-      return `Dr. ${displayName}`;
+      return `${displayName}`;
     } else if (userRole === 'hospital') {
       return displayName; // Hospital name without prefix
     } else if (userRole === 'staff') {

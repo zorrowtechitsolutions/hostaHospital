@@ -1,4 +1,4 @@
-// src/components/layout/TopBar.jsx
+// src/components/layout/TopBar.jsx - FIXED doctor/staff ID handling
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -96,12 +96,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   // Check if user is Hospital Admin (has access to Settings)
   const isHospitalAdmin = userRole === 'hospital';
   
-  // ✅ FIXED: Get correct user ID based on role
+  // ✅ FIXED: Get correct user ID based on role - using authId for API requests
   const userId =
     userRole === "doctor"
-      ? (user?.doctorId || user?.id)
+      ? (user?.authId || user?.id || localStorage.getItem("authId"))
       : userRole === "staff"
-      ? (user?.staffId || user?.id)
+      ? (user?.authId || user?.id || localStorage.getItem("authId"))
       : (user?.id || hospitalId);
   
   // Fetch data based on user role

@@ -762,12 +762,6 @@ const EditStaff = () => {
         }
       };
 
-      console.log('📤 Updating staff data:', {
-        ...updatedStaffData,
-        hospitalId: hospitalId,
-        authId: authId,
-        password: formData.password ? '[REDACTED]' : 'Not changing'
-      });
 
       // ✅ STEP 1: Update staff basic info
       await updateStaff({
@@ -779,13 +773,11 @@ const EditStaff = () => {
 
       // ✅ STEP 2: Change password only if a new password is provided
       if (formData.password) {
-        console.log('🔑 Changing password for staff:', staffId);
         await changeStaffPassword({
           staffId: String(staffId),  // ✅ Use String() as required by API
           newPassword: formData.password,
           confirmPassword: formData.confirmPassword,
         }).unwrap();
-        console.log('✅ Password changed successfully');
       }
 
       // ✅ STEP 3: Update role permission if roleId exists
@@ -802,7 +794,6 @@ const EditStaff = () => {
           ]
         };
         
-        console.log('📤 Assigning permissions:', payload);
         await assignPermissions(payload).unwrap();
       }
 

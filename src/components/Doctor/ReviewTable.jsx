@@ -111,8 +111,6 @@ const {
     : { doctorId }
 );
 
-  console.log("API Response:", reviewsResponse);
-console.log("Reviews Array:", reviewsResponse?.data);
 
 const reviews = reviewsResponse?.data || [];
 const totalReviews = reviews.length;

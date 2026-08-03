@@ -41,15 +41,15 @@ const getFullImageUrl = (imageKey) => {
 
 // ==================== TOAST FUNCTIONS ====================
 const showSuccessToast = (message) => {
-  console.log('✅ Success:', message);
+  // Toast implementation
 };
 
 const showErrorToast = (message) => {
-  console.error('❌ Error:', message);
+  // Toast implementation
 };
 
 const showWarningToast = (message) => {
-  console.warn('⚠️ Warning:', message);
+  // Toast implementation
 };
 
 // ==================== SKELETON LOADER ====================
@@ -129,8 +129,6 @@ const StaffProfile = () => {
   
   const staffId = user?.staffId || user?.id;
   
-  
-  
   const { data: staffResponse, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
     skip: !staffId,
   });
@@ -138,7 +136,7 @@ const StaffProfile = () => {
   const [updateStaff, { isLoading: isUpdating }] = useUpdateStaffMutation();
 
   const [formData, setFormData] = useState({
-    id: '', // ✅ Add numeric ID field
+    id: '',
     name: '',
     email: '',
     phone: '',
@@ -187,9 +185,8 @@ const StaffProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
-  // ✅ Populate profile from API data
+  // Populate profile from API data
   useEffect(() => {
-    
     if (staffResponse) {
       const staff = staffResponse.data;
       
@@ -200,7 +197,6 @@ const StaffProfile = () => {
           staff?.image ||
           null;
         
-        // Get address fields
         const address = staff?.address || {};
         const place = address?.place || '';
         const district = address?.district || '';
@@ -208,24 +204,21 @@ const StaffProfile = () => {
         const country = address?.country || '';
         const pincode = address?.pincode || '';
         
-        // Format address for display
         const addressParts = [place, district, state, country].filter(Boolean);
         const addressString = addressParts.length > 0 ? 
           `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` : 
           '';
         
-        // Format joining date
         const joiningDate = staff?.joiningDate ? 
           staff.joiningDate.split('T')[0] : 
           '';
         
-        // Format date of birth
         const dob = staff?.dob ? 
           staff.dob.split('T')[0] : 
           '';
         
         const staffInfo = {
-          id: staff?.id || '', // ✅ Store numeric ID
+          id: staff?.id || '',
           name: staff?.name || '',
           email: staff?.email || '',
           phone: staff?.phone || '',
@@ -279,7 +272,6 @@ const StaffProfile = () => {
     }));
   };
 
-  // ✅ FIXED: Image upload with proper numeric ID
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -305,7 +297,7 @@ const StaffProfile = () => {
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null, 
-        numericId,  // ✅ Pass numeric ID
+        numericId,
         'staff'
       );
       
@@ -322,7 +314,6 @@ const StaffProfile = () => {
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
     } catch (error) {
-      console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
@@ -352,7 +343,6 @@ const StaffProfile = () => {
     resetUploadState();
   };
 
-  // ✅ Save with proper update data
   const handleSave = async () => {
     setIsSaving(true);
     
@@ -414,7 +404,6 @@ const StaffProfile = () => {
       setIsEditing(false);
       resetUploadState();
       
-      // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { 
         ...storedUser, 
@@ -426,7 +415,6 @@ const StaffProfile = () => {
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
-      // Update authData
       const authData = JSON.parse(localStorage.getItem('authData') || '{}');
       localStorage.setItem('authData', JSON.stringify({
         ...authData,
@@ -485,7 +473,6 @@ const StaffProfile = () => {
     e.target.src = FALLBACK_IMAGE;
   };
 
-  // ✅ Get the staff object from response
   const staff = staffResponse?.data || {};
   const address = staff?.address || {};
 

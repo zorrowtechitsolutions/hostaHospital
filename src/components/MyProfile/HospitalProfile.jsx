@@ -38,7 +38,6 @@ const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 p
 
 // ==================== HELPER FUNCTIONS ====================
 
-// ✅ EXACT SAME LOGIC AS DOCTOR PROFILE
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
@@ -56,15 +55,15 @@ const getFullImageUrl = (imageKey) => {
 
 // ==================== TOAST FUNCTIONS ====================
 const showSuccessToast = (message) => {
-  console.log('✅ Success:', message);
+  // Toast implementation
 };
 
 const showErrorToast = (message) => {
-  console.error('❌ Error:', message);
+  // Toast implementation
 };
 
 const showWarningToast = (message) => {
-  console.warn('⚠️ Warning:', message);
+  // Toast implementation
 };
 
 // ==================== SKELETON LOADER ====================
@@ -95,9 +94,6 @@ const HospitalProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  // ✅ FIXED: Get hospitalId from user object
-  // user.hospitalId is the Hospital table ID
-  // user.id is the Auth table ID
   const hospitalId = user?.hospitalId || user?.id;
   
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
@@ -131,17 +127,11 @@ const HospitalProfile = () => {
 
   // ==================== SOCKET EVENT HANDLERS ====================
   
-  // Handle hospital updated event from socket
   const handleHospitalUpdated = (data) => {
-    console.log('🔄 Hospital updated via socket:', data);
-    
     if (data && data.id === hospitalId) {
       showSuccessToast('Hospital profile updated in real-time!');
-      
-      // Refresh the data
       refetch();
       
-      // Update form data if the hospital data matches
       if (data.name || data.email || data.phone) {
         setFormData(prev => ({
           ...prev,
@@ -159,15 +149,11 @@ const HospitalProfile = () => {
     }
   };
 
-  // Handle hospital registered event
   const handleHospitalRegistered = (data) => {
-    console.log('🏥 New hospital registered via socket:', data);
     showSuccessToast('New hospital registered!');
   };
 
-  // Handle hospital deleted event
   const handleHospitalDeleted = (data) => {
-    console.log('🗑️ Hospital deleted via socket:', data);
     if (data && data.id === hospitalId) {
       showWarningToast('Your hospital profile has been deleted.');
       setTimeout(() => {
@@ -177,9 +163,7 @@ const HospitalProfile = () => {
     }
   };
 
-  // Handle hospital blacklisted event
   const handleHospitalBlacklisted = (data) => {
-    console.log('⛔ Hospital blacklisted via socket:', data);
     if (data && data.id === hospitalId) {
       showErrorToast('Your hospital has been blacklisted. Please contact support.');
       setTimeout(() => {
@@ -189,18 +173,14 @@ const HospitalProfile = () => {
     }
   };
 
-  // Handle hospital recovered event
   const handleHospitalRecovered = (data) => {
-    console.log('🔄 Hospital recovered via socket:', data);
     if (data && data.id === hospitalId) {
       showSuccessToast('Your hospital has been recovered!');
       refetch();
     }
   };
 
-  // Register socket events on mount
   useEffect(() => {
-    // Register all hospital event handlers
     registerHospitalEvents({
       onHospitalRegistered: handleHospitalRegistered,
       onHospitalUpdated: handleHospitalUpdated,
@@ -209,13 +189,11 @@ const HospitalProfile = () => {
       onHospitalRecovered: handleHospitalRecovered,
     });
 
-    // Cleanup on unmount
     return () => {
       unregisterHospitalEvents();
     };
-  }, [hospitalId]); // Re-register if hospitalId changes
+  }, [hospitalId]);
 
-  // Handle fetch error (401 unauthorized)
   useEffect(() => {
     if (fetchError?.status === 401) {
       showErrorToast('Session expired. Redirecting to login...');
@@ -226,7 +204,6 @@ const HospitalProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
-  // Populate profile from API data
   useEffect(() => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
@@ -243,7 +220,6 @@ const HospitalProfile = () => {
         hospital.address?.state,
         hospital.address?.country
       ].filter(Boolean);
-      
       
       const locationString = locationParts.join(', ');
       
@@ -286,7 +262,6 @@ const HospitalProfile = () => {
     }));
   };
 
-  // ✅ EXACT SAME IMAGE UPLOAD LOGIC AS DOCTOR PROFILE
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -327,7 +302,6 @@ const HospitalProfile = () => {
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
     } catch (error) {
-      console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
@@ -357,7 +331,6 @@ const HospitalProfile = () => {
     resetUploadState();
   };
 
-  // ✅ FIXED: Save with correct hospitalId
   const handleSave = async () => {
     setIsSaving(true);
     
@@ -372,8 +345,6 @@ const HospitalProfile = () => {
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
       
-      // ✅ UPDATE: Using hospitalId from user object
-      // hospitalId is already set as user?.hospitalId || user?.id
       const response = await updateHospital({ 
         id: hospitalId, 
         updateHospital: updateData 
@@ -416,8 +387,6 @@ const HospitalProfile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
       showSuccessToast('Profile updated successfully!');
-      
-      // Refetch to get latest data
       refetch();
       
     } catch (error) {
@@ -444,7 +413,6 @@ const HospitalProfile = () => {
     showWarningToast('Changes discarded');
   };
 
-  // ✅ EXACT SAME GET PROFILE IMAGE LOGIC AS DOCTOR PROFILE
   const getProfileImage = () => {
     if (previewImage && !imageError) {
       return previewImage;

@@ -9,7 +9,6 @@ import StaffProfile from "./StaffProfile";
 const Profile = () => {
   const { user } = useAuth();
 
-  console.log("Profile user:", user);
 
   return (
     <div>

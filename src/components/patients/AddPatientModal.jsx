@@ -386,10 +386,7 @@ const AddPatient = () => {
       
       try {
         const patientData = preparePatientData();
-        
-        // ✅ Log the payload to verify hospitalName is included
-        console.log('📤 Sending patient data with hospital name:', patientData);
-        
+                
         await createPatient(patientData).unwrap();
         
         showSuccessToast(

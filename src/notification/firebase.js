@@ -132,12 +132,10 @@ export const isFCMAvailable = () => {
 // Foreground listener
 export const listenMessages = (callback) => {
   return onMessage(messaging, async (payload) => {
-    console.log("FCM Payload:", payload);
 
     try {
       notificationSound.currentTime = 0;
       await notificationSound.play();
-      console.log("✅ Custom notification sound played");
     } catch (err) {
       console.error("❌ Audio play failed:", err);
     }

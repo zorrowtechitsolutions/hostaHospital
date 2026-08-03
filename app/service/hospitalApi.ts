@@ -1,5 +1,5 @@
 // hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT
-// All working-hours conversion logic moved to JSX
+// Working-hours conversion logic in the API layer
 
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
@@ -217,6 +217,31 @@ const isSuperAdmin = (data: any): data is SuperAdmin => {
 };
 
 // ============================================
+// WORKING HOURS CONVERSION HELPER
+// ============================================
+
+const DAYS = [
+  { key: "monday", label: "Monday" },
+  { key: "tuesday", label: "Tuesday" },
+  { key: "wednesday", label: "Wednesday" },
+  { key: "thursday", label: "Thursday" },
+  { key: "friday", label: "Friday" },
+  { key: "saturday", label: "Saturday" },
+  { key: "sunday", label: "Sunday" },
+];
+
+const convertWorkingHoursToApi = (workingHours: any) => {
+  if (!workingHours) return [];
+
+  return DAYS.map(day => ({
+    day: day.label,
+    opening_time: workingHours[day.key]?.open || "09:00 AM",
+    closing_time: workingHours[day.key]?.close || "06:00 PM",
+    is_holiday: workingHours[day.key]?.closed || false,
+  }));
+};
+
+// ============================================
 // HELPER: Store dual IDs in localStorage
 // ============================================
 
@@ -306,7 +331,6 @@ const storeUserIds = (response: AuthResponse) => {
   
   localStorage.setItem("authData", JSON.stringify(authData));
 
-  console.log('✅ IDs stored:', { authId, hospitalId });
 };
 
 const getStoredIds = () => {
@@ -324,11 +348,9 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // ✅ REGISTER - /hospital (POST)
-    // NO conversion logic - JSX already prepared the payload
     // ============================================
     register: builder.mutation<AuthResponse, RegisterData>({
       query: (hospitalData) => {
-        // Use the data as-is - JSX already formatted it correctly
         const body: any = {
           name: hospitalData.name,
           email: hospitalData.email,
@@ -344,21 +366,26 @@ export const hospitalApi = api.injectEndpoints({
         if (hospitalData.longitude) body.longitude = hospitalData.longitude;
         if (hospitalData.about) body.about = hospitalData.about;
         
-        // Working Hours - JSX already built the correct structure
+        // Working Hours - Convert if needed
         const workingHourType = hospitalData.workingHourType || 'normal';
+        let workingHoursData = hospitalData.workingHoursData;
         
-        if (hospitalData.workingHoursData && hospitalData.workingHoursData.length > 0) {
-          // Send only the selected type's data
+        // Automatically convert from frontend format if workingHours is provided
+        if (!workingHoursData && hospitalData.workingHours) {
+          workingHoursData = convertWorkingHoursToApi(hospitalData.workingHours);
+        }
+        
+        if (workingHoursData && workingHoursData.length > 0) {
           if (workingHourType === 'normal') {
-            body.working_hours_general = hospitalData.workingHoursData;
+            body.working_hours_general = workingHoursData;
             body.working_hours_clinic = [];
             body.working_hours_clinic_nobreak = [];
           } else if (workingHourType === 'clinic') {
-            body.working_hours_clinic = hospitalData.workingHoursData;
+            body.working_hours_clinic = workingHoursData;
             body.working_hours_general = [];
             body.working_hours_clinic_nobreak = [];
           } else if (workingHourType === 'clinic-break') {
-            body.working_hours_clinic_nobreak = hospitalData.workingHoursData;
+            body.working_hours_clinic_nobreak = workingHoursData;
             body.working_hours_general = [];
             body.working_hours_clinic = [];
           }
@@ -492,7 +519,7 @@ export const hospitalApi = api.injectEndpoints({
         // Build URL with authId
         let url = `/auth/logout/${authId || 'unknown'}`;
         
-        // ✅ FIX: Send all required fields in the body
+        // Send all required fields in the body
         let body: any = {
           id: Number(authId),      // Convert to number as backend expects
           role: role,                    // Include role
@@ -710,7 +737,7 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ✅ UPDATE Hospital - /hospital/:id (PUT)
-    // NO conversion logic - JSX already prepared the payload
+    // Automatically converts workingHours from Settings.jsx format
     updateHospital: builder.mutation<Hospital, { id: string; updateHospital: any }>({
       query: ({ id, updateHospital }) => {
         const body: any = {
@@ -719,42 +746,75 @@ export const hospitalApi = api.injectEndpoints({
           type: updateHospital.type,
           phone: updateHospital.phone,
         };
-        
+
+        // Optional fields
         if (updateHospital.address) {
           body.address = updateHospital.address;
         }
-        
-        // Working Hours - JSX already built the correct structure
-        const workingHourType = updateHospital.workingHourType || 'normal';
-        
-        if (updateHospital.workingHoursData && updateHospital.workingHoursData.length > 0) {
-          if (workingHourType === 'normal') {
-            body.working_hours_general = updateHospital.workingHoursData;
+
+        if (updateHospital.emergencyContact) {
+          body.emergencyContact = updateHospital.emergencyContact;
+        }
+
+        if (updateHospital.latitude !== undefined) {
+          body.latitude = updateHospital.latitude;
+        }
+
+        if (updateHospital.longitude !== undefined) {
+          body.longitude = updateHospital.longitude;
+        }
+
+        if (updateHospital.about) {
+          body.about = updateHospital.about;
+        }
+
+        // ---------- Working Hours ----------
+        // Determine which type of working hours to use
+        const workingHourType = updateHospital.workingHourType || "normal";
+
+        let workingHoursData = updateHospital.workingHoursData;
+
+        // Automatically convert from Settings.jsx format (workingHours)
+        if (!workingHoursData && updateHospital.workingHours) {
+          workingHoursData = convertWorkingHoursToApi(
+            updateHospital.workingHours
+          );
+        }
+
+        if (workingHoursData && workingHoursData.length > 0) {
+          if (workingHourType === "normal") {
+            body.working_hours_general = workingHoursData;
             body.working_hours_clinic = [];
             body.working_hours_clinic_nobreak = [];
-          } else if (workingHourType === 'clinic') {
-            body.working_hours_clinic = updateHospital.workingHoursData;
+          } else if (workingHourType === "clinic") {
+            body.working_hours_clinic = workingHoursData;
             body.working_hours_general = [];
             body.working_hours_clinic_nobreak = [];
-          } else if (workingHourType === 'clinic-break') {
-            body.working_hours_clinic_nobreak = updateHospital.workingHoursData;
+          } else if (workingHourType === "clinic-break") {
+            body.working_hours_clinic_nobreak = workingHoursData;
             body.working_hours_general = [];
             body.working_hours_clinic = [];
           }
+        } else {
+          // If no working hours provided, preserve existing data
+          // by sending empty arrays (backend will handle this)
+          body.working_hours_general = [];
+          body.working_hours_clinic = [];
+          body.working_hours_clinic_nobreak = [];
         }
-        
-        if (updateHospital.emergencyContact) body.emergencyContact = updateHospital.emergencyContact;
-        if (updateHospital.latitude !== undefined) body.latitude = updateHospital.latitude;
-        if (updateHospital.longitude !== undefined) body.longitude = updateHospital.longitude;
-        if (updateHospital.about) body.about = updateHospital.about;
-        
+
+        console.log("UPDATE BODY", body);
+
         return {
           url: `/hospital/${id}`,
           method: "PUT",
           body: body,
         };
       },
-      invalidatesTags: (result, error, { id }) => [{ type: "Hospital", id }],
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Hospital", id },
+        "Hospital",
+      ],
       transformResponse: (response: Hospital) => {
         return response;
       },

@@ -184,7 +184,6 @@ const storeDoctorIds = (response: DoctorAuthResponse) => {
   };
   localStorage.setItem("authData", JSON.stringify(authData));
 
-  console.log('✅ Doctor IDs stored:', { authId, hospitalId });
 };
 
 // ============================================
