@@ -1,4 +1,4 @@
-// src/components/Doctor/Doctors.jsx - With Hospital Filter for Doctors
+// src/components/Doctor/Doctors.jsx
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
@@ -8,19 +8,12 @@ import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/servi
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { getAuthUser } from '../../../src/utils/auth';
-
-// ✅ Import Excel Export Button
 import ExcelExportButton from '../ui/ExcelExportButton';
-
-// ✅ Import date formatter
 import { formatDate } from "../../utils/dateFormatter";
-
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
 
-// S3 Configuration
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 
-// getS3ImageUrl with cache-busting
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
   if (imageKey.startsWith("http")) {
@@ -29,15 +22,12 @@ const getS3ImageUrl = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// 🔥 FIX: Enhanced helper function to get hospital ID (same pattern as AddPatient)
 const getHospitalId = () => {
-  // Priority 1: Check localStorage
   const storedHospitalId = localStorage.getItem('hospitalId');
   if (storedHospitalId) {
     return storedHospitalId;
   }
   
-  // Priority 2: Check auth.hospitalId
   const authUser = getAuthUser();
   if (authUser?.hospitalId) {
     return authUser.hospitalId;
@@ -46,13 +36,11 @@ const getHospitalId = () => {
   return null;
 };
 
-// 🔥 FIX: Enhanced helper function to get auth ID
 const getAuthId = () => {
   const authUser = getAuthUser();
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// ✅ Helper function to format address
 const formatAddress = (address) => {
   if (!address) return 'N/A';
   
@@ -73,7 +61,6 @@ const formatAddress = (address) => {
   return 'N/A';
 };
 
-// Helper functions
 const getDoctorName = (doctor) =>
   doctor.displayName || `${doctor.firstName || ""} ${doctor.lastName || ""}`.trim() || doctor.name || 'Doctor';
 
@@ -96,11 +83,9 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
-// ✅ FIXED: Doctor Action Menu Component - Only shows Recover when blacklisted
 const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== doctor.id) return null;
   
-  // ✅ Check if doctor is blacklisted/deleted
   const isBlacklisted = doctor.isDelete === true;
   
   return (
@@ -141,7 +126,6 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
       )}
       {!isBlacklisted && <div className="border-t border-gray-100 my-1"></div>}
       
-      {/* ✅ Show Recover when blacklisted, Delete when active */}
       {isBlacklisted ? (
         <button
           onClick={() => onRecover(doctor)}
@@ -167,7 +151,6 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
   );
 });
 
-// Skeleton Loader Component
 const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
   if (viewMode === 'grid') {
     return (
@@ -246,7 +229,6 @@ const Doctors = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // State management
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -261,23 +243,16 @@ const Doctors = () => {
 
   const [recoverDoctor] = useRecoverDoctorMutation();
 
-  // 🔥 FIX: Get the authenticated user using the helper
   const auth = getAuthUser();
-  
-  // 🔥 FIX: Get hospital ID using the helper function (same pattern as AddPatient)
   const hospitalId = getHospitalId();
   const authId = getAuthId();
 
-
-  // 🔥 FIX: Check for roles correctly
   const isHospitalAdmin = auth?.role === 'hospital' || auth?.roleId === 2;
   const isDoctor = auth?.role === 'doctor' || auth?.roleId === 46;
   const isStaff = auth?.role === 'staff' || auth?.roleId === 3;
   const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
   const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
 
-
-  // 🔥 FIX: Build query params with hospital filter for all hospital-bound users
   const queryParams = {
     search_query: searchTerm?.trim() ? searchTerm : undefined,
     speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
@@ -286,9 +261,7 @@ const Doctors = () => {
     limit: itemsPerPage
   };
 
-  // 🔥 CRITICAL FIX: If user is a doctor, staff, OR hospital admin, ALWAYS filter by their hospital ID
   if (shouldFilterByHospital) {
-    // Use hospitalId from auth or localStorage
     if (hospitalId) {
       queryParams.hospitalId = String(hospitalId);
     } else {
@@ -296,12 +269,10 @@ const Doctors = () => {
     }
   }
 
-  // 🔥 For Super Admin, allow filtering by hospitalId if provided
   if (isSuperAdmin && hospitalId) {
     queryParams.hospitalId = String(hospitalId);
   }
 
-  // API Query with hospital filter
   const {
     data: response,
     error,
@@ -310,7 +281,6 @@ const Doctors = () => {
     refetch,
   } = useGetDoctorsQuery(queryParams);
 
-  // Log response for debugging
   useEffect(() => {
     if (response?.data) {
       const uniqueHospitalIds = new Set(response.data.map(d => d.hospitalId));
@@ -320,7 +290,6 @@ const Doctors = () => {
     }
   }, [response]);
 
-  // Register socket event listeners
   useEffect(() => {
     registerDoctorEvents({
       onDoctorRegistered: () => {
@@ -342,8 +311,11 @@ const Doctors = () => {
       onDoctorPasswordReset: () => {
         showSuccessToast(`Doctor password reset initiated!`, 3000);
       },
-      onDoctorPasswordChangedByAdmin: () => {
+      onDoctorPasswordChanged: () => {
         showSuccessToast(`Doctor password changed successfully!`, 3000);
+      },
+      onDoctorPasswordChangedByAdmin: () => {
+        showSuccessToast(`Doctor password changed by admin!`, 3000);
       }
     });
 
@@ -352,25 +324,21 @@ const Doctors = () => {
     };
   }, [refetch]);
 
-  // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('doctorViewMode', viewMode);
   }, [viewMode]);
 
-  // Get doctors from API response
   const doctors = useMemo(() => {
     if (!response?.data) return [];
     return response.data.map((doctor) => ({
       ...doctor,
       imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
       hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
-      // Ensure authId is preserved
       authId: doctor.authId || doctor.userId || doctor.id,
       hospitalId: doctor.hospitalId || hospitalId,
     }));
   }, [response?.data, hospitalId]);
 
-  // Get unique departments from API response
   const departments = useMemo(() => {
     if (response?.departments && Array.isArray(response.departments)) {
       return ['All', ...response.departments];
@@ -383,11 +351,9 @@ const Doctors = () => {
     return ['All', ...Array.from(departmentSet)];
   }, [response?.departments, doctors]);
 
-  // Get total pages and total items from API response
   const totalPages = response?.pagination?.totalPages || 1;
   const totalItems = response?.pagination?.totalItems || 0;
 
-  // Handle location state for department filter
   useEffect(() => {
     if (location.state?.department) {
       setSelectedSpecialty(location.state.department);
@@ -395,12 +361,10 @@ const Doctors = () => {
     }
   }, [location.state]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedSpecialty, filterStatus]);
 
-  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -411,15 +375,12 @@ const Doctors = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ✅ Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
-    // If value is an event object, extract the value
     const searchValue = typeof value === 'string' ? value : value?.target?.value || '';
     setSearchTerm(searchValue);
     setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -497,7 +458,6 @@ const Doctors = () => {
     setSelectedSpecialty('All');
   }, []);
 
-  // ✅ Prepare export data for Excel with formatted address and formatted date
   const getExportData = useCallback(() => {
     return doctors.map((doctor) => {
       const formattedAddress = formatAddress(doctor.address);
@@ -525,7 +485,6 @@ const Doctors = () => {
     });
   }, [doctors]);
 
-  // Error handling
   if (error) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans flex items-center justify-center">
@@ -580,8 +539,6 @@ const Doctors = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-
-      {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -613,10 +570,8 @@ const Doctors = () => {
         )}
       </div>
 
-      {/* Search and Filter */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Using global SearchBar component */}
           <div className="flex-1 max-w-sm">
             <SearchBar
               placeholder="Search by name, department, specialty..."
@@ -685,7 +640,6 @@ const Doctors = () => {
             </svg>
           </button>
 
-          {/* ✅ Replace Download button with ExcelExportButton */}
           <ExcelExportButton
             data={getExportData()}
             fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
@@ -702,8 +656,6 @@ const Doctors = () => {
         </div>
       </div>
 
-
-      {/* Show warning if multiple hospitals detected */}
       {doctors.length > 0 && (
         <div className="mb-4">
           {(() => {
@@ -720,7 +672,6 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* Empty State */}
       {doctors.length === 0 && !isLoading && (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -731,7 +682,6 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* GRID VIEW */}
       {viewMode === 'grid' && doctors.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -805,7 +755,6 @@ const Doctors = () => {
                     </div>
                   </div>
                   
-                  {/* ✅ Only show Recover button when blacklisted - No Appointment Settings button */}
                   {isBlacklisted && (
                     <button 
                       onClick={() => handleRecoverDoctor(doctor)} 
@@ -822,7 +771,6 @@ const Doctors = () => {
             })}
           </div>
 
-          {/* Pagination for Grid View */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
@@ -839,7 +787,6 @@ const Doctors = () => {
         </>
       )}
 
-      {/* LIST VIEW */}
       {viewMode === 'list' && doctors.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -947,7 +894,6 @@ const Doctors = () => {
               </table>
             </div>
 
-            {/* Pagination */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
@@ -962,7 +908,6 @@ const Doctors = () => {
         </div>
       )}
 
-      {/* Delete Doctor Modal */}
       <DeleteDoctor
         isOpen={showDelete}
         onClose={() => {
@@ -975,7 +920,6 @@ const Doctors = () => {
         onDelete={handleDeleteDoctor}
       />
 
-      {/* Appointment Management Modal */}
       <AppointmentManagement
         isOpen={showAppointmentManagement}
         onClose={() => {
