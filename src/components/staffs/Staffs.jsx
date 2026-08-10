@@ -525,9 +525,12 @@ const Staffs = () => {
     return filtered;
   }, [allStaffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // Use filtered data for display
+  // ✅ FIXED: Use filtered data for display
   const staffsData = filteredStaffsData;
-  const totalItems = staffsData.length;
+  
+  // ✅ FIXED: Use API response pagination for total items and pages
+  const totalItems = staffApiResponse?.pagination?.totalItems || 0;
+  const totalPages = staffApiResponse?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
   // Get unique hospitals
   const uniqueHospitals = useMemo(() => {
@@ -539,15 +542,6 @@ const Staffs = () => {
     });
     return Array.from(hospitals);
   }, [staffsData]);
-
-  // Pagination for filtered data
-  const paginatedStaffsData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return staffsData.slice(startIndex, endIndex);
-  }, [staffsData, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(staffsData.length / itemsPerPage);
 
   const getAllDesignations = () => {
     const allData = staffApiResponse?.allData || allStaffsData;
@@ -985,10 +979,10 @@ const Staffs = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          /* ✅ GRID VIEW - Removed duplicate action button */
+          /* ✅ GRID VIEW - Pagination always visible (like Ambulance) */
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {paginatedStaffsData.map((staff) => {
+              {staffsData.map((staff) => {
                 const isBlacklisted = staff.isDelete;
                 const imageUrl = getStaffImageUrl(staff);
                 
@@ -1083,23 +1077,21 @@ const Staffs = () => {
               })}
             </div>
 
-            {/* Pagination for Grid View */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex justify-center">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="staffs"
-                  variant="centered"
-                />
-              </div>
-            )}
+            {/* ✅ Pagination for Grid View - ALWAYS VISIBLE (like Ambulance) */}
+            <div className="mt-6 flex justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="staffs"
+                variant="centered"
+              />
+            </div>
           </>
         ) : (
-          /* ✅ LIST VIEW */
+          /* ✅ LIST VIEW - Pagination always visible (like Ambulance) */
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
@@ -1131,7 +1123,7 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedStaffsData.map((staff) => {
+                    {staffsData.map((staff) => {
                       const imageUrl = getStaffImageUrl(staff);
                       const isBlacklisted = staff.isDelete;
                       
@@ -1218,19 +1210,17 @@ const Staffs = () => {
                 </table>
               </div>
               
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    totalItems={totalItems}
-                    itemsPerPage={itemsPerPage}
-                    itemLabel="staffs"
-                  />
-                </div>
-              )}
+              {/* ✅ Pagination - ALWAYS VISIBLE (like Ambulance) */}
+              <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="staffs"
+                />
+              </div>
             </div>
           </Card>
         )}

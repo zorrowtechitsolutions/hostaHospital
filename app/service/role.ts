@@ -128,7 +128,7 @@ export const roleApi = api.injectEndpoints({
       { id: string | number; roles: string | number }
     >({
       query: ({ id, roles }) => ({
-        url: `/${id}/role/${roles}`,
+        url: `/role/${roles}`,
         method: "DELETE",
       }),
       invalidatesTags: ["Role"],

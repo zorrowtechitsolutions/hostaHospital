@@ -90,7 +90,6 @@ const baseQueryWithReauth: BaseQueryFn<
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
-        console.log("✅ New Access Token received");
 
         localStorage.setItem("accessToken", newToken);
 
@@ -148,6 +147,9 @@ export const api = createApi({
     "Category",
     "emailEnquiry",
     "Users",
+    "Donor",
+    "Email",
+    "Template"
   ],
   endpoints: () => ({}),
 });

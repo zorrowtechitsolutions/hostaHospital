@@ -26,6 +26,11 @@ import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
 import { initSocket } from './socket/socket';
+import EmailComposer from "./components/Notification/EmailNotification";
+import EditEmailTemplate from "./components/Notification/EditEmailTemplate";
+import CreateEmailTemplate from "./components/Notification/CreateEmailTemplate";
+import ViewEmailTemplate from "./components/Notification/ViewEmailTemplate";
+import EmailTemplates from "./components/Notification/EmailTemplates"
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -56,7 +61,7 @@ const PermissionList = lazy(() => import("./components/usermanagment/PermissionL
 const UserPermissions = lazy(() => import("./components/usermanagment/UserPermissions"));
 const Visits = lazy(() => import("./components/visits/Visits"));
 const Appointments = lazy(() => import("./components/Appointment/Appointment"));
-const EmailTemplates = lazy(() => import("./components/Settings/Email"));
+// const EmailTemplates = lazy(() => import("./components/Settings/Email"));
 const Profile = lazy(() => import("./components/MyProfile/Profile"));
 const AddPatient = lazy(() => import("./components/patients/AddPatientModal"));
 const ForgotPassword = lazy(() => import("./Authentication/ForgotPassword"));
@@ -319,6 +324,12 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/help" element={<HelpSupport />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/email-notifications" element={<EmailComposer />} />
+                <Route path="/email-templates/edit/:id" element={<EditEmailTemplate/>} />
+                <Route path="/email-templates/create" element={<CreateEmailTemplate />} />
+                <Route path="/email-templates/view/:id"element={<ViewEmailTemplate />}/>
+                <Route path="/email-templates" element={<EmailTemplates/>}/>
+
                 <Route path="/calendar" element={<CalendarPage />} />
                 
                 {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
@@ -579,7 +590,7 @@ function App() {
                 <Route path="/requests" element={<RequestsTable />} />
                 
                 {/* Email templates - IDs from CSV: email module */}
-                <Route path="/email" element={<EmailTemplates />} />
+                {/* <Route path="/email" element={<EmailTemplates />} /> */}
                 
                 {/* Catch all route */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

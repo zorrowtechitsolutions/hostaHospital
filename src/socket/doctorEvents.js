@@ -1,90 +1,48 @@
 // src/socket/doctorEvents.js
 import { socket } from "./socket";
 
-let onAnyListener = null;
 
 export const registerDoctorEvents = (handlers = {}) => {
-  socket.on("system_event", (payload) => {
-    const event =
-      payload.event ||
-      payload.type ||
-      payload.message?.match(/\[(.*?)\]/)?.[1];
-
+  const dispatch = ({ event, data }) => {
     switch (event) {
       case "DOCTOR_REGISTERED":
-        handlers.onDoctorRegistered?.(payload.data);
+        handlers.onDoctorRegistered?.(data);
         break;
 
       case "DOCTOR_UPDATED":
-        handlers.onDoctorUpdated?.(payload.data);
+        handlers.onDoctorUpdated?.(data);
         break;
 
       case "DOCTOR_DELETED":
-        handlers.onDoctorDeleted?.(payload.data);
+        handlers.onDoctorDeleted?.(data);
         break;
 
       case "DOCTOR_RECOVERED":
-        handlers.onDoctorRecovered?.(payload.data);
+        handlers.onDoctorRecovered?.(data);
         break;
 
       case "DOCTOR_PASSWORD_RESET":
-        handlers.onDoctorPasswordReset?.(payload.data);
+        handlers.onDoctorPasswordReset?.(data);
         break;
 
       case "DOCTOR_PASSWORD_CHANGED":
-        handlers.onDoctorPasswordChanged?.(payload.data);
+        handlers.onDoctorPasswordChanged?.(data);
         break;
 
       case "DOCTOR_PASSWORD_CHANGED_BY_ADMIN":
-        handlers.onDoctorPasswordChangedByAdmin?.(payload.data);
-        break;
-
-      default:
+        handlers.onDoctorPasswordChangedByAdmin?.(data);
         break;
     }
-  });
+  };
 
-  socket.on("DOCTOR_REGISTERED", (data) => {
-    handlers.onDoctorRegistered?.(data);
-  });
+  socket.off("hospital_event");
+  socket.off("doctor_event");
 
-  socket.on("DOCTOR_UPDATED", (data) => {
-    handlers.onDoctorUpdated?.(data);
-  });
-
-  socket.on("DOCTOR_DELETED", (data) => {
-    handlers.onDoctorDeleted?.(data);
-  });
-
-  socket.on("DOCTOR_RECOVERED", (data) => {
-    handlers.onDoctorRecovered?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_RESET", (data) => {
-    handlers.onDoctorPasswordReset?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_CHANGED", (data) => {
-    handlers.onDoctorPasswordChanged?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_CHANGED_BY_ADMIN", (data) => {
-    handlers.onDoctorPasswordChangedByAdmin?.(data);
-  });
+  socket.on("hospital_event", dispatch);
+  socket.on("doctor_event", dispatch);
 };
 
 export const unregisterDoctorEvents = () => {
-  socket.off("system_event");
-  socket.off("DOCTOR_REGISTERED");
-  socket.off("DOCTOR_UPDATED");
-  socket.off("DOCTOR_DELETED");
-  socket.off("DOCTOR_RECOVERED");
-  socket.off("DOCTOR_PASSWORD_RESET");
-  socket.off("DOCTOR_PASSWORD_CHANGED");
-  socket.off("DOCTOR_PASSWORD_CHANGED_BY_ADMIN");
-
-  if (onAnyListener) {
-    socket.offAny(onAnyListener);
-    onAnyListener = null;
-  }
+  socket.off("hospital_event");
+  socket.off("doctor_event");
 };

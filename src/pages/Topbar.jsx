@@ -1,4 +1,4 @@
-// src/components/layout/TopBar.jsx - FIXED with socket integration
+// src/components/layout/TopBar.jsx - FIXED with socket integration and role-based notifications
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -12,7 +12,8 @@ import { useGetHospitalByIdQuery } from '../../app/service/hospitalApi';
 import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
 import {
-  useGetNotificationsByHospitalQuery
+  useGetNotificationsByHospitalQuery,
+  useGetNotificationsByRoleQuery
 } from "../../app/service/notification";
 import { getHospitalId } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
@@ -94,19 +95,22 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
   
-  const hospitalId = getHospitalId();
   const userRole = user?.role || 'hospital';
   
-  // Check if user is Hospital Admin (has access to Settings)
-  const isHospitalAdmin = userRole === 'hospital';
-  
-  // Get correct user ID based on role - using authId for API requests
+  // ================= FIX: CORRECT ID LOGIC (matches HospitalProfile) =================
+  const hospitalId = Number(
+    user?.hospitalId ||
+    localStorage.getItem("hospitalId") ||
+    getHospitalId()
+  );
+
   const userId =
     userRole === "doctor"
-      ? (user?.authId || user?.id || localStorage.getItem("authId"))
+      ? Number(localStorage.getItem("doctorId") || user?.doctorId)
       : userRole === "staff"
-      ? (user?.authId || user?.id || localStorage.getItem("authId"))
-      : (user?.id || hospitalId);
+      ? Number(localStorage.getItem("staffId") || user?.staffId)
+      : hospitalId;
+  // ================= END FIX =================
   
   // Fetch data based on user role
   const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
@@ -124,10 +128,53 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     { skip: userRole !== 'staff' || !userId }
   );
   
-  const { data: notificationsData } = useGetNotificationsByHospitalQuery(
-    { hospitalId },
-    { skip: !hospitalId, pollingInterval: 10000 }
+  // ================= FIXED NOTIFICATION LOGIC =================
+  // Use role-specific notification APIs based on user role
+  
+  // 1. Role-based notifications (for doctors and staff)
+  const { data: roleNotificationsData } = useGetNotificationsByRoleQuery(
+    {
+      role: userRole,
+      id: userId, // Now using the correct doctor/staff ID
+    },
+    {
+      skip: userRole === "hospital" || !userId,
+      pollingInterval: 10000,
+    }
   );
+  
+  // 2. Hospital notifications (for hospital admins only)
+  const { data: hospitalNotificationsData } = useGetNotificationsByHospitalQuery(
+    { hospitalId },
+    {
+      skip: userRole !== "hospital" || !hospitalId,
+      pollingInterval: 10000,
+    }
+  );
+  
+  // 3. Select the correct notifications based on role
+  const notifications =
+    userRole === "hospital"
+      ? hospitalNotificationsData?.data || []
+      : roleNotificationsData?.data || [];
+  
+  // 4. Calculate unread count based on role-specific read status
+  const unreadCount = notifications.filter((n) => {
+    switch (userRole) {
+      case "hospital":
+        return !n.hospitalReadStatus?.[hospitalId];
+      
+      case "doctor":
+        return !n.doctorReadStatus?.[userId]; // userId is now the doctor ID
+      
+      case "staff":
+        return !n.staffReadStatus?.[userId]; // userId is now the staff ID
+      
+      default:
+        return false;
+    }
+  }).length;
+  // ================= END FIXED NOTIFICATION LOGIC =================
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
@@ -221,11 +268,6 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const profileImageUrl = getProfileImageUrl();
   const initials = getInitials(profileData.name);
   const gradientColor = getColorFromName(profileData.name);
-  
-  const notifications = notificationsData?.data || [];
-  const unreadCount = notifications.filter(
-    (n) => !n.hospitalReadStatus?.[hospitalId]
-  ).length;
 
   // Reset image error when profileImageUrl changes
   useEffect(() => {
@@ -639,7 +681,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </button>
                 
                 {/* Show Settings ONLY for Hospital Admin */}
-                {isHospitalAdmin && (
+                {userRole === 'hospital' && (
                   <button 
                     onClick={handleSettings}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"

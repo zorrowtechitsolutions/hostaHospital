@@ -803,7 +803,6 @@ export const hospitalApi = api.injectEndpoints({
           body.working_hours_clinic_nobreak = [];
         }
 
-        console.log("UPDATE BODY", body);
 
         return {
           url: `/hospital/${id}`,
