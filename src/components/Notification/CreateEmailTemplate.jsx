@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import EmailTemplateForm from "./EmailTemplateForm";
 import { useCreateTemplateMutation } from "../../../app/service/emailtemplate";
+import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 const CreateEmailTemplate = () => {
   const navigate = useNavigate();
@@ -15,21 +16,22 @@ const CreateEmailTemplate = () => {
         subject: data.subject,
         message: data.message,
         category: data.category,
-        status: "Active",
+        status: data.status,
       };
 
       await createTemplate(payload).unwrap();
 
-      alert("Email template created successfully.");
+      showSuccessToast("Email template created successfully.", 3000);
 
       navigate("/email-templates");
     } catch (error) {
       console.error("Create template error:", error);
 
-      alert(
+      showErrorToast(
         error?.data?.message ||
           error?.message ||
-          "Failed to create email template."
+          "Failed to create email template.",
+        3000
       );
     }
   };

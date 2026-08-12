@@ -24,7 +24,7 @@ export interface EmailNotification {
   recipients: EmailRecipient[] | string[];
   subject: string;
   message: string;
-  templateId?: number;  // ✅ FIXED: Changed from string to number
+  templateId?: number;
   status?: 'draft' | 'sent' | 'scheduled' | 'failed' | 'queued';
   scheduledAt?: string;
   sentAt?: string;
@@ -70,30 +70,26 @@ export interface SendEmailRequest {
   scheduledAt?: string;
 }
 
-// ✅ FIXED: Changed templateId from string to number
 export interface SaveDraftRequest {
   recipients: EmailRecipient[] | string[];
   subject: string;
   message: string;
-  templateId?: number;  // ✅ Now number, not string
+  templateId?: number;
 }
 
-// ✅ FIXED: Changed templateId from string to number
 export interface UpdateDraftRequest {
   recipients?: EmailRecipient[] | string[];
   subject?: string;
   message?: string;
-  templateId?: number;  // ✅ Now number, not string
+  templateId?: number;
   scheduledAt?: string;
 }
 
 // ================= HELPER FUNCTIONS =================
 
-// Helper: Get hospital ID from auth (returns number)
 const getHospitalIdFromAuth = (auth: any): number | null => {
   if (!auth) return null;
   
-  // Priority 1: Use hospitalId if available (this is the correct hospital ID)
   if (auth.hospitalId) {
     return Number(auth.hospitalId);
   }
@@ -101,11 +97,9 @@ const getHospitalIdFromAuth = (auth: any): number | null => {
   return null;
 };
 
-// Helper: Get auth ID from auth
 const getAuthIdFromAuth = (auth: any): string | null => {
   if (!auth) return null;
   
-  // Priority: authId > id
   if (auth.authId) {
     return String(auth.authId);
   }
@@ -117,19 +111,16 @@ const getAuthIdFromAuth = (auth: any): string | null => {
   return null;
 };
 
-// Helper: Convert string | number to number safely
 const toNumber = (value: string | number | undefined): number | undefined => {
   if (value === undefined || value === null) return undefined;
   return Number(value);
 };
 
-// Helper: Format email addresses for API - Now returns objects as-is
 const formatRecipients = (recipients: EmailRecipient[] | string[]): any[] => {
   return recipients.map(recipient => {
     if (typeof recipient === 'string') {
       return { email: recipient };
     }
-    // Return the object as-is (already has roleId, userIds, etc.)
     return recipient;
   });
 };
@@ -148,7 +139,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -158,7 +148,6 @@ export const emailApi = api.injectEndpoints({
           }
         }
         
-        // Get userId (this is the authId)
         const userId = getAuthIdFromAuth(auth);
         
         return {
@@ -188,7 +177,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -198,7 +186,6 @@ export const emailApi = api.injectEndpoints({
           }
         }
         
-        // Get userId (this is the authId)
         const userId = getAuthIdFromAuth(auth);
         
         return {
@@ -231,7 +218,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -269,7 +255,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -279,12 +264,10 @@ export const emailApi = api.injectEndpoints({
           }
         }
         
-        // Prepare update data
         const updateData: any = {
           status: 'draft',
         };
 
-        // Only include fields that are provided
         if (data.recipients) updateData.recipients = formatRecipients(data.recipients);
         if (data.subject) updateData.subject = data.subject;
         if (data.message) updateData.message = data.message;
@@ -314,7 +297,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -348,7 +330,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -383,7 +364,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -422,7 +402,6 @@ export const emailApi = api.injectEndpoints({
         const auth = getAuthUser();
         const isSuperAdmin = auth?.role === 'super-admin';
         
-        // Get hospital ID using helper
         let hospitalId: number | undefined;
         
         if (!isSuperAdmin) {
@@ -448,6 +427,42 @@ export const emailApi = api.injectEndpoints({
       ],
     }),
 
+    // ================= UNARCHIVE EMAIL =================
+    // Unarchives an email and sets its status to 'draft'
+    unarchiveEmail: builder.mutation<
+      EmailResponse,
+      string | number
+    >({
+      query: (id) => {
+        const auth = getAuthUser();
+        const isSuperAdmin = auth?.role === 'super-admin';
+        
+        let hospitalId: number | undefined;
+        
+        if (!isSuperAdmin) {
+          const authHospitalId = getHospitalIdFromAuth(auth);
+          if (authHospitalId) {
+            hospitalId = authHospitalId;
+          }
+        }
+        
+        return {
+          url: `/email/unarchive/${id}`,
+          method: "PATCH",
+          body: {
+            hospitalId: hospitalId,
+            isArchived: false,
+            status: 'draft', // When unarchived, set status to draft
+          },
+        };
+      },
+
+      invalidatesTags: (result, error, id) => [
+        { type: "Email", id },
+        "Email",
+      ],
+    }),
+
     // ================= GET EMAILS =================
     getEmails: builder.query<
       EmailResponse,
@@ -458,18 +473,14 @@ export const emailApi = api.injectEndpoints({
 
         const auth = getAuthUser();
         
-        // Determine if user is super admin
         const isSuperAdmin = auth?.role === 'super-admin';
         const shouldSkipFilter = params.skipHospitalFilter === true;
 
-        // Get hospital ID using helper
         let hospitalIdToUse = null;
         
-        // For non-super-admin users, always filter by hospital if they have one
         if (!isSuperAdmin && !shouldSkipFilter) {
           hospitalIdToUse = getHospitalIdFromAuth(auth);
           
-          // If no hospitalId found, try params
           if (!hospitalIdToUse && params.hospitalId) {
             hospitalIdToUse = toNumber(params.hospitalId);
           }
@@ -480,46 +491,37 @@ export const emailApi = api.injectEndpoints({
             console.warn("⚠️ No hospital ID found for filtering emails");
           }
         } 
-        // Super Admin with specific hospital filter
         else if (isSuperAdmin && params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
-        // Use provided hospitalId if specified (for cases where we want to override)
         else if (params.hospitalId) {
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        // CreatedBy filter (this should use authId, not hospitalId)
         if (params.createdBy) {
           queryParams.append("createdBy", String(params.createdBy));
         }
 
-        // Status filter
         if (params.status && params.status !== 'all') {
           queryParams.append("status", params.status);
         }
 
-        // Subject filter
         if (params.subject) {
           queryParams.append("subject", params.subject);
         }
 
-        // Recipient filter
         if (params.recipient) {
           queryParams.append("recipient", params.recipient);
         }
 
-        // Template ID filter
         if (params.templateId) {
           queryParams.append("templateId", params.templateId);
         }
 
-        // Search query
         if (params.search_query) {
           queryParams.append("search_query", params.search_query);
         }
 
-        // Date filters
         if (params.startDate) {
           queryParams.append("startDate", params.startDate);
         }
@@ -528,12 +530,10 @@ export const emailApi = api.injectEndpoints({
           queryParams.append("endDate", params.endDate);
         }
 
-        // Archived filter
         if (params.isArchived !== undefined) {
           queryParams.append("isArchived", String(params.isArchived));
         }
 
-        // Pagination parameters
         if (params.page) {
           queryParams.append("page", String(params.page));
         }
@@ -576,4 +576,5 @@ export const {
   useDuplicateEmailMutation,
   useResendEmailMutation,
   useArchiveEmailMutation,
+  useUnarchiveEmailMutation, // ✅ New hook for unarchive
 } = emailApi;

@@ -149,7 +149,8 @@ export const api = createApi({
     "Users",
     "Donor",
     "Email",
-    "Template"
+    "Template",
+    "SessionHistory",
   ],
   endpoints: () => ({}),
 });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   Search,
@@ -50,53 +50,114 @@ const getIconStyles = (category) => {
   return map[category] || { bg: "bg-slate-50", color: "text-slate-600" };
 };
 
-// Skeleton Loading Component
+// ================= ENHANCED SKELETON LOADING COMPONENT =================
 const TemplateSkeleton = () => {
   return (
     <div className="min-h-screen bg-white p-6 font-sans">
+      {/* Breadcrumb Skeleton */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
           <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
         </div>
-        <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+        <div className="h-7 w-64 bg-gray-200 rounded animate-pulse mt-2"></div>
       </div>
 
+      {/* Filter Bar Skeleton */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="h-10 w-64 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="h-10 w-56 bg-gray-200 rounded-md animate-pulse"></div>
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+          <div className="h-10 w-64 bg-gray-200 rounded-lg animate-pulse"></div>
+          <div className="h-10 w-44 bg-gray-200 rounded-lg animate-pulse"></div>
+          <div className="h-10 w-44 bg-gray-200 rounded-lg animate-pulse"></div>
         </div>
         <div className="flex gap-2">
-          <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="w-28 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="h-10 w-10 bg-gray-200 rounded-md animate-pulse"></div>
+          <div className="h-10 w-36 bg-gray-200 rounded-md animate-pulse"></div>
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {[...Array(6)].map((_, i) => (
-                  <th key={i} className="px-5 py-3.5">
-                    <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...Array(5)].map((_, i) => (
-                <tr key={i} className="border-b border-gray-100">
-                  {[...Array(6)].map((_, j) => (
-                    <td key={j} className="px-5 py-3.5">
-                      <div className="h-4 w-full bg-gray-200 rounded animate-pulse"></div>
-                    </td>
+      {/* Table Skeleton */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+        {/* Table Header with Count */}
+        <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-5 w-8 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        {/* Table Container */}
+        <div className="flex flex-col min-h-[500px]">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                <tr>
+                  {["Template Name", "Category", "Subject", "Last Updated", "Status", "Actions"].map((header, index) => (
+                    <th key={index} className="px-6 py-3">
+                      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse"></div>
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[...Array(5)].map((_, rowIndex) => (
+                  <tr key={rowIndex} className="hover:bg-gray-50 transition">
+                    {/* Template Name with Icon */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-gray-200 rounded-lg animate-pulse"></div>
+                        <div>
+                          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-1.5"></div>
+                          <div className="h-3 w-20 bg-gray-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Category Badge */}
+                    <td className="px-6 py-4">
+                      <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
+                    </td>
+
+                    {/* Subject */}
+                    <td className="px-6 py-4">
+                      <div className="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
+                    </td>
+
+                    {/* Last Updated */}
+                    <td className="px-6 py-4">
+                      <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="px-6 py-4">
+                      <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Skeleton */}
+          <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div className="flex justify-between items-center">
+              <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+              <div className="flex gap-2">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -126,7 +187,7 @@ const EmailTemplates = () => {
   } = useGetTemplatesQuery({
     search_query: search || undefined,
     category: category === "All Categories" ? undefined : category,
-    status: status === "All Statuses" ? "all" : status,
+    status: status === "All Statuses" ? undefined : status,
     page: page,
     limit: limit,
   });
@@ -198,7 +259,7 @@ const EmailTemplates = () => {
   };
 
   // Reset page when filters change
-  React.useEffect(() => {
+  useEffect(() => {
     setPage(1);
   }, [search, category, status]);
 
@@ -328,9 +389,9 @@ const EmailTemplates = () => {
               focus:border-indigo-400
             "
           >
-            <option>All Statuses</option>
-            <option>Active</option>
-            <option>Inactive</option>
+            <option value="All Statuses">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </select>
         </div>
 
@@ -465,11 +526,18 @@ const EmailTemplates = () => {
                             text-[11px]
                             font-medium
                             ${
-                              template.status === "Active" || template.status === "active"
+                              template.status === "Active" || 
+                              template.status === "active" ||
+                              template.status === "Published"
                                 ? "bg-emerald-50 text-emerald-600"
-                                : template.status === "Inactive" || template.status === "inactive"
+                                : template.status === "Inactive" || 
+                                  template.status === "inactive" ||
+                                  template.status === "Archived"
                                 ? "bg-slate-100 text-slate-500"
-                                : "bg-amber-50 text-amber-500"
+                                : template.status === "Draft" || 
+                                  template.status === "draft"
+                                ? "bg-amber-50 text-amber-500"
+                                : "bg-gray-50 text-gray-500"
                             }
                           `}
                         >
@@ -536,7 +604,7 @@ const EmailTemplates = () => {
             </table>
           </div>
 
-          {/* ================= STICKY PAGINATION (Like Ambulance UI) ================= */}
+          {/* ================= STICKY PAGINATION ================= */}
           <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
             <Pagination
               currentPage={page}

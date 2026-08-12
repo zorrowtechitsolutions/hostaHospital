@@ -31,6 +31,8 @@ import EditEmailTemplate from "./components/Notification/EditEmailTemplate";
 import CreateEmailTemplate from "./components/Notification/CreateEmailTemplate";
 import ViewEmailTemplate from "./components/Notification/ViewEmailTemplate";
 import EmailTemplates from "./components/Notification/EmailTemplates"
+import SessionHistory from "./components/auditlogin/SessionHistory";
+import EmailHistory from "./components/Notification/EmailHistory";
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -324,11 +326,40 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/help" element={<HelpSupport />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/email-notifications" element={<EmailComposer />} />
-                <Route path="/email-templates/edit/:id" element={<EditEmailTemplate/>} />
-                <Route path="/email-templates/create" element={<CreateEmailTemplate />} />
-                <Route path="/email-templates/view/:id"element={<ViewEmailTemplate />}/>
-                <Route path="/email-templates" element={<EmailTemplates/>}/>
+                <Route 
+                path="/audit-login" 
+                element={
+                  <ProtectedRoute permissionId={111}>
+                    <SessionHistory />
+                  </ProtectedRoute>
+                } />
+                <Route 
+                path="/email-notifications" 
+                element={
+                <ProtectedRoute permissionId={104}>
+                <EmailComposer />
+                </ProtectedRoute>} />
+                <Route path="/email-history" element={<EmailHistory/>} />
+                <Route path="/email-templates/edit/:id" element={
+                  <ProtectedRoute permissionId={109}>
+                    <EditEmailTemplate/>
+                  </ProtectedRoute>
+                } />
+                <Route path="/email-templates/create" element={
+                  <ProtectedRoute permissionId={107}>
+                    <CreateEmailTemplate />
+                  </ProtectedRoute>
+                } />
+                <Route path="/email-templates/view/:id"element={
+                  <ProtectedRoute permissionId={108}>
+                    <ViewEmailTemplate />
+                  </ProtectedRoute>
+                }/>
+                <Route path="/email-templates" element={
+                  <ProtectedRoute permissionId={108}>
+                    <EmailTemplates/>
+                  </ProtectedRoute>
+                } />
 
                 <Route path="/calendar" element={<CalendarPage />} />
                 

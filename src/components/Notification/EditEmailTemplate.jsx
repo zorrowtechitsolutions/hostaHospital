@@ -8,6 +8,7 @@ import {
   useGetTemplateByIdQuery,
   useUpdateTemplateMutation,
 } from "../../../app/service/emailtemplate";
+import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 const EditEmailTemplate = () => {
   const navigate = useNavigate();
@@ -112,6 +113,7 @@ const EditEmailTemplate = () => {
     category: apiTemplate.category || "",
     subject: apiTemplate.subject || "",
     message: apiTemplate.message || apiTemplate.body || "",
+    status: apiTemplate.status || "Active",
   };
 
   // ============================
@@ -125,24 +127,28 @@ const EditEmailTemplate = () => {
         subject: formData.subject,
         message: formData.message,
         category: formData.category,
-        status: "Active",
+        status: formData.status,
       };
+
+      // Debug log to verify payload
+      console.log("UPDATE PAYLOAD:", payload);
 
       await updateTemplate({
         id,
         data: payload,
       }).unwrap();
 
-      alert("Email template updated successfully.");
+      showSuccessToast("Email template updated successfully.", 3000);
 
       navigate("/email-templates");
     } catch (error) {
       console.error("Update template error:", error);
 
-      alert(
+      showErrorToast(
         error?.data?.message ||
           error?.message ||
-          "Failed to update email template."
+          "Failed to update email template.",
+        3000
       );
     }
   };

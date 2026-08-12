@@ -71,12 +71,12 @@ const getDefaultDate = () => {
 
 const getDefaultTime = () => {
   const now = new Date();
-  let hours = now.getHours();
+  const hours = now.getHours();
   const minutes = now.getMinutes();
-  // Add 1 hour and round to nearest minute
-  hours += 1;
-  if (hours >= 24) hours = 9;
-  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
 };
 
 const InfoRow = ({ icon: Icon, label, value }) => {

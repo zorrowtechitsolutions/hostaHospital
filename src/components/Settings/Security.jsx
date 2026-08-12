@@ -1,4 +1,4 @@
-// src/components/Settings/Security.jsx - UPDATED with eye toggle
+// src/components/Settings/Security.jsx - UPDATED with eye toggle and improved Delete modal
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Modal, Input, Badge, Alert } from '../ui';
@@ -348,7 +348,7 @@ const Security = () => {
     );
   };
 
-  // Delete Account Modal
+  // Delete Account Modal - UPDATED with better button styling
   const DeleteAccountModal = () => (
     <Modal isOpen={showDeleteModal} onClose={() => { setShowDeleteModal(false); setConfirmText(''); }} title="Delete Account" size="md">
       <p className="text-sm text-gray-500 mb-6">Permanently delete your hospital account</p>
@@ -379,17 +379,35 @@ const Security = () => {
         />
       </div>
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => { setShowDeleteModal(false); setConfirmText(''); }}>Cancel</Button>
-        <Button
+      {/* UPDATED: Improved button styling with better visual feedback */}
+      <div className="flex justify-end items-center gap-3 mt-6 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={() => {
+            setShowDeleteModal(false);
+            setConfirmText('');
+          }}
+          className="px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
           onClick={handleDeleteAccount}
           disabled={confirmText.trim() !== 'DELETE' || isDeleting}
-          loading={isDeleting}
-          variant="ghost"
-          className="bg-red-600 hover:bg-red-700 text-white"
+          className={`
+            px-5 py-2.5 rounded-lg font-medium text-white transition-all duration-300
+            min-w-[150px]
+            ${
+              confirmText.trim() === 'DELETE' && !isDeleting
+                ? 'bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg cursor-pointer'
+                : 'bg-red-300 cursor-not-allowed opacity-60'
+            }
+          `}
         >
           {isDeleting ? 'Deleting...' : 'Delete My Account'}
-        </Button>
+        </button>
       </div>
     </Modal>
   );

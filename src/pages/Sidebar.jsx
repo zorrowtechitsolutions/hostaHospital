@@ -74,16 +74,13 @@ const menu = [
       label: "Email Notification",
       icon: Mail,
       path: "/email-notifications",
+      permissionId: 104,
     },
     {
       label: "Email Templates",
       icon: FileText,
       path: "/email-templates",
-    },
-    {
-      label: "Notification History",
-      icon: History,
-      path: "/notifications",
+      permissionId: 108,
     },
   ],
 },
@@ -109,6 +106,17 @@ const menu = [
       },
     ],
   },
+  {
+  title: "AUDIT & SECURITY",
+  items: [
+    {
+      label: "AUDIT & SECURITY",
+      icon: ShieldCheck,
+      path: "/audit-login",
+      permissionId: 111,
+    },
+  ],
+},
   {
     title: "HELP",
     items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }], // No permissionId - always visible

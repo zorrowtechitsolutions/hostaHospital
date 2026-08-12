@@ -1,9 +1,9 @@
-// src/components/layout/TopBar.jsx - FIXED with socket integration and role-based notifications
+// src/components/layout/TopBar.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, ChevronDown, Maximize2, Minimize2, Menu, 
-  UserCheck, Settings, LogOut
+  UserCheck, Settings, LogOut, Bell as BellIcon
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,8 @@ import { useGetDoctorByIdQuery } from '../../app/service/doctorApi';
 import { useGetStaffByIdQuery } from '../../app/service/staffApi';
 import {
   useGetNotificationsByHospitalQuery,
-  useGetNotificationsByRoleQuery
+  useGetNotificationsByRoleQuery,
+  useToggleNotificationStatusMutation
 } from "../../app/service/notification";
 import { getHospitalId } from "../utils/auth";
 import { getS3ImageUrl } from '../../app/service/S3';
@@ -90,10 +91,21 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [imageError, setImageError] = useState(false);
   const [menuImageError, setMenuImageError] = useState(false);
   
+  // Notification toggle state
+  const [notificationEnabled, setNotificationEnabled] = useState(
+    user?.notificationEnabled ?? true
+  );
+  
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
   
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
+  
+  // Toggle notification mutation
+  const [
+    toggleNotificationStatus,
+    { isLoading: isTogglingNotification }
+  ] = useToggleNotificationStatusMutation();
   
   const userRole = user?.role || 'hospital';
   
@@ -135,7 +147,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const { data: roleNotificationsData } = useGetNotificationsByRoleQuery(
     {
       role: userRole,
-      id: userId, // Now using the correct doctor/staff ID
+      id: userId,
     },
     {
       skip: userRole === "hospital" || !userId,
@@ -165,16 +177,21 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         return !n.hospitalReadStatus?.[hospitalId];
       
       case "doctor":
-        return !n.doctorReadStatus?.[userId]; // userId is now the doctor ID
+        return !n.doctorReadStatus?.[userId];
       
       case "staff":
-        return !n.staffReadStatus?.[userId]; // userId is now the staff ID
+        return !n.staffReadStatus?.[userId];
       
       default:
         return false;
     }
   }).length;
   // ================= END FIXED NOTIFICATION LOGIC =================
+  
+  // Update notificationEnabled when user changes
+  useEffect(() => {
+    setNotificationEnabled(user?.notificationEnabled ?? true);
+  }, [user?.notificationEnabled]);
   
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   
@@ -275,6 +292,25 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     setMenuImageError(false);
   }, [profileImageUrl]);
 
+  // Notification toggle handler
+  const handleNotificationToggle = async () => {
+    try {
+      const response = await toggleNotificationStatus().unwrap();
+      setNotificationEnabled(response.notificationEnabled);
+      
+      // Optional: Show success toast
+      // toast.success(`Notifications ${response.notificationEnabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error("Failed to update notification status:", error);
+      
+      // Optional: Show error toast
+      // toast.error('Failed to update notification settings');
+      
+      // Revert the toggle state if the API call fails
+      setNotificationEnabled(prev => !prev);
+    }
+  };
+
   // SOCKET INTEGRATION: Initialize socket and register events
   useEffect(() => {
     // Initialize socket connection
@@ -374,7 +410,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       // Disconnect socket on unmount
       socket.disconnect();
     };
-  }, [userRole, userId]); // Re-run when role or userId changes
+  }, [userRole, userId]);
 
   // Handle socket reconnection
   useEffect(() => {
@@ -679,6 +715,43 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                   <UserCheck size={16} className="text-gray-500 dark:text-gray-400" />
                   <span>My Profile</span>
                 </button>
+
+                {/* Notification Toggle */}
+                <div className="w-full px-4 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <BellIcon size={16} className="text-gray-500 dark:text-gray-400" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Notifications
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNotificationToggle}
+                    disabled={isTogglingNotification}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                      notificationEnabled
+                        ? "bg-green-500"
+                        : "bg-gray-300 dark:bg-gray-600"
+                    } ${
+                      isTogglingNotification
+                        ? "opacity-50 cursor-wait"
+                        : "cursor-pointer"
+                    }`}
+                    aria-label={
+                      notificationEnabled
+                        ? "Turn notifications off"
+                        : "Turn notifications on"
+                    }
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform ${
+                        notificationEnabled
+                          ? "translate-x-4"
+                          : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
                 
                 {/* Show Settings ONLY for Hospital Admin */}
                 {userRole === 'hospital' && (

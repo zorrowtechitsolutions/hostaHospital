@@ -15,22 +15,20 @@ import {
   useUpdateDoctorMutation,
   useGetSpecialitiesQuery
 } from "../../../app/service/doctorApi";
-import { useChangeDoctorPasswordMutation } from "../../../app/service/doctorApi"; // ✅ ADD THIS IMPORT
+import { useChangeDoctorPasswordMutation } from "../../../app/service/doctorApi";
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
-// 🔥 FIX: Enhanced helper function to get hospital ID (same pattern as AddPatient)
+// Helper function to get hospital ID
 const getHospitalId = () => {
-  // Priority 1: Check localStorage
   const storedHospitalId = localStorage.getItem('hospitalId');
   if (storedHospitalId) {
     return storedHospitalId;
   }
   
-  // Priority 2: Check auth.hospitalId
   const authUser = getAuthUser();
   if (authUser?.hospitalId) {
     return authUser.hospitalId;
@@ -39,22 +37,20 @@ const getHospitalId = () => {
   return null;
 };
 
-// 🔥 FIX: Enhanced helper function to get auth ID
+// Helper function to get auth ID
 const getAuthId = () => {
   const authUser = getAuthUser();
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// FIX: Enhanced helper function to get full image URL with cache-busting
+// Helper function to get full image URL with cache-busting
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
-  // If it's already a full URL, add cache-busting
   if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return `${imageKey}?t=${Date.now()}`;
   }
   
-  // Otherwise, construct the S3 URL with cache-busting
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
@@ -62,7 +58,7 @@ const getFullImageUrl = (imageKey) => {
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
 
-// Lazy Image Component with Intersection Observer - FIXED with cache-busting
+// Lazy Image Component with Intersection Observer
 const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +74,6 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       (entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
-            // FIX: Use getFullImageUrl with cache-busting
             setImageSrc(getFullImageUrl(imageKey));
             observer.disconnect();
           }
@@ -455,20 +450,15 @@ const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
   
-  // Clean the ID
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
   
-  // 🔥 FIX: Get IDs using the helper functions (same pattern as AddPatient)
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const authId = getAuthId();
   const hospitalName = authUser?.name || '';
 
-  
-  // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
   
-  // 🔥 FIX: Fetch roles with proper hospitalId (skip if no hospitalId)
   const {
     data: rolesData,
     isLoading: rolesLoading,
@@ -476,19 +466,16 @@ const EditDoctor = () => {
     hospitalId: hospitalId || undefined,
     limit: 100
   }, {
-    skip: !hospitalId // Skip if no hospitalId
+    skip: !hospitalId
   });
   
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
   
-  // Fetch specialities from backend for department dropdown
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
   
-  // Transform specialities to department options
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
@@ -508,14 +495,10 @@ const EditDoctor = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  
-  // FIX: Add state to force image refresh
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   
-  // ✅ ADD: Password change mutation hook
   const [changeDoctorPassword] = useChangeDoctorPasswordMutation();
   
-  // Form state
   const [formData, setFormData] = useState({
     profileImage: null,
     imageUrl: null,
@@ -558,14 +541,12 @@ const EditDoctor = () => {
 
   const [errors, setErrors] = useState({});
 
-  // Use getDoctorById query for single doctor
   const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
   });
   
   const [updateDoctor] = useUpdateDoctorMutation();
 
-  // Extract doctor from response
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
 
   const countries = Country.getAllCountries();
@@ -613,13 +594,11 @@ const EditDoctor = () => {
     };
   };
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
     const roleName = getRoleNameById(roleId);
     const roleNameLower = roleName?.toLowerCase();
@@ -629,19 +608,15 @@ const EditDoctor = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
-  // 🔥 FIX: Check if hospitalId exists and show error if not
   useEffect(() => {
     if (!hospitalId) {
       console.warn('⚠️ No hospital ID found. Please log in again.');
     }
   }, [hospitalId]);
 
-  // ✅ FIX: Reset everything when doctor ID changes or component mounts
   useEffect(() => {
-    // Reset initialization flag
     setFormInitialized(false);
     
-    // Reset form data to defaults
     setFormData({
       profileImage: null,
       imageUrl: null,
@@ -687,28 +662,23 @@ const EditDoctor = () => {
     setImageRefreshKey(Date.now());
     setErrors({});
     
-    // Refetch doctor data
     if (doctorId) {
       refetch();
     }
     
-    // Cleanup on unmount
     return () => {
       setFormInitialized(false);
     };
-  }, [doctorId]); // Runs when doctorId changes
+  }, [doctorId]);
 
-  // Initialize form with doctor data
   useEffect(() => {
     if (doctor && doctor.id && !formInitialized) {
-      // Get image key from doctor
       const imageKey = 
         doctor?.imageUrl ||
         doctor?.profileImage ||
         doctor?.image ||
         null;
       
-      // Find country and state
       const country = countries.find(c => 
         c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
       );
@@ -718,10 +688,8 @@ const EditDoctor = () => {
         s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
       );
       
-      // Build schedule from consulting data
       const schedule = getDefaultSchedule();
       
-      // Update schedule with consultingOne data
       if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
         doctor.consultingOne.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -737,7 +705,6 @@ const EditDoctor = () => {
         });
       }
       
-      // Update schedule with consultingTwo data
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
         doctor.consultingTwo.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -797,13 +764,11 @@ const EditDoctor = () => {
       
       setFormData(newFormData);
       
-      // Set preview image with cache-busting
       if (imageKey) {
         setPreviewImage(getFullImageUrl(imageKey));
         setImageRefreshKey(Date.now());
       }
       
-      // Update states and cities
       if (country?.isoCode) {
         setAvailableStates(State.getStatesOfCountry(country.isoCode));
         if (state?.isoCode) {
@@ -825,7 +790,6 @@ const EditDoctor = () => {
     }));
   }, []);
 
-  // ✅ FIXED: handleImageUpload with explicit doctor ID and role
   const handleImageUpload = async (file) => {
     if (!file) return;
     
@@ -846,12 +810,11 @@ const EditDoctor = () => {
     try {
       setUploadProgress(30);
       
-      // ✅ FIX: Pass the doctor ID and role explicitly
       const uploaded = await uploadToS3(
         file, 
         formData.imageKey || null,
-        Number(doctorId),  // ✅ Pass doctor ID explicitly
-        "doctor"           // ✅ Pass role explicitly
+        Number(doctorId),
+        "doctor"
       );
       
       setUploadProgress(100);
@@ -863,7 +826,6 @@ const EditDoctor = () => {
         imageKey: uploaded.key
       }));
       
-      // FIX: Force image refresh after upload
       setImageRefreshKey(Date.now());
       
       setTimeout(() => setUploadProgress(0), 1000);
@@ -904,7 +866,6 @@ const EditDoctor = () => {
     setUploadProgress(0);
     setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
     setErrors(prev => ({ ...prev, profileImage: '' }));
-    // FIX: Force image refresh after removal
     setImageRefreshKey(Date.now());
     showSuccessToast('Image removed', 2000);
   };
@@ -985,17 +946,14 @@ const EditDoctor = () => {
     showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
   }, [formData.bookingOpen]);
 
-  // ✅ UPDATED: handleSubmit with password change
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 🔥 Validate hospitalId exists (same as AddPatient)
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
     }
 
-    // ✅ Validate password confirmation if password is provided
     if (formData.password && formData.password !== formData.confirmPassword) {
       showErrorToast('❌ Passwords do not match!');
       return;
@@ -1031,7 +989,6 @@ const EditDoctor = () => {
         isActive: formData.isActive,
         roleId: roleId,
         hospitalName: hospitalName,
-        // 🔥 FIX: Explicitly include hospitalId in the update (same as AddPatient)
         hospitalId: Number(hospitalId),
         address: {
           country: formData.countryName,
@@ -1081,13 +1038,11 @@ const EditDoctor = () => {
         };
       }
 
-      // ✅ STEP 1: Update doctor data
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
 
-      // ✅ STEP 2: Change password if provided
       if (formData.password) {
         await changeDoctorPassword({
           doctorId: String(doctorId),
@@ -1096,7 +1051,6 @@ const EditDoctor = () => {
         }).unwrap();
       }
 
-      // ✅ STEP 3: Update role permission if roleId exists
       if (roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
@@ -1113,7 +1067,6 @@ const EditDoctor = () => {
         await assignPermissions(payload).unwrap();
       }
 
-      // FIX: Force image refresh after update
       setImageRefreshKey(Date.now());
       await refetch();
 
@@ -1138,9 +1091,7 @@ const EditDoctor = () => {
   const handleGoBack = () => {
     navigate('/doctors');
   };
-          
 
-  // Loading states - Show skeleton while form is initializing
   if (isLoading || rolesLoading) {
     return <CenteredLoader text="Loading doctor data..." />;
   }
@@ -1242,7 +1193,7 @@ const EditDoctor = () => {
 
               {activeTab === 'basic' && (
                 <div className="p-6 space-y-6">
-                  {/* Profile Image Section with Lazy Loading - FIXED */}
+                  {/* Profile Image Section */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                     <div className="flex-shrink-0">
                       <div className="relative">
@@ -1354,7 +1305,6 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {/* Department Dropdown - Fetched from Backend with Lazy Loading */}
                     <SearchableDropdownComponent
                       label="Department"
                       options={departmentOptions}
@@ -1373,7 +1323,6 @@ const EditDoctor = () => {
                       optionKey={(option) => option.id}
                     />
                     
-                    {/* Specialist Field - Optional */}
                     <Input 
                       label="Specialist" 
                       name="specialist" 
@@ -1384,7 +1333,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Assign Role - Dynamic dropdown */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Assign Role <span className="text-red-500">*</span>
@@ -1490,7 +1438,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Languages Multi-select */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-700">
                       Known Languages <span className="text-red-500">*</span>
@@ -1551,7 +1498,6 @@ const EditDoctor = () => {
                     onChange={(e) => handleFieldChange('about', e.target.value)} 
                   />
 
-                  {/* Address Section */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                     <div className="space-y-5">
@@ -1608,7 +1554,6 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  {/* Account Details */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1653,7 +1598,6 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  {/* Status Toggle */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <StatusToggle 
                       status={formData.isActive} 
@@ -1679,38 +1623,60 @@ const EditDoctor = () => {
                     ))}
                   </div>
 
+                  {/* OUT DOOR CONSULTING SECTION - FIXED */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Home className="h-5 w-5" /> Out Door Consulting
                   </h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input 
-                          label="Open Time" 
-                          name="outDoorConsultingOpen" 
-                          type="time" 
-                          value={formData.outDoorConsultingOpen} 
-                          onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)} 
-                        />
-                        <Input 
-                          label="Close Time" 
-                          name="outDoorConsultingClose" 
-                          type="time" 
-                          value={formData.outDoorConsultingClose} 
-                          onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)} 
-                        />
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Consulting Time Section */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Consulting Time
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="relative">
+                            <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <input
+                              type="time"
+                              name="outDoorConsultingOpen"
+                              value={formData.outDoorConsultingOpen}
+                              onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)}
+                              className="w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div className="relative">
+                            <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <input
+                              type="time"
+                              name="outDoorConsultingClose"
+                              value={formData.outDoorConsultingClose}
+                              onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)}
+                              className="w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Consulting Place Section */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Consulting Place
+                        </label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <input
+                            type="text"
+                            name="outDoorConsultingPlace"
+                            placeholder="Enter consulting location"
+                            value={formData.outDoorConsultingPlace}
+                            onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)}
+                            className="w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <Input 
-                      label="Consulting Place" 
-                      name="outDoorConsultingPlace" 
-                      icon={MapPin} 
-                      placeholder="Enter consulting location" 
-                      value={formData.outDoorConsultingPlace} 
-                      onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)} 
-                    />
                   </div>
 
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
