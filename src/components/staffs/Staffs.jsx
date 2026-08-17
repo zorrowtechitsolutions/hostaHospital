@@ -31,6 +31,7 @@ import {
 } from '../ui';
 
 import DeleteModal from '../patients/DeleteModel';
+import PermissionDeniedModal from '../ui/PermissionDeniedModal'; // Import the PermissionDeniedModal
 
 import {
   useGetStaffQuery,
@@ -55,9 +56,20 @@ import { getAuthUser } from '../../../src/utils/auth';
 // Import the export function
 import { exportToExcel } from "../../utils/excelExport";
 
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
 // Import socket
 import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
+
+// Permission IDs for Staff module (9-12)
+const PERMISSIONS = {
+  CREATE: 9,
+  VIEW: 10,
+  EDIT: 11,
+  DELETE: 12
+};
 
 // Helper function to get hospital ID
 const getHospitalId = () => {
@@ -91,7 +103,7 @@ const getS3ImageUrlWithCache = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// ✅ Staff Action Menu Component
+// ✅ Staff Action Menu Component with Permission Checks
 const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelete, onRecover }) => {
   if (activeMenu !== staff.id) return null;
   
@@ -229,6 +241,10 @@ const Staffs = () => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState(null);
+
+  // Permission Denied Modal state
+  const [showPermissionDeniedModal, setShowPermissionDeniedModal] = useState(false);
+  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
 
   // Get authenticated user
   const auth = getAuthUser();
@@ -613,7 +629,22 @@ const Staffs = () => {
     }
   };
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    if (!hasPermission(permissionId)) {
+      setPermissionDeniedAction(actionName);
+      setShowPermissionDeniedModal(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleViewDetails = (staff) => {
+    // Check VIEW permission
+    if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+      return;
+    }
+    
     if (staff.isDelete) {
       showErrorToast('Cannot view details of blacklisted staff', 3000);
       return;
@@ -624,6 +655,11 @@ const Staffs = () => {
   };
 
   const handleEditStaff = (staff) => {
+    // Check EDIT permission
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit staff')) {
+      return;
+    }
+    
     if (staff.isDelete) {
       showErrorToast('Cannot edit blacklisted staff', 3000);
       return;
@@ -634,6 +670,11 @@ const Staffs = () => {
   };
 
   const handleDeleteClick = (staff) => {
+    // Check DELETE permission
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete staff')) {
+      return;
+    }
+    
     setStaffToDelete(staff);
     setShowDeleteModal(true);
     setActiveMenu(null);
@@ -666,7 +707,13 @@ const Staffs = () => {
     }
   };
 
-  const handleAddStaff = () => navigate('/add-staff');
+  const handleAddStaff = () => {
+    // Check CREATE permission
+    if (!checkPermission(PERMISSIONS.CREATE, 'create staff')) {
+      return;
+    }
+    navigate('/add-staff');
+  };
   
   const getActiveFilterCount = () =>
     [
@@ -884,7 +931,11 @@ const Staffs = () => {
               )}
             </button>
             
-            <Button onClick={handleAddStaff} className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+            {/* New Staff Button with Permission Check */}
+            <Button 
+              onClick={handleAddStaff} 
+              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
               <Plus size={16} /> New Staff
             </Button>
           </div>
@@ -1040,7 +1091,15 @@ const Staffs = () => {
                     </div>
                     
                     <h3 
-                      onClick={() => !isBlacklisted && handleViewDetails(staff)} 
+                      onClick={() => {
+                        // Check VIEW permission before opening details
+                        if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+                          return;
+                        }
+                        if (!isBlacklisted) {
+                          handleViewDetails(staff);
+                        }
+                      }} 
                       className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                     >
                       {staff.name}
@@ -1153,7 +1212,15 @@ const Staffs = () => {
                                 </AvatarFallback>
                               </Avatar>
                               <span 
-                                onClick={() => !isBlacklisted && handleViewDetails(staff)}
+                                onClick={() => {
+                                  // Check VIEW permission before opening details
+                                  if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+                                    return;
+                                  }
+                                  if (!isBlacklisted) {
+                                    handleViewDetails(staff);
+                                  }
+                                }}
                                 className={`font-medium ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''} ${
                                   isBlacklisted ? 'text-gray-500' : 'text-gray-800'
                                 }`}
@@ -1239,6 +1306,14 @@ const Staffs = () => {
         title="Delete Staff Member" 
         message="Are you sure you want to delete this staff member? This action cannot be undone." 
         itemName={staffToDelete?.name} 
+      />
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDeniedModal}
+        onClose={() => setShowPermissionDeniedModal(false)}
+        action={permissionDeniedAction}
+        permissionId={PERMISSIONS.VIEW} // Pass a default permission ID or make it dynamic
       />
     </>
   );

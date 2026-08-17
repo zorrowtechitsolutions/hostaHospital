@@ -131,7 +131,6 @@ const EditEmailTemplate = () => {
       };
 
       // Debug log to verify payload
-      console.log("UPDATE PAYLOAD:", payload);
 
       await updateTemplate({
         id,

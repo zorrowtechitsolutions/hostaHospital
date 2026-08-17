@@ -4,7 +4,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
 import { Input, Button, Alert, Card } from '../components/ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
-import { useLoginMutation } from '../../app/service/hospitalApi';
+import {
+  useLoginMutation,
+  useSelectHospitalMutation
+} from '../../app/service/hospitalApi';
 import { useAuth } from '../context/AuthContext';
 import { jwtDecode } from 'jwt-decode';
 import { generateTokenWithTimeout, isFCMAvailable } from "../notification/firebase";
@@ -64,6 +67,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [loginUser, { isLoading: isLoginLoading }] = useLoginMutation();
+  const [selectHospital, { isLoading: isHospitalSelectionLoading }] = useSelectHospitalMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -84,7 +88,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  const isLoading = isLoginLoading || isSubmitting;
+  const isLoading = isLoginLoading || isSubmitting || isHospitalSelectionLoading;
 
   // ✅ Simulate initial loading for skeleton
   useEffect(() => {
@@ -152,13 +156,63 @@ const Login = () => {
   };
 
   const handleLoginWithHospital = async (hospitalId) => {
+    if (!hospitalId) {
+      showWarningToast('⚠️ Please select a hospital', 3000);
+      return;
+    }
+
     setIsSubmitting(true);
     setLoginError('');
-    
+
     try {
-      const response = pendingResponse;
+      const pending = pendingResponse || {};
       const fcmToken = pendingFcmToken;
-      
+
+      // Backend has two valid multi-hospital flows:
+      // 1) membership flow -> temporary selection token -> /auth/select-hospital
+      // 2) duplicate Auth records -> /auth/login with email/password/hospitalId
+      const tempToken =
+        pending.token ||
+        pending.accessToken ||
+        pending.data?.token ||
+        pending.data?.accessToken;
+
+      let finalResponse;
+
+      if (tempToken) {
+
+        finalResponse = await selectHospital({
+          hospitalId: Number(hospitalId),
+          tempToken,
+        }).unwrap();
+      } else {
+
+        finalResponse = await loginUser({
+          email: formData.email,
+          password: formData.password,
+          hospitalId: Number(hospitalId),
+          fcmToken: fcmToken ? {
+            deviceId: getDeviceId(),
+            platform: 'web',
+            fcmToken,
+          } : undefined,
+        }).unwrap();
+      }
+
+
+      const finalToken =
+        finalResponse?.token ||
+        finalResponse?.accessToken ||
+        finalResponse?.data?.token ||
+        finalResponse?.data?.accessToken;
+
+      if (!finalToken) {
+        throw new Error(
+          finalResponse?.message ||
+          'Final authentication token was not returned by the backend.'
+        );
+      }
+
       if (fcmToken) {
         try {
           await tokenManager.addFCMToken(fcmToken);
@@ -166,16 +220,20 @@ const Login = () => {
           console.error('❌ Failed to save token to IndexedDB:', dbError);
         }
       }
-      
-      processSuccessfulLogin(response, fcmToken, selectedHospital);
-      
+
+      // Only the FINAL JWT reaches processSuccessfulLogin.
+      processSuccessfulLogin(finalResponse, fcmToken, selectedHospital);
+
     } catch (error) {
-      localStorage.clear();
-      
-      let errorMessage = "Invalid email or password. Please try again.";
-      if (error.data?.message) {
+      console.error('❌ Hospital selection/login failed:', error);
+
+      let errorMessage = 'Failed to select hospital. Please try again.';
+      if (error?.data?.message) {
         errorMessage = error.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
+
       setLoginError(errorMessage);
       showErrorToast(`❌ ${errorMessage}`, 4000);
       setIsSubmitting(false);
@@ -461,11 +519,19 @@ const Login = () => {
           return;
         }
         
-        if (response.hospitals && response.hospitals.length > 1) {
+        // Backend returns a temporary selection token for doctor/staff membership flow.
+        // It can also return requireHospitalSelection (singular) when duplicate Auth
+        // records exist; that flow is completed by POST /auth/login + hospitalId.
+        const requiresSelection =
+          response.requiresHospitalSelection === true ||
+          response.requireHospitalSelection === true;
+
+        if (requiresSelection && response.hospitals?.length > 1) {
           setPendingResponse(response);
           setPendingFcmToken(fcmToken);
           setHospitalOptions(response.hospitals || []);
-          setDetectedRole(response.roleDetected || '');
+          setDetectedRole(response.roleDetected || response.user?.role || '');
+          setSelectedHospital(null);
           setShowHospitalSelect(true);
           setIsSubmitting(false);
           showWarningToast('⚠️ Please select a hospital to continue', 3000);
@@ -555,6 +621,7 @@ const Login = () => {
                     variant="primary"
                     size="md"
                     fullWidth
+                    disabled={isHospitalSelectionLoading || isSubmitting}
                     onClick={() => handleLoginWithHospital(selectedHospital.hospitalId)}
                     className="mt-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg"
                   >

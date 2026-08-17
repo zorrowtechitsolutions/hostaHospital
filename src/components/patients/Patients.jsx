@@ -22,6 +22,7 @@ import {
 import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
 import ApproveRequestModal from '../Requests/ApproveRequestModel';
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { 
   Button, 
   Badge, 
@@ -41,6 +42,9 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
 
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
 // ✅ Import Excel Export Button
 import ExcelExportButton from '../ui/ExcelExportButton';
 
@@ -48,6 +52,14 @@ import ExcelExportButton from '../ui/ExcelExportButton';
 import { socket } from '../../socket/socket';
 // ✅ Import socket event listeners
 import { registerPatientEvents, unregisterPatientEvents } from '../../socket/patientEvents';
+
+// Permission IDs for Patient module (13-16)
+const PERMISSIONS = {
+  CREATE: 13,
+  VIEW: 14,
+  EDIT: 15,
+  DELETE: 16
+};
 
 // S3 Base URL for images
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
@@ -305,6 +317,10 @@ const Patients = () => {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
 
+  // Permission Denied Modal State
+  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
+  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState('');
+
   // 🔥 FIX: Get hospitalId properly from auth
   const authUser = getAuthUser();
   const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
@@ -369,7 +385,7 @@ const Patients = () => {
     return () => {
       unregisterPatientEvents();
     };
-  }, [refetchPatients]); // ✅ Add refetchPatients as dependency
+  }, [refetchPatients]);
 
   // ✅ Listen for socket connection/disconnection (SAME AS DOCTORS)
   useEffect(() => {
@@ -497,6 +513,16 @@ const Patients = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    if (!hasPermission(permissionId)) {
+      setPermissionDeniedMessage(`You do not have permission to ${actionName}.`);
+      setShowPermissionDenied(true);
+      return false;
+    }
+    return true;
+  };
+
   // ✅ Search handler
   const handleSearchChange = (value) => {
     setSearchTerm(value);
@@ -516,8 +542,13 @@ const Patients = () => {
     }
   }, [filteredTotalPages]);
 
-  // Navigation handlers
+  // Navigation handlers with permission checks
   const handleViewDetails = useCallback((patient) => {
+    // Check VIEW permission
+    if (!checkPermission(PERMISSIONS.VIEW, 'view patient details')) {
+      return;
+    }
+    
     if (patient.isDelete) {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
@@ -527,10 +558,19 @@ const Patients = () => {
   }, [navigate]);
 
   const handleAddPatient = useCallback(() => {
+    // Check CREATE permission
+    if (!checkPermission(PERMISSIONS.CREATE, 'add a patient')) {
+      return;
+    }
     navigate('/add-patient');
   }, [navigate]);
 
   const handleEditPatient = useCallback((patient) => {
+    // Check EDIT permission
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit patient')) {
+      return;
+    }
+    
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
@@ -540,6 +580,11 @@ const Patients = () => {
   }, [navigate]);
 
   const handleDeleteClick = useCallback((patient) => {
+    // Check DELETE permission
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete patient')) {
+      return;
+    }
+    
     setPatientToDelete(patient);
     setShowDeleteModal(true);
     setActiveMenu(null);
@@ -561,6 +606,11 @@ const Patients = () => {
   }, [patientToDelete, deletePatient, refetchPatients]);
 
   const handleRecoverPatient = useCallback(async (patient) => {
+    // Check DELETE permission for recover (same as delete)
+    if (!checkPermission(PERMISSIONS.DELETE, 'recover patient')) {
+      return;
+    }
+    
     try {
       await recoverPatient(patient.id || patient._id).unwrap();
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
@@ -583,6 +633,11 @@ const Patients = () => {
   }, [refetchPatients]);
 
   const handleAddAppointmentModal = useCallback((patient) => {
+    // Check CREATE permission for appointment
+    if (!checkPermission(PERMISSIONS.CREATE, 'create appointment')) {
+      return;
+    }
+    
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for blacklisted patient', 3000);
       return;
@@ -740,425 +795,471 @@ const Patients = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb Navigation */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            aria-label="Go back"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div className="text-xs text-gray-500">
-            <span className="text-gray-700">Patients</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Home</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Patients</span>
-          </div>
-        </div>
-        <h1 className="text-xl font-bold text-gray-800">Patients</h1>
-      </div>
-
-      {/* Search and Filter */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Search Bar - Client-side search */}
-          <div className="flex-1 max-w-sm">
-            <SearchBar
-              placeholder="Search by name, mobile, email, or ID..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onClear={handleClearSearch}
-              className="w-full"
-            />
-          </div>
-
-          {/* ✅ Gender Filter - Client-side */}
-          <select
-            value={genderFilter}
-            onChange={(e) => {
-              setGenderFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            aria-label="Filter by gender"
-          >
-            {genderOptions.map(gender => (
-              <option key={gender} value={gender}>
-                {gender === 'All' ? 'All Genders' : gender}
-              </option>
-            ))}
-          </select>
-
-          {/* ✅ Status Filter - Client-side */}
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            aria-label="Filter by status"
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Blacklisted">Blacklisted</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+    <>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        {/* Breadcrumb Navigation */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
             <button 
-              onClick={() => setViewMode('grid')} 
-              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-              aria-label="Grid view"
+              onClick={() => navigate(-1)} 
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              aria-label="Go back"
             >
-              <LayoutGrid size={16} />
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
             </button>
-            <button 
-              onClick={() => setViewMode('list')} 
-              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-              aria-label="List view"
-            >
-              <List size={16} />
-            </button>
+            <div className="text-xs text-gray-500">
+              <span className="text-gray-700">Patients</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Home</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Patients</span>
+            </div>
           </div>
-
-          <button 
-            onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            disabled={isFetching}
-            aria-label="Refresh"
-          >
-            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
-          </button>
-
-          <ExcelExportButton
-            data={getExportData()}
-            fileName={`patients_${new Date().toISOString().split("T")[0]}`}
-            sheetName="Patients"
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-          />
-
-          <Button 
-            onClick={handleAddPatient} 
-            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            <Plus size={16} /> New Patient
-          </Button>
+          <h1 className="text-xl font-bold text-gray-800">Patients</h1>
         </div>
-      </div>
 
-      {/* Empty State */}
-      {filteredPatients.length === 0 && !isLoadingPatients && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
-          <p className="text-sm text-gray-500">
-            {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
-          </p>
-          {(searchTerm || genderFilter !== 'All' || statusFilter !== 'All') && (
-            <button 
-              onClick={() => {
-                setSearchTerm('');
-                setGenderFilter('All');
-                setStatusFilter('All');
+        {/* Search and Filter */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            {/* ✅ Search Bar - Client-side search */}
+            <div className="flex-1 max-w-sm">
+              <SearchBar
+                placeholder="Search by name, mobile, email, or ID..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onClear={handleClearSearch}
+                className="w-full"
+              />
+            </div>
+
+            {/* ✅ Gender Filter - Client-side */}
+            <select
+              value={genderFilter}
+              onChange={(e) => {
+                setGenderFilter(e.target.value);
+                setCurrentPage(1);
               }}
-              className="mt-4 text-sm text-[#1C62A0] hover:underline"
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              aria-label="Filter by gender"
             >
-              Clear all filters
+              {genderOptions.map(gender => (
+                <option key={gender} value={gender}>
+                  {gender === 'All' ? 'All Genders' : gender}
+                </option>
+              ))}
+            </select>
+
+            {/* ✅ Status Filter - Client-side */}
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              aria-label="Filter by status"
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Blacklisted">Blacklisted</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+              <button 
+                onClick={() => setViewMode('grid')} 
+                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="Grid view"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="List view"
+              >
+                <List size={16} />
+              </button>
+            </div>
+
+            <button 
+              onClick={handleRefresh} 
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+              disabled={isFetching}
+              aria-label="Refresh"
+            >
+              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </button>
-          )}
-        </div>
-      )}
 
-      {/* GRID VIEW - UPDATED: Removed Status, Added Gender */}
-      {viewMode === 'grid' && filteredPatients.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedPatients.map((patient) => {
-              const isBlacklisted = patient.isDelete;
-              const patientStatus = getPatientStatus(patient);
-              
-              return (
-                <div 
-                  key={patient.id || patient._id} 
-                  className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="w-full flex justify-between items-start mb-4">
-                    <Badge variant="info" className="text-[10px]">
-                      {getPatientId(patient.id || patient._id)}
-                    </Badge>
-                    <div className="relative menu-container">
-                      <button 
-                        onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
-                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                        aria-label="Actions menu"
-                      >
-                        ⋮
-                      </button>
-                      <PatientActionMenu
-                        patient={patient}
-                        activeMenu={activeMenu}
-                        onView={handleViewDetails}
-                        onEdit={handleEditPatient}
-                        onDelete={handleDeleteClick}
-                        onAppointment={handleAddAppointmentModal}
-                        onRecover={handleRecoverPatient}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="relative mb-3">
-                    <Avatar className="w-16 h-16">
-                      <AvatarImage
-                        src={getS3ImageUrl(patient.imageKey)}
-                        alt={getPatientName(patient)}
-                      />
-                      <AvatarFallback>
-                        {(patient.name?.[0] || "P").toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div
-                      className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
-                        isBlacklisted
-                          ? "bg-black"
-                          : patient.isActive
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      }`}
-                    />
-                  </div>
-                  
-                  <h3 
-                    onClick={() => !isBlacklisted && handleViewDetails(patient)} 
-                    className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+            <ExcelExportButton
+              data={getExportData()}
+              fileName={`patients_${new Date().toISOString().split("T")[0]}`}
+              sheetName="Patients"
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+            />
+
+            {/* New Patient Button with Permission Check */}
+            <Button 
+              onClick={handleAddPatient} 
+              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <Plus size={16} /> New Patient
+            </Button>
+          </div>
+        </div>
+
+        {/* Empty State */}
+        {filteredPatients.length === 0 && !isLoadingPatients && (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+            <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
+            <p className="text-sm text-gray-500">
+              {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
+            </p>
+            {(searchTerm || genderFilter !== 'All' || statusFilter !== 'All') && (
+              <button 
+                onClick={() => {
+                  setSearchTerm('');
+                  setGenderFilter('All');
+                  setStatusFilter('All');
+                }}
+                className="mt-4 text-sm text-[#1C62A0] hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* GRID VIEW - UPDATED: Removed Status, Added Gender */}
+        {viewMode === 'grid' && filteredPatients.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {paginatedPatients.map((patient) => {
+                const isBlacklisted = patient.isDelete;
+                const patientStatus = getPatientStatus(patient);
+                
+                return (
+                  <div 
+                    key={patient.id || patient._id} 
+                    className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow"
                   >
-                    {getPatientName(patient)}
-                  </h3>
-                  <p className="text-[11px] text-gray-500 mb-4">
-                    {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
-                  </p>
-                  
-                  {/* UPDATED: Removed Status, Added Gender */}
-                  <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
-                    <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
-                      <p className="text-xs font-bold text-gray-700">
-                        {getPatientType(patient)}
-                      </p>
+                    <div className="w-full flex justify-between items-start mb-4">
+                      <Badge variant="info" className="text-[10px]">
+                        {getPatientId(patient.id || patient._id)}
+                      </Badge>
+                      <div className="relative menu-container">
+                        <button 
+                          onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                          aria-label="Actions menu"
+                        >
+                          ⋮
+                        </button>
+                        <PatientActionMenu
+                          patient={patient}
+                          activeMenu={activeMenu}
+                          onView={handleViewDetails}
+                          onEdit={handleEditPatient}
+                          onDelete={handleDeleteClick}
+                          onAppointment={handleAddAppointmentModal}
+                          onRecover={handleRecoverPatient}
+                        />
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
-                      <p className="text-xs font-bold text-gray-700">
-                        {patient.gender || 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Quick Action Button */}
-                  {isBlacklisted ? (
-                    <button 
-                      onClick={() => handleRecoverPatient(patient)} 
-                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <RotateCcw className="w-4 h-4" /> Recover
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => handleAddAppointmentModal(patient)} 
-                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Calendar className="w-4 h-4" /> Appointment
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Pagination for Grid View */}
-          {filteredTotalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={filteredTotalPages}
-                onPageChange={handlePageChange}
-                totalItems={filteredTotalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="patients"
-                variant="centered"
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {/* LIST VIEW */}
-      {viewMode === 'list' && filteredPatients.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Total Patients
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {filteredTotalItems}
-              </span>
-            </h2>
-          </div>
-
-          <div className="flex flex-col min-h-[500px]">
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Patient ID</th>
-                    <th className="px-6 py-3">Patient Name</th>
-                    <th className="px-6 py-3">Gender</th>
-                    <th className="px-6 py-3">Mobile Number</th>
-                    <th className="px-6 py-3">Blood Group</th>
-                    <th className="px-6 py-3">Type</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedPatients.map((patient) => {
-                    const isBlacklisted = patient.isDelete;
-                    const patientStatus = getPatientStatus(patient);
                     
-                    return (
-                      <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
-                        <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                          {getPatientId(patient.id || patient._id)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="w-8 h-8">
-                              <AvatarImage
-                                src={getS3ImageUrl(patient.imageKey)}
-                                alt={getPatientName(patient)}
-                              />
-                              <AvatarFallback>
-                                {(patient.name?.[0] || "P").toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span 
-                              onClick={() => !isBlacklisted && handleViewDetails(patient)} 
-                              className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
-                            >
-                              {getPatientName(patient)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
-                        <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
-                        <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant={getPatientType(patient) === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
-                            {getPatientType(patient)}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant={
-                              isBlacklisted
-                                ? "dark"
-                                : patient.isActive
-                                ? "success"
-                                : "danger"
-                            }
-                            className="text-xs"
-                          >
-                            {patientStatus}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right relative menu-container">
-                          <div className="flex justify-end">
-                            <button 
-                              onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
-                              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                              aria-label="Actions menu"
-                            >
-                              ⋮
-                            </button>
-                            <PatientActionMenu
-                              patient={patient}
-                              activeMenu={activeMenu}
-                              onView={handleViewDetails}
-                              onEdit={handleEditPatient}
-                              onDelete={handleDeleteClick}
-                              onAppointment={handleAddAppointmentModal}
-                              onRecover={handleRecoverPatient}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    <div className="relative mb-3">
+                      <Avatar className="w-16 h-16">
+                        <AvatarImage
+                          src={getS3ImageUrl(patient.imageKey)}
+                          alt={getPatientName(patient)}
+                        />
+                        <AvatarFallback>
+                          {(patient.name?.[0] || "P").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div
+                        className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                          isBlacklisted
+                            ? "bg-black"
+                            : patient.isActive
+                            ? "bg-green-500"
+                            : "bg-red-500"
+                        }`}
+                      />
+                    </div>
+                    
+                    <h3 
+                      onClick={() => {
+                        // Check VIEW permission before opening details
+                        if (!hasPermission(PERMISSIONS.VIEW)) {
+                          setPermissionDeniedMessage('You do not have permission to view patient details.');
+                          setShowPermissionDenied(true);
+                          return;
+                        }
+                        if (!isBlacklisted) {
+                          handleViewDetails(patient);
+                        }
+                      }} 
+                      className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                    >
+                      {getPatientName(patient)}
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mb-4">
+                      {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
+                    </p>
+                    
+                    {/* UPDATED: Removed Status, Added Gender */}
+                    <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
+                        <p className="text-xs font-bold text-gray-700">
+                          {getPatientType(patient)}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
+                        <p className="text-xs font-bold text-gray-700">
+                          {patient.gender || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Quick Action Button */}
+                    {isBlacklisted ? (
+                      <button 
+                        onClick={() => {
+                          // Check DELETE permission for recover
+                          if (!hasPermission(PERMISSIONS.DELETE)) {
+                            setPermissionDeniedMessage('You do not have permission to recover patient.');
+                            setShowPermissionDenied(true);
+                            return;
+                          }
+                          handleRecoverPatient(patient);
+                        }} 
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <RotateCcw className="w-4 h-4" /> Recover
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          // Check CREATE permission for appointment
+                          if (!hasPermission(PERMISSIONS.CREATE)) {
+                            setPermissionDeniedMessage('You do not have permission to create appointment.');
+                            setShowPermissionDenied(true);
+                            return;
+                          }
+                          handleAddAppointmentModal(patient);
+                        }} 
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Calendar className="w-4 h-4" /> Appointment
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Pagination - Sticks to bottom */}
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={filteredTotalPages}
-                onPageChange={handlePageChange}
-                totalItems={filteredTotalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="patients"
-              />
+            {/* Pagination for Grid View */}
+            {filteredTotalPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={filteredTotalPages}
+                  onPageChange={handlePageChange}
+                  totalItems={filteredTotalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="patients"
+                  variant="centered"
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* LIST VIEW */}
+        {viewMode === 'list' && filteredPatients.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Patients
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {filteredTotalItems}
+                </span>
+              </h2>
+            </div>
+
+            <div className="flex flex-col min-h-[500px]">
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-6 py-3">Patient ID</th>
+                      <th className="px-6 py-3">Patient Name</th>
+                      <th className="px-6 py-3">Gender</th>
+                      <th className="px-6 py-3">Mobile Number</th>
+                      <th className="px-6 py-3">Blood Group</th>
+                      <th className="px-6 py-3">Type</th>
+                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3 text-right w-16">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedPatients.map((patient) => {
+                      const isBlacklisted = patient.isDelete;
+                      const patientStatus = getPatientStatus(patient);
+                      
+                      return (
+                        <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
+                          <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                            {getPatientId(patient.id || patient._id)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage
+                                  src={getS3ImageUrl(patient.imageKey)}
+                                  alt={getPatientName(patient)}
+                                />
+                                <AvatarFallback>
+                                  {(patient.name?.[0] || "P").toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span 
+                                onClick={() => {
+                                  // Check VIEW permission before opening details
+                                  if (!hasPermission(PERMISSIONS.VIEW)) {
+                                    setPermissionDeniedMessage('You do not have permission to view patient details.');
+                                    setShowPermissionDenied(true);
+                                    return;
+                                  }
+                                  if (!isBlacklisted) {
+                                    handleViewDetails(patient);
+                                  }
+                                }} 
+                                className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                              >
+                                {getPatientName(patient)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">{patient.gender || 'N/A'}</td>
+                          <td className="px-6 py-4 text-gray-600">{patient.mobileNumber}</td>
+                          <td className="px-6 py-4 text-gray-600">{patient.bloodGroup || 'N/A'}</td>
+                          <td className="px-6 py-4">
+                            <Badge variant={getPatientType(patient) === 'Inpatient' ? 'warning' : 'info'} className="text-xs">
+                              {getPatientType(patient)}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge
+                              variant={
+                                isBlacklisted
+                                  ? "dark"
+                                  : patient.isActive
+                                  ? "success"
+                                  : "danger"
+                              }
+                              className="text-xs"
+                            >
+                              {patientStatus}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right relative menu-container">
+                            <div className="flex justify-end">
+                              <button 
+                                onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                                aria-label="Actions menu"
+                              >
+                                ⋮
+                              </button>
+                              <PatientActionMenu
+                                patient={patient}
+                                activeMenu={activeMenu}
+                                onView={handleViewDetails}
+                                onEdit={handleEditPatient}
+                                onDelete={handleDeleteClick}
+                                onAppointment={handleAddAppointmentModal}
+                                onRecover={handleRecoverPatient}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination - Sticks to bottom */}
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={filteredTotalPages}
+                  onPageChange={handlePageChange}
+                  totalItems={filteredTotalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="patients"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Add Appointment Modal */}
-      {showAppointmentModal && (
-        <AddAppointmentModal
-          isOpen={showAppointmentModal}
-          patient={appointmentPatient}
+        {/* Add Appointment Modal */}
+        {showAppointmentModal && (
+          <AddAppointmentModal
+            isOpen={showAppointmentModal}
+            patient={appointmentPatient}
+            onClose={() => {
+              setShowAppointmentModal(false);
+            }}
+            onProceedApprove={handleProceedApprove}
+          />
+        )}
+
+        {/* Approve Request Modal */}
+        {showApproveModal && bookingData && (
+          <ApproveRequestModal
+            requestData={bookingData}
+            initialDate={bookingData?.booking_date}
+            onClose={() => {
+              setShowApproveModal(false);
+              setBookingData(null);
+            }}
+            onConfirm={handleConfirmAppointment}
+            isLoading={isCreatingBooking}
+          />
+        )}
+
+        {/* Delete Confirmation Modal */}
+        <DeleteModal
+          isOpen={showDeleteModal}
           onClose={() => {
-            setShowAppointmentModal(false);
+            setShowDeleteModal(false);
+            setPatientToDelete(null);
           }}
-          onProceedApprove={handleProceedApprove}
+          onConfirm={handleConfirmDelete}
+          title="Delete Patient"
+          message="Are you sure you want to delete this patient? This action cannot be undone."
+          itemName={patientToDelete?.name}
         />
-      )}
 
-      {/* Approve Request Modal */}
-      {showApproveModal && bookingData && (
-        <ApproveRequestModal
-          requestData={bookingData}
-          initialDate={bookingData?.booking_date}
-          onClose={() => {
-            setShowApproveModal(false);
-            setBookingData(null);
-          }}
-          onConfirm={handleConfirmAppointment}
-          isLoading={isCreatingBooking}
+        {/* Permission Denied Modal */}
+        <PermissionDeniedModal
+          isOpen={showPermissionDenied}
+          onClose={() => setShowPermissionDenied(false)}
+          message={permissionDeniedMessage}
         />
-      )}
-
-      {/* Delete Confirmation Modal */}
-      <DeleteModal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setPatientToDelete(null);
-        }}
-        onConfirm={handleConfirmDelete}
-        title="Delete Patient"
-        message="Are you sure you want to delete this patient? This action cannot be undone."
-        itemName={patientToDelete?.name}
-      />
-    </div>
+      </div>
+    </>
   );
 };
 

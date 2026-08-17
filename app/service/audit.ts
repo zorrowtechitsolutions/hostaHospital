@@ -148,7 +148,6 @@ export const sessionHistoryApi = api.injectEndpoints({
         const queryString = queryParams.toString();
         const url = `/auth/audit-logs/${hospitalId}${queryString ? `?${queryString}` : ""}`;
         
-        console.log("📡 Fetching session history:", url);
         return url;
       },
 
