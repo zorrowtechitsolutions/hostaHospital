@@ -1,90 +1,89 @@
 // src/socket/doctorEvents.js
 import { socket } from "./socket";
 
-let onAnyListener = null;
+/**
+ * Backend (notification.handler.ts) emits ONLY these socket event names:
+ *   - "hospital_event"   -> to room `hospital_${hospitalId}` and `role_1`
+ *   - "doctor_event"     -> to room `doctor_${doctorId}`
+ *   - "emergency_alert"  -> ALSO sent to hospital_${hospitalId} / doctor_${doctorId}
+ *                           as a duplicate of hospital_event / doctor_event for:
+ *                           DOCTOR_REGISTERED, DOCTOR_PASSWORD_RESET,
+ *                           DOCTOR_PASSWORD_CHANGED, DOCTOR_PASSWORD_CHANGED_BY_ADMIN
+ *
+ * Each payload has the shape: { event, message, data }
+ * "event" holds the actual routingKey (DOCTOR_REGISTERED, DOCTOR_DELETED, ...).
+ *
+ * IMPORTANT: hospital_event/doctor_event and emergency_alert are duplicates
+ * for the events listed above. Only wire ONE of them to your normal handlers
+ * or you will process the same notification twice. Use emergency_alert only
+ * if you want a separate "critical alert" UI (banner/sound) in addition to
+ * the normal notification list.
+ */
 
-export const registerDoctorEvents = (handlers = {}) => {
-  socket.on("system_event", (payload) => {
-    const event =
-      payload.event ||
-      payload.type ||
-      payload.message?.match(/\[(.*?)\]/)?.[1];
+const routeEvent = (payload, handlers) => {
+  const { event, data } = payload || {};
 
-    switch (event) {
-      case "DOCTOR_REGISTERED":
-        handlers.onDoctorRegistered?.(payload.data);
-        break;
+  switch (event) {
+    case "DOCTOR_REGISTERED":
+      handlers.onDoctorRegistered?.(data, payload);
+      break;
+    case "DOCTOR_DELETED":
+      handlers.onDoctorDeleted?.(data, payload);
+      break;
+    case "DOCTOR_RECOVERED":
+      handlers.onDoctorRecovered?.(data, payload);
+      break;
+    case "DOCTOR_PASSWORD_RESET":
+      handlers.onDoctorPasswordReset?.(data, payload);
+      break;
+    case "DOCTOR_PASSWORD_CHANGED":
+      handlers.onDoctorPasswordChanged?.(data, payload);
+      break;
+    case "DOCTOR_PASSWORD_CHANGED_BY_ADMIN":
+      handlers.onDoctorPasswordChangedByAdmin?.(data, payload);
+      break;
+    // Not currently emitted anywhere in the backend handler you shared —
+    // kept here in case another handler file emits it later.
+    case "DOCTOR_UPDATED":
+      handlers.onDoctorUpdated?.(data, payload);
+      break;
+    default:
+      break;
+  }
+};
 
-      case "DOCTOR_UPDATED":
-        handlers.onDoctorUpdated?.(payload.data);
-        break;
+/**
+ * @param {object} handlers - your UI callbacks (onDoctorRegistered, etc.)
+ * @param {object} options
+ * @param {boolean} options.useEmergencyAlert
+ *   If true, listens on "emergency_alert" instead of "hospital_event" /
+ *   "doctor_event" for the events that are duplicated on both channels.
+ *   Default false (uses the general channels).
+ */
+export const registerDoctorEvents = (handlers = {}, options = {}) => {
+  const { useEmergencyAlert = false } = options;
 
-      case "DOCTOR_DELETED":
-        handlers.onDoctorDeleted?.(payload.data);
-        break;
-
-      case "DOCTOR_RECOVERED":
-        handlers.onDoctorRecovered?.(payload.data);
-        break;
-
-      case "DOCTOR_PASSWORD_RESET":
-        handlers.onDoctorPasswordReset?.(payload.data);
-        break;
-
-      case "DOCTOR_PASSWORD_CHANGED":
-        handlers.onDoctorPasswordChanged?.(payload.data);
-        break;
-
-      case "DOCTOR_PASSWORD_CHANGED_BY_ADMIN":
-        handlers.onDoctorPasswordChangedByAdmin?.(payload.data);
-        break;
-
-      default:
-        break;
-    }
+  // General hospital-room channel (admin/hospital dashboards)
+  socket.on("hospital_event", (payload) => {
+    if (useEmergencyAlert) return; // avoid double-processing
+    routeEvent(payload, handlers);
   });
 
-  socket.on("DOCTOR_REGISTERED", (data) => {
-    handlers.onDoctorRegistered?.(data);
+  // Doctor-room channel (DOCTOR_PASSWORD_CHANGED_BY_ADMIN goes here)
+  socket.on("doctor_event", (payload) => {
+    if (useEmergencyAlert) return; // avoid double-processing
+    routeEvent(payload, handlers);
   });
 
-  socket.on("DOCTOR_UPDATED", (data) => {
-    handlers.onDoctorUpdated?.(data);
-  });
-
-  socket.on("DOCTOR_DELETED", (data) => {
-    handlers.onDoctorDeleted?.(data);
-  });
-
-  socket.on("DOCTOR_RECOVERED", (data) => {
-    handlers.onDoctorRecovered?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_RESET", (data) => {
-    handlers.onDoctorPasswordReset?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_CHANGED", (data) => {
-    handlers.onDoctorPasswordChanged?.(data);
-  });
-
-  socket.on("DOCTOR_PASSWORD_CHANGED_BY_ADMIN", (data) => {
-    handlers.onDoctorPasswordChangedByAdmin?.(data);
+  // Duplicate/critical channel — only processed if explicitly opted in
+  socket.on("emergency_alert", (payload) => {
+    if (!useEmergencyAlert) return;
+    routeEvent(payload, handlers);
   });
 };
 
 export const unregisterDoctorEvents = () => {
-  socket.off("system_event");
-  socket.off("DOCTOR_REGISTERED");
-  socket.off("DOCTOR_UPDATED");
-  socket.off("DOCTOR_DELETED");
-  socket.off("DOCTOR_RECOVERED");
-  socket.off("DOCTOR_PASSWORD_RESET");
-  socket.off("DOCTOR_PASSWORD_CHANGED");
-  socket.off("DOCTOR_PASSWORD_CHANGED_BY_ADMIN");
-
-  if (onAnyListener) {
-    socket.offAny(onAnyListener);
-    onAnyListener = null;
-  }
+  socket.off("hospital_event");
+  socket.off("doctor_event");
+  socket.off("emergency_alert");
 };
