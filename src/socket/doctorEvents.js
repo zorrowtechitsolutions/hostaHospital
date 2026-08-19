@@ -1,9 +1,10 @@
 // src/socket/doctorEvents.js
 import { socket } from "./socket";
 
-
 export const registerDoctorEvents = (handlers = {}) => {
   const dispatch = ({ event, data }) => {
+    console.log("🔥 DOCTOR EVENT:", event, data);
+
     switch (event) {
       case "DOCTOR_REGISTERED":
         handlers.onDoctorRegistered?.(data);
@@ -32,17 +33,22 @@ export const registerDoctorEvents = (handlers = {}) => {
       case "DOCTOR_PASSWORD_CHANGED_BY_ADMIN":
         handlers.onDoctorPasswordChangedByAdmin?.(data);
         break;
+
+      default:
+        console.warn("⚠️ Unknown doctor event:", event);
     }
   };
 
-  socket.off("hospital_event");
-  socket.off("doctor_event");
-
   socket.on("hospital_event", dispatch);
-  socket.on("doctor_event", dispatch);
+  socket.on("doctor_events", dispatch);
+
+  return () => {
+    socket.off("hospital_event", dispatch);
+    socket.off("doctor_events", dispatch);
+  };
 };
 
 export const unregisterDoctorEvents = () => {
   socket.off("hospital_event");
-  socket.off("doctor_event");
+  socket.off("doctor_events");
 };

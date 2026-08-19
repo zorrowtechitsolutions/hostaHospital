@@ -1030,7 +1030,7 @@ const Staffs = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          /* ✅ GRID VIEW - Pagination always visible (like Ambulance) */
+          /* ✅ GRID VIEW - Pagination conditional (matching Doctors.jsx) */
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {staffsData.map((staff) => {
@@ -1131,23 +1131,42 @@ const Staffs = () => {
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Recover button for blacklisted staff (matching Doctors.jsx) */}
+                    {isBlacklisted && (
+                      <button 
+                        onClick={() => {
+                          // Check DELETE permission for recover
+                          if (!checkPermission(PERMISSIONS.DELETE, 'recover staff')) {
+                            return;
+                          }
+                          handleRecoverStaff(staff);
+                        }} 
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2 mt-2"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Recover
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* ✅ Pagination for Grid View - ALWAYS VISIBLE (like Ambulance) */}
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="staffs"
-                variant="centered"
-              />
-            </div>
+            {/* ✅ Pagination for Grid View - Conditional (matching Doctors.jsx) */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="staffs"
+                  variant="centered"
+                />
+              </div>
+            )}
           </>
         ) : (
           /* ✅ LIST VIEW - Pagination always visible (like Ambulance) */

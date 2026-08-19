@@ -528,7 +528,7 @@ export const doctorApi = api.injectEndpoints({
         method: "DELETE",
       }),
       invalidatesTags: (result, error, doctorId) => [
-        { type: "Doctor", doctorId },
+        { type: "Doctor", id: doctorId },
         "Doctor",
       ],
     }),

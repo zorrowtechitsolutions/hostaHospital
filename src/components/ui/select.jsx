@@ -1,4 +1,3 @@
-// src/components/ui/select.jsx
 import React from 'react';
 import { ChevronDown, AlertCircle, CheckCircle } from 'lucide-react';
 
@@ -26,11 +25,12 @@ export const Select = ({
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
+
       <div className="relative">
         <select
           name={name}
           value={value || ''}
-          onChange={(e) => onChange?.(e.target.value)}
+          onChange={onChange}
           onBlur={onBlur}
           className={`
             w-full px-3 py-2 border rounded-lg 
@@ -46,9 +46,11 @@ export const Select = ({
           `}
           {...props}
         >
-          <option value="">{placeholder || `Select ${label}`}</option>
+          <option value="">
+            {placeholder || `Select ${label}`}
+          </option>
+
           {options.map((option, index) => {
-            // Handle both string arrays and object arrays
             if (typeof option === 'string') {
               return (
                 <option key={index} value={option}>
@@ -62,23 +64,30 @@ export const Select = ({
                 </option>
               );
             }
+
             return null;
           })}
         </select>
+
         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+
         {hasError && (
           <div className="absolute inset-y-0 right-8 pr-3 flex items-center">
             <AlertCircle className="h-4 w-4 text-red-500" />
           </div>
         )}
+
         {isValid && !hasError && value && (
           <div className="absolute inset-y-0 right-8 pr-3 flex items-center">
             <CheckCircle className="h-4 w-4 text-green-500" />
           </div>
         )}
       </div>
+
       {hasError && (
-        <p className="text-xs text-red-500 error-message">{error}</p>
+        <p className="text-xs text-red-500 error-message">
+          {error}
+        </p>
       )}
     </div>
   );
