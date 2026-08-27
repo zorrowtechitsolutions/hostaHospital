@@ -145,8 +145,11 @@ const AddPatient = () => {
   const hospitalIdFromAuth = authUser?.id;
   
   // ✅ FIXED: Use hospitalId from route first, then state, then auth
-  const hospitalId = hospitalIdFromRoute || hospitalIdFromState || hospitalIdFromAuth;
-
+const hospitalId = Number(
+  hospitalIdFromRoute ||
+  hospitalIdFromState ||
+  hospitalIdFromAuth
+);
   
   const [createPatient, { isLoading: isCreateLoading }] = useCreatePatientMutation();
   

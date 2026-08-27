@@ -1,5 +1,5 @@
 // src/components/super-admin/hospitals/EditHospital.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -276,9 +276,18 @@ const EditHospital = () => {
   
   const [errors, setErrors] = useState({});
   
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  // ✅ FIX: Use useMemo to prevent recreation on every render
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  
+  const states = useMemo(
+    () => State.getStatesOfCountry(formData.countryCode),
+    [formData.countryCode]
+  );
+  
+  const cities = useMemo(
+    () => City.getCitiesOfState(formData.countryCode, formData.stateCode),
+    [formData.countryCode, formData.stateCode]
+  );
 
   // ✅ Normal Hours (for "normal" type)
   const [normalHours, setNormalHours] = useState({
@@ -313,57 +322,62 @@ const EditHospital = () => {
     sunday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: true }
   });
 
-  // Load hospital data into form
+  // ✅ FIX: Load hospital data only when hospitalData changes (not when countries/states change)
   useEffect(() => {
-    if (hospitalData) {
-      const country = countries.find(c => c.name === hospitalData.address?.country);
-      const state = states.find(s => s.name === hospitalData.address?.state);
-      
-      setFormData({
-        name: hospitalData.name || '',
-        email: hospitalData.email || '',
-        phone: hospitalData.phone || '',
-        emergencyNumber: hospitalData.emergencyContact || '',
-        about: hospitalData.about || '',
-        hospitalType: hospitalData.type || '',
-        streetAddress: hospitalData.address?.place || '',
-        pincode: hospitalData.address?.pincode?.toString() || '',
-        latitude: hospitalData.latitude?.toString() || '',
-        longitude: hospitalData.longitude?.toString() || '',
-        countryCode: country?.isoCode || '',
-        countryName: hospitalData.address?.country || '',
-        stateCode: state?.isoCode || '',
-        stateName: hospitalData.address?.state || '',
-        cityName: hospitalData.address?.district || ''
+    if (!hospitalData) return;
+
+    const country = countries.find(
+      c => c.name === hospitalData.address?.country
+    );
+
+    const state = State.getStatesOfCountry(country?.isoCode || '').find(
+      s => s.name === hospitalData.address?.state
+    );
+
+    setFormData({
+      name: hospitalData.name || '',
+      email: hospitalData.email || '',
+      phone: hospitalData.phone || '',
+      emergencyNumber: hospitalData.emergencyContact || '',
+      about: hospitalData.about || '',
+      hospitalType: hospitalData.type || '',
+      streetAddress: hospitalData.address?.place || '',
+      pincode: hospitalData.address?.pincode?.toString() || '',
+      latitude: hospitalData.latitude?.toString() || '',
+      longitude: hospitalData.longitude?.toString() || '',
+      countryCode: country?.isoCode || '',
+      countryName: hospitalData.address?.country || '',
+      stateCode: state?.isoCode || '',
+      stateName: hospitalData.address?.state || '',
+      cityName: hospitalData.address?.district || ''
+    });
+
+    // Load working hours if available
+    if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
+      const mappedHours = {};
+      DAYS.forEach(day => {
+        const dayKey = day.toLowerCase();
+        const found = hospitalData.working_hours_general.find(h => h.day === dayKey);
+        if (found) {
+          mappedHours[dayKey] = {
+            start: found.opening_time || '09:00',
+            end: found.closing_time || '18:00',
+            isHoliday: found.is_holiday || false
+          };
+        }
       });
-
-      // Load working hours if available
-      if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
-        const mappedHours = {};
-        DAYS.forEach(day => {
-          const dayKey = day.toLowerCase();
-          const found = hospitalData.working_hours_general.find(h => h.day === dayKey);
-          if (found) {
-            mappedHours[dayKey] = {
-              start: found.opening_time || '09:00',
-              end: found.closing_time || '18:00',
-              isHoliday: found.is_holiday || false
-            };
-          }
-        });
-        setNormalHours(prev => ({ ...prev, ...mappedHours }));
-      }
-
-      // Try to determine working hour type from data
-      if (hospitalData.working_hours_clinic && hospitalData.working_hours_clinic.length > 0) {
-        setWorkingHourType('clinic');
-      } else if (hospitalData.working_hours_clinic_nobreak && hospitalData.working_hours_clinic_nobreak.length > 0) {
-        setWorkingHourType('clinic-break');
-      } else if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
-        setWorkingHourType('normal');
-      }
+      setNormalHours(prev => ({ ...prev, ...mappedHours }));
     }
-  }, [hospitalData, countries, states]);
+
+    // Try to determine working hour type from data
+    if (hospitalData.working_hours_clinic && hospitalData.working_hours_clinic.length > 0) {
+      setWorkingHourType('clinic');
+    } else if (hospitalData.working_hours_clinic_nobreak && hospitalData.working_hours_clinic_nobreak.length > 0) {
+      setWorkingHourType('clinic-break');
+    } else if (hospitalData.working_hours_general && hospitalData.working_hours_general.length > 0) {
+      setWorkingHourType('normal');
+    }
+  }, [hospitalData]); // ✅ Only depend on hospitalData
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -602,7 +616,6 @@ const EditHospital = () => {
     const apiWorkingHours = convertToApiWorkingHours();
 
     const updateData = {
-      id: hospitalData.id,
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
@@ -622,9 +635,12 @@ const EditHospital = () => {
       workingHoursData: apiWorkingHours
     };
 
-
     try {
-      await updateHospital(updateData).unwrap();
+      // ✅ FIXED: Wrap updateData in updateHospital property
+      await updateHospital({
+        id: hospitalData.id,
+        updateHospital: updateData
+      }).unwrap();
       
       showSuccessToast(`✅ ${formData.name} has been successfully updated!`, 5000);
       

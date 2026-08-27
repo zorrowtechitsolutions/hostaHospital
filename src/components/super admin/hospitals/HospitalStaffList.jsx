@@ -589,7 +589,7 @@ const HospitalStaffList = () => {
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-          <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/super-admin/hospitals/${id}`)}>
             <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
           </Button>
           {canModifyStaff && (

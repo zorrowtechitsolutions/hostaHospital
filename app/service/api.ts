@@ -30,20 +30,45 @@ const publicEndpoints = [
 const baseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5173/api",
   credentials: "include",
-  prepareHeaders: (headers, { endpoint }) => {
-    const token = getToken();
+  // prepareHeaders: (headers, { endpoint }) => {
+  //   const token = getToken();
 
-    if (token && !publicEndpoints.includes(endpoint as string)) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
+  //   if (token && !publicEndpoints.includes(endpoint as string)) {
+  //     headers.set("Authorization", `Bearer ${token}`);
+  //   }
 
-    // ✅ Only set Content-Type if not already set (for FormData support)
-    if (!headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
+  //   // ✅ Only set Content-Type if not already set (for FormData support)
+  //   if (!headers.has("Content-Type")) {
+  //     headers.set("Content-Type", "application/json");
+  //   }
 
-    return headers;
-  },
+  //   return headers;
+  // },
+
+  prepareHeaders: (headers, { endpoint, arg }) => {
+  const token = getToken();
+
+  const url =
+    typeof arg === "string"
+      ? arg
+      : arg?.url || "";
+
+  const isRefreshRequest =
+    url === "/auth/refresh" ||
+    endpoint === "refreshToken" ||
+    publicEndpoints.includes(endpoint as string);
+
+  if (token && !isRefreshRequest) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return headers;
+},
+
 });
 
 const baseQueryWithReauth: BaseQueryFn<

@@ -20,6 +20,7 @@ import {
   Ambulance as AmbulanceIcon,
   Smartphone,
   Heart,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLogoutMutation } from '../../../app/service/hospitalApi';
@@ -95,6 +96,13 @@ const Sidebar = ({ isOpen, onToggle }) => {
   label: 'Notifications',
   icon: Bell,
   path: '/super-admin/notifications'
+},
+
+{
+  id: 'Audit Logs',
+  label: 'Audit Logs',
+  icon: ShieldAlert,
+  path: '/super-admin/audit-logs'
 },
   ];
 

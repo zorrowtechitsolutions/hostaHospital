@@ -373,7 +373,7 @@ const AddAmbulanceModal = ({
             <Input
               label="Pincode *"
               name="address.pincode"
-              type="number"
+              type="text"
               value={formData.address.pincode}
               onChange={handleChange}
               onBlur={handleBlur}

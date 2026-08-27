@@ -1,7 +1,7 @@
 import { socket } from "../socket/socket";
 
 export const registerAmbulanceEvents = (handlers = {}) => {
-  socket.on("ambulance_event", (payload) => {
+  socket.on("ambulance_events", (payload) => {
     const { event, message, data } = payload;
 
     switch (event) {
@@ -24,5 +24,5 @@ export const registerAmbulanceEvents = (handlers = {}) => {
 };
 
 export const unregisterAmbulanceEvents = () => {
-  socket.off("ambulance_event");
+  socket.off("ambulance_events");
 };

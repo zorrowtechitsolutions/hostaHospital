@@ -80,6 +80,10 @@ import AddDoctor from './hospitals/Doctors/AddDoctor';
 
 // ✅ Notification imports
 import NotificationsPage from './notification/NotificationsPage';
+import RecentAppointments from './RecentAppointments';
+import RecentActivity from './RecentActivity';
+import SuperAdminAuditLog from './auditlogs/SuperAdminAuditLog';
+import HospitalSessionHistory from './auditlogs/HospitalSessionHistory';
 
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -113,6 +117,10 @@ const SuperAdminLayout = () => {
               
               {/* ✅ Notification Route */}
               <Route path="notifications" element={<NotificationsPage />} />
+
+              {/* recent activity and recent appointments Routes */}
+              <Route path="appointments" element={<RecentAppointments />} />
+              <Route path="activity" element={<RecentActivity />} />
               
               {/* Hospital Routes */}
               <Route path="hospitals" element={<Hospitals />} />
@@ -144,6 +152,11 @@ const SuperAdminLayout = () => {
               {/* ✅ Blood Donor Routes */}
               <Route path="blood-donors" element={<BloodDonors />} />
               <Route path="blood-donors/:id" element={<DonorDetails />} />
+
+              {/* ✅ Audit Logs Routes */}
+              <Route path="audit-logs" element={<SuperAdminAuditLog />} />
+              <Route path="hospitals/:id/sessions" element={<HospitalSessionHistory />} />
+              
               
               {/* ✅ Ambulance Routes */}
               <Route path="ambulance" element={<Ambulance />} />

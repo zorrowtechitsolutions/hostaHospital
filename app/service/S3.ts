@@ -165,6 +165,15 @@ export const uploadToS3 = async (
         ? { key }
         : { size: compressed.size }),
     };
+    console.log("========== S3 PRESIGN DEBUG ==========");
+console.log("API_URL:", API_URL);
+console.log("role:", customRole);
+console.log("id:", id);
+console.log("key:", key);
+console.log("filename:", compressed.name);
+console.log("contentType:", compressed.type);
+console.log("size:", compressed.size);
+console.log("======================================");
     
     const res = await fetch(API_URL, {
       method: key ? "PUT" : "POST",

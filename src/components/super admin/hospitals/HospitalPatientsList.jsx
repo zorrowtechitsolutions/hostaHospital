@@ -698,11 +698,12 @@ const HospitalPatientsList = () => {
       {/* Modals */}
       {showAppointmentModal && (
         <AddAppointmentModal
-          isOpen={showAppointmentModal}
-          patient={appointmentPatient}
-          onClose={() => setShowAppointmentModal(false)}
-          onProceedApprove={handleProceedApprove}
-        />
+  isOpen={showAppointmentModal}
+  patient={appointmentPatient}
+  hospitalId={Number(hospitalId)}
+  onClose={() => setShowAppointmentModal(false)}
+  onProceedApprove={handleProceedApprove}
+/>
       )}
 
       {showApproveModal && bookingData && (

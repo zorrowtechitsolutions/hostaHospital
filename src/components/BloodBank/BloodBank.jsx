@@ -325,7 +325,8 @@ const BloodBank = () => {
   
   // Permission Denied Modal State
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
-  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState('');
+  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
+  const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
   
   // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
@@ -489,7 +490,8 @@ const BloodBank = () => {
   // Permission check helper with modal
   const checkPermission = (permissionId, actionName) => {
     if (!hasPermission(permissionId)) {
-      setPermissionDeniedMessage(`You do not have permission to ${actionName}.`);
+      setPermissionDeniedAction(actionName);
+      setPermissionDeniedPermissionId(permissionId);
       setShowPermissionDenied(true);
       return false;
     }
@@ -860,15 +862,16 @@ const BloodBank = () => {
           itemName={selectedBloodStock?.bloodGroup}
         />
 
-        {/* Permission Denied Modal */}
+        {/* Permission Denied Modal - Updated to match component props */}
         <PermissionDeniedModal
           isOpen={showPermissionDenied}
           onClose={() => setShowPermissionDenied(false)}
-          message={permissionDeniedMessage}
+          action={permissionDeniedAction}
+          permissionId={permissionDeniedPermissionId}
         />
       </div>
     </>
   );
 };
 
-export default BloodBank;
+export default BloodBank; 

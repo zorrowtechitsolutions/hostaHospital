@@ -49,7 +49,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
+  // ✅ FIXED: handleImageUpload - only stores file locally, does NOT upload to S3
   const handleImageUpload = async (file) => {
     if (!file) return;
 
@@ -64,9 +66,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(10);
-    setUploadError(null);
+    // Don't upload to S3 yet.
+    // Just keep the file in browser state.
+    setSelectedFile(file);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -74,46 +76,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     };
     reader.readAsDataURL(file);
 
-    try {
-      setUploadProgress(30);
-      
-      // ✅ IMPORTANT: Use the selected hospital ID from formData
-      const selectedHospitalId = formData.hospitalId;
-      
-      if (!selectedHospitalId) {
-        throw new Error("Please select a hospital first before uploading an image.");
-      }
-      
-      
-      // ✅ Add role parameter - backend requires it
-      const uploaded = await uploadToS3(
-        file,
-        formData.imageKey || null,
-        Number(selectedHospitalId),
-        "hospital" // ✅ Add role as "hospital"
-      );
-      
-      setUploadProgress(100);
-      
-      // Store the uploaded key temporarily
-      setUploadedImageKey(uploaded.key);
-      
-      setFormData(prev => ({
-        ...prev,
-        imageUrl: uploaded.key,
-        imageKey: uploaded.key
-      }));
-      
-      showSuccessToast('Image uploaded successfully!', 2000);
-    } catch (error) {
-      console.error('Image upload error:', error);
-      setUploadError(error.message || 'Failed to upload image');
-      showErrorToast(error.message || 'Failed to upload image. Please try again.', 3000);
-      setPreviewImage(null);
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
-    }
+    setUploadError(null);
   };
 
   const handleFileSelect = (e) => {
@@ -121,9 +84,11 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     if (file) handleImageUpload(file);
   };
 
+  // ✅ FIXED: removeImage now clears selectedFile
   const removeImage = () => {
     setPreviewImage(null);
     setUploadedImageKey(null);
+    setSelectedFile(null);
     setFormData(prev => ({
       ...prev,
       imageUrl: '',
@@ -135,6 +100,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     }
   };
 
+  // ✅ FIXED: handleSubmit now passes the file, not the uploaded key
   const handleSubmit = () => {
     if (!formData.hospitalId) {
       showErrorToast('Hospital is required', 3000);
@@ -149,10 +115,11 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       return;
     }
     
-    // Pass the image key if uploaded, otherwise null
+    // Pass the file instead of the image key
     onSave({
-      imageUrl: uploadedImageKey || formData.imageUrl || null,
-      imageKey: uploadedImageKey || formData.imageKey || null,
+      imageUrl: null,
+      imageKey: null,
+      imageFile: selectedFile,
       hospitalId: Number(formData.hospitalId),
       startDate: formData.startDate,
       endDate: formData.endDate,
@@ -171,6 +138,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     });
     setPreviewImage(null);
     setUploadedImageKey(null);
+    setSelectedFile(null);
     setUploadError(null);
   };
 
@@ -186,6 +154,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
+      setSelectedFile(null);
       setFormData(prev => ({
         ...prev,
         imageUrl: '',
@@ -351,6 +320,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     if (ad) {
@@ -368,6 +338,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     }
   }, [ad]);
 
+  // ✅ FIXED: handleImageUpload - only stores file locally, does NOT upload to S3
   const handleImageUpload = async (file) => {
     if (!file) return;
 
@@ -382,9 +353,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(10);
-    setUploadError(null);
+    // Keep the file locally.
+    // DO NOT upload to S3 yet.
+    setSelectedFile(file);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -392,44 +363,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     };
     reader.readAsDataURL(file);
 
-    try {
-      setUploadProgress(30);
-      
-      // ✅ For edit, use the hospital ID from the ad (or form data)
-      const hospitalIdToUse = formData.hospitalId || ad?.hospitalId;
-      
-      if (!hospitalIdToUse) {
-        throw new Error("Hospital ID not found. Please select a hospital.");
-      }
-      
-      
-      // ✅ Add role parameter - backend requires it
-      const uploaded = await uploadToS3(
-        file,
-        formData.imageKey || null,
-        Number(hospitalIdToUse),
-        "hospital" 
-      );
-      
-      setUploadProgress(100);
-      
-      setUploadedImageKey(uploaded.key);
-      
-      setFormData(prev => ({
-        ...prev,
-        imageUrl: uploaded.key,
-        imageKey: uploaded.key
-      }));
-      
-      showSuccessToast('Image uploaded successfully!', 2000);
-    } catch (error) {
-      console.error('Image upload error:', error);
-      setUploadError(error.message || 'Failed to upload image');
-      showErrorToast(error.message || 'Failed to upload image. Please try again.', 3000);
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
-    }
+    setUploadError(null);
   };
 
   const handleFileSelect = (e) => {
@@ -440,6 +374,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const removeImage = () => {
     setPreviewImage(null);
     setUploadedImageKey(null);
+    setSelectedFile(null);
     setFormData(prev => ({
       ...prev,
       imageUrl: '',
@@ -451,6 +386,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     }
   };
 
+  // ✅ FIXED: handleSubmit now passes the file for new uploads, or keeps existing key
   const handleSubmit = () => {
     if (!formData.hospitalId) {
       showErrorToast('Hospital is required', 3000);
@@ -464,15 +400,17 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       showErrorToast('End date is required', 3000);
       return;
     }
-    
-    // Use the uploaded image key if available, otherwise keep existing
-    const finalImageKey = uploadedImageKey || formData.imageKey || null;
-    
-    onSave({ 
-      ...ad, 
+
+    onSave({
+      ...ad,
       ...formData,
-      imageKey: finalImageKey,
-      imageUrl: finalImageKey
+      imageFile: selectedFile,
+      imageKey: selectedFile
+        ? null
+        : (uploadedImageKey || formData.imageKey || null),
+      imageUrl: selectedFile
+        ? null
+        : (uploadedImageKey || formData.imageKey || null)
     });
   };
 
@@ -487,6 +425,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
+      setSelectedFile(null);
       setFormData(prev => ({
         ...prev,
         imageUrl: '',
@@ -854,27 +793,50 @@ const Ads = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
+  // ✅ FIXED: handleAddAd now uploads image AFTER creating the ad
   const handleAddAd = async (newAd) => {
     try {
-      // ✅ Create the ad first - this will return the ad with an ID
-      const result = await createAd(newAd).unwrap();
-      const createdAd = result.data || result;
-      
-      
-      // ✅ If there's an image, update the ad with the image URL
-      if (newAd.imageKey && createdAd.id) {
-        
-        // ✅ Update the ad with the image URL using the ad ID
+      // 1. Create the ad first WITHOUT an image
+      const result = await createAd({
+        imageUrl: null,
+        imageKey: null,
+        hospitalId: newAd.hospitalId,
+        startDate: newAd.startDate,
+        endDate: newAd.endDate,
+        kilometer: newAd.kilometer,
+        isActive: newAd.isActive
+      }).unwrap();
+
+      const createdAd = result.ad || result.data || result;
+
+      if (!createdAd?.id) {
+        throw new Error("Ad was created but no ad ID was returned");
+      }
+
+
+      // 2. Now upload the image because the ad exists
+      if (newAd.imageFile) {
+
+        const uploaded = await uploadToS3(
+          newAd.imageFile,
+          null,
+          Number(createdAd.id),
+          "ad"
+        );
+
+        console.log("✅ S3 upload successful:", uploaded);
+
+        // 3. Save S3 key into the ad
         await updateAd({
           id: createdAd.id,
           data: {
-            imageUrl: newAd.imageKey,
-            imageKey: newAd.imageKey
+            imageUrl: uploaded.key,
+            imageKey: uploaded.key
           }
         }).unwrap();
-        
       }
-      
+
+      // 4. Socket event
       socket.emit("ad_event", {
         event: "AD_CREATED",
         data: {
@@ -887,24 +849,71 @@ const Ads = () => {
           timestamp: new Date().toISOString()
         }
       });
-      
+
       showSuccessToast('Ad created successfully!', 3000);
       refetch();
       setShowAddModal(false);
+
     } catch (error) {
-      console.error("Create ad error:", error);
-      showErrorToast(error?.data?.message || 'Failed to create ad', 3000);
+      console.error("❌ Create ad error:", error);
+      showErrorToast(
+        error?.data?.message ||
+        error?.message ||
+        'Failed to create ad',
+        3000
+      );
     }
   };
 
+  // ✅ FIXED: handleEditAd now uploads image AFTER updating the ad
   const handleEditAd = async (updatedAd) => {
     try {
-      // ✅ For edit, just update the ad with all data including image
-      await updateAd({ 
-        id: updatedAd.id, 
-        data: updatedAd 
+      // 1. Update the ad first WITHOUT the new image (if a new image is being uploaded)
+      await updateAd({
+        id: updatedAd.id,
+        data: {
+          hospitalId: updatedAd.hospitalId,
+          startDate: updatedAd.startDate,
+          endDate: updatedAd.endDate,
+          kilometer: updatedAd.kilometer,
+          isActive: updatedAd.isActive,
+          // Keep existing image if no new file, otherwise clear it temporarily
+          ...(updatedAd.imageFile
+            ? {
+                imageUrl: null,
+                imageKey: null
+              }
+            : {
+                imageUrl: updatedAd.imageUrl || null,
+                imageKey: updatedAd.imageKey || null
+              })
+        }
       }).unwrap();
-      
+
+      // 2. Upload new image AFTER the ad already exists
+      if (updatedAd.imageFile) {
+        console.log("📤 Uploading new image for existing ad:", updatedAd.id);
+
+        const uploaded = await uploadToS3(
+          updatedAd.imageFile,
+          null,
+          Number(updatedAd.id),
+          "ad"
+        );
+
+        console.log("✅ S3 upload successful:", uploaded);
+
+        // 3. Save S3 key to this AD
+        await updateAd({
+          id: updatedAd.id,
+          data: {
+            imageUrl: uploaded.key,
+            imageKey: uploaded.key
+          }
+        }).unwrap();
+      }
+
+      // 4. Socket event
       socket.emit("ad_event", {
         event: "AD_UPDATED",
         data: {
@@ -918,14 +927,20 @@ const Ads = () => {
           timestamp: new Date().toISOString()
         }
       });
-      
+
       showSuccessToast('Ad updated successfully!', 3000);
       refetch();
       setShowEditModal(false);
       setSelectedAd(null);
+
     } catch (error) {
-      console.error("Edit ad error:", error);
-      showErrorToast(error?.data?.message || 'Failed to update ad', 3000);
+      console.error("❌ Edit ad error:", error);
+      showErrorToast(
+        error?.data?.message ||
+        error?.message ||
+        'Failed to update ad',
+        3000
+      );
     }
   };
 

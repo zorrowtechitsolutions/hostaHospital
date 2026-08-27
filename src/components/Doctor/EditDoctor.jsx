@@ -1105,9 +1105,14 @@ const EditDoctor = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mt-4">Error Loading Doctor</h2>
           <p className="text-gray-600 mt-2">There was an error loading the doctor data.</p>
-          <Button variant="primary" onClick={() => navigate('/doctors')} className="mt-6">
-            Back to Doctors List
-          </Button>
+          <div className="flex items-center justify-center mt-6">
+  <Button
+    variant="primary"
+    onClick={() => navigate('/doctors')}
+  >
+    Back to Doctors List
+  </Button>
+</div>
         </div>
       </div>
     );

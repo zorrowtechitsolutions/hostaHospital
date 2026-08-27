@@ -7,6 +7,7 @@ import { getAuthUser, getHospitalId, getToken } from "../../src/utils/auth";
 export interface Ad {
   id?: number;
   imageUrl: string;
+  imageKey?: string;
   startDate: string;
   endDate: string;
   kilometer: number;
@@ -177,6 +178,7 @@ export const adsApi = api.injectEndpoints({
       query: ({ id, data }) => {
         const requestBody: any = {
           imageUrl: data.imageUrl,
+          imageKey: data.imageKey,
           startDate: data.startDate,
           endDate: data.endDate,
           kilometer: data.kilometer,

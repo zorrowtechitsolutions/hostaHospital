@@ -145,7 +145,6 @@ const SuperUserPermissions = () => {
         ],
       };
 
-
       const result = await createPermission(payload).unwrap();
       
       socket.emit("permission_event", {
@@ -238,6 +237,7 @@ const SuperUserPermissions = () => {
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableHeader className="text-center w-16">SL/No.</TableHeader>
                   <TableHeader>Module</TableHeader>
                   <TableHeader>Action</TableHeader>
                   <TableHeader className="text-center">Actions</TableHeader>
@@ -245,8 +245,14 @@ const SuperUserPermissions = () => {
               </TableHead>
               <TableBody>
                 {filteredPermissions.length > 0 ? (
-                  filteredPermissions.map((permission) => (
+                  filteredPermissions.map((permission, index) => (
                     <TableRow key={permission.id} className="hover:bg-gray-50 transition">
+                      {/* SL/No. */}
+                      <TableCell className="text-center font-medium text-gray-600">
+                        {(currentPage - 1) * 10 + index + 1}
+                      </TableCell>
+
+                      {/* Module */}
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -257,11 +263,15 @@ const SuperUserPermissions = () => {
                           </span>
                         </div>
                       </TableCell>
+
+                      {/* Action */}
                       <TableCell>
                         <Badge variant={getActionBadgeVariant(permission.action)}>
                           {permission.action}
                         </Badge>
                       </TableCell>
+
+                      {/* Actions */}
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
                           <button 
@@ -277,7 +287,7 @@ const SuperUserPermissions = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan="3" className="px-6 py-12 text-center text-gray-500">
+                    <TableCell colSpan="4" className="px-6 py-12 text-center text-gray-500">
                       {searchTerm ? `No permissions found matching "${searchTerm}"` : 'No permissions available'}
                     </TableCell>
                   </TableRow>
