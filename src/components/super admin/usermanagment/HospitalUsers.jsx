@@ -117,9 +117,6 @@ const HospitalUsers = () => {
                   <p className="text-xs text-gray-500">ID: {hospital.id}</p>
                 </div>
               </div>
-              <Badge variant={hospital.status === 'active' ? 'success' : 'warning'}>
-                {hospital.status === 'active' ? 'Active' : 'Inactive'}
-              </Badge>
             </div>
 
             <div className="space-y-2 mb-4">

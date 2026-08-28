@@ -240,42 +240,67 @@ export const bookingApi = api.injectEndpoints({
       providesTags: (result, error, id) => [{ type: "Booking", id }],
     }),
 
-    createBooking: builder.mutation<
-      BookingResponse,
-      Partial<Omit<BookingRequest, 'hospitalId' | 'hospitalName'>>
-    >({
-      query: (data) => {
-        const hospitalId = getHospitalId();
-        const authUser = getAuthUser();
-        const hospitalName = authUser?.name || authUser?.hospitalName || '';
-        
-        return {
-          url: "/booking",
-          method: "POST",
-          body: {
-            patient_name: data.patient_name,
-            patient_dob: data.patient_dob,
-            patient_place: data.patient_place,
-            patient_phone: data.patient_phone,
-            patient_age: data.patient_age,
-            patient_gender: data.patient_gender,
-            doctorId: data.doctorId,
-            displayName: data.displayName,
-            department: data.department,
-            booking_date: data.booking_date,
-            consulting_time: data.consulting_time,
-            token: data.token,
-            status: data.status || "accepted",
-            booking_status: data.booking_status,
-            hospitalId: hospitalId,
-            hospitalName: hospitalName,
-            patientId: data.patientId
-          },
-        };
-      },
-      invalidatesTags: ["Booking"],
-    }),
+createBooking: builder.mutation<
+  BookingResponse,
+  Partial<BookingRequest>
+>({
+  query: (data) => {
+    // Explicit hospitalId from Super Admin takes priority.
+    // Hospital Admin falls back to its logged-in hospital.
+    const hospitalId =
+      data.hospitalId ?? getHospitalId();
 
+    const authUser = getAuthUser();
+
+    // For Super Admin, don't use "Super Admin" as the hospital name.
+    // Use the supplied hospital name if available.
+    const hospitalName =
+      data.hospitalName ??
+      authUser?.hospitalName ??
+      (
+        authUser?.name !== "Super Admin"
+          ? authUser?.name
+          : ""
+      );
+
+    return {
+      url: "/booking",
+      method: "POST",
+      body: {
+        patient_name: data.patient_name,
+        patient_dob: data.patient_dob,
+        patient_place: data.patient_place,
+        patient_phone: data.patient_phone,
+        patient_age: data.patient_age,
+        patient_gender: data.patient_gender,
+
+        doctorId: data.doctorId,
+        displayName: data.displayName,
+        department: data.department,
+
+        booking_date: data.booking_date,
+        consulting_time: data.consulting_time,
+        token: data.token,
+
+        status: data.status || "accepted",
+        booking_status: data.booking_status,
+
+        // IMPORTANT
+        hospitalId:
+          hospitalId !== undefined &&
+          hospitalId !== null
+            ? Number(hospitalId)
+            : undefined,
+
+        hospitalName: hospitalName,
+
+        patientId: data.patientId,
+      },
+    };
+  },
+
+  invalidatesTags: ["Booking"],
+}),
     approveBooking: builder.mutation<
       BookingResponse,
       {

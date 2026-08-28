@@ -81,9 +81,19 @@ export const getAuthUser = (): JwtPayload | null => {
 
 // ================= HOSPITAL ID HELPER =================
 
-export const getHospitalId = (): number | string | null => {
+// export const getHospitalId = (): number | string | null => {
+//   const auth = getAuthUser();
+//   return auth?.hospitalId || auth?.id || null;
+// };
+
+export const getHospitalId = (): number | null => {
   const auth = getAuthUser();
-  return auth?.hospitalId || auth?.id || null;
+
+  if (!auth?.hospitalId) {
+    return null;
+  }
+
+  return Number(auth.hospitalId);
 };
 
 // ================= HOSPITAL NAME HELPER =================

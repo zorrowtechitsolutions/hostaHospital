@@ -1,6 +1,6 @@
 // src/components/patients/tabs/AppointmentsTab.jsx - Fixed to show Appointment ID instead of Patient ID
 import React from "react";
-import { Search, MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
+import { Calendar, MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
 import { Button, Input, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Pagination, SearchBar } from "../../ui";
 
 const AppointmentsTab = ({ 

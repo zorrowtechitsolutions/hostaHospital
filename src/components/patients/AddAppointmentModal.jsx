@@ -5,7 +5,7 @@ import { Modal, Textarea, Button, Avatar, Badge, Loader } from "../ui";
 import { showWarningToast } from "../ui/Toast";
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 
-const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => {
+const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospitalId }) => {
   const [formData, setFormData] = useState({
     date: "",
     quickNotes: "",
@@ -17,11 +17,18 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { 
-    data: doctorsResponse, 
-    isLoading: isLoadingDoctors,
-    isFetching: isFetchingDoctors
-  } = useGetDoctorsQuery({}, { skip: !isOpen });
+  const {
+  data: doctorsResponse,
+  isLoading: isLoadingDoctors,
+  isFetching: isFetchingDoctors,
+} = useGetDoctorsQuery(
+  {
+    hospitalId: hospitalId || patient?.hospitalId,
+  },
+  {
+    skip: !isOpen || !patient?.hospitalId,
+  }
+);
 
   const doctorsList = useMemo(() => {
     if (!doctorsResponse?.data) return [];
@@ -63,6 +70,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove }) => 
         patient_place: patient?.location?.place || patient?.address,
         patient_phone: patient?.mobileNumber,
         patient_gender: patient?.gender,
+        patient_age: Number(patient?.age),
         hospitalId: patient?.hospitalId,
         doctorId: formData.doctorId,
         booking_date: formData.date,

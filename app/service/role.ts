@@ -11,6 +11,7 @@ export interface Role {
   createdAt?: string;
   updatedAt?: string;
   description?: string;
+  hospitalId?: string | number;
 }
 
 export interface RoleResponse {
@@ -89,21 +90,31 @@ export const roleApi = api.injectEndpoints({
     }),
 
     // Updated: Create role (POST)
-    createRole: builder.mutation<RoleResponse, Omit<Role, 'id' | 'hospitalId'>>({
-      query: (data) => {
-        const hospitalId = getHospitalId();
-        
-        return {
-          url: "/role",
-          method: "POST",
-          body: {
-            ...data,
-            hospitalId: hospitalId,
-          },
-        };
+    createRole: builder.mutation<
+  RoleResponse,
+  Omit<Role, "id"> & {
+    hospitalId?: string | number;
+  }
+>({
+  query: (data) => {
+    // Explicit hospitalId is used for Super Admin.
+    // If not provided, fall back to logged-in hospital.
+    const hospitalId = data.hospitalId ?? getHospitalId();
+
+    return {
+      url: "/role",
+      method: "POST",
+      body: {
+        name: data.name,
+        description: data.description,
+        ...(hospitalId !== null && hospitalId !== undefined
+          ? { hospitalId: Number(hospitalId) }
+          : {}),
       },
-      invalidatesTags: ["Role"],
-    }),
+    };
+  },
+  invalidatesTags: ["Role"],
+}),
 
     // Updated: Update role using the new route pattern
     updateRole: builder.mutation<

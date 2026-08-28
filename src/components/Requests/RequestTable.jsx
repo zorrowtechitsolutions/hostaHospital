@@ -18,6 +18,7 @@ import {
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { showSuccessToast, showErrorToast, showAddToast } from "../ui/Toast";
 import {
   useGetBookingsQuery,
@@ -29,6 +30,17 @@ import { getS3ImageUrl } from "../../../app/service/S3";
 
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
+// Permission IDs for Booking module (33-36)
+const PERMISSIONS = {
+  CREATE: 33,
+  VIEW: 34,
+  EDIT: 35,
+  DELETE: 36
+};
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -206,6 +218,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
+  // Permission Denied Modal State
+  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
+  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
+  const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
+
   // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
@@ -286,6 +303,20 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter, showAllData]);
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    const hasPerm = hasPermission(permissionId);
+    console.log(`🔐 Permission check for ${actionName}: ${hasPerm ? '✅ GRANTED' : '❌ DENIED'}`);
+    
+    if (!hasPerm) {
+      setPermissionDeniedAction(actionName);
+      setPermissionDeniedPermissionId(permissionId);
+      setShowPermissionDenied(true);
+      return false;
+    }
+    return true;
+  };
+
   // Handlers
   const handleRefresh = () => {
     resetFilters({
@@ -355,6 +386,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleApproveClick = (request) => {
+    // Check EDIT permission (approving is an edit action)
+    if (!checkPermission(PERMISSIONS.EDIT, 'approve request')) {
+      return;
+    }
+
     if (!request.id) {
       showErrorToast("Invalid request: Missing ID. Please refresh and try again.", TOAST_DURATION);
       return;
@@ -410,6 +446,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleRejectClick = (request) => {
+    // Check EDIT permission (rejecting is an edit action)
+    if (!checkPermission(PERMISSIONS.EDIT, 'reject request')) {
+      return;
+    }
+
     setSelectedRequest(request);
     setRejectReason("");
     setShowRejectModal(true);
@@ -878,6 +919,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           isLoading={isRejecting}
         />
       )}
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDenied}
+        onClose={() => setShowPermissionDenied(false)}
+        action={permissionDeniedAction}
+        permissionId={permissionDeniedPermissionId}
+      />
     </div>
   );
 };

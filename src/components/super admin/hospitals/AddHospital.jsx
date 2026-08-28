@@ -704,11 +704,11 @@ const AddHospital = () => {
         
         if (!hospital || !hospital.id) {
           showSuccessToast(
-            "Registration completed successfully. Please sign in.",
+            "Registration completed successfully.",
             4000
           );
           setIsSubmitting(false);
-          navigate("/sign-in");
+          navigate("/super-admin/hospitals");
           return;
         }
 

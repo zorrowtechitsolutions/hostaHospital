@@ -12,6 +12,7 @@ import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
 import ApproveRequestModal from "../Requests/ApproveRequestModel";
 import RejectRequestModal from "../Requests/RejectRequestModel";
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { 
   useGetBookingsQuery,
   useApproveBookingMutation,
@@ -27,6 +28,17 @@ import { registerBookingEvents, unregisterBookingEvents } from '../../socket/boo
 
 // Import the export function
 import { exportToExcel } from "../../utils/excelExport";
+
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
+// Permission IDs for Booking module (33-36)
+const PERMISSIONS = {
+  CREATE: 33,
+  VIEW: 34,
+  EDIT: 35,
+  DELETE: 36
+};
 
 const DEFAULT_PROFILE_IMAGE = (index) =>
   `https://randomuser.me/api/portraits/lego/${index}.jpg`;
@@ -147,6 +159,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const itemsPerPage = 10;
+
+  // Permission Denied Modal State
+  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
+  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
+  const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
 
   // API Hooks - Server-side pagination
   const { 
@@ -448,6 +465,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setCurrentPage(1);
   };
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    if (!hasPermission(permissionId)) {
+      setPermissionDeniedAction(actionName);
+      setPermissionDeniedPermissionId(permissionId);
+      setShowPermissionDenied(true);
+      return false;
+    }
+    return true;
+  };
+
   // Handlers
   const handleRefresh = () => {
     setSearchTerm("");
@@ -509,6 +537,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleStartConsultation = (appointment) => {
+    // Check VIEW permission for consultation
+    if (!checkPermission(PERMISSIONS.VIEW, 'start consultation')) {
+      return;
+    }
     navigate('/appointments/consultation', {
       state: {
         appointment,
@@ -527,16 +559,28 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleViewDetails = (appointment) => {
+    // Check VIEW permission
+    if (!checkPermission(PERMISSIONS.VIEW, 'view appointment details')) {
+      return;
+    }
     setSelectedRequest(appointment);
     setShowDetailsModal(true);
   };
 
   const handleEditClick = (appointment) => {
+    // Check EDIT permission
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) {
+      return;
+    }
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
   };
 
   const handleApproveClick = (appointment) => {
+    // Check EDIT permission (approving is an edit action)
+    if (!checkPermission(PERMISSIONS.EDIT, 'approve appointment')) {
+      return;
+    }
     setSelectedRequest(appointment);
     setShowApproveModal(true);
   };
@@ -602,6 +646,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleRejectClick = (appointment) => {
+    // Check EDIT permission (rejecting is an edit action)
+    if (!checkPermission(PERMISSIONS.EDIT, 'reject appointment')) {
+      return;
+    }
     setSelectedRequest(appointment);
     setRejectReason("");
     setShowRejectModal(true);
@@ -664,6 +712,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleDeleteClick = (appointment) => {
+    // Check DELETE permission
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete appointment')) {
+      return;
+    }
     setAppointmentToDelete(appointment);
     setShowDeleteModal(true);
   };
@@ -1235,6 +1287,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         message="Are you sure you want to delete this appointment? This action cannot be undone." 
         itemName={appointmentToDelete?.formattedId} 
         isDeleting={isDeleting}
+      />
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDenied}
+        onClose={() => setShowPermissionDenied(false)}
+        action={permissionDeniedAction}
+        permissionId={permissionDeniedPermissionId}
       />
     </div>
   );

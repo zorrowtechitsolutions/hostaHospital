@@ -11,11 +11,11 @@ import {
   Monitor,
 } from "lucide-react";
 
-import { Button, Pagination, SearchBar } from "../ui";
-import { useGetSessionHistoryQuery } from "../../../app/service/sessionHistoryApi";
-import { showSuccessToast, showErrorToast } from "../ui/Toast";
-import { exportToExcel } from "../../utils/excelExport";
-import { getAuthUser } from "../../utils/auth";
+import { Button, Pagination, SearchBar } from "../../ui";
+import { useGetSessionHistoryQuery } from "../../../../app/service/sessionHistoryApi";
+import { showSuccessToast, showErrorToast } from "../../ui/Toast";
+import { exportToExcel } from "../../../utils/excelExport";
+import { getAuthUser } from "../../../utils/auth";
 
 // ============================================================
 // Constants
@@ -273,7 +273,7 @@ const RowActionMenu = ({ session, onView }) => {
 // Main Component
 // ============================================================
 
-const SessionHistory = () => {
+const HospitalSessionHistory = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -464,9 +464,20 @@ const SessionHistory = () => {
     setCurrentPage(1);
   };
 
-  // Go back to hospitals list
-  const handleBackToHospitals = () => {
-    navigate('/hospitals');
+  // ============================================================
+  // UPDATED: Go back to hospital details page
+  // ============================================================
+  const handleBack = () => {
+    if (navigationHospitalId) {
+      // If we came from hospital details, go back there
+      navigate(`/super-admin/hospitals/${navigationHospitalId}`);
+    } else if (selectedHospitalId) {
+      // If a hospital is selected via dropdown, go to its details
+      navigate(`/super-admin/hospitals/${selectedHospitalId}`);
+    } else {
+      // Fallback to hospitals list
+      navigate('/super-admin/hospitals');
+    }
   };
 
   if (isLoading) {
@@ -479,8 +490,9 @@ const SessionHistory = () => {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
-            onClick={handleBackToHospitals}
+            onClick={handleBack}
             className="p-1 hover:bg-gray-200 rounded transition-colors"
+            title="Go back"
           >
             <svg
               className="w-5 h-5 text-gray-600"
@@ -530,10 +542,10 @@ const SessionHistory = () => {
           
           {viewingHospitalName && (
             <button
-              onClick={handleBackToHospitals}
+              onClick={handleBack}
               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
             >
-              ← Back to Hospitals
+              ← Back to Hospital
             </button>
           )}
         </div>
@@ -853,4 +865,4 @@ const SessionHistory = () => {
   );
 };
 
-export default SessionHistory;
+export default HospitalSessionHistory;

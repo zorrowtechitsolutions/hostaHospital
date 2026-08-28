@@ -584,18 +584,6 @@ const EmailTemplates = () => {
                       <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                       <h3 className="text-lg font-medium text-gray-900 mb-1">No templates found</h3>
                       <p className="text-sm text-gray-500">Try adjusting your search or filter criteria</p>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          setSearch("");
-                          setCategory("All Categories");
-                          setStatus("All Statuses");
-                        }}
-                        className="mt-4"
-                      >
-                        Clear Filters
-                      </Button>
                     </td>
                   </tr>
                 )}

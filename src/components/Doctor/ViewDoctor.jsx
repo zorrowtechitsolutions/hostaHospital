@@ -258,9 +258,14 @@ const ViewDoctor = () => {
           <div className={`${CARD_CLASS} p-12 text-center`}>
             <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
             <div className="flex gap-3 justify-center mt-6">
-              <Button onClick={() => navigate('/doctors')} variant="outline" className="px-4 py-2">
-                Back to Doctors
-              </Button>
+              <div className="flex items-center justify-center mt-6">
+  <Button
+    variant="primary"
+    onClick={() => navigate('/doctors')}
+  >
+    Back to Doctor
+  </Button>
+</div>
             </div>
           </div>
         </div>

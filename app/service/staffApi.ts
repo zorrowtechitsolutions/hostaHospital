@@ -261,49 +261,113 @@ export const staffApi = api.injectEndpoints({
 
     // ================= GET ALL STAFF =================
     getStaff: builder.query<
-      StaffResponse,
-      GetStaffParams | void
-    >({
-      query: (params) => {
-        const auth = getCurrentUser();
-        const queryParams = new URLSearchParams();
-        
-        const shouldSkipFilter = params?.skipHospitalFilter === true;
-        const shouldFilterByHospital = !shouldSkipFilter;
+  StaffResponse,
+  GetStaffParams | void
+>({
+  query: (params) => {
+    const queryParams = new URLSearchParams();
 
-        if (shouldFilterByHospital) {
-          const hospitalId = getHospitalId();
-          if (hospitalId) {
-            queryParams.append("hospitalId", String(hospitalId));
-          } else {
-            console.warn("⚠️ No hospital ID found for filtering");
-          }
-        } else if (params?.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
-        }
+    // ============================================
+    // HOSPITAL FILTER
+    // ============================================
+    const hasExplicitHospitalId =
+      params?.hospitalId !== undefined &&
+      params?.hospitalId !== null &&
+      params?.hospitalId !== "";
 
-        if (params?.name) queryParams.append("name", params.name);
-        if (params?.gender) queryParams.append("gender", params.gender);
-        if (params?.phone) queryParams.append("phone", params.phone);
-        if (params?.status) queryParams.append("status", params.status);
-        if (params?.designation) queryParams.append("designation", params.designation);
-        if (params?.staffType) queryParams.append("staffType", params.staffType);
-        if (params?.email) queryParams.append("email", params.email);
-        if (params?.staffId) queryParams.append("staffId", params.staffId);
-        if (params?.search_query) queryParams.append("search_query", params.search_query);
-        if (params?.includeDeleted) queryParams.append("includeDeleted", String(params.includeDeleted));
+    if (hasExplicitHospitalId) {
+      // Super Admin:
+      // use the hospital from the URL/page
+      queryParams.append(
+        "hospitalId",
+        String(params.hospitalId)
+      );
+    } else if (params?.skipHospitalFilter !== true) {
+      // Hospital Admin / Staff:
+      // use logged-in user's hospital
+      const hospitalId = getHospitalId();
 
-        if (params?.page) queryParams.append("page", String(params.page));
-        if (params?.limit) queryParams.append("limit", String(params.limit));
+      if (hospitalId) {
+        queryParams.append(
+          "hospitalId",
+          String(hospitalId)
+        );
+      } else {
+        console.warn(
+          "⚠️ No hospital ID found for filtering"
+        );
+      }
+    }
 
-        const url = `/staff?${queryParams.toString()}`;
-        return url;
-      },
-      providesTags: ["Staff"],
-      transformResponse: (response: StaffResponse) => {
-        return response;
-      },
-    }),
+    // ============================================
+    // OTHER FILTERS
+    // ============================================
+    if (params?.name) {
+      queryParams.append("name", params.name);
+    }
+
+    if (params?.gender) {
+      queryParams.append("gender", params.gender);
+    }
+
+    if (params?.phone) {
+      queryParams.append("phone", params.phone);
+    }
+
+    if (params?.status) {
+      queryParams.append("status", params.status);
+    }
+
+    if (params?.designation) {
+      queryParams.append("designation", params.designation);
+    }
+
+    if (params?.staffType) {
+      queryParams.append("staffType", params.staffType);
+    }
+
+    if (params?.email) {
+      queryParams.append("email", params.email);
+    }
+
+    if (params?.staffId) {
+      queryParams.append("staffId", params.staffId);
+    }
+
+    if (params?.search_query) {
+      queryParams.append(
+        "search_query",
+        params.search_query
+      );
+    }
+
+    if (params?.includeDeleted) {
+      queryParams.append(
+        "includeDeleted",
+        String(params.includeDeleted)
+      );
+    }
+
+    // ============================================
+    // PAGINATION
+    // ============================================
+    if (params?.page) {
+      queryParams.append("page", String(params.page));
+    }
+
+    if (params?.limit) {
+      queryParams.append("limit", String(params.limit));
+    }
+
+    return `/staff?${queryParams.toString()}`;
+  },
+
+  providesTags: ["Staff"],
+
+  transformResponse: (response: StaffResponse) => {
+    return response;
+  },
+}),
 
     // ================= GET STAFF BY ID =================
     getStaffById: builder.query<

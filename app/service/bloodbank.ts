@@ -174,37 +174,34 @@ export const bloodBankApi = api.injectEndpoints({
 
     // ================= CREATE BLOOD BANK =================
     createBloodBank: builder.mutation<
-      BloodBankResponse,
-      Omit<BloodBank, 'id' | 'hospitalId' | 'createdAt' | 'updatedAt' | 'lastUpdated'>
-    >({
-      query: (data) => {
-        const auth = getAuthUser();
-        const isSuperAdmin = auth?.role === 'super-admin';
-        
-        // Get hospital ID using helper
-        let hospitalId: number | undefined;
-        
-        if (!isSuperAdmin) {
-          // Try to get from auth
-          const authHospitalId = getHospitalIdFromAuth(auth);
-          if (authHospitalId) {
-            hospitalId = authHospitalId;
-          }
-        }
-        
-        return {
-          url: "/blood-banks",
-          method: "POST",
-          body: {
-            bloodGroup: data.bloodGroup,
-            count: data.count,
-            hospitalId: hospitalId,
-          },
-        };
-      },
+  BloodBankResponse,
+  Omit<BloodBank, 'id' | 'createdAt' | 'updatedAt' | 'lastUpdated'>
+>({
+  query: (data) => {
+    const auth = getAuthUser();
 
-      invalidatesTags: ["BloodBank"],
-    }),
+    // Explicit hospitalId from Super Admin page first.
+    // Otherwise use logged-in user's hospital.
+    const hospitalId =
+      data.hospitalId !== undefined &&
+      data.hospitalId !== null &&
+      data.hospitalId !== ""
+        ? Number(data.hospitalId)
+        : getHospitalIdFromAuth(auth);
+
+    return {
+      url: "/blood-banks",
+      method: "POST",
+      body: {
+        bloodGroup: data.bloodGroup,
+        count: Number(data.count),
+        hospitalId,
+      },
+    };
+  },
+
+  invalidatesTags: ["BloodBank"],
+}),
 
     // ================= UPDATE BLOOD BANK =================
     updateBloodBank: builder.mutation<

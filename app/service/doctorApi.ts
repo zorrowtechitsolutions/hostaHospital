@@ -251,46 +251,45 @@ export const doctorApi = api.injectEndpoints({
     // GET DOCTORS - /doctor with hospital filtering
     // ============================================
     getDoctors: builder.query({
-      query: (params: GetDoctorsParams = {}) => {
-        const auth = getCurrentUser();
-        const queryParams = new URLSearchParams();
+  query: (params: GetDoctorsParams = {}) => {
+    const queryParams = new URLSearchParams();
 
-        const shouldSkipFilter = params.skipHospitalFilter === true;
-        const shouldFilterByHospital = !shouldSkipFilter;
+    // ✅ PRIORITY 1: Use explicitly provided hospitalId (Super Admin case)
+    if (params.hospitalId !== undefined && params.hospitalId !== null) {
+      queryParams.append("hospitalId", String(params.hospitalId));
+    } 
+    // ✅ PRIORITY 2: Use logged-in user's hospital (regular hospital admin)
+    else if (params.skipHospitalFilter !== true) {
+      const hospitalId = getHospitalId();
+      if (hospitalId) {
+        queryParams.append("hospitalId", String(hospitalId));
+      }
+    }
+    // ✅ PRIORITY 3: Skip hospital filter entirely (system-wide views)
 
-        if (shouldFilterByHospital) {
-          const hospitalId = getHospitalId();
-          if (hospitalId) {
-            queryParams.append("hospitalId", String(hospitalId));
-          }
-        } else if (params.hospitalId) {
-          queryParams.append("hospitalId", String(params.hospitalId));
-        }
+    if (params.name) {
+      queryParams.append("name", params.name);
+    }
 
-        if (params.name) {
-          queryParams.append("name", params.name);
-        }
+    if (params.speciality) {
+      queryParams.append("speciality", params.speciality);
+    }
 
-        if (params.speciality) {
-          queryParams.append("speciality", params.speciality);
-        }
+    if (params.status !== undefined && params.status !== null && params.status !== "") {
+      queryParams.append("status", String(params.status));
+    }
 
-        if (params.status !== undefined && params.status !== null && params.status !== '') {
-          queryParams.append("status", String(params.status));
-        }
+    if (params.search_query) {
+      queryParams.append("search_query", params.search_query);
+    }
 
-        if (params.search_query) {
-          queryParams.append("search_query", params.search_query);
-        }
+    queryParams.append("page", String(params.page || 1));
+    queryParams.append("limit", String(params.limit || 10));
 
-        queryParams.append("page", String(params.page || 1));
-        queryParams.append("limit", String(params.limit || 10));
-
-        const url = `/doctor?${queryParams.toString()}`;
-        return url;
-      },
-      providesTags: ["Doctor"],
-    }),
+    return `/doctor?${queryParams.toString()}`;
+  },
+  providesTags: ["Doctor"],
+}),
 
     // ============================================
     // GET SPECIALITIES - /speciality
@@ -528,7 +527,7 @@ export const doctorApi = api.injectEndpoints({
         method: "DELETE",
       }),
       invalidatesTags: (result, error, doctorId) => [
-        { type: "Doctor", doctorId },
+        { type: "Doctor", id: doctorId },
         "Doctor",
       ],
     }),
