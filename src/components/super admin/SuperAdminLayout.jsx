@@ -1,6 +1,9 @@
+// src/components/super-admin/SuperAdminLayout.jsx
+
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import TopBar from './TopBar'; // ✅ Import TopBar
 import Hospitals from './hospitals/Hospitals';
 import Categories from './Categories';
 import Specialties from './Specialties';
@@ -28,6 +31,8 @@ import EditStaff from './hospitals/Staff/EditStaff';
 // Ambulance imports
 import AddAmbulance from '../Ambulance/AddAmbulanceModal';
 import EditAmbulance from '../Ambulance/EditAmbulanceModal';
+import Ambulance from './phone/ambulance/Ambulance';
+import AmbulanceDetails from './phone/ambulance/AmbulanceDetails';
 
 // ✅ Blood Bank imports
 import AddBloodBank from './hospitals/bloodbank/AddBloodBank';
@@ -38,6 +43,10 @@ import BloodBankDetails from './hospitals/bloodbank/BloodBankDetails';
 import AddPatient from './hospitals/patients/AddPatients';
 import EditPatient from './hospitals/patients/EditPatient';
 import PatientDetails from './hospitals/patients/PatientsDetails';
+
+// ✅ Blood Donor imports
+import BloodDonors from './phone/blooddonor/BloodDonors';
+import DonorDetails from './phone/blooddonor/DonorDetails';
 
 // Specialty imports
 import HospitalsBySpeciality from './speciality/HospitalsBySpeciality';
@@ -69,6 +78,9 @@ import UsersList from './users/userslist';
 import EditDoctor from './hospitals/Doctors/EditDoctor';
 import AddDoctor from './hospitals/Doctors/AddDoctor';
 
+// ✅ Notification imports
+import NotificationsPage from './notification/NotificationsPage';
+
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -85,6 +97,12 @@ const SuperAdminLayout = () => {
           marginLeft: sidebarOpen ? `${SIDEBAR_OPEN_WIDTH}px` : `${SIDEBAR_CLOSED_WIDTH}px`
         }}
       >
+        {/* ✅ TopBar Component - Now visible */}
+        <TopBar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+        />
+
         <div className="flex-1 overflow-auto">
           <div className="p-6">
             <Routes>
@@ -92,6 +110,9 @@ const SuperAdminLayout = () => {
               
               {/* Dashboard */}
               <Route path="dashboard" element={<AdminDashboard />} />
+              
+              {/* ✅ Notification Route */}
+              <Route path="notifications" element={<NotificationsPage />} />
               
               {/* Hospital Routes */}
               <Route path="hospitals" element={<Hospitals />} />
@@ -115,9 +136,18 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/patients/:patientId" element={<PatientDetails />} />
               
               {/* ✅ Blood Bank Routes */}
+              <Route path="blood-bank" element={<HospitalBloodBanksList />} />
               <Route path="blood-bank/add" element={<AddBloodBank />} />
               <Route path="blood-bank/edit/:id" element={<EditBloodBank />} />
               <Route path="blood-bank/:id" element={<BloodBankDetails />} />
+              
+              {/* ✅ Blood Donor Routes */}
+              <Route path="blood-donors" element={<BloodDonors />} />
+              <Route path="blood-donors/:id" element={<DonorDetails />} />
+              
+              {/* ✅ Ambulance Routes */}
+              <Route path="ambulance" element={<Ambulance />} />
+              <Route path="ambulance/:id" element={<AmbulanceDetails />} />
               
               {/* ✅ Doctor Routes */}
               <Route path="hospitals/:id/doctors/edit/:doctorId" element={<EditDoctor />} />
@@ -129,7 +159,7 @@ const SuperAdminLayout = () => {
               <Route path="staff/add" element={<AddStaff />} />
               <Route path="staff/edit/:id" element={<EditStaff />} />
               
-              {/* Ambulance Routes */}
+              {/* Ambulance Routes - Add/Edit */}
               <Route path="ambulance/add" element={<AddAmbulance />} />
               <Route path="ambulance/edit/:id" element={<EditAmbulance />} />
               

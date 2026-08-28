@@ -1,26 +1,28 @@
 import { socket } from "../socket/socket";
 
-// Ambulance Events Listener
 export const registerAmbulanceEvents = (handlers = {}) => {
-  // ✅ REGISTER EVENT
-  socket.on("AMBULANCE_REGISTERED", (data) => {
-    handlers.onRegistered?.(data);
-  });
+  socket.on("ambulance_events", (payload) => {
+    const { event, message, data } = payload;
 
-  // ✅ UPDATED EVENT
-  socket.on("AMBULANCE_UPDATED", (data) => {
-    handlers.onUpdated?.(data);
-  });
+    switch (event) {
+      case "AMBULANCE_REGISTERED":
+        handlers.onRegistered?.({ message, data });
+        break;
 
-  // ✅ DELETED EVENT 
-  socket.on("AMBULANCE_DELETED", (data) => {
-    handlers.onDeleted?.(data);
-  });
+      case "AMBULANCE_UPDATED":
+        handlers.onUpdated?.({ message, data });
+        break;
+
+      case "AMBULANCE_DELETED":
+        handlers.onDeleted?.({ message, data });
+        break;
+
+      default:
+        break;
+    }
+  }); 
 };
 
-// Unregister ambulance events (cleanup)
 export const unregisterAmbulanceEvents = () => {
-  socket.off("AMBULANCE_REGISTERED");
-  socket.off("AMBULANCE_UPDATED");
-  socket.off("AMBULANCE_DELETED");
+  socket.off("ambulance_events");
 };

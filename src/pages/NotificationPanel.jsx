@@ -1,4 +1,4 @@
-// src/components/layout/NotificationPanel.jsx
+// src/components/layout/NotificationPanel.jsx - FIXED for staff
 import React, { useState, useEffect } from 'react';
 import { Bell, Trash2, CheckCheck, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -31,10 +31,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
   const userRole = getUserRole();
   const hospitalId = getHospitalId();
 
-  // ✅ For STAFF: use role-based query with "staff" role
-  // ✅ For HOSPITAL: use hospital-based query
-  // ✅ For DOCTOR: use role-based query with "doctor" role
-  
+  // Get the correct entity ID based on role
   const getEntityId = () => {
     if (userRole === "doctor") {
       return auth?.doctorId || auth?.id;
@@ -47,18 +44,18 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   const entityId = getEntityId();
 
-  // ✅ Hospital-based query (for hospital and staff only)
+  // Hospital notifications - ONLY for hospital admin
   const hospitalQuery = useGetNotificationsByHospitalQuery(
     {
       hospitalId,
     },
     {
-      skip: !hospitalId || (userRole !== "hospital" && userRole !== "staff"),
+      skip: userRole !== "hospital", // Only fetch for hospital admin
       refetchOnMountOrArgChange: true,
     }
   );
 
-  // ✅ Role-based query (for doctor and staff only)
+  // Role-based notifications - for doctors AND staff
   const roleQuery = useGetNotificationsByRoleQuery(
     {
       role: userRole,
@@ -70,90 +67,68 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   );
 
-  // ✅ Notification selection logic based on role
-  const staffNotifications = roleQuery.data?.data || [];
-  const hospitalNotifications = hospitalQuery.data?.data || [];
-
+  // Select notifications based on role
   let notifications = [];
 
   if (userRole === "hospital") {
-    notifications = hospitalNotifications;
-  } else if (userRole === "doctor") {
+    notifications = hospitalQuery.data?.data || [];
+  } else if (userRole === "doctor" || userRole === "staff") {
+    // Staff and doctors ONLY get their role-specific notifications
     notifications = roleQuery.data?.data || [];
-  } else if (userRole === "staff") {
-    notifications = [
-      ...staffNotifications,
-      ...hospitalNotifications,
-    ].filter(
-      (n, index, self) =>
-        index === self.findIndex(item => item.id === n.id)
-    );
   }
 
-  // ✅ Update loading based on role
   const isLoading = () => {
     if (userRole === "hospital") {
       return hospitalQuery.isLoading;
-    } else if (userRole === "doctor") {
+    } else if (userRole === "doctor" || userRole === "staff") {
       return roleQuery.isLoading;
-    } else if (userRole === "staff") {
-      return hospitalQuery.isLoading || roleQuery.isLoading;
     }
     return false;
   };
 
-  // ✅ Update error based on role
   const error = () => {
     if (userRole === "hospital") {
       return hospitalQuery.error;
-    } else if (userRole === "doctor") {
+    } else if (userRole === "doctor" || userRole === "staff") {
       return roleQuery.error;
-    } else if (userRole === "staff") {
-      return hospitalQuery.error || roleQuery.error;
     }
     return null;
   };
 
-  // ✅ Update refetch based on role
   const refetch = () => {
     if (userRole === "hospital") {
       hospitalQuery.refetch();
-    } else if (userRole === "doctor") {
-      roleQuery.refetch();
-    } else if (userRole === "staff") {
-      hospitalQuery.refetch();
+    } else if (userRole === "doctor" || userRole === "staff") {
       roleQuery.refetch();
     }
   };
 
-  // Mutations
   const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
   const [markAllAsReadRole] = useMarkAllNotificationsAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
   const [updateNotification] = useUpdateNotificationMutation();
 
-  // ✅ Filter unread based on user role
-  const unreadNotifications = notifications.filter(notification => {
+  // Check if notification is unread based on role
+  const isNotificationUnread = (notification) => {
     if (userRole === "hospital") {
-      // Hospital uses hospitalReadStatus
       return !notification.hospitalReadStatus?.[hospitalId];
     } else if (userRole === "doctor") {
-      // Doctor uses doctorReadStatus
       return !notification.doctorReadStatus?.[entityId];
     } else if (userRole === "staff") {
-      // Staff uses staffReadStatus
       return !notification.staffReadStatus?.[entityId];
     }
     return false;
-  });
+  };
+
+  const unreadNotifications = notifications.filter(notification => 
+    isNotificationUnread(notification)
+  );
 
   const unreadCount = unreadNotifications.length;
 
-  // ✅ Update local unread count and emit event for badge update
   useEffect(() => {
     if (unreadCount !== localUnreadCount) {
       setLocalUnreadCount(unreadCount);
-      // Emit event for badge to update
       socket.emit("unread_count_updated", {
         count: unreadCount,
         userRole: userRole,
@@ -163,7 +138,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   }, [unreadCount, localUnreadCount, userRole, hospitalId, entityId]);
 
-  // ✅ Notify parent component of unread count changes
   useEffect(() => {
     if (onUnreadCountChange) {
       onUnreadCountChange(unreadCount);
@@ -172,21 +146,62 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   // Register socket event listeners
   useEffect(() => {
-    const handleNotificationCreated = () => {
-      if (refetch) refetch();
-      showSuccessToast("New notification received!", 2000);
+    const handleNotificationCreated = (data) => {
+      refetch();
+      showSuccessToast(data?.message || "New notification received!", 2000);
     };
 
-    const handleNotificationRead = () => {
-      if (refetch) refetch();
+    const handleNotificationRead = (data) => {
+      refetch();
+    };
+
+    const handleDoctorRegistered = (data) => {
+      refetch();
+      showSuccessToast(`Doctor ${data?.doctorName || 'Doctor'} registered`, 2000);
+    };
+
+    const handleDoctorUpdated = (data) => {
+      refetch();
+      showSuccessToast(`Doctor ${data?.doctorName || 'Doctor'} updated`, 2000);
+    };
+
+    const handleDoctorDeleted = (data) => {
+      refetch();
+      showSuccessToast('Doctor deleted', 2000);
+    };
+
+    const handleDoctorRecovered = (data) => {
+      refetch();
+      showSuccessToast('Doctor recovered', 2000);
+    };
+
+    const handleDoctorPasswordReset = (data) => {
+      refetch();
+      showSuccessToast('Password reset completed', 2000);
+    };
+
+    const handleDoctorPasswordChanged = (data) => {
+      refetch();
+      showSuccessToast('Password changed successfully', 2000);
+    };
+
+    const handleDoctorPasswordChangedByAdmin = (data) => {
+      refetch();
+      showSuccessToast('Password changed by admin', 2000);
     };
 
     registerNotificationEvents({
       onNotificationCreated: handleNotificationCreated,
       onNotificationRead: handleNotificationRead,
+      onDoctorRegistered: handleDoctorRegistered,
+      onDoctorUpdated: handleDoctorUpdated,
+      onDoctorDeleted: handleDoctorDeleted,
+      onDoctorRecovered: handleDoctorRecovered,
+      onDoctorPasswordReset: handleDoctorPasswordReset,
+      onDoctorPasswordChanged: handleDoctorPasswordChanged,
+      onDoctorPasswordChangedByAdmin: handleDoctorPasswordChangedByAdmin,
     });
 
-    // Additional socket listeners
     socket.on("notifications_read_all", handleNotificationRead);
     socket.on("notification_deleted", handleNotificationRead);
 
@@ -206,11 +221,11 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
       if (!eventsRegistered) {
         registerNotificationEvents({
           onNotificationCreated: () => {
-            if (refetch) refetch();
+            refetch();
             showSuccessToast("New notification received!", 2000);
           },
           onNotificationRead: () => {
-            if (refetch) refetch();
+            refetch();
           }
         });
         setEventsRegistered(true);
@@ -224,19 +239,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Check if notification is unread based on role
-  const isNotificationUnread = (notification) => {
-    if (userRole === "hospital") {
-      return !notification.hospitalReadStatus?.[hospitalId];
-    } else if (userRole === "doctor") {
-      return !notification.doctorReadStatus?.[entityId];
-    } else if (userRole === "staff") {
-      return !notification.staffReadStatus?.[entityId];
-    }
-    return false;
-  };
-
-  // ✅ Mark a single notification as read
   const handleMarkAsRead = async (notificationId) => {
     try {
       let updateBody = {};
@@ -266,7 +268,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
         body: updateBody
       }).unwrap();
       
-      // Emit socket event for real-time updates
       socket.emit("notification_read", {
         notificationId: notificationId,
         hospitalId: hospitalId,
@@ -275,10 +276,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
       });
       
       await refetch();
-      
-      // Update local count immediately for better UX
       setLocalUnreadCount(prev => Math.max(0, prev - 1));
-      
       showSuccessToast("Notification marked as read", 2000);
     } catch (error) {
       console.error("Mark as read error:", error);
@@ -286,7 +284,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  // Handle notification click - marks as read if unread
   const handleNotificationClick = (notification) => {
     const isUnread = isNotificationUnread(notification);
     if (isUnread) {
@@ -294,7 +291,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  // ✅ Mark all notifications as read
   const handleMarkAllAsRead = async () => {
     try {
       if (!unreadNotifications.length) {
@@ -305,13 +301,11 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
       const notificationIds = unreadNotifications.map(notification => notification.id);
 
       if (userRole === "hospital") {
-        // Hospital uses hospital-based mark all
         await markAllAsReadHospital({
           hospitalId: Number(hospitalId),
           notificationIds,
         }).unwrap();
       } else if (userRole === "doctor" || userRole === "staff") {
-        // Doctor and staff use role-based mark all
         await markAllAsReadRole({
           role: userRole,
           userId: entityId,
@@ -327,10 +321,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
       });
 
       await refetch();
-      
-      // Update local count immediately
       setLocalUnreadCount(0);
-      
       showSuccessToast("All notifications marked as read", 2000);
     } catch (error) {
       console.error("Mark all as read error:", error);
@@ -338,7 +329,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  // Delete notification
   const handleDeleteClick = (id, e) => {
     e.stopPropagation();
     setSelectedNotificationId(id);
@@ -358,7 +348,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
       
       await refetch();
       
-      // Update local count
       const deletedNotif = notifications.find(n => n.id === selectedNotificationId);
       if (deletedNotif && isNotificationUnread(deletedNotif)) {
         setLocalUnreadCount(prev => Math.max(0, prev - 1));
@@ -383,7 +372,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     navigate('/notifications');
   };
 
-  // Format time
   const formatTime = (dateString) => {
     if (!dateString) return '';
     try {
@@ -393,7 +381,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  // Get notification type color/label
   const getNotificationType = (type) => {
     switch (type) {
       case 'success':
@@ -407,7 +394,6 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  // Log for debugging
   const currentError = error();
   
   if (!isOpen) return null;
@@ -464,14 +450,14 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
                 Try again
               </button>
             </div>
-          ) : unreadNotifications.length === 0 ? (
+          ) : notifications.length === 0 ? (
             <div className="px-5 py-8 text-center">
               <Bell size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">All caught up!</p>
-              <p className="text-xs text-gray-400 mt-1">No unread notifications</p>
+              <p className="text-gray-500 dark:text-gray-400">No notifications</p>
+              <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
             </div>
           ) : (
-            unreadNotifications.map((notif) => {
+            notifications.map((notif) => {
               const typeInfo = getNotificationType(notif.type);
               const isUnread = isNotificationUnread(notif);
               
@@ -522,7 +508,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
           )}
         </div>
 
-        {/* Footer - ALWAYS SHOW VIEW ALL BUTTON */}
+        {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <button 
             onClick={handleViewAll}

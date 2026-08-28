@@ -1,92 +1,136 @@
 // src/components/super-admin/TopBar.jsx
-import React, { useState, useEffect } from 'react';
-import { Search, Bell, User, LogOut, Sun, Moon } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  Bell, Maximize2, Minimize2, Menu
+} from 'lucide-react';
+import NotificationPanel from './notification/NotificationPanel';
+import { useGetNotificationsByRoleQuery } from '../../../app/service/notification';
 
-const TopBar = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [userName, setUserName] = useState('Super Admin');
-  const [userInitial, setUserInitial] = useState('S');
-  const { logout } = useAuth();
+// Get super admin ID from localStorage or auth context
+const SUPER_ADMIN_ID = Number(localStorage.getItem("roleId")) || 1;
+
+const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const navigate = useNavigate();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  
+  const notificationRef = useRef(null);
+
+  // Fetch notifications with a higher limit to get accurate unread count
+  // You can either:
+  // Option 1: Fetch all notifications (if total is manageable)
+  // Option 2: Fetch with a large limit and count unread
+  const { data: notificationsData, refetch } = useGetNotificationsByRoleQuery(
+    { 
+      role: 'superadmin', 
+      id: SUPER_ADMIN_ID,
+      limit: 50, // Increase limit to get more notifications for accurate count
+      page: 1
+    },
+    { pollingInterval: 30000 }
+  );
+
+  const notifications = notificationsData?.data || [];
+  const totalUnreadCount = notificationsData?.unreadCount || 0; // If your API returns total unread count
+  
+  // Calculate unread count from fetched notifications
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  
+  // Use totalUnreadCount from API if available, otherwise use calculated count
+  const displayUnreadCount = totalUnreadCount || unreadCount;
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  const handleNotificationClick = () => {
+    setShowNotifications(!showNotifications);
+    if (!showNotifications) {
+      refetch();
+    }
+  };
 
   useEffect(() => {
-    const authData = localStorage.getItem('authData');
-    if (authData) {
-      try {
-        const user = JSON.parse(authData);
-        if (user.name) {
-          setUserName(user.name);
-          setUserInitial(user.name.charAt(0).toUpperCase());
-        }
-      } catch (error) {
-        // Silently handle parse error
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
       }
-    }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
-  const handleLogout = () => {
-    if (window.confirm("Are you sure you want to logout?")) {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('roleId');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('userData');
-      localStorage.removeItem('authData');
-      localStorage.removeItem('permissions');
-      localStorage.removeItem('hospitalInfo');
-      localStorage.removeItem('doctorId');
-      localStorage.removeItem('staffId');
-      localStorage.removeItem('superAdminId');
-      
-      logout();
-      navigate("/sign-in", { replace: true });
-    }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    // Implement search functionality here
-  };
-
   return (
-    <div className="bg-white h-20 px-8 flex items-center justify-between border-b border-gray-200">
-      {/* Search Bar - Left Side */}
-      <form onSubmit={handleSearch} className="relative">
-        <Search
-          size={18}
-          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-        />
-        <input
-          type="text"
-          placeholder="Search something..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-4 py-2 bg-gray-100 rounded-xl w-72 outline-none focus:ring-2 focus:ring-[#6366F1] focus:bg-white transition-all"
-        />
-      </form>
-
-      {/* Right Side - Notification and User Profile */}
-      <div className="flex items-center gap-4">
-        {/* Notification Bell */}
-        <button className="p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors relative">
-          <Bell size={18} className="text-gray-600" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+    <header className="bg-[#0f172a] border-b border-slate-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+      {/* Left side - Menu button */}
+      <div className="flex items-center gap-4 flex-1">
+        <button 
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 rounded-md hover:bg-slate-700 transition-colors"
+          aria-label="Toggle sidebar"
+        >
+          <Menu size={22} className="!text-white" stroke="white" />
         </button>
-
-        {/* User Profile */}
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition-colors">
-          <div className="w-10 h-10 rounded-full bg-[#6366F1] text-white flex items-center justify-center font-semibold">
-            {userInitial}
-          </div>
-          <div className="hidden md:block">
-            <p className="font-medium text-gray-900">{userName}</p>
-            <p className="text-xs text-gray-500">Super Admin</p>
-          </div>
+        
+        <div className="hidden md:block">
+          <h1 className="text-white font-semibold text-sm">Super Admin</h1>
         </div>
       </div>
-    </div>
+
+      {/* Right side - Fullscreen and Notifications */}
+      <div className="flex items-center gap-2 md:gap-4">
+        {/* Fullscreen Toggle */}
+        <button 
+          onClick={toggleFullscreen}
+          className="p-2 rounded-full hover:bg-slate-700 transition-colors"
+          aria-label="Toggle fullscreen"
+        >
+          {isFullscreen ? (
+            <Minimize2 size={20} className="!text-white" stroke="white" />
+          ) : (
+            <Maximize2 size={20} className="!text-white" stroke="white" />
+          )}
+        </button>
+
+        {/* Notifications */}
+        <div className="relative" ref={notificationRef}>
+          <button 
+            onClick={handleNotificationClick}
+            className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
+            aria-label="Toggle notifications"
+          >
+            <Bell size={20} className="!text-white" stroke="white" />
+            {displayUnreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1 font-medium">
+                {displayUnreadCount > 99 ? '99+' : displayUnreadCount}
+              </span>
+            )}
+          </button>
+
+          <NotificationPanel 
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+          />
+        </div>
+      </div>
+    </header>
   );
 };
 

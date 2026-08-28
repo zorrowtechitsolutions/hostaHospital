@@ -16,6 +16,7 @@ import DeleteModal from '../patients/DeleteModel';
 import AddAmbulanceModal from './AddAmbulanceModal';
 import EditAmbulanceModal from './EditAmbulanceModal';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
+import PermissionDeniedModal from '../ui/PermissionDeniedModal'; // Import the new modal
 import { 
   Badge, 
   Pagination,
@@ -31,6 +32,9 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // Import the export function
 import { exportToExcel } from "../../utils/excelExport";
+
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
 
 // Import socket
 import { socket } from '../../socket/socket';
@@ -48,6 +52,14 @@ const ambulanceTypes = [
   "Boat Ambulance",
   "Emergency Response Vehicle"
 ];
+
+// Permission IDs for Ambulance module (29-32)
+const PERMISSIONS = {
+  CREATE: 29,
+  VIEW: 30,
+  EDIT: 31,
+  DELETE: 32
+};
 
 // Skeleton Loading Component
 const AmbulanceSkeleton = () => {
@@ -115,12 +127,14 @@ const Ambulance = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPermissionDeniedModal, setShowPermissionDeniedModal] = useState(false);
+  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState('');
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
   
   // Menu state for grid view
   const [activeMenu, setActiveMenu] = useState(null);
   
-  // ✅ Pagination state - server-side
+  // Pagination state - server-side
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -136,7 +150,7 @@ const Ambulance = () => {
     return `#AMB${String(numericId).padStart(4, '0')}`;
   };
 
-  // ✅ UPDATED API Hooks - Passing pagination and filter parameters
+  // API Hooks - Passing pagination and filter parameters
   const { 
     data: ambulancesResponse, 
     isLoading: loading, 
@@ -223,14 +237,14 @@ const Ambulance = () => {
     }));
   };
 
-  // ✅ No client-side filtering - use data directly from API
+  // No client-side filtering - use data directly from API
   const ambulancesData = transformAmbulanceData(ambulancesResponse?.data || []);
   
-  // ✅ Get pagination from API response
+  // Get pagination from API response
   const totalItems = ambulancesResponse?.pagination?.totalItems || 0;
   const totalPages = ambulancesResponse?.pagination?.totalPages || 1;
 
-  // ✅ Reset page when filters change
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, countryFilter]);
@@ -246,13 +260,13 @@ const Ambulance = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ✅ Search handler - receives value directly from SearchBar
+  // Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
+  // Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -260,6 +274,13 @@ const Ambulance = () => {
 
   // CRUD Handlers with API
   const handleAddAmbulance = async (newAmbulance) => {
+    // Check permission before adding
+    if (!hasPermission(PERMISSIONS.CREATE)) {
+      setPermissionDeniedMessage("You do not have permission to create an ambulance. Please contact your administrator.");
+      setShowPermissionDeniedModal(true);
+      return;
+    }
+
     try {
       const ambulanceToAdd = {
         serviceName: newAmbulance.serviceName,
@@ -279,6 +300,13 @@ const Ambulance = () => {
   };
 
   const handleEditAmbulance = async (updatedAmbulance) => {
+    // Check permission before editing
+    if (!hasPermission(PERMISSIONS.EDIT)) {
+      setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
+      setShowPermissionDeniedModal(true);
+      return;
+    }
+
     try {
       const updateData = {
         serviceName: updatedAmbulance.serviceName,
@@ -302,6 +330,13 @@ const Ambulance = () => {
   };
 
   const handleDeleteAmbulance = async () => {
+    // Check permission before deleting
+    if (!hasPermission(PERMISSIONS.DELETE)) {
+      setPermissionDeniedMessage("You do not have permission to delete an ambulance. Please contact your administrator.");
+      setShowPermissionDeniedModal(true);
+      return;
+    }
+
     if (selectedAmbulance) {
       try {
         await deleteAmbulance(selectedAmbulance.id).unwrap();
@@ -383,7 +418,7 @@ const Ambulance = () => {
     }
   };
 
-  // ✅ Loading state with skeleton
+  // Loading state with skeleton
   if (loading) {
     return <AmbulanceSkeleton />;
   }
@@ -415,7 +450,7 @@ const Ambulance = () => {
       {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
-          {/* ✅ Using global SearchBar component */}
+          {/* Using global SearchBar component */}
           <SearchBar
             placeholder="Search by name, ID, place..."
             value={searchTerm}
@@ -463,8 +498,16 @@ const Ambulance = () => {
             <Download size={16} />
           </button>
 
+          {/* Add Ambulance Button with Permission Check */}
           <button 
-            onClick={() => setShowAddModal(true)} 
+            onClick={() => {
+              if (!hasPermission(PERMISSIONS.CREATE)) {
+                setPermissionDeniedMessage("You do not have permission to create an ambulance. Please contact your administrator.");
+                setShowPermissionDeniedModal(true);
+                return;
+              }
+              setShowAddModal(true);
+            }} 
             className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={16} /> Add Ambulance
@@ -472,7 +515,7 @@ const Ambulance = () => {
         </div>
       </div>
 
-      {/* ✅ GRID VIEW - Using server-side paginated data */}
+      {/* GRID VIEW - Using server-side paginated data */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -488,14 +531,50 @@ const Ambulance = () => {
                     </button>
                     {activeMenu === ambulance.id && (
                       <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        {/* View Details with Permission Check */}
+                        <button onClick={() => { 
+                          if (!hasPermission(PERMISSIONS.VIEW)) {
+                            setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
+                            setShowPermissionDeniedModal(true);
+                            setActiveMenu(null);
+                            return;
+                          }
+                          setSelectedAmbulance(ambulance); 
+                          setShowViewModal(true); 
+                          setActiveMenu(null); 
+                        }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                           <Eye size={16} /> View Details
                         </button>
-                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        
+                        {/* Edit with Permission Check */}
+                        <button onClick={() => { 
+                          if (!hasPermission(PERMISSIONS.EDIT)) {
+                            setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
+                            setShowPermissionDeniedModal(true);
+                            setActiveMenu(null);
+                            return;
+                          }
+                          setSelectedAmbulance(ambulance); 
+                          setShowEditModal(true); 
+                          setActiveMenu(null); 
+                        }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                           <Edit size={16} /> Edit
                         </button>
+                        
                         <div className="border-t border-gray-100 my-1"></div>
-                        <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                        
+                        {/* Delete with Permission Check */}
+                        <button onClick={() => { 
+                          if (!hasPermission(PERMISSIONS.DELETE)) {
+                            setPermissionDeniedMessage("You do not have permission to delete an ambulance. Please contact your administrator.");
+                            setShowPermissionDeniedModal(true);
+                            setActiveMenu(null);
+                            return;
+                          }
+                          setSelectedAmbulance(ambulance); 
+                          setShowDeleteModal(true); 
+                          setActiveMenu(null); 
+                        }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
                           <Trash2 size={16} /> Delete
                         </button>
                       </div>
@@ -509,7 +588,15 @@ const Ambulance = () => {
                   </div>
                 </div>
 
-                <h3 onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0] text-center">
+                <h3 onClick={() => { 
+                  if (!hasPermission(PERMISSIONS.VIEW)) {
+                    setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
+                    setShowPermissionDeniedModal(true);
+                    return;
+                  }
+                  setSelectedAmbulance(ambulance); 
+                  setShowViewModal(true); 
+                }} className="text-[14px] font-bold text-gray-800 cursor-pointer hover:text-[#1C62A0] text-center">
                   {ambulance.serviceName}
                 </h3>
                 <p className="text-[11px] text-gray-500 mb-4 text-center">{ambulance.vehicleType}</p>
@@ -531,7 +618,7 @@ const Ambulance = () => {
             ))}
           </div>
 
-          {/* ✅ Pagination for Grid View - Using server-side totalPages */}
+          {/* Pagination for Grid View - Using server-side totalPages */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
@@ -548,7 +635,7 @@ const Ambulance = () => {
         </>
       )}
 
-      {/* ✅ LIST VIEW - Using server-side paginated data */}
+      {/* LIST VIEW - Using server-side paginated data */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -585,7 +672,15 @@ const Ambulance = () => {
                             <Truck className="w-4 h-4 text-[#1C62A0]" />
                           </div>
                           <span 
-                            onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} 
+                            onClick={() => { 
+                              if (!hasPermission(PERMISSIONS.VIEW)) {
+                                setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
+                                setShowPermissionDeniedModal(true);
+                                return;
+                              }
+                              setSelectedAmbulance(ambulance); 
+                              setShowViewModal(true); 
+                            }} 
                             className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
                           >
                             {ambulance.serviceName}
@@ -604,14 +699,50 @@ const Ambulance = () => {
                           </button>
                           {activeMenu === ambulance.id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                              {/* View Details with Permission Check */}
+                              <button onClick={() => { 
+                                if (!hasPermission(PERMISSIONS.VIEW)) {
+                                  setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
+                                  setShowPermissionDeniedModal(true);
+                                  setActiveMenu(null);
+                                  return;
+                                }
+                                setSelectedAmbulance(ambulance); 
+                                setShowViewModal(true); 
+                                setActiveMenu(null); 
+                              }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                 <Eye size={16} /> View Details
                               </button>
-                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                              
+                              {/* Edit with Permission Check */}
+                              <button onClick={() => { 
+                                if (!hasPermission(PERMISSIONS.EDIT)) {
+                                  setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
+                                  setShowPermissionDeniedModal(true);
+                                  setActiveMenu(null);
+                                  return;
+                                }
+                                setSelectedAmbulance(ambulance); 
+                                setShowEditModal(true); 
+                                setActiveMenu(null); 
+                              }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                 <Edit size={16} /> Edit
                               </button>
+                              
                               <div className="border-t border-gray-100 my-1"></div>
-                              <button onClick={() => { setSelectedAmbulance(ambulance); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                              
+                              {/* Delete with Permission Check */}
+                              <button onClick={() => { 
+                                if (!hasPermission(PERMISSIONS.DELETE)) {
+                                  setPermissionDeniedMessage("You do not have permission to delete an ambulance. Please contact your administrator.");
+                                  setShowPermissionDeniedModal(true);
+                                  setActiveMenu(null);
+                                  return;
+                                }
+                                setSelectedAmbulance(ambulance); 
+                                setShowDeleteModal(true); 
+                                setActiveMenu(null); 
+                              }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
                                 <Trash2 size={16} /> Delete
                               </button>
                             </div>
@@ -624,7 +755,7 @@ const Ambulance = () => {
               </table>
             </div>
 
-            {/* ✅ Pagination */}
+            {/* Pagination */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
@@ -686,6 +817,13 @@ const Ambulance = () => {
         title="Delete Ambulance"
         message="Are you sure you want to delete this ambulance? This action cannot be undone."
         itemName={selectedAmbulance?.serviceName}
+      />
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDeniedModal}
+        onClose={() => setShowPermissionDeniedModal(false)}
+        message={permissionDeniedMessage}
       />
     </div>
   );

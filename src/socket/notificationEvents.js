@@ -16,4 +16,4 @@ export const registerNotificationEvents = (handlers = {}) => {
 export const unregisterNotificationEvents = () => {
   socket.off("NOTIFICATION_CREATED");
   socket.off("NOTIFICATION_READ");
-};
+}; 

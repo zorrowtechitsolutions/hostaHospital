@@ -1,4 +1,4 @@
-// hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT
+// hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT AND MULTI-HOSPITAL LOGIN
 // Working-hours conversion logic in the API layer
 
 import { api } from "./api";
@@ -59,6 +59,7 @@ export interface LoginCredentials {
   email: string;
   password: string;
   fcmToken?: FCMTokenData | null;
+  hospitalId?: number;
 }
 
 export interface PhoneLoginData {
@@ -144,6 +145,13 @@ export interface AuthResponse {
   token?: string;
   accessToken?: string;
   refreshToken?: string;
+  requiresHospitalSelection?: boolean;  // ✅ Added for multi-hospital flow
+  hospitals?: Array<{                    // ✅ Added for multi-hospital flow
+    hospitalId: number;
+    hospitalName?: string;
+    status?: string;
+    [key: string]: any;
+  }>;
   data?: Hospital | SuperAdmin;
   hospital?: Hospital;
   user?: SuperAdmin;
@@ -152,10 +160,11 @@ export interface AuthResponse {
   roleId?: number;
   role?: string;
   roleDetected?: string;
-  hospitals?: any[];
   authId?: string;
   hospitalId?: string;
   id?: string;
+  staffId?: string;
+  doctorId?: string;
 }
 
 export interface HospitalListResponse {
@@ -410,7 +419,8 @@ export const hospitalApi = api.injectEndpoints({
     }),
 
     // ============================================
-    // ✅ LOGIN - /auth/login
+    // ✅ LOGIN - First request - /auth/login
+    // IMPORTANT: Does NOT store token for multi-hospital users
     // ============================================
     login: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => {
@@ -418,6 +428,12 @@ export const hospitalApi = api.injectEndpoints({
           email: loginData.email,
           password: loginData.password,
         };
+
+        // Backend also supports selecting a hospital directly during login
+        // when multiple Auth records exist for the same email/phone.
+        if (loginData.hospitalId !== undefined && loginData.hospitalId !== null) {
+          payload.hospitalId = Number(loginData.hospitalId);
+        }
 
         if (loginData.fcmToken !== undefined && loginData.fcmToken !== null) {
           payload.fcmToken = loginData.fcmToken;
@@ -431,8 +447,13 @@ export const hospitalApi = api.injectEndpoints({
           body: payload,
         };
       },
+      // ✅ FIXED: Do NOT store token here for multi-hospital users
       transformResponse: (response: AuthResponse) => {
-        storeUserIds(response);
+        // Only store if it's NOT a multi-hospital selection response
+        // Or if it's a super_admin (roleId === 1)
+        if (!response.requiresHospitalSelection || Number(response.roleId) === 1) {
+          storeUserIds(response);
+        }
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
@@ -442,6 +463,40 @@ export const hospitalApi = api.injectEndpoints({
         };
       },
       invalidatesTags: ["Hospital"],
+    }),
+
+    // ============================================
+    // MULTI-HOSPITAL LOGIN - Selection-token flow
+    // Backend: POST /auth/select-hospital
+    // Authorization: Bearer <temporary selection token>
+    // Body: { hospitalId }
+    // ============================================
+    selectHospital: builder.mutation<
+      AuthResponse,
+      {
+        hospitalId: number;
+        tempToken: string;
+      }
+    >({
+      query: ({ hospitalId, tempToken }) => ({
+        url: `/auth/select-hospital`,
+        method: "POST",
+        body: { hospitalId: Number(hospitalId) },
+        headers: {
+          Authorization: `Bearer ${tempToken}`,
+        },
+      }),
+      transformResponse: (response: AuthResponse) => {
+        // Backend returns the FINAL 15-minute JWT here.
+        storeUserIds(response);
+        return response;
+      },
+      transformErrorResponse: (response: { status: number; data?: any }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || "Hospital selection failed",
+        };
+      },
     }),
 
     // ============================================
@@ -803,7 +858,6 @@ export const hospitalApi = api.injectEndpoints({
           body.working_hours_clinic_nobreak = [];
         }
 
-        console.log("UPDATE BODY", body);
 
         return {
           url: `/hospital/${id}`,
@@ -869,6 +923,7 @@ export const {
   // Auth hooks 
   useRegisterMutation,  
   useLoginMutation,
+  useSelectHospitalMutation,
   useRequestHospitalOtpMutation,
   useVerifyHospitalOtpMutation,
   useRefreshTokenMutation,

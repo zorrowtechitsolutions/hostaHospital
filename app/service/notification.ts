@@ -89,6 +89,12 @@ export interface RoleNotificationsResponse {
   error?: null;
 }
 
+export interface ToggleNotificationStatusResponse {
+  success: boolean;
+  message: string;
+  notificationEnabled: boolean;
+}
+
 export const notificationApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
@@ -118,25 +124,25 @@ export const notificationApi = api.injectEndpoints({
       providesTags: (result, error, id) => [{ type: 'Notification', id }],
     }),
 
-getNotificationsByRole: builder.query<
-  NotificationsResponse,
-  { role: string; id: number; page?: number; limit?: number }
->({
-  query: ({ role, id, page, limit }) => {
-    const queryParams = new URLSearchParams();
+    getNotificationsByRole: builder.query<
+      NotificationsResponse,
+      { role: string; id: number; page?: number; limit?: number }
+    >({
+      query: ({ role, id, page, limit }) => {
+        const queryParams = new URLSearchParams();
 
-    if (page) queryParams.append("page", page.toString());
-    if (limit) queryParams.append("limit", limit.toString());
+        if (page) queryParams.append("page", page.toString());
+        if (limit) queryParams.append("limit", limit.toString());
 
-    const queryString = queryParams.toString();
+        const queryString = queryParams.toString();
 
-    return `/notification/${role}/${id}${
-      queryString ? `?${queryString}` : ""
-    }`;
-  },
+        return `/notification/${role}/${id}${
+          queryString ? `?${queryString}` : ""
+        }`;
+      },
 
-  providesTags: [{ type: "Notifications", id: "BY_ROLE" }],
-}),
+      providesTags: [{ type: "Notifications", id: "BY_ROLE" }],
+    }),
 
     getNotificationsByHospital: builder.query<NotificationsResponse, { hospitalId: number; page?: number; limit?: number }>({
       query: ({ hospitalId, page, limit }) => {
@@ -252,6 +258,20 @@ getNotificationsByRole: builder.query<
         { type: 'Notifications', id: 'BY_HOSPITAL' }
       ],
     }),
+
+    toggleNotificationStatus: builder.mutation<
+      ToggleNotificationStatusResponse,
+      void
+    >({
+      query: () => ({
+        url: 'auth/notification/toggle',
+        method: 'PUT',
+      }),
+      invalidatesTags: [
+        { type: 'Notifications', id: 'LIST' },
+      ],
+    }),
+
   }),
   overrideExisting: false,
 });
@@ -270,4 +290,5 @@ export const {
   useMarkAllNotificationsAsReadByHospitalMutation,
   useDeleteNotificationMutation,
   useDeleteNotificationsByHospitalMutation,
+  useToggleNotificationStatusMutation,
 } = notificationApi;

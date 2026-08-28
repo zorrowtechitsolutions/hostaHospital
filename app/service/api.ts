@@ -28,7 +28,7 @@ const publicEndpoints = [
 ];
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5173/api",
   credentials: "include",
   prepareHeaders: (headers, { endpoint }) => {
     const token = getToken();
@@ -90,7 +90,6 @@ const baseQueryWithReauth: BaseQueryFn<
       const newToken = data.token || data.accessToken;
 
       if (newToken) {
-        console.log("✅ New Access Token received");
 
         localStorage.setItem("accessToken", newToken);
 
@@ -148,6 +147,10 @@ export const api = createApi({
     "Category",
     "emailEnquiry",
     "Users",
+    "Donor",
+    "Email",
+    "Template",
+    "SessionHistory",
   ],
   endpoints: () => ({}),
 });

@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Pagination, SearchBar } from '../ui';
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -11,6 +12,17 @@ import { getAuthUser } from '../../../src/utils/auth';
 import ExcelExportButton from '../ui/ExcelExportButton';
 import { formatDate } from "../../utils/dateFormatter";
 import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/doctorEvents';
+
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
+// Permission IDs for Doctor module (1-4)
+const PERMISSIONS = {
+  CREATE: 1,
+  VIEW: 2,
+  EDIT: 3,
+  DELETE: 4
+};
 
 const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
 
@@ -241,6 +253,10 @@ const Doctors = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Permission Denied Modal State
+  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
+  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState('');
+
   const [recoverDoctor] = useRecoverDoctorMutation();
 
   const auth = getAuthUser();
@@ -328,6 +344,16 @@ const Doctors = () => {
     localStorage.setItem('doctorViewMode', viewMode);
   }, [viewMode]);
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    if (!hasPermission(permissionId)) {
+      setPermissionDeniedMessage(`You do not have permission to ${actionName}.`);
+      setShowPermissionDenied(true);
+      return false;
+    }
+    return true;
+  };
+
   const doctors = useMemo(() => {
     if (!response?.data) return [];
     return response.data.map((doctor) => ({
@@ -404,28 +430,48 @@ const Doctors = () => {
   }, [refetch]);
 
   const handleViewDetails = useCallback((doctor) => {
+    // Check VIEW permission
+    if (!checkPermission(PERMISSIONS.VIEW, 'view doctor details')) {
+      return;
+    }
     navigate(`/doctor/${doctor.id}`);
     setActiveMenu(null);
   }, [navigate]);
 
   const handleEdit = useCallback((doctor) => {
+    // Check EDIT permission
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit doctor')) {
+      return;
+    }
     navigate(`/edit-doctor/${doctor.id}`);
     setActiveMenu(null);
   }, [navigate]);
 
   const handleAppointmentManagement = useCallback((doctor) => {
+    // Check EDIT permission for appointment settings
+    if (!checkPermission(PERMISSIONS.EDIT, 'manage appointment settings')) {
+      return;
+    }
     setSelectedDoctorForManagement(doctor);
     setShowAppointmentManagement(true);
     setActiveMenu(null);
   }, []);
 
   const handleDeleteClick = useCallback((doctor) => {
+    // Check DELETE permission
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete doctor')) {
+      return;
+    }
     setDoctorToDelete(doctor);
     setShowDelete(true);
     setActiveMenu(null);
   }, []);
 
   const handleRecoverDoctor = useCallback(async (doctor) => {
+    // Check DELETE permission for recover
+    if (!checkPermission(PERMISSIONS.DELETE, 'recover doctor')) {
+      return;
+    }
     try {
       await recoverDoctor(doctor.id).unwrap();
       setActiveMenu(null);
@@ -538,399 +584,444 @@ const Doctors = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            aria-label="Go back"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div className="text-xs text-gray-500">
-            <span className="text-gray-700">Doctors</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Home</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Doctors</span>
-          </div>
-        </div>
-        <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
-
-        {selectedSpecialty !== 'All' && (
-          <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm ml-2">
-            <span>Filtering by department: <strong>{selectedSpecialty}</strong></span>
-            <button onClick={clearDepartmentFilter} className="hover:text-blue-900" aria-label="Clear filter">
-              ✕
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="flex-1 max-w-sm">
-            <SearchBar
-              placeholder="Search by name, department, specialty..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onClear={handleClearSearch}
-              className="w-full"
-            />
-          </div>
-
-          <select
-            value={selectedSpecialty}
-            onChange={(e) => setSelectedSpecialty(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            aria-label="Filter by department"
-          >
-            {departments.map(dept => (
-              <option key={dept} value={dept}>
-                {dept === 'All' ? 'All Departments' : dept}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            aria-label="Filter by status"
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button 
-              onClick={() => setViewMode('grid')} 
-              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-              aria-label="Grid view"
+    <>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              aria-label="Go back"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z" />
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </button>
-            <button 
-              onClick={() => setViewMode('list')} 
-              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-              aria-label="List view"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+            <div className="text-xs text-gray-500">
+              <span className="text-gray-700">Doctors</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Home</span>
+              <span className="mx-1 text-gray-400">»</span>
+              <span>Doctors</span>
+            </div>
           </div>
+          <h1 className="text-xl font-bold text-gray-800">Doctors</h1>
 
-          <button 
-            onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            disabled={isFetching}
-            aria-label="Refresh"
-          >
-            <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-
-          <ExcelExportButton
-            data={getExportData()}
-            fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
-            sheetName="Doctors"
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-          />
-
-          <Link 
-            to="/add-doctor" 
-            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            <span className="text-lg">+</span> New Doctor
-          </Link>
-        </div>
-      </div>
-
-      {doctors.length > 0 && (
-        <div className="mb-4">
-          {(() => {
-            const uniqueHospitalIds = new Set(doctors.map(d => d.hospitalId));
-            if (uniqueHospitalIds.size > 1) {
-              return (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg">
-                  ⚠️ Warning: Showing doctors from multiple hospitals ({Array.from(uniqueHospitalIds).join(', ')})
-                </div>
-              );
-            }
-            return null;
-          })()}
-        </div>
-      )}
-
-      {doctors.length === 0 && !isLoading && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
-          <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
-        </div>
-      )}
-
-      {viewMode === 'grid' && doctors.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {doctors.map((doctor) => {
-              const isBlacklisted = doctor.isDelete === true;
-              
-              return (
-                <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-full flex justify-between items-start mb-4">
-                    <Badge variant="info" className="text-[10px]">
-                      {getDoctorId(doctor.id)}
-                    </Badge>
-                    <div className="relative menu-container">
-                      <button 
-                        onClick={(e) => toggleMenu(doctor.id, e)} 
-                        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                        aria-label="Actions menu"
-                      >
-                        ⋮
-                      </button>
-                      <DoctorActionMenu
-                        doctor={doctor}
-                        activeMenu={activeMenu}
-                        onView={handleViewDetails}
-                        onEdit={handleEdit}
-                        onDelete={handleDeleteClick}
-                        onAppointment={handleAppointmentManagement}
-                        onRecover={handleRecoverDoctor}
-                      />
-                    </div>
-                  </div>
-                  <div className="relative mb-3">
-                    <Avatar className="w-16 h-16">
-                      <AvatarImage
-                        src={getS3ImageUrl(doctor.imageUrl)}
-                        alt={getDoctorName(doctor)}
-                      />
-                      <AvatarFallback>
-                        {(doctor.firstName?.[0] || "D").toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div
-                      className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
-                        isBlacklisted
-                          ? "bg-black"
-                          : doctor.isActive
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      }`}
-                    />
-                  </div>
-                  <h3 
-                    onClick={() => !isBlacklisted && handleViewDetails(doctor)} 
-                    className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
-                  >
-                    {getDoctorName(doctor)}
-                  </h3>
-                  <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
-                  <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
-                    <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
-                      <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold">
-                        {doctor.autoDecline ? "Auto Decline" : "Appointments"}
-                      </p>
-                      <p className="text-xs font-bold text-gray-700">
-                        {getAppointmentValue(doctor)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {isBlacklisted && (
-                    <button 
-                      onClick={() => handleRecoverDoctor(doctor)} 
-                      className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Recover
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="doctors"
-                variant="centered"
-              />
+          {selectedSpecialty !== 'All' && (
+            <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm ml-2">
+              <span>Filtering by department: <strong>{selectedSpecialty}</strong></span>
+              <button onClick={clearDepartmentFilter} className="hover:text-blue-900" aria-label="Clear filter">
+                ✕
+              </button>
             </div>
           )}
-        </>
-      )}
+        </div>
 
-      {viewMode === 'list' && doctors.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">
-              Total Doctors
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                {totalItems}
-              </span>
-            </h2>
-          </div>
-
-          <div className="flex flex-col min-h-[500px]">
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-6 py-3">Doctor ID</th>
-                    <th className="px-6 py-3">Auth ID</th>
-                    <th className="px-6 py-3">Doctor Name</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Qualification</th>
-                    <th className="px-6 py-3">Experience</th>
-                    <th className="px-6 py-3">Appointments</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doctors.map((doctor) => {
-                    const isBlacklisted = doctor.isDelete === true;
-                    
-                    return (
-                      <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
-                        <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                          {getDoctorId(doctor.id)}
-                        </td>
-                        <td className="px-6 py-4 text-gray-500 text-xs font-mono">
-                          {doctor.authId || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="w-8 h-8">
-                              <AvatarImage
-                                src={getS3ImageUrl(doctor.imageUrl)}
-                                alt={getDoctorName(doctor)}
-                              />
-                              <AvatarFallback>
-                                {(doctor.firstName?.[0] || "D").toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span 
-                              onClick={() => !isBlacklisted && handleViewDetails(doctor)} 
-                              className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
-                            >
-                              {getDoctorName(doctor)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
-                        <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
-                        <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
-                        <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant={
-                              isBlacklisted
-                                ? "dark"
-                                : doctor.isActive
-                                ? "success"
-                                : "danger"
-                            }
-                            className="text-xs"
-                          >
-                            {isBlacklisted
-                              ? "Blacklisted"
-                              : doctor.isActive
-                              ? "Active"
-                              : "Inactive"}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right relative menu-container">
-                          <div className="flex justify-end">
-                            <button 
-                              onClick={(e) => toggleMenu(doctor.id, e)} 
-                              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
-                              aria-label="Actions menu"
-                            >
-                              ⋮
-                            </button>
-                            <DoctorActionMenu
-                              doctor={doctor}
-                              activeMenu={activeMenu}
-                              onView={handleViewDetails}
-                              onEdit={handleEdit}
-                              onDelete={handleDeleteClick}
-                              onAppointment={handleAppointmentManagement}
-                              onRecover={handleRecoverDoctor}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.max(1, totalPages)}
-                onPageChange={handlePageChange}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                itemLabel="doctors"
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            <div className="flex-1 max-w-sm">
+              <SearchBar
+                placeholder="Search by name, department, specialty..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onClear={handleClearSearch}
+                className="w-full"
               />
             </div>
+
+            <select
+              value={selectedSpecialty}
+              onChange={(e) => setSelectedSpecialty(e.target.value)}
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              aria-label="Filter by department"
+            >
+              {departments.map(dept => (
+                <option key={dept} value={dept}>
+                  {dept === 'All' ? 'All Departments' : dept}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
+              aria-label="Filter by status"
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+              <button 
+                onClick={() => setViewMode('grid')} 
+                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="Grid view"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z" />
+                </svg>
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                aria-label="List view"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+
+            <button 
+              onClick={handleRefresh} 
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+              disabled={isFetching}
+              aria-label="Refresh"
+            >
+              <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+
+            <ExcelExportButton
+              data={getExportData()}
+              fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
+              sheetName="Doctors"
+              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+            />
+
+            {/* New Doctor Link with Permission Check */}
+            <Link 
+              to="/add-doctor"
+              onClick={(e) => {
+                if (!hasPermission(PERMISSIONS.CREATE)) {
+                  e.preventDefault();
+                  setPermissionDeniedMessage('You do not have permission to add a doctor.');
+                  setShowPermissionDenied(true);
+                }
+              }}
+              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <span className="text-lg">+</span> New Doctor
+            </Link>
           </div>
         </div>
-      )}
 
-      <DeleteDoctor
-        isOpen={showDelete}
-        onClose={() => {
-          setShowDelete(false);
-          setDoctorToDelete(null);
-        }}
-        doctorId={doctorToDelete?.id}
-        doctorName={doctorToDelete ? getDoctorName(doctorToDelete) : ''}
-        doctorSpecialty={doctorToDelete?.specialist || doctorToDelete?.specialty}
-        onDelete={handleDeleteDoctor}
-      />
+        {doctors.length > 0 && (
+          <div className="mb-4">
+            {(() => {
+              const uniqueHospitalIds = new Set(doctors.map(d => d.hospitalId));
+              if (uniqueHospitalIds.size > 1) {
+                return (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg">
+                    ⚠️ Warning: Showing doctors from multiple hospitals ({Array.from(uniqueHospitalIds).join(', ')})
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        )}
 
-      <AppointmentManagement
-        isOpen={showAppointmentManagement}
-        onClose={() => {
-          setShowAppointmentManagement(false);
-          setSelectedDoctorForManagement(null);
-        }}
-        onSave={handleSaveAppointmentSettings}
-        doctor={selectedDoctorForManagement}
-        refetchDoctors={refetch}
+        {doctors.length === 0 && !isLoading && (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+            <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No doctors found</h3>
+            <p className="text-gray-500 mb-4">Try adjusting your search or filter criteria</p>
+          </div>
+        )}
+
+        {viewMode === 'grid' && doctors.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {doctors.map((doctor) => {
+                const isBlacklisted = doctor.isDelete === true;
+                
+                return (
+                  <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-full flex justify-between items-start mb-4">
+                      <Badge variant="info" className="text-[10px]">
+                        {getDoctorId(doctor.id)}
+                      </Badge>
+                      <div className="relative menu-container">
+                        <button 
+                          onClick={(e) => toggleMenu(doctor.id, e)} 
+                          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                          aria-label="Actions menu"
+                        >
+                          ⋮
+                        </button>
+                        <DoctorActionMenu
+                          doctor={doctor}
+                          activeMenu={activeMenu}
+                          onView={handleViewDetails}
+                          onEdit={handleEdit}
+                          onDelete={handleDeleteClick}
+                          onAppointment={handleAppointmentManagement}
+                          onRecover={handleRecoverDoctor}
+                        />
+                      </div>
+                    </div>
+                    <div className="relative mb-3">
+                      <Avatar className="w-16 h-16">
+                        <AvatarImage
+                          src={getS3ImageUrl(doctor.imageUrl)}
+                          alt={getDoctorName(doctor)}
+                        />
+                        <AvatarFallback>
+                          {(doctor.firstName?.[0] || "D").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div
+                        className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
+                          isBlacklisted
+                            ? "bg-black"
+                            : doctor.isActive
+                            ? "bg-green-500"
+                            : "bg-red-500"
+                        }`}
+                      />
+                    </div>
+                    <h3 
+                      onClick={() => {
+                        // Check VIEW permission before opening details
+                        if (!hasPermission(PERMISSIONS.VIEW)) {
+                          setPermissionDeniedMessage('You do not have permission to view doctor details.');
+                          setShowPermissionDenied(true);
+                          return;
+                        }
+                        if (!isBlacklisted) {
+                          handleViewDetails(doctor);
+                        }
+                      }} 
+                      className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                    >
+                      {getDoctorName(doctor)}
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
+                    <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
+                        <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold">
+                          {doctor.autoDecline ? "Auto Decline" : "Appointments"}
+                        </p>
+                        <p className="text-xs font-bold text-gray-700">
+                          {getAppointmentValue(doctor)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {isBlacklisted && (
+                      <button 
+                        onClick={() => {
+                          // Check DELETE permission for recover
+                          if (!hasPermission(PERMISSIONS.DELETE)) {
+                            setPermissionDeniedMessage('You do not have permission to recover doctor.');
+                            setShowPermissionDenied(true);
+                            return;
+                          }
+                          handleRecoverDoctor(doctor);
+                        }} 
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Recover
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="doctors"
+                  variant="centered"
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {viewMode === 'list' && doctors.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Total Doctors
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                  {totalItems}
+                </span>
+              </h2>
+            </div>
+
+            <div className="flex flex-col min-h-[500px]">
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-6 py-3">Doctor ID</th>
+                      <th className="px-6 py-3">Auth ID</th>
+                      <th className="px-6 py-3">Doctor Name</th>
+                      <th className="px-6 py-3">Department</th>
+                      <th className="px-6 py-3">Qualification</th>
+                      <th className="px-6 py-3">Experience</th>
+                      <th className="px-6 py-3">Appointments</th>
+                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3 text-right w-16">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doctors.map((doctor) => {
+                      const isBlacklisted = doctor.isDelete === true;
+                      
+                      return (
+                        <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
+                          <td className="px-6 py-4 text-[#1C62A0] font-medium">
+                            {getDoctorId(doctor.id)}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs font-mono">
+                            {doctor.authId || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage
+                                  src={getS3ImageUrl(doctor.imageUrl)}
+                                  alt={getDoctorName(doctor)}
+                                />
+                                <AvatarFallback>
+                                  {(doctor.firstName?.[0] || "D").toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span 
+                                onClick={() => {
+                                  // Check VIEW permission before opening details
+                                  if (!hasPermission(PERMISSIONS.VIEW)) {
+                                    setPermissionDeniedMessage('You do not have permission to view doctor details.');
+                                    setShowPermissionDenied(true);
+                                    return;
+                                  }
+                                  if (!isBlacklisted) {
+                                    handleViewDetails(doctor);
+                                  }
+                                }} 
+                                className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
+                              >
+                                {getDoctorName(doctor)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
+                          <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
+                          <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
+                          <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
+                          <td className="px-6 py-4">
+                            <Badge
+                              variant={
+                                isBlacklisted
+                                  ? "dark"
+                                  : doctor.isActive
+                                  ? "success"
+                                  : "danger"
+                              }
+                              className="text-xs"
+                            >
+                              {isBlacklisted
+                                ? "Blacklisted"
+                                : doctor.isActive
+                                ? "Active"
+                                : "Inactive"}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right relative menu-container">
+                            <div className="flex justify-end">
+                              <button 
+                                onClick={(e) => toggleMenu(doctor.id, e)} 
+                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
+                                aria-label="Actions menu"
+                              >
+                                ⋮
+                              </button>
+                              <DoctorActionMenu
+                                doctor={doctor}
+                                activeMenu={activeMenu}
+                                onView={handleViewDetails}
+                                onEdit={handleEdit}
+                                onDelete={handleDeleteClick}
+                                onAppointment={handleAppointmentManagement}
+                                onRecover={handleRecoverDoctor}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={Math.max(1, totalPages)}
+                  onPageChange={handlePageChange}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="doctors"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DeleteDoctor
+          isOpen={showDelete}
+          onClose={() => {
+            setShowDelete(false);
+            setDoctorToDelete(null);
+          }}
+          doctorId={doctorToDelete?.id}
+          doctorName={doctorToDelete ? getDoctorName(doctorToDelete) : ''}
+          doctorSpecialty={doctorToDelete?.specialist || doctorToDelete?.specialty}
+          onDelete={handleDeleteDoctor}
+        />
+
+        <AppointmentManagement
+          isOpen={showAppointmentManagement}
+          onClose={() => {
+            setShowAppointmentManagement(false);
+            setSelectedDoctorForManagement(null);
+          }}
+          onSave={handleSaveAppointmentSettings}
+          doctor={selectedDoctorForManagement}
+          refetchDoctors={refetch}
+        />
+      </div>
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDenied}
+        onClose={() => setShowPermissionDenied(false)}
+        message={permissionDeniedMessage}
       />
-    </div>
+    </>
   );
 };
 

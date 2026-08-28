@@ -21,7 +21,6 @@ self.addEventListener("push", (event) => {
   let payload = {};
   try {
     payload = event.data.json();
-    console.log('📨 Payload:', payload);
   } catch (error) {
     console.error('❌ Failed to parse push payload:', error);
     return;
@@ -30,7 +29,6 @@ self.addEventListener("push", (event) => {
   const title = payload.notification?.title || payload.data?.title || "New Booking";
   const body = payload.notification?.body || payload.data?.body || "You have a new booking request";
 
-  console.log('📨 Notification title:', payload);
 
   const options = {
     body: body,

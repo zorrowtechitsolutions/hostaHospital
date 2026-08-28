@@ -1,4 +1,3 @@
-// src/components/super-admin/Sidebar.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -17,6 +16,10 @@ import {
   Hospital,
   X,
   Users,
+  Bell,
+  Ambulance as AmbulanceIcon,
+  Smartphone,
+  Heart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLogoutMutation } from '../../../app/service/hospitalApi';
@@ -48,6 +51,26 @@ const Sidebar = ({ isOpen, onToggle }) => {
       description: 'View and manage all users'
     },
     { 
+      id: 'apps', 
+      label: 'Apps', 
+      icon: Smartphone, 
+      hasDropdown: true,
+      dropdownItems: [
+        { 
+          label: 'Blood Donors', 
+          icon: Heart, 
+          path: '/super-admin/blood-donors',
+          description: 'Manage blood donors & registrations'
+        },
+        { 
+          label: 'Ambulance', 
+          icon: AmbulanceIcon, 
+          path: '/super-admin/ambulance',
+          description: 'Manage ambulance services & tracking'
+        },
+      ]
+    },
+    { 
       id: 'permission-management', 
       label: 'Permission Management', 
       icon: Shield, 
@@ -64,9 +87,15 @@ const Sidebar = ({ isOpen, onToggle }) => {
           icon: Hospital, 
           path: '/super-admin/hospital-users',
           description: 'Manage hospital roles & permissions'
-        },
+        }
       ]
-    },
+      },
+      {
+  id: 'notifications',
+  label: 'Notifications',
+  icon: Bell,
+  path: '/super-admin/notifications'
+},
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -141,7 +170,6 @@ const Sidebar = ({ isOpen, onToggle }) => {
         deviceId = getDeviceId();
       }
       
-      
       // ✅ STEP 6: Call logout API with Super Admin parameters
       // This will remove the FCM token from the backend database
       const result = await logoutApi({
@@ -150,7 +178,6 @@ const Sidebar = ({ isOpen, onToggle }) => {
         deviceId: deviceId,
         useGlobalEndpoint: true // Super Admin always uses global endpoint
       }).unwrap();
-      
       
     } catch (error) {
       console.error('❌ Super Admin logout error:', error);
@@ -233,6 +260,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
       specialties: 'from-blue-500 to-blue-600',
       ads: 'from-blue-500 to-blue-600',
       'all-users': 'from-teal-500 to-teal-600',
+      apps: 'from-purple-500 to-purple-600',
       'permission-management': 'from-violet-500 to-violet-600',
     };
     return colors[id] || 'from-blue-500 to-blue-600';
@@ -240,6 +268,9 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
   const getDropdownItemColor = (label) => {
     const colors = {
+      'Blood Donors': 'from-red-500 to-rose-600',
+      'Blood Bank': 'from-red-500 to-red-600',
+      'Ambulance': 'from-emerald-500 to-emerald-600',
       'Super Admin Roles': 'from-violet-500 to-violet-600',
       'Hospital Roles': 'from-indigo-500 to-indigo-600',
     };

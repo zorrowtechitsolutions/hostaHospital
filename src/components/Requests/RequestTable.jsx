@@ -838,19 +838,17 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* ✅ Pagination - Using server-side pagination from API */}
-              {paginationInfo.totalPages > 1 && (
-                <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={paginationInfo.totalPages}
-                    onPageChange={setCurrentPage}
-                    totalItems={paginationInfo.totalItems}
-                    itemsPerPage={itemsPerPage}
-                    itemLabel="pending requests"
-                  />
-                </div>
-              )}
+              {/* ✅ Pagination - ALWAYS VISIBLE (like Ambulance) */}
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={paginationInfo.totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={paginationInfo.totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="pending requests"
+                />
+              </div>
             </div>
           </div>
         </div>

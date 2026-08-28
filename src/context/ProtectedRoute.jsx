@@ -9,6 +9,7 @@ const ProtectedRoute = ({
 }) => {
   const { isAuthenticated, loading } = useAuth();
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -17,32 +18,40 @@ const ProtectedRoute = ({
     );
   }
 
-  // Login check
+  // 1. Login check
   if (!isAuthenticated) {
     return <Navigate to="/sign-in" replace />;
   }
 
-  // Super Admin check
+  // 2. Super Admin check
   if (requireSuperAdmin) {
     const roleId = Number(localStorage.getItem("roleId"));
     const userRole = localStorage.getItem("userRole");
     
-    if (roleId !== 1 && userRole !== "super_admin") {
+    const isSuperAdmin = roleId === 1 || userRole === "super_admin";
+    
+    if (!isSuperAdmin) {
       return <Navigate to="/dashboard" replace />;
     }
   }
 
-  // Permission check
-  if (permissionId) {
-    const permissions = JSON.parse(
-      localStorage.getItem("permissions") || "[]"
-    );
+  // 3. Permission check
+  if (permissionId !== null) {
+    try {
+      const permissions = JSON.parse(
+        localStorage.getItem("permissions") || "[]"
+      );
 
-    const hasPermission = permissions.some(
-      (item) => item.permissionId === permissionId
-    );
+      const hasPermission = permissions.some(
+        (item) => Number(item.permissionId) === Number(permissionId)
+      );
 
-    if (!hasPermission) {
+      if (!hasPermission) {
+        return <Navigate to="/dashboard" replace />;
+      }
+    } catch (error) {
+      // Handle invalid JSON in localStorage
+      console.error("Error parsing permissions:", error);
       return <Navigate to="/dashboard" replace />;
     }
   }

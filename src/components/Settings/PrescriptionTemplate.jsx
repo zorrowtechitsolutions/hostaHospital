@@ -929,7 +929,6 @@ const PrescriptionTemplate = () => {
                 <span className="flex items-center gap-2">
                   <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">Default</span>
                   Demo Template
-                  {demoTemplate && <span className="text-green-500 text-xs">✓</span>}
                 </span>
               </button>
               <button
@@ -960,7 +959,6 @@ const PrescriptionTemplate = () => {
               <h3 className="font-semibold mb-3 text-gray-700">
                 Demo Template
                 {!demoTemplate && <span className="text-sm font-normal text-gray-500 ml-2">(No demo template available)</span>}
-                {demoTemplate && <span className="text-sm font-normal text-green-600 ml-2">✓ Template ID: {demoTemplate.id}</span>}
               </h3>
               {demoTemplate && demoTemplate.design && demoTemplate.design.length > 0 ? (
                 <TemplatePreview

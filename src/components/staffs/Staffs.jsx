@@ -31,6 +31,7 @@ import {
 } from '../ui';
 
 import DeleteModal from '../patients/DeleteModel';
+import PermissionDeniedModal from '../ui/PermissionDeniedModal'; // Import the PermissionDeniedModal
 
 import {
   useGetStaffQuery,
@@ -55,9 +56,20 @@ import { getAuthUser } from '../../../src/utils/auth';
 // Import the export function
 import { exportToExcel } from "../../utils/excelExport";
 
+// Import hasPermission for permission checks
+import { hasPermission } from "../../utils/permission";
+
 // Import socket
 import { socket } from '../../socket/socket';
 import { registerStaffEvents, unregisterStaffEvents } from '../../socket/staffEvents';
+
+// Permission IDs for Staff module (9-12)
+const PERMISSIONS = {
+  CREATE: 9,
+  VIEW: 10,
+  EDIT: 11,
+  DELETE: 12
+};
 
 // Helper function to get hospital ID
 const getHospitalId = () => {
@@ -91,7 +103,7 @@ const getS3ImageUrlWithCache = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
-// ✅ Staff Action Menu Component
+// ✅ Staff Action Menu Component with Permission Checks
 const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelete, onRecover }) => {
   if (activeMenu !== staff.id) return null;
   
@@ -229,6 +241,10 @@ const Staffs = () => {
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState(null);
+
+  // Permission Denied Modal state
+  const [showPermissionDeniedModal, setShowPermissionDeniedModal] = useState(false);
+  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
 
   // Get authenticated user
   const auth = getAuthUser();
@@ -525,9 +541,12 @@ const Staffs = () => {
     return filtered;
   }, [allStaffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // Use filtered data for display
+  // ✅ FIXED: Use filtered data for display
   const staffsData = filteredStaffsData;
-  const totalItems = staffsData.length;
+  
+  // ✅ FIXED: Use API response pagination for total items and pages
+  const totalItems = staffApiResponse?.pagination?.totalItems || 0;
+  const totalPages = staffApiResponse?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
   // Get unique hospitals
   const uniqueHospitals = useMemo(() => {
@@ -539,15 +558,6 @@ const Staffs = () => {
     });
     return Array.from(hospitals);
   }, [staffsData]);
-
-  // Pagination for filtered data
-  const paginatedStaffsData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return staffsData.slice(startIndex, endIndex);
-  }, [staffsData, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(staffsData.length / itemsPerPage);
 
   const getAllDesignations = () => {
     const allData = staffApiResponse?.allData || allStaffsData;
@@ -619,7 +629,22 @@ const Staffs = () => {
     }
   };
 
+  // Permission check helper with modal
+  const checkPermission = (permissionId, actionName) => {
+    if (!hasPermission(permissionId)) {
+      setPermissionDeniedAction(actionName);
+      setShowPermissionDeniedModal(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleViewDetails = (staff) => {
+    // Check VIEW permission
+    if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+      return;
+    }
+    
     if (staff.isDelete) {
       showErrorToast('Cannot view details of blacklisted staff', 3000);
       return;
@@ -630,6 +655,11 @@ const Staffs = () => {
   };
 
   const handleEditStaff = (staff) => {
+    // Check EDIT permission
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit staff')) {
+      return;
+    }
+    
     if (staff.isDelete) {
       showErrorToast('Cannot edit blacklisted staff', 3000);
       return;
@@ -640,6 +670,11 @@ const Staffs = () => {
   };
 
   const handleDeleteClick = (staff) => {
+    // Check DELETE permission
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete staff')) {
+      return;
+    }
+    
     setStaffToDelete(staff);
     setShowDeleteModal(true);
     setActiveMenu(null);
@@ -672,7 +707,13 @@ const Staffs = () => {
     }
   };
 
-  const handleAddStaff = () => navigate('/add-staff');
+  const handleAddStaff = () => {
+    // Check CREATE permission
+    if (!checkPermission(PERMISSIONS.CREATE, 'create staff')) {
+      return;
+    }
+    navigate('/add-staff');
+  };
   
   const getActiveFilterCount = () =>
     [
@@ -890,7 +931,11 @@ const Staffs = () => {
               )}
             </button>
             
-            <Button onClick={handleAddStaff} className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+            {/* New Staff Button with Permission Check */}
+            <Button 
+              onClick={handleAddStaff} 
+              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
               <Plus size={16} /> New Staff
             </Button>
           </div>
@@ -985,10 +1030,10 @@ const Staffs = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          /* ✅ GRID VIEW - Removed duplicate action button */
+          /* ✅ GRID VIEW - Pagination conditional (matching Doctors.jsx) */
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {paginatedStaffsData.map((staff) => {
+              {staffsData.map((staff) => {
                 const isBlacklisted = staff.isDelete;
                 const imageUrl = getStaffImageUrl(staff);
                 
@@ -1046,7 +1091,15 @@ const Staffs = () => {
                     </div>
                     
                     <h3 
-                      onClick={() => !isBlacklisted && handleViewDetails(staff)} 
+                      onClick={() => {
+                        // Check VIEW permission before opening details
+                        if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+                          return;
+                        }
+                        if (!isBlacklisted) {
+                          handleViewDetails(staff);
+                        }
+                      }} 
                       className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                     >
                       {staff.name}
@@ -1078,12 +1131,29 @@ const Staffs = () => {
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Recover button for blacklisted staff (matching Doctors.jsx) */}
+                    {isBlacklisted && (
+                      <button 
+                        onClick={() => {
+                          // Check DELETE permission for recover
+                          if (!checkPermission(PERMISSIONS.DELETE, 'recover staff')) {
+                            return;
+                          }
+                          handleRecoverStaff(staff);
+                        }} 
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2 mt-2"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Recover
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Pagination for Grid View */}
+            {/* ✅ Pagination for Grid View - Conditional (matching Doctors.jsx) */}
             {totalPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -1099,7 +1169,7 @@ const Staffs = () => {
             )}
           </>
         ) : (
-          /* ✅ LIST VIEW */
+          /* ✅ LIST VIEW - Pagination always visible (like Ambulance) */
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
@@ -1131,7 +1201,7 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedStaffsData.map((staff) => {
+                    {staffsData.map((staff) => {
                       const imageUrl = getStaffImageUrl(staff);
                       const isBlacklisted = staff.isDelete;
                       
@@ -1161,7 +1231,15 @@ const Staffs = () => {
                                 </AvatarFallback>
                               </Avatar>
                               <span 
-                                onClick={() => !isBlacklisted && handleViewDetails(staff)}
+                                onClick={() => {
+                                  // Check VIEW permission before opening details
+                                  if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
+                                    return;
+                                  }
+                                  if (!isBlacklisted) {
+                                    handleViewDetails(staff);
+                                  }
+                                }}
                                 className={`font-medium ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''} ${
                                   isBlacklisted ? 'text-gray-500' : 'text-gray-800'
                                 }`}
@@ -1218,19 +1296,17 @@ const Staffs = () => {
                 </table>
               </div>
               
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    totalItems={totalItems}
-                    itemsPerPage={itemsPerPage}
-                    itemLabel="staffs"
-                  />
-                </div>
-              )}
+              {/* ✅ Pagination - ALWAYS VISIBLE (like Ambulance) */}
+              <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="staffs"
+                />
+              </div>
             </div>
           </Card>
         )}
@@ -1249,6 +1325,14 @@ const Staffs = () => {
         title="Delete Staff Member" 
         message="Are you sure you want to delete this staff member? This action cannot be undone." 
         itemName={staffToDelete?.name} 
+      />
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={showPermissionDeniedModal}
+        onClose={() => setShowPermissionDeniedModal(false)}
+        action={permissionDeniedAction}
+        permissionId={PERMISSIONS.VIEW} // Pass a default permission ID or make it dynamic
       />
     </>
   );

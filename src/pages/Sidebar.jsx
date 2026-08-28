@@ -16,6 +16,10 @@ import {
   Droplet,
   HelpCircle,
   ShieldCheck,
+   Bell,
+  Mail,
+  History,
+  FileText
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -42,15 +46,7 @@ const menu = [
       { label: "Patients", icon: Users, path: "/patients", permissionId: 14 },
       { label: "Doctors", icon: Stethoscope, path: "/doctors", permissionId: 2 },
       { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 34 },
-      {
-        label: "Appointments",
-        icon: CalendarDays,
-        permissionId: 34,
-        hasDropdown: true,
-        dropdownItems: [
-          { label: "Appointments List", icon: FileClock, path: "/appointments", permissionId: 34 },
-        ],
-      },
+      { label: "Appointments", icon: FileClock, path: "/appointments", permissionId: 34 },
       { label: "Visits", icon: Activity, path: "/visits", permissionId: 34 },
       { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 30 },
       { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
@@ -69,6 +65,25 @@ const menu = [
         path: "/settings",
         permissionId: 58,
       },
+      {
+  label: "Notifications",
+  icon: Bell,
+  hasDropdown: true,
+  dropdownItems: [
+    {
+      label: "Email Notification",
+      icon: Mail,
+      path: "/email-notifications",
+      permissionId: 104,
+    },
+    {
+      label: "Email Templates",
+      icon: FileText,
+      path: "/email-templates",
+      permissionId: 108,
+    },
+  ],
+},
       {
         label: "User Management",
         icon: UserCog,
@@ -91,6 +106,17 @@ const menu = [
       },
     ],
   },
+  {
+  title: "AUDIT & SECURITY",
+  items: [
+    {
+      label: "AUDIT & SECURITY",
+      icon: ShieldCheck,
+      path: "/audit-login",
+      permissionId: 111,
+    },
+  ],
+},
   {
     title: "HELP",
     items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }], // No permissionId - always visible

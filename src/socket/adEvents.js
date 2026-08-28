@@ -10,7 +10,7 @@ export const registerAdEvents = (handlers = {}) => {
         handlers.onAdCreated?.(data, message);
         break;
       case "AD_UPDATED":
-        handlers.onAdUpdated?.(data, message);  
+        handlers.onAdUpdated?.(data, message);
         break;
       case "AD_DELETED":
         handlers.onAdDeleted?.(data, message);

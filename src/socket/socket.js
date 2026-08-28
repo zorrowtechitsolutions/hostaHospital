@@ -18,6 +18,10 @@ export const initSocket = () => {
       socket.emit("join-room", `doctor_${authUser.doctorId}`);
     }
 
+    if (authUser.staffId) {
+      socket.emit("join-room", `staff_${authUser.staffId}`);
+    }
+
     // Hospital's room — most doctor lifecycle events go here.
     if (authUser.hospitalId) {
       socket.emit("join-room", `hospital_${authUser.hospitalId}`);

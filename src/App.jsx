@@ -26,6 +26,13 @@ import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
 import { initSocket } from './socket/socket';
+import EmailComposer from "./components/Notification/EmailNotification";
+import EditEmailTemplate from "./components/Notification/EditEmailTemplate";
+import CreateEmailTemplate from "./components/Notification/CreateEmailTemplate";
+import ViewEmailTemplate from "./components/Notification/ViewEmailTemplate";
+import EmailTemplates from "./components/Notification/EmailTemplates"
+import SessionHistory from "./components/auditlogin/SessionHistory";
+import EmailHistory from "./components/Notification/EmailHistory";
 
 // Lazy load components
 const Patients = lazy(() => import("./components/patients/Patients"));
@@ -56,7 +63,7 @@ const PermissionList = lazy(() => import("./components/usermanagment/PermissionL
 const UserPermissions = lazy(() => import("./components/usermanagment/UserPermissions"));
 const Visits = lazy(() => import("./components/visits/Visits"));
 const Appointments = lazy(() => import("./components/Appointment/Appointment"));
-const EmailTemplates = lazy(() => import("./components/Settings/Email"));
+// const EmailTemplates = lazy(() => import("./components/Settings/Email"));
 const Profile = lazy(() => import("./components/MyProfile/Profile"));
 const AddPatient = lazy(() => import("./components/patients/AddPatientModal"));
 const ForgotPassword = lazy(() => import("./Authentication/ForgotPassword"));
@@ -319,6 +326,41 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/help" element={<HelpSupport />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route 
+                path="/audit-login" 
+                element={
+                  <ProtectedRoute permissionId={111}>
+                    <SessionHistory />
+                  </ProtectedRoute>
+                } />
+                <Route 
+                path="/email-notifications" 
+                element={
+                <ProtectedRoute permissionId={104}>
+                <EmailComposer />
+                </ProtectedRoute>} />
+                <Route path="/email-history" element={<EmailHistory/>} />
+                <Route path="/email-templates/edit/:id" element={
+                  <ProtectedRoute permissionId={109}>
+                    <EditEmailTemplate/>
+                  </ProtectedRoute>
+                } />
+                <Route path="/email-templates/create" element={
+                  <ProtectedRoute permissionId={107}>
+                    <CreateEmailTemplate />
+                  </ProtectedRoute>
+                } />
+                <Route path="/email-templates/view/:id"element={
+                  <ProtectedRoute permissionId={108}>
+                    <ViewEmailTemplate />
+                  </ProtectedRoute>
+                }/>
+                <Route path="/email-templates" element={
+                  <ProtectedRoute permissionId={108}>
+                    <EmailTemplates/>
+                  </ProtectedRoute>
+                } />
+
                 <Route path="/calendar" element={<CalendarPage />} />
                 
                 {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
@@ -579,7 +621,7 @@ function App() {
                 <Route path="/requests" element={<RequestsTable />} />
                 
                 {/* Email templates - IDs from CSV: email module */}
-                <Route path="/email" element={<EmailTemplates />} />
+                {/* <Route path="/email" element={<EmailTemplates />} /> */}
                 
                 {/* Catch all route */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
