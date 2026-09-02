@@ -8,7 +8,6 @@ import {
   Filter,
   RefreshCcw,
   Download,
-  Upload,
   Users as UsersIcon,
   Phone
 } from "lucide-react";
@@ -18,7 +17,6 @@ import {
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
-import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { showSuccessToast, showErrorToast, showAddToast } from "../ui/Toast";
 import {
   useGetBookingsQuery,
@@ -31,16 +29,8 @@ import { getS3ImageUrl } from "../../../app/service/S3";
 import { socket } from '../../socket/socket';
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
-// Import hasPermission for permission checks
-import { hasPermission } from "../../utils/permission";
-
-// Permission IDs for Booking module (33-36)
-const PERMISSIONS = {
-  CREATE: 33,
-  VIEW: 34,
-  EDIT: 35,
-  DELETE: 36
-};
+// Import the export function
+import { exportToExcel } from "../../utils/excelExport";
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -64,28 +54,14 @@ const formatRequestId = (id) => {
 
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
-  try {
-    // Handle different date formats (DD/MM/YYYY or YYYY-MM-DD)
-    let birthDate;
-    if (dob.includes('/')) {
-      const parts = dob.split('/');
-      birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
-    } else {
-      birthDate = new Date(dob);
-    }
-    
-    if (isNaN(birthDate.getTime())) return "N/A";
-    
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  } catch (error) {
-    return "N/A";
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
   }
+  return age;
 };
 
 const transformBookingsData = (bookingList) => {
@@ -98,7 +74,7 @@ const transformBookingsData = (bookingList) => {
     const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
 
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
-    const rawTime = booking.consulting_time || booking.open || booking.consulting_time || "N/A";
+    const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
 
     return {
       id: bookingId,
@@ -114,6 +90,7 @@ const transformBookingsData = (bookingList) => {
       consulting_time: rawTime,
       status: booking.status || "pending",
       patientImageKey: patientImageKey,
+      reason: booking.reason || booking.notes || "N/A",
     };
   });
 };
@@ -160,21 +137,27 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <th key={i} className="px-6 py-3">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                </th>
-              ))}
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
             </tr>
           </thead>
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
-                  <td key={j} className="px-6 py-4">
-                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
-                  </td>
-                ))}
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
               </tr>
             ))}
           </tbody>
@@ -218,11 +201,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  // Permission Denied Modal State
-  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
-  const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
-  const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
-
   // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
@@ -240,291 +218,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
-
-  // ✅ Get pagination info from API response
-  const paginationInfo = useMemo(() => ({
-    totalItems: bookingsResponse?.pagination?.totalItems || 0,
-    totalPages: bookingsResponse?.pagination?.totalPages || 1,
-    currentPage: bookingsResponse?.pagination?.currentPage || 1,
-    hasNextPage: bookingsResponse?.pagination?.hasNextPage || false,
-    hasPreviousPage: bookingsResponse?.pagination?.hasPreviousPage || false,
-  }), [bookingsResponse]);
-
-  // Transform API response
-  const safeData = useMemo(() => {
-    return transformBookingsData(bookingsResponse?.data || []);
-  }, [bookingsResponse]);
-
-  // ✅ Apply frontend filters (for display purposes only)
-  const filteredRequests = useMemo(() => {
-    let result = safeData;
-
-    // Apply department filter if set (only if API doesn't support it)
-    if (departmentFilter && !bookingsResponse?.pagination) {
-      result = result.filter(item => 
-        item.department?.toLowerCase() === departmentFilter.toLowerCase()
-      );
-    }
-
-    // Apply date filter if set (only if API doesn't support it)
-    if (dateFilter && !bookingsResponse?.pagination) {
-      result = result.filter(item => 
-        item.appointmentDate === dateFilter
-      );
-    }
-
-    // Apply doctor filter
-    if (doctorId && !showAllData) {
-      result = result.filter(item => 
-        matchesDoctor(item, doctorId, doctorName)
-      );
-    }
-
-    return result;
-  }, [safeData, departmentFilter, dateFilter, doctorId, doctorName, showAllData, bookingsResponse]);
-
-  // Get all unique departments from the data
-  const departments = useMemo(() => {
-    let sourceData;
-    if (doctorId && !showAllData) {
-      sourceData = safeData.filter(item => matchesDoctor(item, doctorId, doctorName));
-    } else {
-      sourceData = safeData;
-    }
-    return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
-  }, [safeData, doctorId, doctorName, showAllData]);
-
-  const activeFilterCount = [departmentFilter, dateFilter, statusFilter, searchTerm].filter(Boolean).length;
-  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
-  const hasActiveFilters = departmentFilter !== '' || dateFilter !== '' || statusFilter !== '';
-
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter, showAllData]);
-
-  // Permission check helper with modal
-  const checkPermission = (permissionId, actionName) => {
-    const hasPerm = hasPermission(permissionId);
-    console.log(`🔐 Permission check for ${actionName}: ${hasPerm ? '✅ GRANTED' : '❌ DENIED'}`);
-    
-    if (!hasPerm) {
-      setPermissionDeniedAction(actionName);
-      setPermissionDeniedPermissionId(permissionId);
-      setShowPermissionDenied(true);
-      return false;
-    }
-    return true;
-  };
-
-  // Handlers
-  const handleRefresh = () => {
-    resetFilters({
-      setSearchTerm,
-      setDepartmentFilter,
-      setDateFilter,
-      setStatusFilter,
-      setCurrentPage
-    });
-    refetch();
-    showSuccessToast("Refreshed requests", TOAST_DURATION);
-  };
-
-  const clearAllFilters = () => {
-    resetFilters({
-      setSearchTerm,
-      setDepartmentFilter,
-      setDateFilter,
-      setStatusFilter,
-      setCurrentPage
-    });
-    showSuccessToast("All filters cleared", TOAST_DURATION);
-  };
-
-  const handleExport = () => {
-    const exportData = filteredRequests.map(req => ({
-      'Request ID': req.formattedId,
-      'Patient ID': req.patientId,
-      'Patient Name': req.patientName,
-      'Age': req.age,
-      'Contact Number': req.contact,
-      'Doctor Name': req.doctorName,
-      'Department': req.department,
-      'Appointment Date': `${req.appointmentDate} at ${req.consulting_time}`,
-      'Status': req.status,
-      'Reason': req.reason
-    }));
-
-    const link = document.createElement('a');
-    link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    link.download = `requests_export_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    showSuccessToast(`Exported ${exportData.length} requests`, TOAST_DURATION);
-  };
-
-  const handleImport = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        const pendingImports = importedData.filter(item => item.status === "pending");
-        showAddToast(`Successfully imported ${pendingImports.length} pending requests!`, SUCCESS_DURATION, {
-          'Total': importedData.length,
-          'Pending': pendingImports.length,
-          'Other': importedData.length - pendingImports.length
-        });
-        refetch();
-      } catch (error) {
-        showErrorToast('Error parsing JSON file. Please check file format.', TOAST_DURATION);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
-
-  const handleApproveClick = (request) => {
-    // Check EDIT permission (approving is an edit action)
-    if (!checkPermission(PERMISSIONS.EDIT, 'approve request')) {
-      return;
-    }
-
-    if (!request.id) {
-      showErrorToast("Invalid request: Missing ID. Please refresh and try again.", TOAST_DURATION);
-      return;
-    }
-    setSelectedRequest(request);
-    setShowApproveModal(true);
-  };
-
-  const handleConfirmApprove = async (appointmentData) => {
-    if (!selectedRequest) {
-      showErrorToast("No request selected", TOAST_DURATION);
-      return;
-    }
-
-    if (!selectedRequest.id) {
-      showErrorToast("Request ID is missing. Cannot approve.", TOAST_DURATION);
-      closeApproveModal();
-      return;
-    }
-
-    setIsApproving(true);
-
-    try {
-      await approveBooking({
-        id: selectedRequest.id,
-        data: {
-          date: appointmentData.date,
-          consulting_time: appointmentData.consulting_time,
-          token: appointmentData.token,
-          notes: appointmentData.notes || ""
-        }
-      }).unwrap();
-
-      showSuccessToast(
-        `Request ${selectedRequest.formattedId} approved successfully!`,
-        SUCCESS_DURATION,
-        {
-          'Patient': selectedRequest.patientName,
-          'Date': appointmentData.date,
-          'Time': appointmentData.consulting_time,
-          'Token': `#${appointmentData.token}`
-        }
-      );
-
-      refetch();
-      closeApproveModal();
-
-    } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to approve request', TOAST_DURATION);
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  const handleRejectClick = (request) => {
-    // Check EDIT permission (rejecting is an edit action)
-    if (!checkPermission(PERMISSIONS.EDIT, 'reject request')) {
-      return;
-    }
-
-    setSelectedRequest(request);
-    setRejectReason("");
-    setShowRejectModal(true);
-  };
-
-  const handleConfirmReject = async () => {
-    if (!selectedRequest) {
-      showErrorToast("No request selected", TOAST_DURATION);
-      return;
-    }
-
-    if (!selectedRequest.id) {
-      showErrorToast("Request ID is missing. Cannot reject.", TOAST_DURATION);
-      closeRejectModal();
-      return;
-    }
-
-    setIsRejecting(true);
-
-    try {
-      await rejectBooking({
-        id: selectedRequest.id,
-        data: { reason: rejectReason }
-      }).unwrap();
-
-      showErrorToast(
-        `Request ${selectedRequest.formattedId} rejected successfully!`,
-        SUCCESS_DURATION,
-        {
-          'Patient': selectedRequest.patientName,
-          'Doctor': selectedRequest.doctorName,
-          'Reason': rejectReason || "No reason provided"
-        }
-      );
-
-      refetch();
-      closeRejectModal();
-
-    } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to reject request', TOAST_DURATION);
-    } finally {
-      setIsRejecting(false);
-    }
-  };
-
-  const toggleShowAllData = () => {
-    setShowAllData(prev => !prev);
-    setCurrentPage(1);
-    resetFilters({
-      setSearchTerm,
-      setDepartmentFilter,
-      setDateFilter,
-      setStatusFilter,
-      setCurrentPage
-    });
-    if (!showAllData) {
-      showSuccessToast(`Now showing all doctors' requests`, TOAST_DURATION);
-    } else {
-      showSuccessToast(`Now showing requests for ${doctorName}`, TOAST_DURATION);
-    }
-  };
-
-  const closeApproveModal = () => {
-    setShowApproveModal(false);
-    setSelectedRequest(null);
-  };
-
-  const closeRejectModal = () => {
-    setShowRejectModal(false);
-    setSelectedRequest(null);
-    setRejectReason('');
-  };
-
-  const showDoctorBanner = doctorId && !showAllData;
 
   // Register socket event listeners
   useEffect(() => {
@@ -602,6 +295,301 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     };
   }, [refetch, eventsRegistered]);
 
+  // Transform API response
+  const safeData = useMemo(() => {
+    return transformBookingsData(bookingsResponse?.data || []);
+  }, [bookingsResponse]);
+
+  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  const filteredBySearch = useMemo(() => {
+    // If no search term or search term is too short, return all data
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return safeData;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    return safeData.filter(item => {
+      // Search through all relevant fields
+      const searchFields = [
+        item.formattedId?.toLowerCase() || '',
+        item.patientName?.toLowerCase() || '',
+        item.patientId?.toLowerCase() || '',
+        item.contact?.toString() || '',
+        item.doctorName?.toLowerCase() || '',
+        item.department?.toLowerCase() || '',
+        item.appointmentDate?.toString() || '',
+        item.consulting_time?.toString() || ''
+      ];
+
+      return searchFields.some(field => field.includes(searchLower));
+    });
+  }, [safeData, searchTerm]);
+
+  // ✅ Apply doctor filter
+  const filteredByDoctor = useMemo(() => {
+    if (doctorId && !showAllData) {
+      return filteredBySearch.filter(item => 
+        matchesDoctor(item, doctorId, doctorName)
+      );
+    }
+    return filteredBySearch;
+  }, [filteredBySearch, doctorId, doctorName, showAllData]);
+
+  // ✅ Apply department filter (frontend fallback)
+  const filteredRequests = useMemo(() => {
+    let result = filteredByDoctor;
+
+    // Apply department filter if set
+    if (departmentFilter) {
+      result = result.filter(item => 
+        item.department?.toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+
+    // Apply date filter if set
+    if (dateFilter) {
+      result = result.filter(item => 
+        item.appointmentDate === dateFilter
+      );
+    }
+
+    return result;
+  }, [filteredByDoctor, departmentFilter, dateFilter]);
+
+  // ✅ Get total items from filtered results
+  const totalItems = filteredRequests.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Paginate the filtered results
+  const paginatedRequests = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredRequests.slice(startIndex, endIndex);
+  }, [filteredRequests, currentPage, itemsPerPage]);
+
+  // Get all unique departments from the data
+  const departments = useMemo(() => {
+    let sourceData;
+    if (doctorId && !showAllData) {
+      sourceData = safeData.filter(item => matchesDoctor(item, doctorId, doctorName));
+    } else {
+      sourceData = safeData;
+    }
+    return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
+  }, [safeData, doctorId, doctorName, showAllData]);
+
+  const activeFilterCount = [departmentFilter, dateFilter, statusFilter, searchTerm].filter(Boolean).length;
+  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  const hasActiveFilters = departmentFilter !== '' || dateFilter !== '' || statusFilter !== '';
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, dateFilter, showAllData]);
+
+  // Handlers
+  const handleRefresh = () => {
+    resetFilters({
+      setSearchTerm,
+      setDepartmentFilter,
+      setDateFilter,
+      setStatusFilter,
+      setCurrentPage
+    });
+    refetch();
+    showSuccessToast("Refreshed requests", TOAST_DURATION);
+  };
+
+  const clearAllFilters = () => {
+    resetFilters({
+      setSearchTerm,
+      setDepartmentFilter,
+      setDateFilter,
+      setStatusFilter,
+      setCurrentPage
+    });
+    showSuccessToast("All filters cleared", TOAST_DURATION);
+  };
+
+  // Updated Export handler with Excel functionality
+  const handleExport = () => {
+    if (filteredRequests.length === 0) {
+      showErrorToast("No data available to export", TOAST_DURATION);
+      return;
+    }
+
+    try {
+      // Transform data for Excel export
+      const exportData = filteredRequests.map(req => ({
+        'Request ID': req.formattedId,
+        'Patient ID': req.patientId,
+        'Patient Name': req.patientName,
+        'Age': req.age,
+        'Contact Number': req.contact,
+        'Doctor Name': req.doctorName,
+        'Department': req.department,
+        'Appointment Date': req.appointmentDate !== "N/A" ? req.appointmentDate : "",
+        'Consulting Time': req.consulting_time && req.consulting_time !== "N/A" ? req.consulting_time : "",
+        'Status': req.status || "pending",
+        'Reason/Notes': req.reason || "N/A"
+      }));
+
+      // Generate filename with date
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `requests_export_${dateStr}`;
+
+      // Export to Excel with column width
+      exportToExcel({
+        data: exportData,
+        fileName: fileName,
+        sheetName: "Pending Requests",
+        columnWidth: 20
+      });
+
+      showSuccessToast(
+        `Successfully exported ${exportData.length} requests to Excel!`,
+        SUCCESS_DURATION
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showErrorToast("Failed to export data. Please try again.", TOAST_DURATION);
+    }
+  };
+
+  // ✅ REMOVED: handleImport function
+
+  const handleApproveClick = (request) => {
+    if (!request.id) {
+      showErrorToast("Invalid request: Missing ID. Please refresh and try again.", TOAST_DURATION);
+      return;
+    }
+    setSelectedRequest(request);
+    setShowApproveModal(true);
+  };
+
+  const handleConfirmApprove = async (appointmentData) => {
+    if (!selectedRequest) {
+      showErrorToast("No request selected", TOAST_DURATION);
+      return;
+    }
+
+    if (!selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot approve.", TOAST_DURATION);
+      closeApproveModal();
+      return;
+    }
+
+    setIsApproving(true);
+
+    try {
+      await approveBooking({
+        id: selectedRequest.id,
+        data: {
+          date: appointmentData.date,
+          consulting_time: appointmentData.consulting_time,
+          token: appointmentData.token,
+          notes: appointmentData.notes || ""
+        }
+      }).unwrap();
+
+      showSuccessToast(
+        `Request ${selectedRequest.formattedId} approved successfully!`,
+        SUCCESS_DURATION,
+        {
+          'Patient': selectedRequest.patientName,
+          'Date': appointmentData.date,
+          'Time': appointmentData.consulting_time,
+          'Token': `#${appointmentData.token}`
+        }
+      );
+
+      refetch();
+      closeApproveModal();
+
+    } catch (error) {
+      showErrorToast(error?.data?.message || 'Failed to approve request', TOAST_DURATION);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleRejectClick = (request) => {
+    setSelectedRequest(request);
+    setRejectReason("");
+    setShowRejectModal(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedRequest) {
+      showErrorToast("No request selected", TOAST_DURATION);
+      return;
+    }
+
+    if (!selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot reject.", TOAST_DURATION);
+      closeRejectModal();
+      return;
+    }
+
+    setIsRejecting(true);
+
+    try {
+      await rejectBooking({
+        id: selectedRequest.id,
+        data: { reason: rejectReason }
+      }).unwrap();
+
+      showErrorToast(
+        `Request ${selectedRequest.formattedId} rejected successfully!`,
+        SUCCESS_DURATION,
+        {
+          'Patient': selectedRequest.patientName,
+          'Doctor': selectedRequest.doctorName,
+          'Reason': rejectReason || "No reason provided"
+        }
+      );
+
+      refetch();
+      closeRejectModal();
+
+    } catch (error) {
+      showErrorToast(error?.data?.message || 'Failed to reject request', TOAST_DURATION);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const toggleShowAllData = () => {
+    setShowAllData(prev => !prev);
+    setCurrentPage(1);
+    resetFilters({
+      setSearchTerm,
+      setDepartmentFilter,
+      setDateFilter,
+      setStatusFilter,
+      setCurrentPage
+    });
+    if (!showAllData) {
+      showSuccessToast(`Now showing all doctors' requests`, TOAST_DURATION);
+    } else {
+      showSuccessToast(`Now showing requests for ${doctorName}`, TOAST_DURATION);
+    }
+  };
+
+  const closeApproveModal = () => {
+    setShowApproveModal(false);
+    setSelectedRequest(null);
+  };
+
+  const closeRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedRequest(null);
+    setRejectReason('');
+  };
+
+  const showDoctorBanner = doctorId && !showAllData;
+
   if (loading) {
     return <SkeletonLoader />;
   }
@@ -623,7 +611,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 Showing requests for: <span className="font-semibold">{doctorName}</span>
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                Total requests: {paginationInfo.totalItems}
+                Total requests: {filteredRequests.length}
               </p>
             </div>
             <button
@@ -641,7 +629,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <div>
             <p className="text-sm text-gray-700">
               <span className="font-medium">Showing all doctors' requests</span>
-              <span className="text-gray-500 ml-2">Total: {paginationInfo.totalItems} requests</span>
+              <span className="text-gray-500 ml-2">Total: {filteredRequests.length} requests</span>
             </p>
           </div>
           <button
@@ -662,6 +650,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             onChange={setSearchTerm}
             onClear={() => setSearchTerm('')}
           />
+          {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
+            <span className="text-xs text-yellow-500 ml-2">Type at least 2 characters</span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">  
           <button
@@ -672,14 +663,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <input type="file" onChange={handleImport} accept=".json" className="hidden" id="import-file" />
-          <label htmlFor="import-file" className={`${ICON_BUTTON_CLASS} cursor-pointer`} title="Import Requests">
-            <Upload size={16} />
-          </label>
+          {/* ✅ IMPORT BUTTON REMOVED */}
           <button
             onClick={handleExport}
             className={ICON_BUTTON_CLASS}
-            title="Export Requests"
+            title="Export to Excel"
           >
             <Download size={16} />
           </button>
@@ -775,6 +763,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               ? 'No requests match the selected filters. Try adjusting your filters.'
               : 'All requests have been processed.'}
           </p>
+          {(hasSearchTerm || hasActiveFilters) && (
+            <button 
+              onClick={clearAllFilters} 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="w-full overflow-hidden">
@@ -783,11 +779,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Pending Requests
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                  {paginationInfo.totalItems}
+                  {totalItems}
                 </span>
-                {(hasSearchTerm || hasActiveFilters) && filteredRequests.length > 0 && (
+                {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
-                    (Showing {filteredRequests.length})
+                    (Filtered)
                   </span>
                 )}
               </h2>
@@ -809,7 +805,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredRequests.map((item, index) => (
+                    {paginatedRequests.map((item, index) => (
                       <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
@@ -879,17 +875,19 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* ✅ Pagination - ALWAYS VISIBLE (like Ambulance) */}
-              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={paginationInfo.totalPages}
-                  onPageChange={setCurrentPage}
-                  totalItems={paginationInfo.totalItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="pending requests"
-                />
-              </div>
+              {/* Pagination - Uses client-side pagination */}
+              {totalPages > 1 && (
+                <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    itemLabel="pending requests"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -919,14 +917,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           isLoading={isRejecting}
         />
       )}
-
-      {/* Permission Denied Modal */}
-      <PermissionDeniedModal
-        isOpen={showPermissionDenied}
-        onClose={() => setShowPermissionDenied(false)}
-        action={permissionDeniedAction}
-        permissionId={permissionDeniedPermissionId}
-      />
     </div>
   );
 };

@@ -68,6 +68,8 @@ export const prescriptionApi = api.injectEndpoints({
       query: (data) => {
         const hospitalId = getHospitalId();
 
+        console.log("Creating prescription with data:", data);
+
         const payload = {
           bookingId: data.bookingId,
           hospitalId,
@@ -113,6 +115,9 @@ export const prescriptionApi = api.injectEndpoints({
           bsa: data?.bsa || 0,
         };
 
+
+        console.log("payload:", payload);
+
         return {
           url: "/prescription",
           method: "POST",
@@ -121,6 +126,8 @@ export const prescriptionApi = api.injectEndpoints({
       },
       invalidatesTags: ["Prescription"],
     }),
+
+    
 
     // GET ALL PRESCRIPTIONS
     getPrescriptions: builder.query({

@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Clock, X, Save, Settings, Users, Calendar, AlertCircle } from 'lucide-react';
-import { useUpdateDoctorMutation } from "../../../app/service/doctorApi";
+import { 
+  useUpdateDoctorMutation,
+  useStartAutoDeclineMutation,
+  useCancelAutoDeclineMutation 
+} from "../../../app/service/doctorApi";
 import { showSaveToast, showErrorToast } from '../ui/Toast';
 
 // ==================== CONSTANTS ====================
@@ -60,7 +64,12 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
   const [selectionType, setSelectionType] = useState('manual_count');
   const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(5);
   const [manualCount, setManualCount] = useState(21);
-  const [updateDoctor, { isLoading }] = useUpdateDoctorMutation();
+  const [updateDoctor, { isLoading: isUpdating }] = useUpdateDoctorMutation();
+  const [startAutoDecline, { isLoading: isStartingAutoDecline }] = useStartAutoDeclineMutation();
+  const [cancelAutoDecline, { isLoading: isCancelingAutoDecline }] = useCancelAutoDeclineMutation();
+
+  // Combined loading state
+  const isLoading = isUpdating || isStartingAutoDecline || isCancelingAutoDecline;
 
   const handleManualCountChange = (value) => {
     if (value === '') {
@@ -109,19 +118,69 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
       }
 
       const doctorName = getDoctorName(doctor);
+      // Use authId if available, otherwise use id
+      const bookingId = doctor.authId || doctor.id;
 
-      const updateData = selectionType === "manual_count"
-        ? { appointmentCount: Number(manualCount), autoDecline: 0 }
-        : { autoDecline: Number(autoDeclineMinutes), appointmentCount: 0 };
+      if (selectionType === "manual_count") {
+        // MANUAL COUNT: Update doctor and cancel auto-decline
+        const updateData = {
+          appointmentCount: Number(manualCount),
+          autoDecline: 0
+        };
 
-      const payload = {
-        id: doctor.id,
-        updateDoctor: updateData,
-      };
+        const payload = {
+          id: doctor.id,
+          updateDoctor: updateData,
+        };
 
-      await updateDoctor(payload).unwrap();
+        await updateDoctor(payload).unwrap();
+
+        // Cancel auto-decline if it was running
+        try {
+          await cancelAutoDecline({ doctorId: bookingId }).unwrap();
+          console.log('Auto-decline canceled successfully for bookingId:', bookingId);
+        } catch (cancelError) {
+          // Ignore if no auto-decline was running
+          console.log('No auto-decline to cancel or already canceled');
+        }
+
+      } else {
+        // AUTO-DECLINE: Update doctor and start auto-decline task
+        const updateData = {
+          autoDecline: Number(autoDeclineMinutes),
+          appointmentCount: 0
+        };
+
+        // First update the doctor
+        const payload = {
+          id: doctor.id,
+          updateDoctor: updateData,
+        };
+
+        await updateDoctor(payload).unwrap();
+
+        // Then start the auto-decline task with correct parameter names
+        try {
+          const result = await startAutoDecline({
+            doctorId: bookingId,
+            autoDeclineMinutes: Number(autoDeclineMinutes)
+          }).unwrap();
+          console.log('Auto-decline started successfully:', result);
+        } catch (autoDeclineError) {
+          // If auto-decline fails but doctor was updated, show error
+          console.error('Auto-decline start failed:', autoDeclineError);
+          showErrorToast(
+            `Doctor updated but auto-decline failed to start. Please try again.`,
+            5000
+          );
+          return;
+        }
+      }
+
+      // Refetch doctors to update UI
       await refetchDoctors?.();
 
+      // Save settings to localStorage
       const settingsToSave = {
         doctorId: doctor.id,
         doctorName,
@@ -135,6 +194,7 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
       savedSettings[doctor.id] = settingsToSave;
       setStorageData(STORAGE_KEY, savedSettings);
 
+      // Show success message
       const settingDescription = selectionType === 'manual_count'
         ? `Maximum ${manualCount} appointments per day`
         : `Auto-decline after ${autoDeclineMinutes} minutes`;
@@ -187,6 +247,9 @@ const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetch
                 <span className="font-medium">{getDoctorName(doctor)}</span>
                 {doctor?.specialist && ` • ${doctor.specialist}`}
                 {!doctor?.specialist && doctor?.specialty && ` • ${doctor.specialty}`}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                ID: {doctor.id} {doctor.authId && `| Auth ID: ${doctor.authId}`}
               </p>
             </div>
           )}

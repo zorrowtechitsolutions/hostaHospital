@@ -126,7 +126,7 @@ export const roleApi = api.injectEndpoints({
       }
     >({
       query: ({ id, roles, data }) => ({
-        url: `/${id}/role/${roles}`,
+        url: `/role/${roles}`,
         method: "PUT",
         body: data,
       }),
