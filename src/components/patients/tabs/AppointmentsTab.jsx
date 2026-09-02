@@ -164,16 +164,6 @@ const AppointmentsTab = ({
                             <button
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                handleEditAppointmentClick(apt);
-                                setOpenMenu(null);
-                              }}
-                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Edit size={15} /> Edit
-                            </button>
-                            <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
                                 handleDeleteClick('appointment', apt.id, startIndex + index, `Appointment with ${apt.doctorName} on ${apt.date || apt.appointmentDate}`);
                                 setOpenMenu(null);
                               }}

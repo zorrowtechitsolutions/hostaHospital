@@ -123,12 +123,19 @@ const BloodBankSkeleton = () => {
 };
 
 // Add Blood Stock Modal
-const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
+const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
   const [formData, setFormData] = useState({
     bloodGroup: 'A+',
     count: 0
   });
- 
+  const [serverError, setServerError] = useState(null);
+
+  useEffect(() => {
+    if (error) {
+      setServerError(error);
+    }
+  }, [error]);
+
   const handleSubmit = () => {
     if (formData.count < 0) {
       showErrorToast('Count cannot be negative', 3000);
@@ -142,9 +149,21 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
     setFormData({ bloodGroup: 'A+', count: 0 });
   };
 
+  const handleClose = () => {
+    setServerError(null);
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Blood Stock" size="md">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add Blood Stock" size="md">
       <div className="space-y-4">
+        {/* ✅ Display server error if provided */}
+        {serverError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-600">{serverError}</p>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
             <Droplet className="w-5 h-5 text-red-600" />
@@ -182,7 +201,7 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+          <Button variant="outline" onClick={handleClose} fullWidth>Cancel</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
             {isSaving ? 'Adding...' : 'Add Blood Stock'}
           </Button>
@@ -193,11 +212,18 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving }) => {
 };
 
 // Edit Blood Stock Modal
-const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
+const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }) => {
   const [formData, setFormData] = useState({
     bloodGroup: '',
     count: 0
   });
+  const [serverError, setServerError] = useState(null);
+
+  useEffect(() => {
+    if (error) {
+      setServerError(error);
+    }
+  }, [error]);
 
   useEffect(() => {
     if (stock) {
@@ -220,9 +246,21 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
     onSave({ ...stock, ...formData });
   };
 
+  const handleClose = () => {
+    setServerError(null);
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit Blood Stock" size="md">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Blood Stock" size="md">
       <div className="space-y-4">
+        {/* ✅ Display server error if provided */}
+        {serverError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-600">{serverError}</p>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
             <Droplet className="w-5 h-5 text-red-600" />
@@ -259,7 +297,7 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving }) => {
         </div>
 
         <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
+          <Button variant="outline" onClick={handleClose} fullWidth>Cancel</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={isSaving} loading={isSaving} fullWidth>
             {isSaving ? 'Updating...' : 'Update Blood Stock'}
           </Button>
@@ -322,6 +360,10 @@ const BloodBank = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBloodStock, setSelectedBloodStock] = useState(null);
+  
+  // ✅ Error states for modals
+  const [addError, setAddError] = useState(null);
+  const [editError, setEditError] = useState(null);
   
   // Permission Denied Modal State
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
@@ -498,12 +540,14 @@ const BloodBank = () => {
     return true;
   };
 
-  // CRUD Handlers with Permission Checks
+  // ✅ CRUD Handlers with Proper Error Handling
   const handleAddBloodStock = async (newBloodStock) => {
     // Check CREATE permission
     if (!checkPermission(PERMISSIONS.CREATE, 'create blood stock')) {
       return;
     }
+
+    setAddError(null);
 
     try {
       await createBloodBank({
@@ -514,8 +558,27 @@ const BloodBank = () => {
       showSuccessToast(`${newBloodStock.bloodGroup} blood stock added successfully!`, 3000);
       await refetch();
       setShowAddModal(false);
+      setAddError(null);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to add blood stock', 3000);
+      console.error("Error adding blood stock:", error);
+      
+      // 🔥 FIXED: Properly handle nested error structure
+      if (error.data?.error?.details?.length) {
+        const messages = error.data.error.details
+          .map(detail => detail.message)
+          .filter(Boolean);
+        setAddError(messages.join(', '));
+        showErrorToast(`❌ ${messages.join(', ')}`, 4000);
+      } else if (error.data?.error?.message) {
+        setAddError(error.data.error.message);
+        showErrorToast(`❌ ${error.data.error.message}`, 4000);
+      } else if (error.data?.message) {
+        setAddError(error.data.message);
+        showErrorToast(`❌ ${error.data.message}`, 4000);
+      } else {
+        setAddError('Failed to add blood stock. Please try again.');
+        showErrorToast('Failed to add blood stock. Please try again.', 4000);
+      }
     }
   };
 
@@ -524,6 +587,8 @@ const BloodBank = () => {
     if (!checkPermission(PERMISSIONS.EDIT, 'edit blood stock')) {
       return;
     }
+
+    setEditError(null);
 
     try {
       await updateBloodBank({ 
@@ -538,8 +603,27 @@ const BloodBank = () => {
       await refetch();
       setShowEditModal(false);
       setSelectedBloodStock(null);
+      setEditError(null);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to update blood stock', 3000);
+      console.error("Error updating blood stock:", error);
+      
+      // 🔥 FIXED: Properly handle nested error structure
+      if (error.data?.error?.details?.length) {
+        const messages = error.data.error.details
+          .map(detail => detail.message)
+          .filter(Boolean);
+        setEditError(messages.join(', '));
+        showErrorToast(`❌ ${messages.join(', ')}`, 4000);
+      } else if (error.data?.error?.message) {
+        setEditError(error.data.error.message);
+        showErrorToast(`❌ ${error.data.error.message}`, 4000);
+      } else if (error.data?.message) {
+        setEditError(error.data.message);
+        showErrorToast(`❌ ${error.data.message}`, 4000);
+      } else {
+        setEditError('Failed to update blood stock. Please try again.');
+        showErrorToast('Failed to update blood stock. Please try again.', 4000);
+      }
     }
   };
 
@@ -559,7 +643,21 @@ const BloodBank = () => {
         setShowDeleteModal(false);
         setSelectedBloodStock(null);
       } catch (error) {
-        showErrorToast(error?.data?.message || 'Failed to delete blood stock', 3000);
+        console.error("Error deleting blood stock:", error);
+        
+        // 🔥 FIXED: Properly handle nested error structure
+        if (error.data?.error?.details?.length) {
+          const messages = error.data.error.details
+            .map(detail => detail.message)
+            .filter(Boolean);
+          showErrorToast(`❌ ${messages.join(', ')}`, 4000);
+        } else if (error.data?.error?.message) {
+          showErrorToast(`❌ ${error.data.error.message}`, 4000);
+        } else if (error.data?.message) {
+          showErrorToast(`❌ ${error.data.message}`, 4000);
+        } else {
+          showErrorToast('Failed to delete blood stock. Please try again.', 4000);
+        }
       }
     }
   };
@@ -581,6 +679,7 @@ const BloodBank = () => {
       return;
     }
     setSelectedBloodStock(stock);
+    setEditError(null);
     setShowEditModal(true);
     setActiveMenu(null);
   };
@@ -615,6 +714,7 @@ const BloodBank = () => {
     if (!checkPermission(PERMISSIONS.CREATE, 'add blood stock')) {
       return;
     }
+    setAddError(null);
     setShowAddModal(true);
   };
 
@@ -825,9 +925,13 @@ const BloodBank = () => {
         {/* Modals */}
         <AddBloodStockModal
           isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
+          onClose={() => {
+            setShowAddModal(false);
+            setAddError(null);
+          }}
           onSave={handleAddBloodStock}
           isSaving={isAdding}
+          error={addError}
         />
 
         <EditBloodStockModal
@@ -835,10 +939,12 @@ const BloodBank = () => {
           onClose={() => {
             setShowEditModal(false);
             setSelectedBloodStock(null);
+            setEditError(null);
           }}
           onSave={handleEditBloodStock}
           stock={selectedBloodStock}
           isSaving={isUpdating}
+          error={editError}
         />
 
         <ViewBloodStockModal
@@ -862,7 +968,7 @@ const BloodBank = () => {
           itemName={selectedBloodStock?.bloodGroup}
         />
 
-        {/* Permission Denied Modal - Updated to match component props */}
+        {/* Permission Denied Modal */}
         <PermissionDeniedModal
           isOpen={showPermissionDenied}
           onClose={() => setShowPermissionDenied(false)}
@@ -874,4 +980,4 @@ const BloodBank = () => {
   );
 };
 
-export default BloodBank; 
+export default BloodBank;

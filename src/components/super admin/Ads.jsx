@@ -824,7 +824,6 @@ const Ads = () => {
           "ad"
         );
 
-        console.log("✅ S3 upload successful:", uploaded);
 
         // 3. Save S3 key into the ad
         await updateAd({
@@ -892,7 +891,6 @@ const Ads = () => {
 
       // 2. Upload new image AFTER the ad already exists
       if (updatedAd.imageFile) {
-        console.log("📤 Uploading new image for existing ad:", updatedAd.id);
 
         const uploaded = await uploadToS3(
           updatedAd.imageFile,
@@ -901,7 +899,6 @@ const Ads = () => {
           "ad"
         );
 
-        console.log("✅ S3 upload successful:", uploaded);
 
         // 3. Save S3 key to this AD
         await updateAd({

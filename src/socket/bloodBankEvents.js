@@ -1,8 +1,10 @@
 import { socket } from "./socket";
 
 export const registerBloodBankEvents = (handlers = {}) => {
-  socket.on("system_event", (payload) => {
-    const event = payload.message?.match(/\[(.*?)\]/)?.[1];
+  socket.on("blood_bank_events", (payload) => {
+
+    const event = payload.event;
+
 
     switch (event) {
       case "STOCK_CREATED":
@@ -18,13 +20,11 @@ export const registerBloodBankEvents = (handlers = {}) => {
         break;
 
       default:
-        // Unknown event - silently ignore
-        break;
     }
   });
 };
 
 export const unregisterBloodBankEvents = () => {
-  socket.off("system_event");
+  socket.off("blood_bank_events");
   socket.offAny();
 };

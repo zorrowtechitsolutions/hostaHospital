@@ -833,6 +833,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
     return doctorData;
   };
 
+  // 🔥 FIXED: handleSubmit with proper error handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -880,9 +881,24 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
         
       } catch (error) {
         console.error("Error adding doctor:", error);
+
+        // 🔥 FIXED: Properly handle nested error structure
         if (error.status === 409) {
-          showErrorToast('Email already exists! Please use a different email address.');
+          showErrorToast(
+            'Email already exists! Please use a different email address.'
+          );
+        } else if (error.data?.error?.details?.length) {
+          // Backend validation errors (the case you're seeing)
+          const validationMessages = error.data.error.details
+            .map(detail => detail.message)
+            .filter(Boolean);
+
+          showErrorToast(`❌ ${validationMessages.join(', ')}`);
+        } else if (error.data?.error?.message) {
+          // Backend general error
+          showErrorToast(`❌ ${error.data.error.message}`);
         } else if (error.data?.message) {
+          // Fallback - works for the old format too
           showErrorToast(`❌ ${error.data.message}`);
         } else {
           showErrorToast('Failed to add doctor. Please try again.');

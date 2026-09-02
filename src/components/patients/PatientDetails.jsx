@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
-import EditAppointmentModal from "./EditAppointmentModal";
 import EditVisitHistory from "./EditVisitHistoryModal";
 import DeleteModal from "./DeleteModel";
 
@@ -60,12 +59,10 @@ const PatientDetails = () => {
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   
-  const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [selectedMedical, setSelectedMedical] = useState(null);
   const [selectedVital, setSelectedVital] = useState(null);
-  const [appointmentToEdit, setAppointmentToEdit] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [openMenu, setOpenMenu] = useState(null);
@@ -760,12 +757,6 @@ const PatientDetails = () => {
     refetchPrescriptions();
   };
 
-  const handleEditAppointmentClick = (appointment) => {
-    setAppointmentToEdit(appointment);
-    setShowEditAppointmentModal(true);
-    setOpenMenu(null);
-  };
-
   const handleEditVisitClick = (visit) => {
     setVisitToEdit(visit);
     setShowEditVisitHistoryModal(true);
@@ -779,17 +770,6 @@ const PatientDetails = () => {
     setPatient({...patient, visitHistoryList: updatedList});
     setShowEditVisitHistoryModal(false);
     setVisitToEdit(null);
-  };
-
-  const handleSaveEditedAppointment = (updatedData) => {
-    const updatedList = patient.appointmentsList.map(apt => 
-      apt.id === appointmentToEdit.id 
-        ? { ...apt, ...updatedData }
-        : apt
-    );
-    setPatient({...patient, appointmentsList: updatedList});
-    setShowEditAppointmentModal(false);
-    setAppointmentToEdit(null);
   };
 
   // 👇 Updated handleDeleteClick with optimistic update for prescriptions
@@ -930,7 +910,6 @@ const PatientDetails = () => {
       handleViewVisitDetails,
       handleViewMedicalDetails,
       handleViewVitalDetails,
-      handleEditAppointmentClick,
       handleEditVisitClick,
       handleDeleteClick,
       handleDownloadDocument,
@@ -1076,16 +1055,6 @@ const PatientDetails = () => {
       
       {showAppointmentModal && (
         <AddAppointmentModal patient={patient} setPatient={setPatient} onClose={() => setShowAppointmentModal(false)} />
-      )}
-      
-      {showEditAppointmentModal && appointmentToEdit && (
-        <EditAppointmentModal 
-          isOpen={showEditAppointmentModal} 
-          onClose={() => setShowEditAppointmentModal(false)} 
-          appointment={appointmentToEdit} 
-          patient={patient} 
-          onSave={handleSaveEditedAppointment} 
-        />
       )}
       
       {showEditVisitHistoryModal && visitToEdit && (
