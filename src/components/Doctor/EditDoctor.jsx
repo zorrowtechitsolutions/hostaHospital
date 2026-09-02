@@ -946,6 +946,7 @@ const EditDoctor = () => {
     showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
   }, [formData.bookingOpen]);
 
+  // 🔥 FIXED: handleSubmit with proper error handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -1078,10 +1079,25 @@ const EditDoctor = () => {
 
     } catch (error) {
       console.error("Update Error:", error);
+      
+      // 🔥 FIXED: Properly handle nested error structure
       if (error.status === 409) {
         showErrorToast('Email already exists! Please use a different email address.');
+      } else if (error.data?.error?.details?.length) {
+        // Backend validation errors
+        const validationMessages = error.data.error.details
+          .map(detail => detail.message)
+          .filter(Boolean);
+        
+        showErrorToast(`❌ ${validationMessages.join(', ')}`);
+      } else if (error.data?.error?.message) {
+        // Backend general error
+        showErrorToast(`❌ ${error.data.error.message}`);
+      } else if (error.data?.message) {
+        // Fallback - works for the old format too
+        showErrorToast(`❌ ${error.data.message}`);
       } else {
-        showErrorToast(error.data?.message || "Failed to update doctor");
+        showErrorToast("Failed to update doctor. Please try again.");
       }
     } finally {
       setIsSubmitting(false);
@@ -1106,13 +1122,13 @@ const EditDoctor = () => {
           <h2 className="text-2xl font-bold text-gray-900 mt-4">Error Loading Doctor</h2>
           <p className="text-gray-600 mt-2">There was an error loading the doctor data.</p>
           <div className="flex items-center justify-center mt-6">
-  <Button
-    variant="primary"
-    onClick={() => navigate('/doctors')}
-  >
-    Back to Doctors List
-  </Button>
-</div>
+            <Button
+              variant="primary"
+              onClick={() => navigate('/doctors')}
+            >
+              Back to Doctors List
+            </Button>
+          </div>
         </div>
       </div>
     );

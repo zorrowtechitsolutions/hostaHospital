@@ -256,10 +256,6 @@ export const sessionHistoryApi = api.injectEndpoints({
           url =
             `/auth/audit-logs/0?${queryParams.toString()}`;
 
-          console.log(
-            "🔵 SUPER ADMIN Session History API:",
-            url
-          );
 
         } else if (isHospitalAdmin(auth)) {
 
@@ -277,10 +273,7 @@ export const sessionHistoryApi = api.injectEndpoints({
             `/auth/audit-logs/${normalizedHospitalId}` +
             `${queryString ? `?${queryString}` : ""}`;
 
-          console.log(
-            "🟢 HOSPITAL ADMIN Session History API:",
-            url
-          );
+         
 
         } else {
 

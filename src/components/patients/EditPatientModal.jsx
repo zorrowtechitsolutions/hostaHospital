@@ -425,14 +425,20 @@ const EditPatient = () => {
         }, 1500);
         
       } catch (error) {
-        if (error.status === 409) {
-          showErrorToast('❌ Mobile number or email already exists!');
-        } else if (error.data?.message) {
-          showErrorToast(`❌ ${error.data.message}`);
-        } else {
-          showErrorToast('❌ Failed to update patient. Please try again.');
-        }
-        
+        // ✅ FIXED: Extract specific validation error first, then fallback
+        console.error('Update Patient Error:', error);
+
+        const message =
+          error?.data?.error?.details?.[0]?.message ||
+          error?.data?.details?.[0]?.message ||
+          error?.data?.errors?.[0]?.message ||
+          error?.data?.error?.message ||
+          error?.data?.message ||
+          error?.error ||
+          error?.message ||
+          'Failed to update patient. Please try again.';
+
+        showErrorToast(message);
         setIsSubmitting(false);
       }
     } else {

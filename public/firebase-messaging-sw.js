@@ -15,23 +15,21 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 🔔 Background notification
-self.addEventListener("push", (event) => {
+// ✅ Use Firebase's onBackgroundMessage instead of raw push listener
+messaging.onBackgroundMessage((payload) => {
+
+  const title = payload.data?.title || 
+                payload.notification?.title || 
+                "New Booking";
   
-  let payload = {};
-  try {
-    payload = event.data.json();
-  } catch (error) {
-    console.error('❌ Failed to parse push payload:', error);
-    return;
-  }
-
-  const title = payload.notification?.title || payload.data?.title || "New Booking";
-  const body = payload.notification?.body || payload.data?.body || "You have a new booking request";
-
+  const body = payload.data?.body || 
+               payload.notification?.body || 
+               "You have a new booking request";
 
   const options = {
     body: body,
+    icon: "/logo192.png",
+    badge: "/logo192.png",
     vibrate: [200, 100, 200],
     requireInteraction: true,
     data: payload.data || {},
@@ -41,14 +39,11 @@ self.addEventListener("push", (event) => {
     ],
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  return self.registration.showNotification(title, options);
 });
 
 // 🔘 Handle notification clicks
 self.addEventListener("notificationclick", (event) => {
-  console.log('🔘 Notification clicked:', event.action);
   event.notification.close();
 
   const bookingData = event.notification.data || {};
@@ -112,11 +107,9 @@ self.addEventListener("notificationclick", (event) => {
 
 // 🚀 Service Worker Install/Activate events
 self.addEventListener("install", (event) => {
-  console.log("📦 Service Worker installed");
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
-  console.log("⚡ Service Worker activated");
   event.waitUntil(self.clients.claim());
 });

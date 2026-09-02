@@ -188,47 +188,99 @@ const AddAmbulanceModal = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  // ✅ FIXED: Made async and await onSave
+  const handleSubmit = async () => {
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
       
-      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      const errorElement = document.querySelector(
+        `[name="${firstErrorField}"]`
+      );
+      
       if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
       }
+      
       showErrorToast('Please fix the validation errors before submitting', 3000);
       return;
     }
     
     setIsSubmitting(true);
     
-    const payload = {
-      serviceName: formData.serviceName,
-      phone: formData.phone,
-      vehicleType: formData.vehicleType,
-      address: {
-        country: formData.address.country,
-        state: formData.address.state,
-        district: formData.address.district,
-        place: formData.address.place,
-        pincode: Number(formData.address.pincode)
+    try {
+      const payload = {
+        serviceName: formData.serviceName,
+        phone: formData.phone,
+        vehicleType: formData.vehicleType,
+        address: {
+          country: formData.address.country,
+          state: formData.address.state,
+          district: formData.address.district,
+          place: formData.address.place,
+          pincode: Number(formData.address.pincode)
+        }
+      };
+      
+      // ✅ IMPORTANT: wait for backend response
+      await onSave(payload);
+      
+      // ✅ Only reset/close when API succeeds
+      setFormData({
+        serviceName: '',
+        address: {
+          country: '',
+          state: '',
+          district: '',
+          place: '',
+          pincode: ''
+        },
+        phone: '',
+        vehicleType: ''
+      });
+      
+      setCountryCode('');
+      setStateCode('');
+      setErrors({});
+      setTouched({});
+      
+      onClose();
+      
+    } catch (error) {
+      console.error('Add ambulance error:', error);
+      
+      const backendError = error?.data?.error;
+      
+      // ✅ Show actual backend validation details
+      if (backendError?.details?.length) {
+        const message = backendError.details
+          .map(item => item?.message)
+          .filter(Boolean)
+          .join(', ');
+        
+        showErrorToast(message);
       }
-    };
-    
-    onSave(payload);
-    
-    setFormData({
-      serviceName: '',
-      address: { country: '', state: '', district: '', place: '', pincode: '' },
-      phone: '',
-      vehicleType: ''
-    });
-    setCountryCode('');
-    setStateCode('');
-    setErrors({});
-    setTouched({});
-    setIsSubmitting(false);
-    onClose();
+      // ✅ Show backend message
+      else if (backendError?.message) {
+        showErrorToast(backendError.message);
+      }
+      // ✅ Other API message
+      else if (error?.data?.message) {
+        showErrorToast(error.data.message);
+      }
+      // ✅ JS/network error
+      else if (error?.message) {
+        showErrorToast(error.message);
+      }
+      else {
+        showErrorToast('Failed to save ambulance');
+      }
+      
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

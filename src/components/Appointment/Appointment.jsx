@@ -567,11 +567,22 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowDetailsModal(true);
   };
 
+  // ✅ UPDATED: Edit handler with status validation
   const handleEditClick = (appointment) => {
+    // Edit is allowed only for accepted appointments
+    if (appointment?.originalStatus?.toLowerCase() !== 'accepted') {
+      showWarningToast(
+        'Only accepted appointments can be edited.',
+        3000
+      );
+      return;
+    }
+
     // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) {
       return;
     }
+
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
   };
@@ -888,7 +899,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // RowActionMenu Component
+  // ✅ UPDATED: RowActionMenu Component - Edit button only shows for accepted appointments
   const RowActionMenu = ({ appointment }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -939,12 +950,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </>
             )}
             <div className="border-t border-gray-100 my-1"></div>
-            <button 
-              onClick={() => { handleEditClick(appointment); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
-            >
-              <Edit size={16} /> Edit
-            </button>
+            {/* ✅ Edit button only shows for accepted appointments */}
+            {appointment.originalStatus === 'accepted' && (
+              <button 
+                onClick={() => { handleEditClick(appointment); setShowMenu(false); }} 
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
+              >
+                <Edit size={16} /> Edit
+              </button>
+            )}
             <button 
               onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }} 
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"

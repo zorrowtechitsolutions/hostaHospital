@@ -18,7 +18,16 @@ import { socket } from '../../socket/socket';
 // ✅ Import booking events (if you want to listen for events in this component)
 import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
 
-const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = false, appointment = null }) => {
+const AddAppointmentModal = ({ 
+  isOpen, 
+  onClose, 
+  patient, 
+  onSave, 
+  isEditing = false, 
+  appointment = null,
+  error,        // ✅ New prop for server error
+  isLoading: isLoadingProp = false  // ✅ New prop for loading state
+}) => {
   const { user } = useAuth();
   const [createBooking, { isLoading: isCreating }] = useCreateBookingMutation();
   
@@ -37,6 +46,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState(null);
 
   // Extract hospital ID correctly from user object
   const hospitalId = user?.hospital?.id || user?.hospitalId || user?.id;
@@ -86,6 +96,13 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     };
   }, [isOpen]);
 
+  // ✅ Update serverError when prop changes
+  useEffect(() => {
+    if (error) {
+      setServerError(error);
+    }
+  }, [error]);
+
   // Populate form when editing
   useEffect(() => {
     if (isEditing && appointment) {
@@ -109,6 +126,8 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear server error when user makes changes
+    if (serverError) setServerError(null);
   };
 
   const validateForm = () => {
@@ -152,6 +171,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
     if (!validateForm()) return;
     
     setIsSubmitting(true);
+    setServerError(null);
 
     try {
       // EXACT PAYLOAD MATCHING BACKEND EXPECTATIONS
@@ -205,10 +225,36 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
       onClose();
       
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to create appointment. Please try again.', 4000);
+      console.error("Error creating appointment:", error);
+      
+      // 🔥 FIXED: Properly handle nested error structure
+      if (error.data?.error?.details?.length) {
+        const messages = error.data.error.details
+          .map(detail => detail.message)
+          .filter(Boolean);
+        setServerError(messages.join(', '));
+        showErrorToast(`❌ ${messages.join(', ')}`, 4000);
+      } else if (error.data?.error?.message) {
+        setServerError(error.data.error.message);
+        showErrorToast(`❌ ${error.data.error.message}`, 4000);
+      } else if (error.data?.message) {
+        setServerError(error.data.message);
+        showErrorToast(`❌ ${error.data.message}`, 4000);
+      } else {
+        setServerError('Failed to create appointment. Please try again.');
+        showErrorToast('Failed to create appointment. Please try again.', 4000);
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // ✅ Reset form with proper cleanup
+  const handleClose = () => {
+    resetForm();
+    setServerError(null);
+    setIsSubmitting(false);
+    onClose();
   };
 
   const resetForm = () => {
@@ -262,11 +308,22 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
         speciality: selectedDoctor.speciality || selectedDoctor.department || "",
       }));
     }
+    // Clear server error when doctor changes
+    if (serverError) setServerError(null);
   };
 
+  const isLoading = isSubmitting || isLoadingProp || isCreating;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? "Edit Appointment" : "Schedule New Appointment"} size="xl" showCloseButton={false}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={isEditing ? "Edit Appointment" : "Schedule New Appointment"} size="xl" showCloseButton={false}>
       <form onSubmit={handleSubmit}>
+        {/* ✅ Display server error if provided */}
+        {serverError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+            <p className="text-sm text-red-600">{serverError}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Patient Name */}
           <Input
@@ -397,11 +454,11 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onSave, isEditing = fal
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-          <Button variant="outline" onClick={onClose} type="button" disabled={isSubmitting}>
+          <Button variant="outline" onClick={handleClose} type="button" disabled={isLoading}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit" disabled={isSubmitting} loading={isSubmitting}>
-            {isSubmitting ? (isEditing ? 'Updating...' : 'Scheduling...') : (isEditing ? 'Update Appointment' : 'Schedule Appointment')}
+          <Button variant="primary" type="submit" disabled={isLoading} loading={isLoading}>
+            {isLoading ? (isEditing ? 'Updating...' : 'Scheduling...') : (isEditing ? 'Update Appointment' : 'Schedule Appointment')}
           </Button>
         </div>
       </form>

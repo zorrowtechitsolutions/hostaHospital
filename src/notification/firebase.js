@@ -27,6 +27,7 @@ const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 export const requestNotificationPermission = async () => {
   try {
     if (!("Notification" in window)) {
+      console.warn('⚠️ Notifications not supported');
       return "unsupported";
     }
 
@@ -35,6 +36,7 @@ export const requestNotificationPermission = async () => {
     }
 
     if (Notification.permission === "denied") {
+      console.warn('⚠️ Notification permission denied');
       return "denied";
     }
 
@@ -46,38 +48,42 @@ export const requestNotificationPermission = async () => {
   }
 };
 
-// Generate Token
+// Generate Token - Updated with explicit registration
 export const generateToken = async () => {
   try {
-    
     // 1. Check permission
     if (Notification.permission !== "granted") {
+      console.warn('⚠️ Notification permission not granted');
       return null;
     }
 
     // 2. Check VAPID key
     if (!VAPID_KEY) {
+      console.error('❌ VAPID key missing');
       return null;
     }
 
     // 3. Check service worker
     if (!("serviceWorker" in navigator)) {
+      console.error('❌ Service Worker not supported');
       return null;
     }
 
-    // 4. Wait for service worker
+    // 4. Wait for service worker ready
     let registration;
     try {
       registration = await navigator.serviceWorker.ready;
     } catch (swError) {
+      console.error('❌ Service Worker ready error:', swError);
       return null;
     }
 
     if (!registration) {
+      console.error('❌ No service worker registration');
       return null;
     }
 
-    // 5. Get token
+    // 5. Get token with explicit registration
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,
@@ -86,6 +92,7 @@ export const generateToken = async () => {
     if (token) {
       return token;
     } else {
+      console.warn('⚠️ FCM token generation returned null');
       return null;
     }
   } catch (err) {
@@ -96,7 +103,6 @@ export const generateToken = async () => {
 
 // Generate token with timeout
 export const generateTokenWithTimeout = async (timeoutMs = 10000) => {
-  
   const timeoutPromise = new Promise((_, reject) => 
     setTimeout(() => reject(new Error(`FCM token generation timeout (${timeoutMs}ms)`)), timeoutMs)
   );
@@ -120,16 +126,15 @@ export const isFCMAvailable = () => {
   const hasServiceWorker = "serviceWorker" in navigator;
   const permissionGranted = Notification.permission === "granted";
   
-  
   if (!hasVapid) {
+    console.warn('⚠️ VAPID key missing');
     return false;
   }
   
   return hasNotification && hasServiceWorker && permissionGranted;
 };
 
-// Foreground listener
-// Foreground listener
+// Foreground listener with sound
 export const listenMessages = (callback) => {
   return onMessage(messaging, async (payload) => {
 
@@ -137,7 +142,7 @@ export const listenMessages = (callback) => {
       notificationSound.currentTime = 0;
       await notificationSound.play();
     } catch (err) {
-      console.error("❌ Audio play failed:", err);
+      console.warn('⚠️ Audio play failed:', err);
     }
 
     if (callback) callback(payload);

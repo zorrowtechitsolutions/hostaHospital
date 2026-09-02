@@ -481,9 +481,11 @@ const Settings = () => {
     }
   }, [fetchError, logout, navigate]);
 
+  // ✅ IMPROVED: Error handling for updateError
   useEffect(() => {
     if (updateError) {
       const status = updateError?.status || updateError?.originalStatus;
+      
       if (status === 401) {
         showErrorToast('Authentication failed. Please log in again.', 3000);
         setTimeout(() => {
@@ -491,7 +493,18 @@ const Settings = () => {
           navigate('/sign-in');
         }, 2000);
       } else {
-        showErrorToast(updateError?.data?.message || 'Failed to update hospital information', 4000);
+        // ✅ Extract error message from various response formats
+        const message =
+          updateError?.data?.error?.details?.[0]?.message ||
+          updateError?.data?.details?.[0]?.message ||
+          updateError?.data?.errors?.[0]?.message ||
+          updateError?.data?.error?.message ||
+          updateError?.data?.message ||
+          updateError?.error ||
+          updateError?.message ||
+          'Failed to update hospital information';
+        
+        showErrorToast(message, 4000);
       }
       resetUpdate();
     }
@@ -567,8 +580,18 @@ const Settings = () => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
 
+  // ✅ FIXED: Added phone validation at the beginning of handleEditSubmit
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+
+    // Phone number validation
+    const phone = String(editForm.mobileNumber || '').trim();
+
+    if (!/^\d{10}$/.test(phone)) {
+      showErrorToast('Phone number must be exactly 10 digits', 4000);
+      return;
+    }
+
     setIsSaving(true);
     
     try {
@@ -632,14 +655,28 @@ const Settings = () => {
       
     } catch (error) {
       console.error('Update error:', error);
-      if (error.status === 401) {
+      
+      // ✅ FIXED: Extract specific validation error first, then fallback
+      const status = error?.status || error?.originalStatus;
+      
+      if (status === 401) {
         showErrorToast('Session expired. Redirecting to login...', 3000);
         setTimeout(() => {
           logout();
           navigate('/sign-in');
         }, 2000);
       } else {
-        showErrorToast(error.data?.message || error.message || 'Failed to update hospital information', 4000);
+        const message =
+          error?.data?.error?.details?.[0]?.message ||
+          error?.data?.details?.[0]?.message ||
+          error?.data?.errors?.[0]?.message ||
+          error?.data?.error?.message ||
+          error?.data?.message ||
+          error?.error ||
+          error?.message ||
+          'Failed to update hospital information';
+        
+        showErrorToast(message, 4000);
       }
     } finally {
       setIsSaving(false);
@@ -902,7 +939,21 @@ const Settings = () => {
                   )}
                 </div>
                 
-                <Input label="Mobile Number" name="mobileNumber" value={editForm.mobileNumber} onChange={handleInputChange} required />
+                {/* ✅ FIXED: Mobile Number input with 10-digit restriction */}
+                <Input 
+                  label="Mobile Number" 
+                  name="mobileNumber" 
+                  value={editForm.mobileNumber} 
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setEditForm(prev => ({
+                      ...prev,
+                      mobileNumber: value
+                    }));
+                  }}
+                  type="tel"
+                  required 
+                />
               </div>
 
               <div className="border-t border-gray-200 pt-4 mt-2">

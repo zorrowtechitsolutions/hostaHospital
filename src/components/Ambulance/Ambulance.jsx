@@ -16,7 +16,7 @@ import DeleteModal from '../patients/DeleteModel';
 import AddAmbulanceModal from './AddAmbulanceModal';
 import EditAmbulanceModal from './EditAmbulanceModal';
 import ViewAmbulanceModal from './ViewAmbulanceModal';
-import PermissionDeniedModal from '../ui/PermissionDeniedModal'; // Import the new modal
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { 
   Badge, 
   Pagination,
@@ -29,14 +29,8 @@ import {
   useDeleteAmbulanceMutation
 } from '../../../app/service/ambulance';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
-
-// Import the export function
 import { exportToExcel } from "../../utils/excelExport";
-
-// Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
-
-// Import socket
 import { socket } from '../../socket/socket';
 import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../socket/ambulanceEvents';
 
@@ -272,13 +266,16 @@ const Ambulance = () => {
     setCurrentPage(1);
   };
 
-  // CRUD Handlers with API
+  // ============================================================
+  // ✅ FIXED: handleAddAmbulance - Now throws errors to modal
+  // ============================================================
   const handleAddAmbulance = async (newAmbulance) => {
     // Check permission before adding
     if (!hasPermission(PERMISSIONS.CREATE)) {
       setPermissionDeniedMessage("You do not have permission to create an ambulance. Please contact your administrator.");
       setShowPermissionDeniedModal(true);
-      return;
+      // Throw error so modal knows something went wrong
+      throw new Error("Permission denied");
     }
 
     try {
@@ -295,16 +292,22 @@ const Ambulance = () => {
       await refetch();
       setShowAddModal(false);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to add ambulance', 3000);
+      console.error('Add ambulance error:', error);
+      // ✅ IMPORTANT: Re-throw the error so the modal can handle it
+      throw error;
     }
   };
 
+  // ============================================================
+  // ✅ FIXED: handleEditAmbulance - Now throws errors to modal
+  // ============================================================
   const handleEditAmbulance = async (updatedAmbulance) => {
     // Check permission before editing
     if (!hasPermission(PERMISSIONS.EDIT)) {
       setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
       setShowPermissionDeniedModal(true);
-      return;
+      // Throw error so modal knows something went wrong
+      throw new Error("Permission denied");
     }
 
     try {
@@ -325,7 +328,9 @@ const Ambulance = () => {
       setShowEditModal(false);
       setSelectedAmbulance(null);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to update ambulance', 3000);
+      console.error('Edit ambulance error:', error);
+      // ✅ IMPORTANT: Re-throw the error so the modal can handle it
+      throw error;
     }
   };
 

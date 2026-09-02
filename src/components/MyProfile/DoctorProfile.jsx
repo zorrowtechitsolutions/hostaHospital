@@ -1,4 +1,4 @@
-// src/components/MyProfile/DoctorProfile.jsx - COMPLETE WITH ALL DATA FETCH
+// src/components/MyProfile/DoctorProfile.jsx - COMPLETE WITH PHONE VALIDATION
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -10,6 +10,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useGetDoctorByIdQuery, useUpdateDoctorMutation } from '../../../app/service/doctorApi';
 import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
+// ✅ IMPORT TOAST FUNCTIONS
+import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 
 // ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -24,6 +26,19 @@ const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 p
 
 // ==================== HELPER FUNCTIONS ====================
 
+// ✅ Phone validation helper
+const validatePhone = (phone) => {
+  if (!phone || phone.trim() === '') {
+    return 'Phone number is required';
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    return 'Phone number must be exactly 10 digits';
+  }
+
+  return '';
+};
+
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
   
@@ -37,16 +52,6 @@ const getFullImageUrl = (imageKey) => {
   
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}_t=${Date.now()}`;
-};
-
-// ==================== TOAST FUNCTIONS ====================
-const showSuccessToast = (message) => {
-};
-
-const showErrorToast = (message) => {
-};
-
-const showWarningToast = (message) => {
 };
 
 // ==================== SKELETON LOADER ====================
@@ -126,7 +131,6 @@ const DoctorProfile = () => {
   
   const doctorId = user?.doctorId || user?.id;
   
-  
   // ✅ Fetch doctor data from API
   const { data: doctorResponse, isLoading, error: fetchError, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId,
@@ -173,6 +177,7 @@ const DoctorProfile = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [serverError, setServerError] = useState(null); // Keep for logic, but not displayed
 
   // Handle fetch error (401 unauthorized)
   useEffect(() => {
@@ -187,7 +192,6 @@ const DoctorProfile = () => {
 
   // ✅ Populate profile from API data
   useEffect(() => {
-    
     if (doctorResponse) {
       // ✅ The doctor data is in doctorResponse.data
       const doctor = doctorResponse.data || doctorResponse;
@@ -251,7 +255,6 @@ const DoctorProfile = () => {
           updatedAt: doctor?.updatedAt || ''
         };
         
-        
         setFormData(newFormData);
         setEditForm(newFormData);
         
@@ -273,6 +276,8 @@ const DoctorProfile = () => {
       ...prev,
       [field]: value
     }));
+    // Clear server error when user makes changes
+    if (serverError) setServerError(null);
   };
 
   // ✅ Image upload with proper params
@@ -343,12 +348,25 @@ const DoctorProfile = () => {
   const handleEdit = () => {
     setIsEditing(true);
     setEditForm({ ...formData });
+    setServerError(null);
     resetUploadState();
   };
 
-  // ✅ Save with proper update data
+  // ============================================================
+  // ✅ FIXED: Phone validation + robust error handling
+  // ============================================================
   const handleSave = async () => {
+    // ✅ Validate phone before sending to backend
+    const phoneError = validatePhone(editForm.phone);
+
+    if (phoneError) {
+      setServerError(phoneError);
+      showErrorToast(phoneError); // ✅ Shows toast only
+      return;
+    }
+
     setIsSaving(true);
+    setServerError(null);
     
     try {
       const updateData = {
@@ -407,6 +425,7 @@ const DoctorProfile = () => {
       
       setIsEditing(false);
       resetUploadState();
+      setServerError(null);
       
       // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -435,15 +454,65 @@ const DoctorProfile = () => {
       refetch();
       
     } catch (error) {
+      console.error('Update Error:', error);
+
+      // ✅ 401 Unauthorized - Session expired
       if (error?.status === 401) {
         showErrorToast('Session expired. Redirecting to login...');
         setTimeout(() => {
           logout();
           navigate('/sign-in');
         }, 2000);
-      } else {
-        showErrorToast(error?.data?.message || 'Failed to update profile');
+        return;
       }
+
+      // ✅ Get backend error safely
+      const backendError = error?.data?.error;
+
+      // ✅ Backend validation/details
+      if (Array.isArray(backendError?.details) && backendError.details.length > 0) {
+        const messages = backendError.details
+          .map(detail => detail?.message)
+          .filter(Boolean);
+
+        const message = messages.join(', ');
+        setServerError(message);
+        showErrorToast(message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Backend error.message
+      if (backendError?.message) {
+        setServerError(backendError.message);
+        showErrorToast(backendError.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Direct API message
+      if (error?.data?.message) {
+        setServerError(error.data.message);
+        showErrorToast(error.data.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ RTK / fetch error
+      if (error?.error) {
+        setServerError(error.error);
+        showErrorToast(error.error); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ JavaScript error
+      if (error?.message) {
+        setServerError(error.message);
+        showErrorToast(error.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Final fallback
+      setServerError('Failed to update profile. Please try again.');
+      showErrorToast('Failed to update profile. Please try again.'); // ✅ Shows toast only
+      
     } finally {
       setIsSaving(false);
     }
@@ -455,6 +524,7 @@ const DoctorProfile = () => {
     setUploadProgress(0);
     setIsEditing(false);
     setImageError(false);
+    setServerError(null);
     showWarningToast('Changes discarded');
   };
 
@@ -516,6 +586,8 @@ const DoctorProfile = () => {
           <h1 className="text-3xl font-bold text-gray-900">Doctor Profile</h1>
           <p className="text-gray-600 mt-1">Manage your professional information</p>
         </div>
+
+        {/* ❌ REMOVED: Large red error div - now only shows toast notifications */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Profile Card */}
@@ -606,11 +678,11 @@ const DoctorProfile = () => {
                   <>
                     <button
                       onClick={handleSave}
-                      disabled={isSaving}
+                      disabled={isSaving || isUpdating}
                       className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88] disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Save className="w-4 h-4" />
-                      <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+                      <span>{isSaving || isUpdating ? 'Saving...' : 'Save Changes'}</span>
                     </button>
                     <button
                       onClick={handleCancel}
@@ -650,12 +722,18 @@ const DoctorProfile = () => {
                   type="email"
                   icon={Mail}
                 />
+                {/* ✅ Phone input with 10-digit restriction */}
                 <ProfileField
                   label="Phone"
                   value={isEditing ? editForm.phone : formData.phone}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('phone', e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateEditForm('phone', value);
+                  }}
+                  type="tel"
                   icon={Phone}
+                  placeholder="10 digit phone number"
                 />
                 <ProfileField
                   label="Gender"

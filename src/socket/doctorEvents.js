@@ -3,7 +3,6 @@ import { socket } from "./socket";
 
 export const registerDoctorEvents = (handlers = {}) => {
   const dispatch = ({ event, data }) => {
-    console.log("🔥 DOCTOR EVENT:", event, data);
 
     switch (event) {
       case "DOCTOR_REGISTERED":

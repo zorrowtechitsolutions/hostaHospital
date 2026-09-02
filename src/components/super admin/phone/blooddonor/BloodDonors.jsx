@@ -29,6 +29,12 @@ import {
 import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
 import { useNavigate } from 'react-router-dom';
 
+// ✅ Import socket event handlers
+import { 
+  registerBloodDonorEvents, 
+  unregisterBloodDonorEvents 
+} from '../../../../socket/bloodDonorEvents';
+
 // ================= PAGINATION COMPONENT =================
 const Pagination = ({ 
   currentPage, 
@@ -354,6 +360,28 @@ const BloodDonors = () => {
     isFetching
   } = useGetDonorsQuery(buildQueryParams());
 
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    registerBloodDonorEvents({
+      onDonorRegistered: (data) => {
+        showSuccessToast(`🩸 New donor registered: ${data.donorId}`, 3000);
+        refetch();
+      },
+      onDonorUpdated: (data) => {
+        showSuccessToast(`🔄 Donor ${data.donorId} updated successfully`, 3000);
+        refetch();
+      },
+      onDonorDeleted: (data) => {
+        showErrorToast(`🗑️ Donor ${data.donorId} was deleted`, 3000);
+        refetch();
+      }
+    });
+
+    // ✅ Cleanup on component unmount
+    return () => {
+      unregisterBloodDonorEvents();
+    };
+  }, [refetch]);
 
   // Reset page when search or filters change
   useEffect(() => {
@@ -442,7 +470,7 @@ const BloodDonors = () => {
             {/* Filter Button */}
             <button
               onClick={() => setIsFilterModalOpen(true)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`relative p-2 rounded-lg transition-colors ${
                 hasActiveFilters 
                   ? 'bg-[#154A7D] text-white hover:bg-[#1a5c8f]' 
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'

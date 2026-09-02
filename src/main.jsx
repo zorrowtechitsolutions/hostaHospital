@@ -9,29 +9,19 @@ import process from "process";
 
 window.process = process;
 
-// ✅ REGISTER SERVICE WORKER WITH BETTER HANDLING
+// ✅ REGISTER SERVICE WORKER - NO UNREGISTER ON EVERY LOAD
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      // Unregister any existing service workers first (cleanup)
-      const existingRegistrations = await navigator.serviceWorker.getRegistrations();
-      for (let registration of existingRegistrations) {
-        if (registration.active && registration.active.scriptURL.includes('firebase-messaging-sw')) {
-          await registration.unregister();
-        }
-      }
-      
-      // Register new service worker
+      // Register service worker without unregistering first
       const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
         scope: '/'
       });
       
       
-      // Check if SW is active
-      if (registration.active) {
-      } else if (registration.installing) {
-      } else if (registration.waiting) {
-      }
+      // Wait for service worker to be ready
+      await navigator.serviceWorker.ready;
+      
       
       // Listen for SW updates
       registration.addEventListener('updatefound', () => {

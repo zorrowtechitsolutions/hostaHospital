@@ -873,11 +873,13 @@ export const hospitalApi = api.injectEndpoints({
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || "Failed to update hospital",
-        };
-      },
+  return {
+    status: response.status,
+    data: response.data,
+    message: response.data?.message || "Failed to update hospital",
+  };
+},
+      
     }),
 
     // DELETE Hospital - /hospital/:id (DELETE)

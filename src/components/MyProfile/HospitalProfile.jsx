@@ -24,6 +24,8 @@ import {
 } from '../../../app/service/hospitalApi';
 import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
+// ✅ IMPORT TOAST FUNCTIONS
+import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 
 // ==================== CONSTANTS ====================
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -37,6 +39,19 @@ const SECTION_ICON_CLASS = 'w-5 h-5 mr-2 text-blue-600';
 const ACTION_BUTTON_CLASS = 'w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors';
 
 // ==================== HELPER FUNCTIONS ====================
+
+// ✅ Phone validation helper
+const validatePhone = (phone) => {
+  if (!phone || phone.trim() === '') {
+    return 'Phone number is required';
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    return 'Phone number must be exactly 10 digits';
+  }
+
+  return '';
+};
 
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
@@ -53,18 +68,16 @@ const getFullImageUrl = (imageKey) => {
   return `${url}${separator}_t=${Date.now()}`;
 };
 
-// ==================== TOAST FUNCTIONS ====================
-const showSuccessToast = (message) => {
-  // Toast implementation
-};
-
-const showErrorToast = (message) => {
-  // Toast implementation
-};
-
-const showWarningToast = (message) => {
-  // Toast implementation
-};
+// ==================== ❌ REMOVE THESE PLACEHOLDER FUNCTIONS ====================
+// const showSuccessToast = (message) => {
+//   // Toast implementation
+// };
+// const showErrorToast = (message) => {
+//   // Toast implementation
+// };
+// const showWarningToast = (message) => {
+//   // Toast implementation
+// };
 
 // ==================== SKELETON LOADER ====================
 const ProfileSkeleton = () => (
@@ -124,6 +137,7 @@ const HospitalProfile = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [serverError, setServerError] = useState(null); // Keep for logic, but not displayed
 
   // ==================== SOCKET EVENT HANDLERS ====================
   
@@ -260,6 +274,8 @@ const HospitalProfile = () => {
       ...prev,
       [field]: value
     }));
+    // Clear server error when user makes changes
+    if (serverError) setServerError(null);
   };
 
   const handleImageUpload = async (file) => {
@@ -302,6 +318,7 @@ const HospitalProfile = () => {
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
     } catch (error) {
+      console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
       if (formData.profileImage) {
@@ -328,11 +345,25 @@ const HospitalProfile = () => {
   const handleEdit = () => {
     setIsEditing(true);
     setEditForm({ ...formData });
+    setServerError(null);
     resetUploadState();
   };
 
+  // ============================================================
+  // ✅ FIXED: Phone validation + robust error handling
+  // ============================================================
   const handleSave = async () => {
+    // ✅ Validate phone before sending to backend
+    const phoneError = validatePhone(editForm.phoneNumber);
+
+    if (phoneError) {
+      setServerError(phoneError);
+      showErrorToast(phoneError); // ✅ Shows toast only
+      return;
+    }
+
     setIsSaving(true);
+    setServerError(null);
     
     try {
       const updateData = {
@@ -375,6 +406,7 @@ const HospitalProfile = () => {
       
       setIsEditing(false);
       resetUploadState();
+      setServerError(null);
       
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { 
@@ -390,15 +422,65 @@ const HospitalProfile = () => {
       refetch();
       
     } catch (error) {
+      console.error('Update Error:', error);
+
+      // ✅ 401 Unauthorized - Session expired
       if (error?.status === 401) {
         showErrorToast('Session expired. Redirecting to login...');
         setTimeout(() => {
           logout();
           navigate('/sign-in');
         }, 2000);
-      } else {
-        showErrorToast(error?.data?.message || 'Failed to update profile');
+        return;
       }
+
+      // ✅ Get backend error safely
+      const backendError = error?.data?.error;
+
+      // ✅ Backend validation/details
+      if (Array.isArray(backendError?.details) && backendError.details.length > 0) {
+        const messages = backendError.details
+          .map(detail => detail?.message)
+          .filter(Boolean);
+
+        const message = messages.join(', ');
+        setServerError(message);
+        showErrorToast(message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Backend error.message
+      if (backendError?.message) {
+        setServerError(backendError.message);
+        showErrorToast(backendError.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Direct API message
+      if (error?.data?.message) {
+        setServerError(error.data.message);
+        showErrorToast(error.data.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ RTK / fetch error
+      if (error?.error) {
+        setServerError(error.error);
+        showErrorToast(error.error); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ JavaScript error
+      if (error?.message) {
+        setServerError(error.message);
+        showErrorToast(error.message); // ✅ Shows toast only
+        return;
+      }
+
+      // ✅ Final fallback
+      setServerError('Failed to update profile. Please try again.');
+      showErrorToast('Failed to update profile. Please try again.'); // ✅ Shows toast only
+      
     } finally {
       setIsSaving(false);
     }
@@ -410,6 +492,7 @@ const HospitalProfile = () => {
     setUploadProgress(0);
     setIsEditing(false);
     setImageError(false);
+    setServerError(null);
     showWarningToast('Changes discarded');
   };
 
@@ -446,6 +529,8 @@ const HospitalProfile = () => {
           <h1 className="text-3xl font-bold text-gray-900">Hospital Profile</h1>
           <p className="text-gray-600 mt-1">Manage your hospital information and preferences</p>
         </div>
+
+        {/* ❌ REMOVED: Large red error div - now only shows toast notifications */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
@@ -617,12 +702,18 @@ const HospitalProfile = () => {
                   icon={Mail}
                 />
                 
+                {/* ✅ Phone input with 10-digit restriction */}
                 <ProfileField
                   label="Phone Number"
                   value={isEditing ? editForm.phoneNumber : formData.phoneNumber}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('phoneNumber', e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateEditForm('phoneNumber', value);
+                  }}
+                  type="tel"
                   icon={Phone}
+                  placeholder="10 digit phone number"
                 />
               </div>
             </div>
@@ -666,7 +757,7 @@ const SectionTitle = ({ icon: Icon, title }) => (
   </h3>
 );
 
-const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon }) => (
+const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon, placeholder = '' }) => (
   <div>
     <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
     {isEditing ? (
@@ -675,6 +766,7 @@ const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: 
         value={value || ''}
         onChange={onChange}
         className={INPUT_CLASS}
+        placeholder={placeholder}
       />
     ) : (
       <div className="flex items-center space-x-2">

@@ -198,35 +198,80 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  // ✅ FIXED: Made async and await onSave
+  const handleSubmit = async () => {
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
-      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      
+      const errorElement = document.querySelector(
+        `[name="${firstErrorField}"]`
+      );
+      
       if (errorElement) {
-        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
       }
-      showErrorToast('Please fix the validation errors before submitting', 3000);
+      
+      showErrorToast(
+        'Please fix the validation errors before submitting',
+        3000
+      );
+      
       return;
     }
     
     setIsSubmitting(true);
     
-    onSave({
-      id: formData.id,
-      serviceName: formData.serviceName,
-      phone: formData.phone,
-      vehicleType: formData.vehicleType,
-      address: {
-        country: formData.address.country,
-        state: formData.address.state,
-        district: formData.address.district,
-        place: formData.address.place,
-        pincode: Number(formData.address.pincode)
+    try {
+      // ✅ IMPORTANT: wait for backend response
+      await onSave({
+        id: formData.id,
+        serviceName: formData.serviceName,
+        phone: formData.phone,
+        vehicleType: formData.vehicleType,
+        address: {
+          country: formData.address.country,
+          state: formData.address.state,
+          district: formData.address.district,
+          place: formData.address.place,
+          pincode: Number(formData.address.pincode)
+        }
+      });
+      
+      // ✅ Only close after successful API response
+      onClose();
+      
+    } catch (error) {
+      console.error('Edit ambulance error:', error);
+      
+      const backendError = error?.data?.error;
+      
+      if (backendError?.details?.length) {
+        const message = backendError.details
+          .map(item => item?.message)
+          .filter(Boolean)
+          .join(', ');
+        
+        showErrorToast(message);
       }
-    });
-    
-    setIsSubmitting(false);
-    onClose();
+      else if (backendError?.message) {
+        showErrorToast(backendError.message);
+      }
+      else if (error?.data?.message) {
+        showErrorToast(error.data.message);
+      }
+      else if (error?.message) {
+        showErrorToast(error.message);
+      }
+      else {
+        showErrorToast('Failed to update ambulance');
+      }
+      
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -258,7 +303,7 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
             }`}
           >
             <option value="">Select vehicle type</option>
-            {ambulanceTypes.map(type => (
+            {ambulanceTypes && ambulanceTypes.map(type => (
               <option key={type} value={type}>{type}</option>
             ))}
           </select>

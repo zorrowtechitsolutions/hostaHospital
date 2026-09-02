@@ -165,15 +165,7 @@ export const uploadToS3 = async (
         ? { key }
         : { size: compressed.size }),
     };
-    console.log("========== S3 PRESIGN DEBUG ==========");
-console.log("API_URL:", API_URL);
-console.log("role:", customRole);
-console.log("id:", id);
-console.log("key:", key);
-console.log("filename:", compressed.name);
-console.log("contentType:", compressed.type);
-console.log("size:", compressed.size);
-console.log("======================================");
+
     
     const res = await fetch(API_URL, {
       method: key ? "PUT" : "POST",
@@ -189,7 +181,7 @@ console.log("======================================");
       try {
         errorText = await res.text();
       } catch (e) {
-        errorText = "Could not read error response";
+        errorText = "Could not read error respconsole.logonse";
       }
       
       console.error("Presign API Error Response:", {
