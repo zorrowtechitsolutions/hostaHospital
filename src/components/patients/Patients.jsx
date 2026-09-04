@@ -154,7 +154,23 @@ const extractAddress = (patient) => {
 
 // Helper functions
 const getPatientName = (patient) => patient.name || 'Patient';
+
+// ✅ FIXED: Use patientNumber for display (user-facing ID)
+const getPatientDisplayId = (patient) => {
+  if (patient?.patientNumber) {
+    return `#PT${String(patient.patientNumber).padStart(4, '0')}`;
+  }
+  // Fallback to database ID if patientNumber is not available
+  const id = patient?.id || patient?._id;
+  return id ? `#PT${String(id).padStart(4, '0')}` : '#PT0000';
+};
+
+// ✅ For API operations that need the database ID
+const getPatientDbId = (patient) => patient?.id || patient?._id || null;
+
+// For backward compatibility - get patient ID for display
 const getPatientId = (id) => id ? `#PT${String(id).padStart(4, '0')}` : '#PT0000';
+
 const getPatientType = (patient) => patient.patientType || 'Outpatient';
 const getPatientStatus = (patient) => {
   if (patient.isDelete) return 'Blacklisted';
@@ -445,19 +461,23 @@ const Patients = () => {
   const filteredPatients = useMemo(() => {
     let result = transformedPatients;
     
-    // ✅ Filter by search term (client-side)
+    // ✅ Filter by search term (client-side) - now includes patientNumber
     if (searchTerm && searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
       result = result.filter(patient => {
         const name = (patient.name || '').toLowerCase();
         const mobile = (patient.mobileNumber || '').toLowerCase();
         const email = (patient.email || '').toLowerCase();
-        const id = String(patient.id || patient._id || '');
+        const patientNumber = String(patient.patientNumber || '');
+        const dbId = String(patient.id || patient._id || '');
+        const displayId = getPatientDisplayId(patient).toLowerCase();
         
         return name.includes(search) || 
                mobile.includes(search) || 
                email.includes(search) || 
-               id.includes(search);
+               patientNumber.includes(search) ||
+               displayId.includes(search) ||
+               dbId.includes(search);
       });
     }
     
@@ -553,7 +573,9 @@ const Patients = () => {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
     }
-    navigate(`/patients/${patient.id || patient._id}`, { state: { patient } });
+    // Use database ID for navigation
+    const dbId = getPatientDbId(patient);
+    navigate(`/patients/${dbId}`, { state: { patient } });
     setActiveMenu(null);
   }, [navigate]);
 
@@ -575,7 +597,9 @@ const Patients = () => {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
     }
-    navigate(`/edit-patient/${patient.id || patient._id}`, { state: { patient } });
+    // Use database ID for navigation
+    const dbId = getPatientDbId(patient);
+    navigate(`/edit-patient/${dbId}`, { state: { patient } });
     setActiveMenu(null);
   }, [navigate]);
 
@@ -593,7 +617,9 @@ const Patients = () => {
   const handleConfirmDelete = useCallback(async () => {
     if (patientToDelete) {
       try {
-        await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
+        // Use database ID for API call
+        const dbId = getPatientDbId(patientToDelete);
+        await deletePatient(dbId).unwrap();
         await refetchPatients();
         setShowDeleteModal(false);
         setPatientToDelete(null);
@@ -612,7 +638,9 @@ const Patients = () => {
     }
     
     try {
-      await recoverPatient(patient.id || patient._id).unwrap();
+      // Use database ID for API call
+      const dbId = getPatientDbId(patient);
+      await recoverPatient(dbId).unwrap();
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
       refetchPatients();
       setActiveMenu(null);
@@ -648,11 +676,17 @@ const Patients = () => {
   }, []);
 
   const handleProceedApprove = useCallback((data) => {
-    const patientId = appointmentPatient?.id || appointmentPatient?._id;
+    // ✅ FIXED: Use patientNumber for booking, not database ID
+    const patientNumber = appointmentPatient?.patientNumber;
     
     const updatedData = {
       ...data,
-      patientId: patientId ? `#PT00${String(patientId)}` : null,
+      // Use patientNumber for the booking (user-facing ID)
+      patientId: patientNumber 
+        ? `#PT${String(patientNumber).padStart(4, '0')}`
+        : null,
+      // Keep the database ID for internal use if needed
+      patientDbId: appointmentPatient?.id || appointmentPatient?._id || null,
     };
 
     setBookingData(updatedData);
@@ -683,8 +717,16 @@ const Patients = () => {
 
   const handleConfirmAppointment = useCallback(async (approveData) => {
     try {
+      // ✅ FIXED: Extract patientNumber from the formatted patientId
+      const patientNumber = bookingData?.patientId 
+        ? Number(bookingData.patientId.replace("#PT", ""))
+        : null;
+      
       const payload = {
-        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
+        // Use patientNumber instead of database ID
+        patientNumber: patientNumber,
+        // Keep patientId for backward compatibility if needed
+        patientId: patientNumber,
         userId: Number(bookingData?.userId),
         patient_name: bookingData?.patient_name,
         patient_dob: formatDate(bookingData?.patient_dob),
@@ -737,7 +779,7 @@ const Patients = () => {
     setActiveMenu(prevActive => prevActive === id ? null : id);
   }, []);
 
-  // ✅ Prepare export data for Excel with formatted address
+  // ✅ Prepare export data for Excel with patientNumber
   const getExportData = useCallback(() => {
     const patientsToExport = filteredPatients;
     
@@ -745,7 +787,8 @@ const Patients = () => {
       const address = patient.formattedAddress || 'N/A';
       
       return {
-        'Patient ID': patient.id || patient._id || 'N/A',
+        // ✅ Use patientNumber for display
+        'Patient Number': patient.patientNumber ? `#PT${String(patient.patientNumber).padStart(4, '0')}` : 'N/A',
         'Name': patient.name || 'N/A',
         'Gender': patient.gender || 'N/A',
         'Age': patient.age || 'N/A',
@@ -823,10 +866,10 @@ const Patients = () => {
         {/* Search and Filter */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            {/* ✅ Search Bar - Client-side search */}
+            {/* ✅ Search Bar - Client-side search with patientNumber support */}
             <div className="flex-1 max-w-sm">
               <SearchBar
-                placeholder="Search by name, mobile, email, or ID..."
+                placeholder="Search by name, mobile, email, ID, or Patient Number..."
                 value={searchTerm}
                 onChange={handleSearchChange}
                 onClear={handleClearSearch}
@@ -935,26 +978,28 @@ const Patients = () => {
           </div>
         )}
 
-        {/* GRID VIEW - UPDATED: Removed Status, Added Gender */}
+        {/* GRID VIEW - Using patientNumber for display */}
         {viewMode === 'grid' && filteredPatients.length > 0 && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {paginatedPatients.map((patient) => {
                 const isBlacklisted = patient.isDelete;
                 const patientStatus = getPatientStatus(patient);
+                const dbId = getPatientDbId(patient);
                 
                 return (
                   <div 
-                    key={patient.id || patient._id} 
+                    key={dbId} 
                     className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="w-full flex justify-between items-start mb-4">
                       <Badge variant="info" className="text-[10px]">
-                        {getPatientId(patient.id || patient._id)}
+                        {/* ✅ Use patientNumber for display */}
+                        {getPatientDisplayId(patient)}
                       </Badge>
                       <div className="relative menu-container">
                         <button 
-                          onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                          onClick={(e) => toggleMenu(dbId, e)} 
                           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                           aria-label="Actions menu"
                         >
@@ -1013,7 +1058,6 @@ const Patients = () => {
                       {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
                     </p>
                     
-                    {/* UPDATED: Removed Status, Added Gender */}
                     <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                       <div className="text-center">
                         <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
@@ -1083,7 +1127,7 @@ const Patients = () => {
           </>
         )}
 
-        {/* LIST VIEW */}
+        {/* LIST VIEW - Using patientNumber for display */}
         {viewMode === 'list' && filteredPatients.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -1100,7 +1144,7 @@ const Patients = () => {
                 <table className="w-full text-sm text-left">
                   <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                     <tr>
-                      <th className="px-6 py-3">Patient ID</th>
+                      <th className="px-6 py-3">Patient Number</th>
                       <th className="px-6 py-3">Patient Name</th>
                       <th className="px-6 py-3">Gender</th>
                       <th className="px-6 py-3">Mobile Number</th>
@@ -1114,11 +1158,13 @@ const Patients = () => {
                     {paginatedPatients.map((patient) => {
                       const isBlacklisted = patient.isDelete;
                       const patientStatus = getPatientStatus(patient);
+                      const dbId = getPatientDbId(patient);
                       
                       return (
-                        <tr key={patient.id || patient._id} className="hover:bg-gray-50 border-b border-gray-100">
+                        <tr key={dbId} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                            {getPatientId(patient.id || patient._id)}
+                            {/* ✅ Use patientNumber for display */}
+                            {getPatientDisplayId(patient)}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
@@ -1174,7 +1220,7 @@ const Patients = () => {
                           <td className="px-6 py-4 text-right relative menu-container">
                             <div className="flex justify-end">
                               <button 
-                                onClick={(e) => toggleMenu(patient.id || patient._id, e)} 
+                                onClick={(e) => toggleMenu(dbId, e)} 
                                 className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                                 aria-label="Actions menu"
                               >
