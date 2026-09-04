@@ -119,10 +119,20 @@
 @layer base {
     * {
         @apply border-border outline-ring/50;
+        
+        /* Hide scrollbars globally while keeping scrolling enabled */
+        -ms-overflow-style: none; /* IE and old Edge */
+        scrollbar-width: none; /* Firefox */
     }
+    
+    *::-webkit-scrollbar {
+        display: none; /* Chrome, Edge, Safari */
+    }
+    
     body {
         @apply bg-background text-foreground;
     }
+    
     html {
         @apply font-sans;
     }
@@ -153,16 +163,6 @@ body {
 
 .unit {
     @apply bg-gray-100 px-3 flex items-center border border-l-0 rounded-r-md text-sm;
-}
-
-/* Targeted scrollbar hiding - apply only where needed */
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
 }
 
 /* Counter Component Styles */
