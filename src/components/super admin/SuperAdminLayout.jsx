@@ -25,8 +25,8 @@ import DoctorDetails from './hospitals/Doctors/DoctorDetails';
 
 // ✅ Staff imports
 import StaffDetails from './hospitals/staff/staffDetails';
-import AddStaff from './hospitals/Staff/AddStaff';
-import EditStaff from './hospitals/Staff/EditStaff';
+import AddStaff from './hospitals/staff/AddStaff';
+import EditStaff from './hospitals/staff/EditStaff';
 
 // Ambulance imports
 import AddAmbulance from '../Ambulance/AddAmbulanceModal';
@@ -35,9 +35,9 @@ import Ambulance from './phone/ambulance/Ambulance';
 import AmbulanceDetails from './phone/ambulance/AmbulanceDetails';
 
 // ✅ Blood Bank imports
-import AddBloodBank from './hospitals/bloodbank/AddBloodBank';
-import EditBloodBank from './hospitals/bloodbank/EditBloodBank';
-import BloodBankDetails from './hospitals/bloodbank/BloodBankDetails';
+import AddBloodBank from './hospitals/BloodBank/AddBloodBank';
+import EditBloodBank from './hospitals/BloodBank/EditBloodBank';
+import BloodBankDetails from './hospitals/BloodBank/BloodBankDetails';
 
 // ✅ Patient imports
 import AddPatient from './hospitals/patients/AddPatients';
