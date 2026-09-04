@@ -40,14 +40,25 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
     if (appointment) {
       const booking = appointment;
       
-      // Format date for input (YYYY-MM-DD)
+      // FIXED: More robust date parsing with multiple possible field names
       let formattedDate = '';
-      const rawDate = booking.booking_date || booking.appointmentDate || booking.date;
-      if (rawDate && rawDate !== 'N/A') {
+      const rawDate = 
+        booking.booking_date ||
+        booking.appointmentDate ||
+        booking.appointment_date ||
+        booking.date ||
+        '';
+
+      if (rawDate && rawDate !== 'N/A' && rawDate !== '') {
         try {
-          const dateObj = new Date(rawDate);
-          if (!isNaN(dateObj.getTime())) {
-            formattedDate = format(dateObj, 'yyyy-MM-dd');
+          // Handle YYYY-MM-DD directly
+          if (/^\d{4}-\d{2}-\d{2}$/.test(String(rawDate))) {
+            formattedDate = String(rawDate);
+          } else {
+            const dateObj = new Date(rawDate);
+            if (!isNaN(dateObj.getTime())) {
+              formattedDate = format(dateObj, 'yyyy-MM-dd');
+            }
           }
         } catch (e) {
           console.warn('Date parsing error:', e);
@@ -56,8 +67,9 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
       // Format time for input (HH:mm) - 24-hour format for time input
       let formattedTime = '';
-      const rawTime = booking.consulting_time || booking.time;
-      if (rawTime && rawTime !== 'N/A') {
+      const rawTime = booking.consulting_time || booking.time || '';
+      
+      if (rawTime && rawTime !== 'N/A' && rawTime !== '') {
         if (rawTime.includes('AM') || rawTime.includes('PM')) {
           formattedTime = convertTo24Hour(rawTime);
         } else {
@@ -68,13 +80,20 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       // Get doctor ID from various possible sources
       const doctorId = booking.doctorId || booking.doctor?.id || booking.doctor_id || '';
 
+      // FIXED: More robust token extraction
+      const existingToken = 
+        booking.token ??
+        booking.token_number ??
+        booking.tokenNumber ??
+        '';
+
       setFormData({
         patient_name: booking.patient_name || booking.patientName || '',
         patient_phone: booking.patient_phone || booking.contact || booking.patientPhone || '',
         doctorId: String(doctorId),
         booking_date: formattedDate,
         consulting_time: formattedTime,
-        token: String(booking.token || ''),
+        token: String(existingToken),
       });
     }
   }, [appointment]);
@@ -182,7 +201,7 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         doctorId: formData.doctorId,
         booking_date: formData.booking_date,
         consulting_time: consultingTime,
-        token: formData.token,
+        token: formData.token, // Token is preserved on save
       };
 
       await updateBooking({

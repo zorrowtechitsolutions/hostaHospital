@@ -1,4 +1,4 @@
-// app/service/email-template.ts - Updated to match backend response
+// app/service/emailTemplate.ts - Email Template API service with Hospital Filter
 
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
@@ -12,12 +12,11 @@ export interface EmailTemplateVariable {
   required?: boolean;
 }
 
-// Updated to match backend response
 export interface EmailTemplate {
   id?: number;
-  templateName: string;  // Changed from 'name'
+  templateName: string;
   subject: string;
-  message: string;       // Changed from 'body'
+  message: string;
   category?: string;
   status?: 'Active' | 'Inactive' | 'Draft';
   variables?: EmailTemplateVariable[];
@@ -43,18 +42,14 @@ export interface TemplateResponse {
 export interface GetTemplateParams {
   id?: string | number;
   hospitalId?: string | number;
-  createdBy?: string | number;
   category?: string;
-  status?: 'Active' | 'Inactive' | 'Draft' | 'all';
-  name?: string;
-  search_query?: string;
-  isSystem?: boolean;
+  status?: string;
+  search?: string;
   page?: number;
   limit?: number;
   skipHospitalFilter?: boolean;
 }
 
-// Updated to match backend expectations
 export interface CreateTemplateRequest {
   templateName: string;
   subject: string;
@@ -73,6 +68,40 @@ export interface UpdateTemplateRequest {
   variables?: EmailTemplateVariable[];
 }
 
+// ================= HELPER FUNCTIONS =================
+
+const getHospitalIdFromAuth = (auth: any): number | null => {
+  if (!auth) return null;
+  if (auth.hospitalId) {
+    return Number(auth.hospitalId);
+  }
+  return null;
+};
+
+const getAuthIdFromAuth = (auth: any): string | null => {
+  if (!auth) return null;
+  if (auth.authId) {
+    return String(auth.authId);
+  }
+  if (auth.id) {
+    return String(auth.id);
+  }
+  return null;
+};
+
+const toNumber = (value: string | number | undefined): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  return Number(value);
+};
+
+// Helper to ensure single string from param
+const getQueryString = (queryParam: any): string | undefined => {
+  if (Array.isArray(queryParam)) {
+    return queryParam[0] as string;
+  }
+  return queryParam as string | undefined;
+};
+
 // ================= API =================
 
 export const templateApi = api.injectEndpoints({
@@ -89,6 +118,7 @@ export const templateApi = api.injectEndpoints({
         
         let hospitalId: number | undefined;
         
+        // For non-super-admin, use their hospital
         if (!isSuperAdmin) {
           const authHospitalId = getHospitalIdFromAuth(auth);
           if (authHospitalId) {
@@ -129,6 +159,14 @@ export const templateApi = api.injectEndpoints({
         const isSuperAdmin = auth?.role === 'super-admin';
         const shouldSkipFilter = params.skipHospitalFilter === true;
 
+        // Handle pagination
+        const page = parseInt(getQueryString(params.page) || "1", 10);
+        const limit = parseInt(getQueryString(params.limit) || "20", 10);
+        
+        queryParams.append("page", String(page));
+        queryParams.append("limit", String(limit));
+
+        // Handle hospital filter
         let hospitalIdToUse = null;
         
         if (!isSuperAdmin && !shouldSkipFilter) {
@@ -145,36 +183,22 @@ export const templateApi = api.injectEndpoints({
           queryParams.append("hospitalId", String(params.hospitalId));
         }
 
-        if (params.createdBy) {
-          queryParams.append("createdBy", String(params.createdBy));
-        }
-
+        // Category filter
         if (params.category) {
           queryParams.append("category", params.category);
         }
 
-        if (params.status && params.status !== 'all') {
-          queryParams.append("status", params.status);
+        // Status filter - capitalize first letter to match backend
+        let status = getQueryString(params.status);
+        if (status) {
+          status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+          queryParams.append("status", status);
         }
 
-        if (params.name) {
-          queryParams.append("name", params.name);
-        }
-
-        if (params.search_query) {
-          queryParams.append("search_query", params.search_query);
-        }
-
-        if (params.isSystem !== undefined) {
-          queryParams.append("isSystem", String(params.isSystem));
-        }
-
-        if (params.page) {
-          queryParams.append("page", String(params.page));
-        }
-
-        if (params.limit) {
-          queryParams.append("limit", String(params.limit));
+        // Search filter
+        const search = getQueryString(params.search);
+        if (search) {
+          queryParams.append("search", search);
         }
 
         const queryString = queryParams.toString();
@@ -314,40 +338,6 @@ export const templateApi = api.injectEndpoints({
     }),
   }),
 });
-
-// ================= HELPER FUNCTIONS =================
-
-// Helper: Get hospital ID from auth (returns number)
-const getHospitalIdFromAuth = (auth: any): number | null => {
-  if (!auth) return null;
-  
-  if (auth.hospitalId) {
-    return Number(auth.hospitalId);
-  }
-  
-  return null;
-};
-
-// Helper: Get auth ID from auth
-const getAuthIdFromAuth = (auth: any): string | null => {
-  if (!auth) return null;
-  
-  if (auth.authId) {
-    return String(auth.authId);
-  }
-  
-  if (auth.id) {
-    return String(auth.id);
-  }
-  
-  return null;
-};
-
-// Helper: Convert string | number to number safely
-const toNumber = (value: string | number | undefined): number | undefined => {
-  if (value === undefined || value === null) return undefined;
-  return Number(value);
-};
 
 // ================= EXPORT HOOKS =================
 

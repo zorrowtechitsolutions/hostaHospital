@@ -143,7 +143,11 @@ const EmailTemplateForm = ({
 
   // Editor reference
   const editorRef = useRef(null);
+  const subjectRef = useRef(null);
   const savedSelectionRef = useRef(null);
+  
+  // Track which field is active
+  const [activeField, setActiveField] = useState("message");
 
   // File input refs
   const fileInputRef = useRef(null);
@@ -200,9 +204,45 @@ const EmailTemplateForm = ({
 
   // Insert variable at cursor position
   const insertVariable = (variable) => {
+    const variableText = `{{${variable}}}`;
+
+    // SUBJECT
+    if (activeField === "subject") {
+      const input = subjectRef.current;
+
+      if (!input) return;
+
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+
+      const newSubject =
+        input.value.substring(0, start) +
+        variableText +
+        input.value.substring(end);
+
+      setSubject(newSubject);
+
+      // Put cursor after inserted variable
+      requestAnimationFrame(() => {
+        input.focus();
+
+        const newCursorPosition = start + variableText.length;
+
+        input.setSelectionRange(
+          newCursorPosition,
+          newCursorPosition
+        );
+      });
+
+      return;
+    }
+
+    // MESSAGE
     editorRef.current?.focus();
     restoreSelection();
-    document.execCommand("insertText", false, `{{${variable}}}`);
+
+    document.execCommand("insertText", false, variableText);
+
     if (editorRef.current) {
       setMessage(editorRef.current.innerHTML);
     }
@@ -395,8 +435,10 @@ const EmailTemplateForm = ({
                   <span className="text-red-500 ml-1">*</span>
                 </label>
                 <input
+                  ref={subjectRef}
                   type="text"
                   value={subject}
+                  onFocus={() => setActiveField("subject")}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="Enter email subject"
                   className="
@@ -557,6 +599,7 @@ const EmailTemplateForm = ({
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
+                    onFocus={() => setActiveField("message")}
                     onInput={handleEditorInput}
                     className="
                       w-full
@@ -619,7 +662,11 @@ const EmailTemplateForm = ({
                       type="button"
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        saveSelection();
+
+                        if (activeField === "message") {
+                          saveSelection();
+                        }
+
                         insertVariable(variable.key);
                       }}
                       className="

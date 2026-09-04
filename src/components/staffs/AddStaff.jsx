@@ -79,18 +79,13 @@ const removeUndefined = obj => {
 
 const buildPlace = (line1, line2) => `${line1} ${line2}`.trim();
 
+// ❌ REMOVED: Phone validation from frontend - let backend handle it
+
 // Validation functions
 const validateName = (name) => {
   if (!name || name.trim() === '') return 'Full name is required';
   if (name.length < 2) return 'Name must be at least 2 characters';
   if (name.length > 50) return 'Name must be less than 50 characters';
-  return '';
-};
-
-const validatePhone = (phone) => {
-  if (!phone || phone.trim() === '') return 'Phone number is required';
-  const mobileRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,5}[-\s\.]?[0-9]{4,6}$/;
-  if (!mobileRegex.test(phone)) return 'Please enter a valid phone number';
   return '';
 };
 
@@ -146,7 +141,6 @@ const validateImage = (file) => {
 
 const validators = {
   name: validateName,
-  phone: validatePhone,
   email: validateEmail,
   password: validatePassword,
   confirmPassword: validateConfirmPassword,
@@ -465,6 +459,7 @@ const AddStaff = () => {
         address: { ...prev.address, [addressField]: value }
       }));
     } else {
+      // ❌ REMOVED: Phone restriction - let backend handle validation
       updateFormData({ [name]: type === 'checkbox' ? checked : value });
     }
     
@@ -579,7 +574,8 @@ const AddStaff = () => {
   // Validation
   const validateForm = () => {
     const newErrors = {};
-    const requiredFields = ['name', 'phone', 'email', 'password', 'designation', 'roleId'];
+    // ❌ REMOVED: 'phone' from required fields - let backend handle it
+    const requiredFields = ['name', 'email', 'password', 'designation', 'roleId'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field], formData);
       if (error) newErrors[field] = error;
@@ -606,7 +602,7 @@ const AddStaff = () => {
 
     // Mark all fields as touched
     const touchedFields = {};
-    ['name', 'phone', 'email', 'password', 'confirmPassword', 'designation', 'roleId'].forEach(field => {
+    ['name', 'email', 'password', 'confirmPassword', 'designation', 'roleId'].forEach(field => {
       touchedFields[field] = true;
     });
     setTouched(touchedFields);
@@ -695,7 +691,12 @@ const AddStaff = () => {
       }, 2000);
 
     } catch (error) {
-      if (error?.status === 401 || error?.originalStatus === 401) {
+      console.error('Create Staff Error:', error);
+      
+      // ✅ IMPROVED: Extract error message from various response formats
+      const status = error?.status || error?.originalStatus;
+      
+      if (status === 401) {
         showErrorToast('Session expired. Please login again.', TOAST_DURATION);
         setTimeout(() => {
           window.location.href = '/sign-in';
@@ -703,19 +704,17 @@ const AddStaff = () => {
         return;
       }
       
-      const errorMessage = error?.data?.message || error?.message || 'Failed to add staff';
+      const message =
+        error?.data?.error?.details?.[0]?.message ||
+        error?.data?.details?.[0]?.message ||
+        error?.data?.errors?.[0]?.message ||
+        error?.data?.error?.message ||
+        error?.data?.message ||
+        error?.error ||
+        error?.message ||
+        'Failed to add staff';
       
-      if (error?.data?.errors) {
-        const backendErrors = error.data.errors;
-        const formattedErrors = {};
-        Object.keys(backendErrors).forEach(key => {
-          formattedErrors[key] = backendErrors[key];
-        });
-        setErrors(prev => ({ ...prev, ...formattedErrors }));
-        showErrorToast('Please check the form for errors', SUCCESS_DURATION);
-      } else {
-        showErrorToast(errorMessage, SUCCESS_DURATION);
-      }
+      showErrorToast(message, SUCCESS_DURATION);
       setIsSubmitting(false);
     }
   };
@@ -880,13 +879,12 @@ const AddStaff = () => {
                   name="phone" 
                   type="tel" 
                   icon={Phone}
-                  placeholder="+1 00000 00000"
+                  placeholder="10 digit phone number"
                   value={formData.phone} 
                   onChange={handleChange} 
-                  onBlur={handleBlur} 
+                  // ❌ REMOVED: onBlur validation for phone - let backend handle it
                   error={errors.phone} 
                   touched={touched.phone}
-                  required 
                 />
 
                 <Input 

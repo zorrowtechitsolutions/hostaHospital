@@ -1,12 +1,13 @@
-// src/socket/bookingEvents.js
 import { socket } from "./socket";
 
-// Booking Events Listener - Using system_event pattern
 export const registerBookingEvents = (handlers = {}) => {
-  // ✅ UNIFIED SYSTEM EVENT LISTENER
-  socket.on("system_event", (payload) => {
-    // Extract event type from message (format: [EVENT_TYPE] message)
-    const event = payload.message?.match(/\[(.*?)\]/)?.[1];
+  const handleBookingEvent = (payload) => {
+    console.log("🔥 BOOKING EVENT RECEIVED:", payload);
+
+    const event = payload?.event;
+
+    console.log("📡 Event name:", event);
+    console.log("📦 Event data:", payload?.data);
 
     switch (event) {
       case "BOOKING_REGISTERED":
@@ -29,18 +30,26 @@ export const registerBookingEvents = (handlers = {}) => {
         handlers.onBookingCompleted?.(payload.data);
         break;
 
-      default:
-        // Unknown event - silently ignore
+      case "TOKEN_UPDATED":
+        handlers.onTokenUpdated?.(payload.data);
         break;
+
+      case "BOOKING_DELETED":
+        handlers.onBookingDeleted?.(payload.data);
+        break;
+
+      default:
+        console.log("⚠️ Unknown booking event:", event);
     }
-  });
+  };
+
+  socket.on("booking_event", handleBookingEvent);
+
+  return () => {
+    socket.off("booking_event", handleBookingEvent);
+  };
 };
 
-// Unregister booking events (cleanup)
 export const unregisterBookingEvents = () => {
-  // Remove system_event listener
-  socket.off("system_event");
-  
-  // Remove the onAny listener
-  socket.offAny();
+  socket.off("booking_event");
 };

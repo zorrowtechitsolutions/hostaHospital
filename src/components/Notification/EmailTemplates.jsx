@@ -6,10 +6,8 @@ import {
   Pencil,
   Trash2,
   Users,
-  CalendarDays,
   AlertTriangle,
   GraduationCap,
-  Wrench,
   FileText,
   RefreshCcw,
 } from "lucide-react";
@@ -22,6 +20,7 @@ import { Button } from "../ui/button";
 import { Pagination } from "../ui/Pagination";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
+// Remove TypeScript type annotations
 const categoryStyles = {
   General: "bg-indigo-50 text-indigo-600",
   Alert: "bg-red-50 text-red-500",
@@ -164,6 +163,8 @@ const TemplateSkeleton = () => {
   );
 };
 
+// ================= MAIN COMPONENT =================
+
 const EmailTemplates = () => {
   const navigate = useNavigate();
   
@@ -174,7 +175,7 @@ const EmailTemplates = () => {
   const limit = 10;
 
   // ============================
-  // API QUERIES
+  // API QUERIES - CORRECTED PARAMETERS
   // ============================
 
   const {
@@ -185,7 +186,7 @@ const EmailTemplates = () => {
     refetch,
     isFetching,
   } = useGetTemplatesQuery({
-    search_query: search || undefined,
+    search: search || undefined,        // Changed from search_query to search
     category: category === "All Categories" ? undefined : category,
     status: status === "All Statuses" ? undefined : status,
     page: page,
@@ -392,6 +393,7 @@ const EmailTemplates = () => {
             <option value="All Statuses">All Statuses</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
+            <option value="Draft">Draft</option>
           </select>
         </div>
 
@@ -527,12 +529,10 @@ const EmailTemplates = () => {
                             font-medium
                             ${
                               template.status === "Active" || 
-                              template.status === "active" ||
-                              template.status === "Published"
+                              template.status === "active"
                                 ? "bg-emerald-50 text-emerald-600"
                                 : template.status === "Inactive" || 
-                                  template.status === "inactive" ||
-                                  template.status === "Archived"
+                                  template.status === "inactive"
                                 ? "bg-slate-100 text-slate-500"
                                 : template.status === "Draft" || 
                                   template.status === "draft"
@@ -563,7 +563,7 @@ const EmailTemplates = () => {
                             <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(template.id, template.templateName || template.name)}
+                            onClick={() => handleDelete(template.id, template.templateName || template.name || "")}
                             disabled={isDeleting}
                             title="Delete"
                             className="p-1.5 rounded hover:bg-gray-100 text-slate-400 hover:text-red-600 transition disabled:opacity-40"

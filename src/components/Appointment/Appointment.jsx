@@ -65,6 +65,54 @@ const convertTo12Hour = (time24h) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
+// ✅ FIXED: Calculate age from DOB with support for DD/MM/YYYY format
+const calculateAge = (dob) => {
+  if (!dob) return "N/A";
+
+  let birthDate;
+
+  // Check if DOB is in DD/MM/YYYY format (contains '/')
+  if (typeof dob === "string" && dob.includes("/")) {
+    const parts = dob.split("/");
+    // Check if it's DD/MM/YYYY (day first)
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      
+      // Validate the parts
+      if (!day || !month || !year || isNaN(day) || isNaN(month) || isNaN(year)) {
+        return "N/A";
+      }
+      
+      // Create date with year, month-1 (0-indexed), day
+      birthDate = new Date(year, month - 1, day);
+    } else {
+      birthDate = new Date(dob);
+    }
+  } else {
+    birthDate = new Date(dob);
+  }
+
+  // Invalid date protection
+  if (isNaN(birthDate.getTime())) {
+    return "N/A";
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+
+  // Ensure age is positive
+  if (age < 0) return "N/A";
+  
+  return age;
+};
+
 // Skeleton Loader Component
 const SkeletonLoader = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -284,23 +332,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return null;
   };
 
-  // Transform API response
+  // ⭐ TRANSFORM BOOKINGS DATA - UPDATED WITH booking_date AND token
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
     return bookingList.map((booking, index) => {
-      const calculateAge = (dob) => {
-        if (!dob) return "N/A";
-        const birthDate = new Date(dob);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        return age;
-      };
-
       const formatDate = (dateString) => {
         if (!dateString || dateString === "N/A") return "N/A";
         const date = new Date(dateString);
@@ -310,7 +346,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const displayStatus = mapStatus(booking.status);
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
       
-      const rawDate = booking.booking_date ?? booking.appointmentDate ?? "N/A";
+      // Get raw date from various possible sources
+      const rawDate = booking.booking_date || booking.appointmentDate || booking.date || "";
       const actualPatientId = booking.patientId ||
         booking.patient?.id ||
         booking.patient?._id ||
@@ -320,28 +357,46 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const extractedGender = extractGender(booking);
       const finalGender = extractedGender || "N/A";
 
+      // ⭐ Get token from various possible sources
+      const token = booking.token || booking.token_number || booking.tokenNumber || "";
+
+      // ✅ FIXED: Use patient_age from API if available, otherwise calculate from DOB
+      const calculatedAge = calculateAge(booking.patient_dob || booking.dob);
+      const age = booking.patient_age ?? calculatedAge;
+
       return {
         id: booking.id || booking._id,
         formattedId: formatAppointmentId(booking.id || booking._id),
+        
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
-        age: calculateAge(booking.patient_dob || booking.dob),
+        age: age, // ✅ Now using patient_age from API with fallback
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: finalGender,
-        doctorId: booking.doctorId,
+        
+        doctorId: booking.doctorId || booking.doctor?.id || booking.doctor_id || null,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
+        
+        // ⭐ CRITICAL FIX: Keep RAW values for editing
+        booking_date: rawDate,
+        token: token,
+        
+        // Existing display fields
         appointmentDateDisplay: formatDate(rawDate),
-        consulting_time: booking.consulting_time || "N/A",
+        consulting_time: booking.consulting_time || booking.time || "N/A",
+        
         status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
         reason: booking.reason || "",
         notes: booking.notes || "",
+        
         patientImageKey: patientImageKey,
-        originalStatus: booking.status,
-        userId: booking.userId || null,
+        originalStatus: booking.status || booking.booking_status || booking.bookingStatus || null,
+        userId: booking.userId || booking.user_id || null,
+        
         rawGender: booking.gender,
         patientGender: booking.patient_gender,
         patientGenderNested: booking.patient?.gender
@@ -582,6 +637,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) {
       return;
     }
+
+    console.log("📝 [handleEditClick] Appointment data:", appointment);
+    console.log("📝 [handleEditClick] booking_date:", appointment.booking_date);
+    console.log("📝 [handleEditClick] token:", appointment.token);
 
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
