@@ -5,17 +5,91 @@ import { Button, TableHead, TableHeader, TableCell, Pagination } from "../../ui"
 import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonRow = () => (
+  <tr className="border-t border-gray-100">
+    <td className="px-4 py-3">
+      <SkeletonText width="w-40" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-24" height="h-3" />
+    </td>
+    <td className="px-4 py-3 text-right">
+      <div className="flex justify-end">
+        <SkeletonText width="w-8" height="h-8" className="rounded" />
+      </div>
+    </td>
+  </tr>
+);
+
+const MedicalHistorySkeleton = () => (
+  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+    <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <SkeletonText width="w-36" height="h-5" />
+        <SkeletonText width="w-8" height="h-5" className="rounded-full" />
+      </div>
+    </div>
+
+    <div className="flex flex-col min-h-[420px]">
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+            <tr>
+              <TableHeader>
+                <SkeletonText width="w-20" height="h-3" />
+              </TableHeader>
+              <TableHeader>
+                <SkeletonText width="w-20" height="h-3" />
+              </TableHeader>
+              <TableHeader className="text-right w-16"></TableHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(5)].map((_, index) => (
+              <SkeletonRow key={index} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-auto px-6 py-3 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <SkeletonText width="w-32" height="h-3" />
+          <div className="flex gap-2">
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
 const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClick, openMenu, setOpenMenu }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const { data: prescriptionData } = useGetPrescriptionsQuery({
+  const { data: prescriptionData, isLoading: isLoadingPrescriptions } = useGetPrescriptionsQuery({
     patientId: patient?.id,
     page: 1,
     limit: 100,
   });
 
-  const { data: doctorsData } = useGetDoctorsQuery();
+  const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery();
+
+  // Show skeleton while either query is loading
+  const isLoading = isLoadingPrescriptions || isLoadingDoctors;
 
   const medicalHistoryList = prescriptionData?.data?.map((item) => {
     const doctor = doctorsData?.data?.find(
@@ -46,6 +120,12 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  // ============ SKELETON LOADING STATE ============
+  if (isLoading) {
+    return <MedicalHistorySkeleton />;
+  }
+  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">

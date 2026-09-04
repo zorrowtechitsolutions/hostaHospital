@@ -2,6 +2,98 @@ import React, { useState } from "react";
 import { MoreVertical, Eye, Trash2, FileText, RotateCcw } from "lucide-react";
 import { Button, Pagination, Badge } from "../../ui";
 
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonRow = () => (
+  <tr className="border-b border-gray-100">
+    <td className="px-6 py-4">
+      <SkeletonText width="w-24" height="h-3" />
+    </td>
+    <td className="px-6 py-4">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse"></div>
+        <SkeletonText width="w-28" height="h-3" />
+      </div>
+    </td>
+    <td className="px-6 py-4">
+      <SkeletonText width="w-24" height="h-3" />
+    </td>
+    <td className="px-6 py-4">
+      <SkeletonText width="w-20" height="h-3" />
+    </td>
+    <td className="px-6 py-4">
+      <SkeletonText width="w-16" height="h-5" className="rounded-full" />
+    </td>
+    <td className="px-6 py-4 text-right">
+      <SkeletonText width="w-8" height="h-4" className="ml-auto" />
+    </td>
+  </tr>
+);
+
+const PrescriptionSkeleton = () => (
+  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+    <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <SkeletonText width="w-36" height="h-5" />
+        <SkeletonText width="w-8" height="h-5" className="rounded-full" />
+      </div>
+    </div>
+
+    <div className="flex flex-col min-h-[420px]">
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+            <tr>
+              <th className="px-6 py-3">
+                <SkeletonText width="w-12" height="h-3" />
+              </th>
+              <th className="px-6 py-3">
+                <SkeletonText width="w-20" height="h-3" />
+              </th>
+              <th className="px-6 py-3">
+                <SkeletonText width="w-20" height="h-3" />
+              </th>
+              <th className="px-6 py-3">
+                <SkeletonText width="w-16" height="h-3" />
+              </th>
+              <th className="px-6 py-3">
+                <SkeletonText width="w-12" height="h-3" />
+              </th>
+              <th className="px-6 py-3 text-right">
+                <SkeletonText width="w-16" height="h-3" className="ml-auto" />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(5)].map((_, index) => (
+              <SkeletonRow key={index} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-auto px-6 py-3 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <SkeletonText width="w-32" height="h-3" />
+          <div className="flex gap-2">
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
 const PrescriptionTab = ({ 
   patient, 
   handleDeleteClick, 
@@ -9,7 +101,8 @@ const PrescriptionTab = ({
   handleRecoverClick,
   openMenu, 
   setOpenMenu, 
-  getStatusBadge 
+  getStatusBadge,
+  isLoading = false // New prop for loading state
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -86,6 +179,12 @@ const PrescriptionTab = ({
     }
     return item.status || "Active";
   };
+
+  // ============ SKELETON LOADING STATE ============
+  if (isLoading) {
+    return <PrescriptionSkeleton />;
+  }
+  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">

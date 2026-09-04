@@ -4,7 +4,110 @@ import { MoreVertical, Trash2 } from "lucide-react";
 import { Button, TableHead, TableHeader, TableCell, Pagination } from "../../ui";
 import { formatDate } from "../../../utils/dateFormatter";
 
-const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, openMenu, setOpenMenu, getStatusBadge }) => {
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonRow = () => (
+  <tr className="border-t border-gray-100">
+    <td className="px-4 py-3">
+      <SkeletonText width="w-20" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse"></div>
+        <SkeletonText width="w-28" height="h-3" />
+      </div>
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-24" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-28" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-16" height="h-5" className="rounded-full" />
+    </td>
+    <td className="px-4 py-3 text-right">
+      <SkeletonText width="w-8" height="h-4" className="ml-auto" />
+    </td>
+  </tr>
+);
+
+const VisitHistorySkeleton = () => (
+  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-[500px]">
+    {/* Header - Fixed */}
+    <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <SkeletonText width="w-36" height="h-5" />
+        <SkeletonText width="w-8" height="h-5" className="rounded-full" />
+      </div>
+    </div>
+
+    <div className="flex flex-col h-full">
+      {/* Scrollable table container */}
+      <div className="flex-1 overflow-y-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 text-gray-600 text-xs uppercase sticky top-0 z-10">
+            <tr>
+              <TableHeader>
+                <SkeletonText width="w-12" height="h-3" />
+              </TableHeader>
+              <TableHeader>
+                <SkeletonText width="w-20" height="h-3" />
+              </TableHeader>
+              <TableHeader>
+                <SkeletonText width="w-20" height="h-3" />
+              </TableHeader>
+              <TableHeader>
+                <SkeletonText width="w-16" height="h-3" />
+              </TableHeader>
+              <TableHeader>
+                <SkeletonText width="w-12" height="h-3" />
+              </TableHeader>
+              <TableHeader className="text-right w-16">
+                <SkeletonText width="w-8" height="h-3" className="ml-auto" />
+              </TableHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(5)].map((_, index) => (
+              <SkeletonRow key={index} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination - Sticky at bottom */}
+      <div className="flex-shrink-0 px-6 py-3 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <SkeletonText width="w-32" height="h-3" />
+          <div className="flex gap-2">
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
+const VisitHistoryTab = ({ 
+  patient, 
+  handleViewVisitDetails, 
+  handleDeleteClick, 
+  openMenu, 
+  setOpenMenu, 
+  getStatusBadge,
+  isLoading = false // New prop for loading state
+}) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -20,6 +123,12 @@ const VisitHistoryTab = ({ patient, handleViewVisitDetails, handleDeleteClick, o
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  // ============ SKELETON LOADING STATE ============
+  if (isLoading) {
+    return <VisitHistorySkeleton />;
+  }
+  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-[500px]">

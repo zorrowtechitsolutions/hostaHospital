@@ -20,6 +20,104 @@ import { getAuthUser } from "../../../utils/auth";
 import { getS3ImageUrl, uploadToS3 } from "../../../../app/service/S3";
 import LaboratoryReportModal from "../modals/LaboratoryReportModal";
 
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonRow = () => (
+  <tr className="border-t border-gray-100">
+    <td className="px-4 py-3">
+      <div className="flex items-center gap-2">
+        <SkeletonText width="w-5" height="h-5" className="rounded" />
+        <SkeletonText width="w-6" height="h-3" />
+      </div>
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-32" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-24" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-28" height="h-3" />
+    </td>
+    <td className="px-4 py-3">
+      <SkeletonText width="w-16" height="h-5" className="rounded-full" />
+    </td>
+    <td className="px-4 py-3 text-right">
+      <div className="flex gap-1 justify-end">
+        <SkeletonText width="w-8" height="h-8" className="rounded" />
+        <SkeletonText width="w-8" height="h-8" className="rounded" />
+        <SkeletonText width="w-8" height="h-8" className="rounded" />
+        <SkeletonText width="w-8" height="h-8" className="rounded" />
+      </div>
+    </td>
+  </tr>
+);
+
+const LabResultsSkeleton = () => (
+  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+    <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <SkeletonText width="w-32" height="h-5" />
+        <SkeletonText width="w-8" height="h-5" className="rounded-full" />
+      </div>
+      <SkeletonText width="w-36" height="h-9" className="rounded-lg" />
+    </div>
+
+    <div className="flex flex-col min-h-[420px]">
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+            <tr>
+              <th className="px-4 py-3 font-medium">
+                <SkeletonText width="w-12" height="h-3" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <SkeletonText width="w-20" height="h-3" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <SkeletonText width="w-20" height="h-3" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <SkeletonText width="w-16" height="h-3" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <SkeletonText width="w-12" height="h-3" />
+              </th>
+              <th className="px-4 py-3 font-medium text-right w-44">
+                <SkeletonText width="w-16" height="h-3" className="ml-auto" />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...Array(5)].map((_, index) => (
+              <SkeletonRow key={index} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-auto px-6 py-3 border-t bg-gray-50">
+        <div className="flex justify-between items-center">
+          <SkeletonText width="w-32" height="h-3" />
+          <div className="flex gap-2">
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+            <SkeletonText width="w-8" height="h-8" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
 // ========================
 // DOCTOR SEARCH DROPDOWN
 // ========================
@@ -834,16 +932,11 @@ const LabResultsTab = ({ patient }) => {
   // RENDER
   // ========================
 
+  // ============ SKELETON LOADING STATE ============
   if (isLoadingLabResults) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8">
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1C62A0]"></div>
-          <span className="ml-3 text-gray-600">Loading lab results...</span>
-        </div>
-      </div>
-    );
+    return <LabResultsSkeleton />;
   }
+  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
