@@ -24,7 +24,7 @@ import EditHospital from './hospitals/EditHospital';
 import DoctorDetails from './hospitals/Doctors/DoctorDetails';
 
 // ✅ Staff imports
-import StaffDetails from './hospitals/Staff/StaffDetails';
+import StaffDetails from './hospitals/staff/staffDetails';
 import AddStaff from './hospitals/Staff/AddStaff';
 import EditStaff from './hospitals/Staff/EditStaff';
 
