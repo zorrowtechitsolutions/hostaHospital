@@ -95,6 +95,27 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
+// Helper function to calculate slots
+const calculateSlots = (doctor) => {
+  const totalSlots = Number(doctor.totalSlots) || 0;
+  const takenSlots = Number(doctor.takenSlots) || 0;
+  const leftSlots = Math.max(0, totalSlots - takenSlots);
+
+  return { totalSlots, takenSlots, leftSlots };
+};
+// Helper to check if auto decline is enabled
+const hasAutoDecline = (doctor) => {
+  return doctor.autoDecline && Number(doctor.autoDecline) > 0;
+};
+
+// Helper to get appointment count display
+const getAppointmentCountDisplay = (doctor) => {
+  if (doctor.appointmentCount && Number(doctor.appointmentCount) > 0) {
+    return `${doctor.appointmentCount}/day`;
+  }
+  return 'N/A';
+};
+
 const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== doctor.id) return null;
   
@@ -203,7 +224,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
                 <th key={i} className="px-6 py-3">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </th>
@@ -213,7 +234,7 @@ const DoctorSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
           <tbody>
             {[...Array(itemsPerPage)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
                   <td key={j} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
                   </td>
@@ -354,16 +375,27 @@ const Doctors = () => {
     return true;
   };
 
-  const doctors = useMemo(() => {
-    if (!response?.data) return [];
-    return response.data.map((doctor) => ({
-      ...doctor,
-      imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
-      hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
-      authId: doctor.authId || doctor.userId || doctor.id,
-      hospitalId: doctor.hospitalId || hospitalId,
-    }));
-  }, [response?.data, hospitalId]);
+const doctors = useMemo(() => {
+  if (!response?.data) return [];
+
+  return response.data.map((doctor) => ({
+    ...doctor,
+    imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
+    hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
+    authId: doctor.authId || doctor.userId || doctor.id,
+    hospitalId: doctor.hospitalId || hospitalId,
+
+    totalSlots: Number(doctor.appointmentCount) || 0,
+    takenSlots: Number(
+      doctor.takenSlots ??
+      doctor.todayTakenSlots ??
+      doctor.bookedSlots ??
+      doctor.todayBookings ??
+      0
+    ),
+  }));
+}, [response?.data, hospitalId]);
+
 
   const departments = useMemo(() => {
     if (response?.departments && Array.isArray(response.departments)) {
@@ -430,7 +462,6 @@ const Doctors = () => {
   }, [refetch]);
 
   const handleViewDetails = useCallback((doctor) => {
-    // Check VIEW permission
     if (!checkPermission(PERMISSIONS.VIEW, 'view doctor details')) {
       return;
     }
@@ -439,7 +470,6 @@ const Doctors = () => {
   }, [navigate]);
 
   const handleEdit = useCallback((doctor) => {
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit doctor')) {
       return;
     }
@@ -448,7 +478,6 @@ const Doctors = () => {
   }, [navigate]);
 
   const handleAppointmentManagement = useCallback((doctor) => {
-    // Check EDIT permission for appointment settings
     if (!checkPermission(PERMISSIONS.EDIT, 'manage appointment settings')) {
       return;
     }
@@ -458,7 +487,6 @@ const Doctors = () => {
   }, []);
 
   const handleDeleteClick = useCallback((doctor) => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete doctor')) {
       return;
     }
@@ -468,7 +496,6 @@ const Doctors = () => {
   }, []);
 
   const handleRecoverDoctor = useCallback(async (doctor) => {
-    // Check DELETE permission for recover
     if (!checkPermission(PERMISSIONS.DELETE, 'recover doctor')) {
       return;
     }
@@ -508,6 +535,7 @@ const Doctors = () => {
     return doctors.map((doctor) => {
       const formattedAddress = formatAddress(doctor.address);
       const formattedDOB = doctor.dob ? formatDate(doctor.dob) : 'N/A';
+      const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
       
       return {
         'Doctor ID': getDoctorId(doctor.id),
@@ -517,7 +545,8 @@ const Doctors = () => {
         'Specialty': doctor.specialist || doctor.specialty || 'N/A',
         'Qualification': doctor.qualification || 'MBBS',
         'Experience': doctor.experience || 'N/A',
-        'Appointments': getAppointmentValue(doctor),
+        'Auto Decline': doctor.autoDecline ? `${doctor.autoDecline} min` : 'Disabled',
+        'Appointment Limit': doctor.appointmentCount ? `${doctor.appointmentCount}/day` : 'N/A',
         'Email': doctor.email || 'N/A',
         'Phone': doctor.phone || 'N/A',
         'Status': doctor.isDelete ? 'Blacklisted' : (doctor.isActive ? 'Active' : 'Inactive'),
@@ -526,7 +555,10 @@ const Doctors = () => {
         'Address': formattedAddress,
         'Display Name': doctor.displayName || 'N/A',
         'Hospital': doctor.hospitalName || 'N/A',
-        'Hospital ID': doctor.hospitalId || 'N/A'
+        'Hospital ID': doctor.hospitalId || 'N/A',
+        'Total Slots': totalSlots,
+        'Taken Slots': takenSlots,
+        'Left Slots': leftSlots,
       };
     });
   }, [doctors]);
@@ -694,7 +726,6 @@ const Doctors = () => {
               className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             />
 
-            {/* New Doctor Link with Permission Check */}
             <Link 
               to="/add-doctor"
               onClick={(e) => {
@@ -742,6 +773,11 @@ const Doctors = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {doctors.map((doctor) => {
                 const isBlacklisted = doctor.isDelete === true;
+                const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
+                const autoDecline = hasAutoDecline(doctor);
+                const appointmentLimit = getAppointmentCountDisplay(doctor);
+                // ✅ DEFINE utilization HERE
+                const utilization = totalSlots > 0 ? Math.round((takenSlots / totalSlots) * 100) : 0;
                 
                 return (
                   <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
@@ -790,7 +826,6 @@ const Doctors = () => {
                     </div>
                     <h3 
                       onClick={() => {
-                        // Check VIEW permission before opening details
                         if (!hasPermission(PERMISSIONS.VIEW)) {
                           setPermissionDeniedMessage('You do not have permission to view doctor details.');
                           setShowPermissionDenied(true);
@@ -805,25 +840,63 @@ const Doctors = () => {
                       {getDoctorName(doctor)}
                     </h3>
                     <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
-                    <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
+                    
+                    {/* Stats grid with Experience, Auto Decline, and Appointment Limit */}
+                    <div className="grid grid-cols-3 gap-2 w-full border-t border-gray-50 pt-4 mb-3">
                       <div className="text-center">
-                        <p className="text-[9px] text-gray-400 uppercase font-bold">Experience</p>
+                        <p className="text-[8px] text-gray-400 uppercase font-bold">Experience</p>
                         <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[9px] text-gray-400 uppercase font-bold">
-                          {doctor.autoDecline ? "Auto Decline" : "Appointments"}
-                        </p>
+                        <p className="text-[8px] text-gray-400 uppercase font-bold">Auto Decline</p>
                         <p className="text-xs font-bold text-gray-700">
-                          {getAppointmentValue(doctor)}
+                          {autoDecline ? `${doctor.autoDecline} min` : 'Off'}
                         </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[8px] text-gray-400 uppercase font-bold">Appt. Limit</p>
+                        <p className="text-xs font-bold text-gray-700">
+                          {appointmentLimit}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* HIGHLIGHTED Today's slots section - Professional Indigo/Blue */}
+                    <div className="w-full  to-blue-50 rounded-lg p-3 mb-3 border border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[9px] text-indigo-600 uppercase font-bold flex items-center gap-1">
+                          <span>📊</span> Today's Slots
+                        </p>
+                        <span className="text-[8px] font-medium text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full">
+                          {utilization}% filled
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center px-2">
+                        <div className="text-center">
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Taken</p>
+                          <p className="text-sm font-bold text-gray-800">{takenSlots}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Left</p>
+                          <p className="text-sm font-bold text-gray-800">{leftSlots}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Total</p>
+                          <p className="text-sm font-bold text-gray-800">{totalSlots}</p>
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="mt-2 w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full bg-gradient-to-r from-indigo-200 to-indigo-500 transition-all duration-500"
+                          style={{ width: `${Math.min(utilization, 100)}%` }}
+                        />
                       </div>
                     </div>
                     
                     {isBlacklisted && (
                       <button 
                         onClick={() => {
-                          // Check DELETE permission for recover
                           if (!hasPermission(PERMISSIONS.DELETE)) {
                             setPermissionDeniedMessage('You do not have permission to recover doctor.');
                             setShowPermissionDenied(true);
@@ -882,7 +955,11 @@ const Doctors = () => {
                       <th className="px-6 py-3">Department</th>
                       <th className="px-6 py-3">Qualification</th>
                       <th className="px-6 py-3">Experience</th>
-                      <th className="px-6 py-3">Appointments</th>
+                      <th className="px-6 py-3">Auto Decline</th>
+                      <th className="px-6 py-3">Appt. Limit</th>
+                      <th className="px-6 py-3">Total Slots</th>
+                      <th className="px-6 py-3">Taken</th>
+                      <th className="px-6 py-3">Left</th>
                       <th className="px-6 py-3">Status</th>
                       <th className="px-6 py-3 text-right w-16">Actions</th>
                     </tr>
@@ -890,6 +967,9 @@ const Doctors = () => {
                   <tbody>
                     {doctors.map((doctor) => {
                       const isBlacklisted = doctor.isDelete === true;
+                      const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
+                      const autoDecline = hasAutoDecline(doctor);
+                      const appointmentLimit = getAppointmentCountDisplay(doctor);
                       
                       return (
                         <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
@@ -912,7 +992,6 @@ const Doctors = () => {
                               </Avatar>
                               <span 
                                 onClick={() => {
-                                  // Check VIEW permission before opening details
                                   if (!hasPermission(PERMISSIONS.VIEW)) {
                                     setPermissionDeniedMessage('You do not have permission to view doctor details.');
                                     setShowPermissionDenied(true);
@@ -931,7 +1010,13 @@ const Doctors = () => {
                           <td className="px-6 py-4 text-gray-600">{getDepartmentDisplay(doctor)}</td>
                           <td className="px-6 py-4 text-gray-600">{doctor.qualification || 'MBBS'}</td>
                           <td className="px-6 py-4 text-gray-600">{doctor.experience || 'N/A'}</td>
-                          <td className="px-6 py-4 text-gray-600">{getAppointmentValue(doctor)}</td>
+                          <td className="px-6 py-4 text-gray-600">
+                            {autoDecline ? `${doctor.autoDecline} min` : 'Off'}
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">{appointmentLimit}</td>
+                          <td className="px-6 py-4 text-gray-600">{totalSlots}</td>
+                          <td className="px-6 py-4 text-gray-600">{takenSlots}</td>
+                          <td className="px-6 py-4 text-gray-600">{leftSlots}</td>
                           <td className="px-6 py-4">
                             <Badge
                               variant={

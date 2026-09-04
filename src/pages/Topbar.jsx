@@ -689,7 +689,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                     />
                   ) : (
                     <div className={`w-full h-full bg-gradient-to-r ${gradientColor} flex items-center justify-center`}>
-                      <span className="text-white font-medium text-sm">
+                      <span className="text-white font-medium text-sm"> 
                         {initials}
                       </span>
                     </div>

@@ -85,6 +85,29 @@ interface SpecialityResponse {
 }
 
 // ============================================
+// AUTO-DECLINE TYPES
+// ============================================
+
+export interface AutoDeclineRequest {
+  bookingId: string;
+  delayMinutes: number;
+}
+
+export interface AutoDeclineCancelRequest {
+  bookingId: string;
+}
+
+export interface AutoDeclineResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    bookingId: string;
+    delayMinutes: number;
+    status: string;
+  };
+}
+
+// ============================================
 // AUTH / PASSWORD MANAGEMENT TYPES
 // ============================================
 
@@ -251,45 +274,41 @@ export const doctorApi = api.injectEndpoints({
     // GET DOCTORS - /doctor with hospital filtering
     // ============================================
     getDoctors: builder.query({
-  query: (params: GetDoctorsParams = {}) => {
-    const queryParams = new URLSearchParams();
+      query: (params: GetDoctorsParams = {}) => {
+        const queryParams = new URLSearchParams();
 
-    // ✅ PRIORITY 1: Use explicitly provided hospitalId (Super Admin case)
-    if (params.hospitalId !== undefined && params.hospitalId !== null) {
-      queryParams.append("hospitalId", String(params.hospitalId));
-    } 
-    // ✅ PRIORITY 2: Use logged-in user's hospital (regular hospital admin)
-    else if (params.skipHospitalFilter !== true) {
-      const hospitalId = getHospitalId();
-      if (hospitalId) {
-        queryParams.append("hospitalId", String(hospitalId));
-      }
-    }
-    // ✅ PRIORITY 3: Skip hospital filter entirely (system-wide views)
+        if (params.hospitalId !== undefined && params.hospitalId !== null) {
+          queryParams.append("hospitalId", String(params.hospitalId));
+        } else if (params.skipHospitalFilter !== true) {
+          const hospitalId = getHospitalId();
+          if (hospitalId) {
+            queryParams.append("hospitalId", String(hospitalId));
+          }
+        }
 
-    if (params.name) {
-      queryParams.append("name", params.name);
-    }
+        if (params.name) {
+          queryParams.append("name", params.name);
+        }
 
-    if (params.speciality) {
-      queryParams.append("speciality", params.speciality);
-    }
+        if (params.speciality) {
+          queryParams.append("speciality", params.speciality);
+        }
 
-    if (params.status !== undefined && params.status !== null && params.status !== "") {
-      queryParams.append("status", String(params.status));
-    }
+        if (params.status !== undefined && params.status !== null && params.status !== "") {
+          queryParams.append("status", String(params.status));
+        }
 
-    if (params.search_query) {
-      queryParams.append("search_query", params.search_query);
-    }
+        if (params.search_query) {
+          queryParams.append("search_query", params.search_query);
+        }
 
-    queryParams.append("page", String(params.page || 1));
-    queryParams.append("limit", String(params.limit || 10));
+        queryParams.append("page", String(params.page || 1));
+        queryParams.append("limit", String(params.limit || 10));
 
-    return `/doctor?${queryParams.toString()}`;
-  },
-  providesTags: ["Doctor"],
-}),
+        return `/doctor?${queryParams.toString()}`;
+      },
+      providesTags: ["Doctor"],
+    }),
 
     // ============================================
     // GET SPECIALITIES - /speciality
@@ -468,19 +487,19 @@ export const doctorApi = api.injectEndpoints({
     // CHANGE PASSWORD - /doctor/auth/change-password/:authId
     // ============================================
     changeDoctorPassword: builder.mutation<
-  ChangePasswordResponse,
-  ChangePasswordData
->({
-  query: ({ doctorId, newPassword, confirmPassword }) => ({
-    url: `/doctor/auth/change-password/${doctorId}`,
-    method: "PUT",
-    body: {
-      newPassword,
-      confirmPassword,
-    },
-  }),
-  invalidatesTags: ["Doctor"],
-}),
+      ChangePasswordResponse,
+      ChangePasswordData
+    >({
+      query: ({ doctorId, newPassword, confirmPassword }) => ({
+        url: `/doctor/auth/change-password/${doctorId}`,
+        method: "PUT",
+        body: {
+          newPassword,
+          confirmPassword,
+        },
+      }),
+      invalidatesTags: ["Doctor"],
+    }),
 
     // ============================================
     // ADD NEW DOCTOR - /doctor (POST)
@@ -545,6 +564,41 @@ export const doctorApi = api.injectEndpoints({
         "Doctor",
       ],
     }),
+
+    // ============================================
+    // START AUTO-DECLINE - /booking-task/auto-decline
+    // ============================================
+    startAutoDecline: builder.mutation<AutoDeclineResponse, { doctorId: string; autoDeclineMinutes: number }>({
+      query: ({ doctorId, autoDeclineMinutes }) => ({
+        url: `/booking-task/auto-decline`,
+        method: "POST",
+        body: {
+          bookingId: doctorId,
+          delayMinutes: autoDeclineMinutes,
+        },
+      }),
+      invalidatesTags: (result, error, { doctorId }) => [
+        { type: "Doctor", id: doctorId },
+        "Doctor",
+      ],
+    }),
+
+    // ============================================
+    // CANCEL AUTO-DECLINE - /booking-task/auto-decline/cancel
+    // ============================================
+    cancelAutoDecline: builder.mutation<AutoDeclineResponse, { doctorId: string }>({
+      query: ({ doctorId }) => ({
+        url: `/booking-task/auto-decline/cancel`,
+        method: "POST",
+        body: {
+          bookingId: doctorId,
+        },
+      }),
+      invalidatesTags: (result, error, { doctorId }) => [
+        { type: "Doctor", id: doctorId },
+        "Doctor",
+      ],
+    }),
   }),
 
   overrideExisting: false,
@@ -565,4 +619,6 @@ export const {
   useVerifyDoctorOtpMutation,
   useResetDoctorPasswordMutation,
   useChangeDoctorPasswordMutation,
+  useStartAutoDeclineMutation,
+  useCancelAutoDeclineMutation,
 } = doctorApi;

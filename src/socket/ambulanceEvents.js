@@ -20,7 +20,7 @@ export const registerAmbulanceEvents = (handlers = {}) => {
       default:
         break;
     }
-  });
+  }); 
 };
 
 export const unregisterAmbulanceEvents = () => {
