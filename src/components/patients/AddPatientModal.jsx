@@ -251,10 +251,25 @@ const AddPatient = () => {
         if (value && !/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value)) return 'Please enter a valid email address';
         return '';
       case 'age':
-        if (value && (isNaN(value) || value <= 0)) return 'Age must be a positive number';
-        if (value && value > 120) return 'Age cannot exceed 120 years';
+        if (!value) return 'Age is required';
+        if (isNaN(value) || value <= 0) return 'Age must be a positive number';
+        if (value > 120) return 'Age cannot exceed 120 years';
         return '';
       case 'dob':
+        if (!value) return 'Date of birth is required';
+        // Validate that the date is valid
+        const dobDate = new Date(value);
+        if (isNaN(dobDate.getTime())) return 'Please enter a valid date';
+        
+        // Check if date is in the future
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (dobDate > today) return 'Date of birth cannot be in the future';
+        
+        // Check if date is too far in the past (older than 120 years)
+        const minDate = new Date();
+        minDate.setFullYear(minDate.getFullYear() - 120);
+        if (dobDate < minDate) return 'Date of birth cannot be more than 120 years ago';
         return '';
       case 'gender':
         if (!value) return 'Gender is required';
@@ -269,7 +284,12 @@ const AddPatient = () => {
         if (value.length < 5) return 'Please enter a complete address';
         return '';
       case 'pincode':
-        if (value && !/^\d{5,6}$/.test(value)) return 'Pin code must be 5 or 6 digits';
+        if (!value) return 'Pin code is required';
+        if (!/^\d{5,6}$/.test(value)) return 'Pin code must be 5 or 6 digits';
+        return '';
+      case 'place':
+        if (!value) return 'Place/Locality is required';
+        if (value.length < 2) return 'Please enter a valid place name';
         return '';
       case 'countryName':
         if (!value) return 'Country is required';
@@ -288,13 +308,9 @@ const AddPatient = () => {
     const newErrors = {};
     const fieldsToValidate = [
       'fullName', 'mobileNumber', 'gender', 'patientType',
-      'addressLine1', 'countryName', 'stateName', 'district'
+      'addressLine1', 'countryName', 'stateName', 'district',
+      'dob', 'age', 'pincode', 'place' // Added pincode and place
     ];
-    
-    if (formData.age) {
-      const ageError = validateField('age', formData.age);
-      if (ageError) newErrors.age = ageError;
-    }
     
     fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
@@ -312,15 +328,29 @@ const AddPatient = () => {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
     }
+    
+    // Auto-calculate age when DOB is entered
     if (name === 'dob' && value) {
       const today = new Date();
       const birthDate = new Date(value);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age > 0 && age <= 120) {
-        setFormData(prev => ({ ...prev, age: age.toString() }));
-        showInfoToast(`Patient age calculated: ${age} years`, 2000);
+      
+      // Check if birth date is valid
+      if (!isNaN(birthDate.getTime())) {
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        if (age > 0 && age <= 120) {
+          setFormData(prev => ({ ...prev, age: age.toString() }));
+          showInfoToast(`Patient age calculated: ${age} years`, 2000);
+        } else if (age <= 0) {
+          showWarningToast('Please enter a valid date of birth (patient must be at least 1 year old)');
+          setFormData(prev => ({ ...prev, age: '' }));
+        } else if (age > 120) {
+          showWarningToast('Age cannot exceed 120 years');
+          setFormData(prev => ({ ...prev, age: '' }));
+        }
       }
     }
   };
@@ -344,8 +374,8 @@ const AddPatient = () => {
         country: formData.countryName,
         state: formData.stateName,
         district: formData.district,
-        place: formData.place || "",
-        pincode: Number(formData.pincode || 0)
+        place: formData.place,
+        pincode: Number(formData.pincode)
       },
       hospitalId: hospitalId,
       hospitalName: hospitalName, // ✅ ADDED: Include hospital name in payload
@@ -374,7 +404,8 @@ const AddPatient = () => {
     
     const allFields = [
       'fullName', 'mobileNumber', 'gender', 'patientType',
-      'addressLine1', 'countryName', 'stateName', 'district'
+      'addressLine1', 'countryName', 'stateName', 'district',
+      'dob', 'age', 'pincode', 'place' // Added pincode and place
     ];
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
@@ -419,7 +450,13 @@ const AddPatient = () => {
     } else {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
-        showWarningToast(`⚠️ Please fix the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field`);
+        let fieldName = firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase();
+        // Make error messages more specific
+        if (firstErrorField === 'dob') fieldName = 'date of birth';
+        if (firstErrorField === 'age') fieldName = 'age';
+        if (firstErrorField === 'pincode') fieldName = 'pin code';
+        if (firstErrorField === 'place') fieldName = 'place/locality';
+        showWarningToast(`⚠️ Please fix the ${fieldName} field`);
       }
     }
   };
@@ -499,12 +536,13 @@ const AddPatient = () => {
                     name="age" 
                     type="number" 
                     icon={Clock} 
-                    placeholder="Age in years (Optional)" 
+                    placeholder="Age in years" 
                     value={formData.age} 
                     onChange={handleChange} 
                     onBlur={handleBlur} 
                     error={errors.age} 
                     touched={touched.age} 
+                    required 
                   />
                   <Input 
                     label="Date of Birth" 
@@ -516,6 +554,7 @@ const AddPatient = () => {
                     onBlur={handleBlur} 
                     error={errors.dob} 
                     touched={touched.dob} 
+                    required 
                   />
                   <Select 
                     label="Gender" 
@@ -683,9 +722,13 @@ const AddPatient = () => {
                   <Input 
                     label="Place / Locality" 
                     name="place" 
-                    placeholder="Place/Locality (Optional)" 
+                    placeholder="Place/Locality" 
                     value={formData.place} 
-                    onChange={handleChange} 
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.place}
+                    touched={touched.place}
+                    required 
                   />
                 </div>
 
@@ -693,12 +736,13 @@ const AddPatient = () => {
                   <Input 
                     label="Pin Code" 
                     name="pincode" 
-                    placeholder="Postal code (Optional)" 
+                    placeholder="Postal code" 
                     value={formData.pincode} 
                     onChange={handleChange} 
                     onBlur={handleBlur} 
                     error={errors.pincode} 
-                    touched={touched.pincode} 
+                    touched={touched.pincode}
+                    required 
                   />
                 </div>
               </div>
