@@ -29,6 +29,109 @@ import ReviewTable from "../Doctor/ReviewTable";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonCard = ({ className = "" }) => (
+  <div className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${className}`}>
+    <div className="flex flex-col md:flex-row items-start gap-6">
+      <div className="w-24 h-24 rounded-full bg-gray-200 animate-pulse flex-shrink-0"></div>
+      <div className="flex-1 space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <SkeletonText width="w-48" height="h-7" />
+          <SkeletonText width="w-20" height="h-5" className="rounded-full" />
+          <SkeletonText width="w-24" height="h-5" className="rounded-full" />
+        </div>
+        <SkeletonText width="w-40" height="h-4" />
+        <SkeletonText width="w-64" height="h-4" />
+        <div className="flex flex-wrap gap-6">
+          <SkeletonText width="w-32" height="h-4" />
+          <SkeletonText width="w-32" height="h-4" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const SkeletonTabs = () => (
+  <div className="border-b border-gray-200 px-6">
+    <div className="flex gap-8 overflow-x-auto py-1">
+      {["Basic Information", "Schedule & Consulting", "Appointments", "Requests", "Reviews"].map((label, index) => (
+        <SkeletonText key={index} width="w-32" height="h-8" className="py-2" />
+      ))}
+    </div>
+  </div>
+);
+
+const SkeletonSection = ({ rows = 6, cols = 2 }) => {
+  const itemsPerRow = cols;
+  const totalItems = rows * itemsPerRow;
+  
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+        <SkeletonText width="w-5" height="h-5" />
+        <SkeletonText width="w-40" height="h-5" />
+      </div>
+      <div className="bg-white rounded-lg border border-gray-100 p-4">
+        <div className={`grid grid-cols-1 md:grid-cols-${cols} gap-4`}>
+          {[...Array(totalItems)].map((_, index) => (
+            <div key={index} className="flex justify-between py-2 border-b border-gray-50 last:border-0">
+              <SkeletonText width="w-28" height="h-4" />
+              <SkeletonText width="w-32" height="h-4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SkeletonScheduleRow = () => (
+  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 border-b border-gray-100 last:border-0">
+    <div className="flex items-center gap-2 mb-2 sm:mb-0">
+      <SkeletonText width="w-5" height="h-5" />
+      <SkeletonText width="w-24" height="h-4" />
+    </div>
+    <div className="flex flex-wrap gap-2">
+      <SkeletonText width="w-40" height="h-7" className="rounded-full" />
+    </div>
+  </div>
+);
+
+const ViewDoctorSkeleton = () => (
+  <div className="min-h-screen bg-gray-50">
+    <div className="max-w-6xl mx-auto p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <SkeletonText width="w-48" height="h-7" />
+        <SkeletonText width="w-36" height="h-9" className="rounded-lg" />
+      </div>
+
+      {/* Profile Card */}
+      <SkeletonCard />
+
+      {/* Tabs and Content */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <SkeletonTabs />
+        <div className="p-6">
+          {/* Personal Information */}
+          <SkeletonSection rows={3} cols={2} />
+          {/* Professional Details */}
+          <SkeletonSection rows={3} cols={2} />
+          {/* Contact Information */}
+          <SkeletonSection rows={1} cols={2} />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
   if (imageKey.startsWith("http")) return imageKey;
@@ -213,13 +316,11 @@ const ViewDoctor = () => {
                                 outDoorConsulting?.time?.close && 
                                 outDoorConsulting?.place;
 
+  // ============ SKELETON LOADING STATE ============
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader centered text="Loading doctor details..." />
-      </div>
-    );
+    return <ViewDoctorSkeleton />;
   }
+  // ============ END SKELETON LOADING STATE ============
   
   if (error) {
     return (

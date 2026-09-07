@@ -1,4 +1,4 @@
-// src/components/patients/PatientDetails.jsx - With Optimistic Updates
+// src/components/patients/PatientDetails.jsx - With Optimistic Updates & Skeleton Loading
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
@@ -40,6 +40,62 @@ import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 // Import date formatter
 import { formatDate } from "../../utils/dateFormatter";
+
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonTabs = () => (
+  <div className="flex flex-wrap gap-2 mb-6">
+    {[...Array(8)].map((_, index) => (
+      <SkeletonText key={index} width="w-28" height="h-9" className="rounded-lg" />
+    ))}
+  </div>
+);
+
+const PatientDetailsSkeleton = () => (
+  <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="flex justify-between items-center mb-6">
+      <div>
+        <SkeletonText width="w-48" height="h-7" className="mb-1" />
+        <SkeletonText width="w-32" height="h-4" />
+      </div>
+      <SkeletonText width="w-36" height="h-10" className="rounded-lg" />
+    </div>
+
+    <SkeletonTabs />
+
+    {/* Skeleton for tab content - ProfileTab skeleton */}
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="p-6">
+        <div className="flex items-center gap-6 mb-6">
+          <div className="w-24 h-24 rounded-full bg-gray-200 animate-pulse"></div>
+          <div className="flex-1">
+            <SkeletonText width="w-48" height="h-7" className="mb-2" />
+            <SkeletonText width="w-32" height="h-4" className="mb-1" />
+            <SkeletonText width="w-24" height="h-4" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, index) => (
+            <div key={index} className="border rounded-lg p-4">
+              <SkeletonText width="w-24" height="h-3" className="mb-2" />
+              <SkeletonText width="w-32" height="h-5" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex gap-3">
+          <SkeletonText width="w-24" height="h-9" className="rounded-lg" />
+          <SkeletonText width="w-28" height="h-9" className="rounded-lg" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
 
 const PatientDetails = () => {
   const location = useLocation();
@@ -922,11 +978,11 @@ const PatientDetails = () => {
       case "profile": 
         return <ProfileTab patient={patient} handleEditPatient={handleEditPatient} handleAddAppointment={handleAddAppointment} handleViewAppointmentDetails={handleViewAppointmentDetails} handleViewVisitDetails={handleViewVisitDetails} handleViewVitalDetails={handleViewVitalDetails} setTab={setTab} getStatusBadge={getStatusBadge} />;
       case "appointments": 
-        return <AppointmentsTab {...tabProps} />;
+        return <AppointmentsTab {...tabProps} isLoading={isLoadingBookings} />;
       case "vitals": 
-        return <VitalsTab patient={patient} handleViewVitalDetails={handleViewVitalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
+        return <VitalsTab patient={patient} handleViewVitalDetails={handleViewVitalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} isLoading={isLoadingVitals} />;
       case "visits": 
-        return <VisitHistoryTab {...tabProps} />;
+        return <VisitHistoryTab {...tabProps} isLoading={isLoadingBookings} />;
       case "prescription": 
         return (
           <PrescriptionTab 
@@ -936,15 +992,16 @@ const PatientDetails = () => {
             handleRecoverClick={handleRecoverPrescription}
             openMenu={openMenu} 
             setOpenMenu={setOpenMenu} 
-            getStatusBadge={getStatusBadge} 
+            getStatusBadge={getStatusBadge}
+            isLoading={isLoadingPrescriptions}
           />
         );
       case "medical": 
-        return <MedicalHistoryTab patient={patient} handleViewMedicalDetails={handleViewMedicalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} />;
+        return <MedicalHistoryTab patient={patient} handleViewMedicalDetails={handleViewMedicalDetails} handleDeleteClick={handleDeleteClick} openMenu={openMenu} setOpenMenu={setOpenMenu} getStatusBadge={getStatusBadge} isLoading={isLoadingPrescriptions || isLoadingDoctors} />;
       case "documents": 
-        return <DocumentsTab patient={patient} handleDownloadDocument={handleDownloadDocument} handleDeleteClick={handleDeleteClick} />;
+        return <DocumentsTab patient={patient} handleDownloadDocument={handleDownloadDocument} handleDeleteClick={handleDeleteClick} isLoading={false} />;
       case "lab-results": 
-        return <LabResultsTab patient={patient} handleDeleteClick={handleDeleteClick} />;
+        return <LabResultsTab patient={patient} handleDeleteClick={handleDeleteClick} isLoading={isLoadingVitals} />;
       case "insurance": 
         return <InsuranceTab patient={patient} handleDeleteClick={handleDeleteClick} getStatusBadge={getStatusBadge} />;
       default: 
@@ -952,13 +1009,11 @@ const PatientDetails = () => {
     }
   };
 
+  // ============ SKELETON LOADING STATE ============
   if (isLoadingPatient && !patientData) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader centered text="Loading patient details..." />
-      </div>
-    );
+    return <PatientDetailsSkeleton />;
   }
+  // ============ END SKELETON LOADING STATE ============
 
   if (!patientData && !isLoadingPatient) {
     return (

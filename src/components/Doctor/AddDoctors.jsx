@@ -24,6 +24,107 @@ import { getHospitalId, getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3 } from '../../../app/service/S3';
 
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonCard = ({ className = "" }) => (
+  <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className="border-b border-gray-200 px-6">
+      <div className="flex gap-8 py-4">
+        <SkeletonText width="w-24" height="h-6" />
+        <SkeletonText width="w-28" height="h-6" />
+      </div>
+    </div>
+    <div className="p-6 space-y-6">
+      {/* Profile Image Section */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+        <div className="flex-shrink-0">
+          <div className="w-24 h-24 bg-gray-200 rounded-full animate-pulse"></div>
+        </div>
+        <div className="flex-1 w-full space-y-2">
+          <SkeletonText width="w-32" height="h-4" />
+          <SkeletonText width="w-36" height="h-9" className="rounded-lg" />
+          <SkeletonText width="w-48" height="h-3" />
+        </div>
+      </div>
+
+      {/* Form Fields Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {[...Array(8)].map((_, index) => (
+          <div key={index} className="space-y-2">
+            <SkeletonText width="w-28" height="h-4" />
+            <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+          </div>
+        ))}
+      </div>
+
+      {/* Address Section */}
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <SkeletonText width="w-48" height="h-6" className="mb-4" />
+        <div className="space-y-5">
+          {[...Array(3)].map((_, index) => (
+            <div key={index} className="space-y-2">
+              <SkeletonText width="w-24" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <SkeletonText width="w-16" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <SkeletonText width="w-16" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Account Details Section */}
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <SkeletonText width="w-48" height="h-6" className="mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[...Array(3)].map((_, index) => (
+            <div key={index} className="space-y-2">
+              <SkeletonText width="w-28" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer Buttons */}
+      <div className="border-t border-gray-200 pt-4 flex justify-end gap-3">
+        <SkeletonText width="w-24" height="h-10" className="rounded-lg" />
+        <SkeletonText width="w-28" height="h-10" className="rounded-lg" />
+      </div>
+    </div>
+  </div>
+);
+
+const AddDoctorSkeleton = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <SkeletonText width="w-10" height="h-10" className="rounded-lg" />
+          <div>
+            <SkeletonText width="w-48" height="h-7" />
+            <SkeletonText width="w-64" height="h-4" className="mt-1" />
+          </div>
+        </div>
+      </div>
+      <SkeletonCard />
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
 
@@ -937,16 +1038,11 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
     );
   }
 
+  // ============ SKELETON LOADING STATE ============
   if (rolesLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <AddDoctorSkeleton />;
   }
+  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
