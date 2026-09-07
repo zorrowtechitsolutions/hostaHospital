@@ -8,6 +8,11 @@ import { getAuthUser, JwtPayload } from "../../src/utils/auth";
 
 export interface Doctor {
   id?: string;
+  
+  // ✅ Hospital-specific sequential ID
+  doctorNumber?: number;
+  doctorId?: string;
+  
   authId?: string;        // User ID from Auth table
   userId?: string;        // Alias for authId
   name: string;

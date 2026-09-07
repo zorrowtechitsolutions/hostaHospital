@@ -86,7 +86,18 @@ const getAppointmentValue = (doctor) =>
         0
       );
 
-const getDoctorId = (id) => `#DR${String(id).padStart(4, '0')}`;
+// ✅ FIXED: Format doctor number to display ID (4 digits padding)
+const getDoctorId = (doctor) => {
+  if (doctor?.doctorId) {
+    return doctor.doctorId;
+  }
+
+  if (doctor?.doctorNumber !== undefined && doctor?.doctorNumber !== null) {
+    return `#DR${String(doctor.doctorNumber).padStart(4, '0')}`;
+  }
+
+  return '#DR0000';
+};
 
 const getDepartmentDisplay = (doctor) => {
   if (doctor.department) return doctor.department;
@@ -375,27 +386,43 @@ const Doctors = () => {
     return true;
   };
 
-const doctors = useMemo(() => {
-  if (!response?.data) return [];
+  // ✅ FIXED: Transform doctors with doctorNumber and doctorId, and sort by doctorNumber
+  const doctors = useMemo(() => {
+    if (!response?.data) return [];
 
-  return response.data.map((doctor) => ({
-    ...doctor,
-    imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
-    hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
-    authId: doctor.authId || doctor.userId || doctor.id,
-    hospitalId: doctor.hospitalId || hospitalId,
+    return response.data
+      .map((doctor) => ({
+        ...doctor,
+        
+        // ✅ Keep database ID for CRUD
+        id: doctor.id,
+        
+        // ✅ Hospital-specific sequential number
+        doctorNumber: doctor.doctorNumber,
+        
+        // ✅ Use backend virtual ID if available
+        doctorId: doctor.doctorId || 
+          (doctor.doctorNumber !== undefined 
+            ? `#DR${String(doctor.doctorNumber).padStart(4, '0')}`
+            : '#DR0000'),
+        
+        imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
+        hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
+        authId: doctor.authId || doctor.userId || doctor.id,
+        hospitalId: doctor.hospitalId || hospitalId,
 
-    totalSlots: Number(doctor.appointmentCount) || 0,
-    takenSlots: Number(
-      doctor.takenSlots ??
-      doctor.todayTakenSlots ??
-      doctor.bookedSlots ??
-      doctor.todayBookings ??
-      0
-    ),
-  }));
-}, [response?.data, hospitalId]);
-
+        totalSlots: Number(doctor.appointmentCount) || 0,
+        takenSlots: Number(
+          doctor.takenSlots ??
+          doctor.todayTakenSlots ??
+          doctor.bookedSlots ??
+          doctor.todayBookings ??
+          0
+        ),
+      }))
+      // ✅ CRITICAL FIX: Sort by doctorNumber to ensure proper ordering
+      .sort((a, b) => Number(a.doctorNumber) - Number(b.doctorNumber));
+  }, [response?.data, hospitalId]);
 
   const departments = useMemo(() => {
     if (response?.departments && Array.isArray(response.departments)) {
@@ -531,6 +558,7 @@ const doctors = useMemo(() => {
     setSelectedSpecialty('All');
   }, []);
 
+  // ✅ FIXED: Export uses getDoctorId(doctor) instead of getDoctorId(doctor.id)
   const getExportData = useCallback(() => {
     return doctors.map((doctor) => {
       const formattedAddress = formatAddress(doctor.address);
@@ -538,7 +566,7 @@ const doctors = useMemo(() => {
       const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
       
       return {
-        'Doctor ID': getDoctorId(doctor.id),
+        'Doctor ID': getDoctorId(doctor),
         'Auth ID': doctor.authId || 'N/A',
         'Name': getDoctorName(doctor),
         'Department': getDepartmentDisplay(doctor),
@@ -776,14 +804,14 @@ const doctors = useMemo(() => {
                 const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
                 const autoDecline = hasAutoDecline(doctor);
                 const appointmentLimit = getAppointmentCountDisplay(doctor);
-                // ✅ DEFINE utilization HERE
                 const utilization = totalSlots > 0 ? Math.round((takenSlots / totalSlots) * 100) : 0;
                 
                 return (
                   <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
                     <div className="w-full flex justify-between items-start mb-4">
+                      {/* ✅ FIXED: Use getDoctorId(doctor) instead of getDoctorId(doctor.id) */}
                       <Badge variant="info" className="text-[10px]">
-                        {getDoctorId(doctor.id)}
+                        {getDoctorId(doctor)}
                       </Badge>
                       <div className="relative menu-container">
                         <button 
@@ -841,7 +869,6 @@ const doctors = useMemo(() => {
                     </h3>
                     <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
                     
-                    {/* Stats grid with Experience, Auto Decline, and Appointment Limit */}
                     <div className="grid grid-cols-3 gap-2 w-full border-t border-gray-50 pt-4 mb-3">
                       <div className="text-center">
                         <p className="text-[8px] text-gray-400 uppercase font-bold">Experience</p>
@@ -861,8 +888,7 @@ const doctors = useMemo(() => {
                       </div>
                     </div>
 
-                    {/* HIGHLIGHTED Today's slots section - Professional Indigo/Blue */}
-                    <div className="w-full  to-blue-50 rounded-lg p-3 mb-3 border border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300">
+                    <div className="w-full to-blue-50 rounded-lg p-3 mb-3 border border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] text-indigo-600 uppercase font-bold flex items-center gap-1">
                           <span>📊</span> Today's Slots
@@ -885,7 +911,6 @@ const doctors = useMemo(() => {
                           <p className="text-sm font-bold text-gray-800">{totalSlots}</p>
                         </div>
                       </div>
-                      {/* Progress bar */}
                       <div className="mt-2 w-full h-1 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full rounded-full bg-gradient-to-r from-indigo-200 to-indigo-500 transition-all duration-500"
@@ -973,8 +998,9 @@ const doctors = useMemo(() => {
                       
                       return (
                         <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
+                          {/* ✅ FIXED: Use getDoctorId(doctor) instead of getDoctorId(doctor.id) */}
                           <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                            {getDoctorId(doctor.id)}
+                            {getDoctorId(doctor)}
                           </td>
                           <td className="px-6 py-4 text-gray-500 text-xs font-mono">
                             {doctor.authId || 'N/A'}
