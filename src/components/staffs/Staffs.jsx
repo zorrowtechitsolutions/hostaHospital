@@ -31,7 +31,7 @@ import {
 } from '../ui';
 
 import DeleteModal from '../patients/DeleteModel';
-import PermissionDeniedModal from '../ui/PermissionDeniedModal'; // Import the PermissionDeniedModal
+import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 
 import {
   useGetStaffQuery,
@@ -258,7 +258,6 @@ const Staffs = () => {
     localStorage.setItem('staffViewMode', viewMode);
   }, [viewMode]);
 
-
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -405,26 +404,7 @@ const Staffs = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // Helper function to format staff ID
-  const formatStaffId = (id) => {
-    if (!id) return '#SF0000';
-    let numericId;
-    if (typeof id === 'string') {
-      const match = id.match(/\d+/);
-      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-    } else {
-      numericId = parseInt(id) || 0;
-    }
-    return `#SF${String(numericId).padStart(4, '0')}`;
-  };
-
-  const getStaffImageUrl = (staff) => {
-    const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
-    if (!imageKey) return null;
-    return getS3ImageUrlWithCache(imageKey);
-  };
-
-  // Transform API response
+  // ✅ FIXED: Transform API response - Use staffNumber for display
   const transformStaffData = (staffList) => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
@@ -440,7 +420,13 @@ const Staffs = () => {
       
       return {
         id: staff.id,
-        formattedId: formatStaffId(staff.id || index + 1),
+        
+        // ✅ Use hospital-specific staffNumber for display
+        staffNumber: staff.staffNumber,
+        formattedId: staff.staffNumber 
+          ? `#STF${String(staff.staffNumber).padStart(5, '0')}`
+          : '#STF00000',
+        
         originalId: staff.id || staff._id,
         name: staff.name || '',
         firstName: staff.name?.split(' ')[0] || '',
@@ -473,12 +459,21 @@ const Staffs = () => {
     });
   };
 
-  const allStaffsData = transformStaffData(staffApiResponse?.data || []);
-  const totalItemsFromApi = staffApiResponse?.pagination?.totalItems || 0;
+  // ✅ FIXED: Sort staff by staffNumber (ascending) after transformation
+  const staffsData = useMemo(() => {
+    const transformed = transformStaffData(staffApiResponse?.data || []);
+    
+    // ✅ Sort by staffNumber to ensure proper ordering (STF00001, STF00002, STF00003...)
+    return [...transformed].sort((a, b) => {
+      const numberA = Number(a.staffNumber) || 0;
+      const numberB = Number(b.staffNumber) || 0;
+      return numberA - numberB;
+    });
+  }, [staffApiResponse?.data]);
 
-  // Apply frontend search AND filter filtering
+  // ✅ FIXED: Apply frontend search AND filter filtering on sorted data
   const filteredStaffsData = useMemo(() => {
-    let filtered = allStaffsData;
+    let filtered = staffsData;
 
     // 1. Apply search filter
     const searchLower = debouncedSearchTerm?.trim().toLowerCase();
@@ -539,28 +534,28 @@ const Staffs = () => {
     }
 
     return filtered;
-  }, [allStaffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
+  }, [staffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // ✅ FIXED: Use filtered data for display
-  const staffsData = filteredStaffsData;
+  // ✅ Use filtered data for display
+  const displayStaffsData = filteredStaffsData;
   
-  // ✅ FIXED: Use API response pagination for total items and pages
+  // ✅ Use API response pagination for total items and pages
   const totalItems = staffApiResponse?.pagination?.totalItems || 0;
   const totalPages = staffApiResponse?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
   // Get unique hospitals
   const uniqueHospitals = useMemo(() => {
     const hospitals = new Set();
-    staffsData.forEach(staff => {
+    displayStaffsData.forEach(staff => {
       if (staff.hospitalId) {
         hospitals.add(staff.hospitalId);
       }
     });
     return Array.from(hospitals);
-  }, [staffsData]);
+  }, [displayStaffsData]);
 
   const getAllDesignations = () => {
-    const allData = staffApiResponse?.allData || allStaffsData;
+    const allData = staffApiResponse?.allData || staffsData;
     const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
   };
@@ -584,14 +579,14 @@ const Staffs = () => {
 
   // Updated Export handler with Excel functionality
   const handleExport = () => {
-    if (staffsData.length === 0) {
+    if (displayStaffsData.length === 0) {
       showErrorToast("No data available to export", 3000);
       return;
     }
 
     try {
       // Transform data for Excel export
-      const exportData = staffsData.map(staff => ({
+      const exportData = displayStaffsData.map(staff => ({
         'Staff ID': staff.formattedId,
         'Staff Name': staff.name,
         'Gender': staff.gender || 'N/A',
@@ -733,7 +728,7 @@ const Staffs = () => {
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
     
-    const imageUrl = getStaffImageUrl(staff);
+    const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
     
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
@@ -837,7 +832,7 @@ const Staffs = () => {
 
   // Check if we should show the "No results" message
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
-  const hasResults = staffsData.length > 0;
+  const hasResults = displayStaffsData.length > 0;
   const isSearchActive = debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
   const hasActiveFilters = designationFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all' || !!dateFilter;
 
@@ -1030,12 +1025,12 @@ const Staffs = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          /* ✅ GRID VIEW - Pagination conditional (matching Doctors.jsx) */
+          /* ✅ GRID VIEW - Using staffNumber for display */
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {staffsData.map((staff) => {
+              {displayStaffsData.map((staff) => {
                 const isBlacklisted = staff.isDelete;
-                const imageUrl = getStaffImageUrl(staff);
+                const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                 
                 return (
                   <div 
@@ -1132,7 +1127,7 @@ const Staffs = () => {
                       </div>
                     </div>
 
-                    {/* Recover button for blacklisted staff (matching Doctors.jsx) */}
+                    {/* Recover button for blacklisted staff */}
                     {isBlacklisted && (
                       <button 
                         onClick={() => {
@@ -1153,7 +1148,7 @@ const Staffs = () => {
               })}
             </div>
 
-            {/* ✅ Pagination for Grid View - Conditional (matching Doctors.jsx) */}
+            {/* Pagination for Grid View */}
             {totalPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -1169,7 +1164,7 @@ const Staffs = () => {
             )}
           </>
         ) : (
-          /* ✅ LIST VIEW - Pagination always visible (like Ambulance) */
+          /* ✅ LIST VIEW - Using staffNumber for display */
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
@@ -1201,8 +1196,8 @@ const Staffs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {staffsData.map((staff) => {
-                      const imageUrl = getStaffImageUrl(staff);
+                    {displayStaffsData.map((staff) => {
+                      const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                       const isBlacklisted = staff.isDelete;
                       
                       return (
@@ -1296,7 +1291,7 @@ const Staffs = () => {
                 </table>
               </div>
               
-              {/* ✅ Pagination - ALWAYS VISIBLE (like Ambulance) */}
+              {/* Pagination - Always visible */}
               <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}
@@ -1332,7 +1327,7 @@ const Staffs = () => {
         isOpen={showPermissionDeniedModal}
         onClose={() => setShowPermissionDeniedModal(false)}
         action={permissionDeniedAction}
-        permissionId={PERMISSIONS.VIEW} // Pass a default permission ID or make it dynamic
+        permissionId={PERMISSIONS.VIEW}
       />
     </>
   );
