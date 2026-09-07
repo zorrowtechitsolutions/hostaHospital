@@ -1,4 +1,4 @@
-// src/components/patients/tabs/ProfileTab.jsx - Refactored with proper image handling
+// src/components/patients/tabs/ProfileTab.jsx - Refactored with proper image handling and patient number display
 import React, { useState } from "react";
 import { 
   User, Phone, Mail, MapPin, Edit, Calendar as CalendarIcon, 
@@ -7,7 +7,30 @@ import {
 } from "lucide-react";
 import { Button, Badge, Card } from "../../ui";
 
-const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleViewAppointmentDetails, handleViewVisitDetails, handleViewVitalDetails, setTab }) => {
+// ✅ Helper function to format patient display ID
+const getPatientDisplayId = (patient) => {
+  if (patient?.patientNumber !== undefined && patient?.patientNumber !== null) {
+    return `#PT${String(patient.patientNumber).padStart(4, '0')}`;
+  }
+  if (patient?.displayId) {
+    return patient.displayId;
+  }
+  if (patient?.patientId) {
+    return patient.patientId;
+  }
+  const id = patient?.id || patient?._id;
+  return id ? `#PT${String(id).slice(-4)}` : '#PT0000';
+};
+
+const ProfileTab = ({ 
+  patient, 
+  handleEditPatient, 
+  handleAddAppointment, 
+  handleViewAppointmentDetails, 
+  handleViewVisitDetails, 
+  handleViewVitalDetails, 
+  setTab 
+}) => {
   const [imageError, setImageError] = useState(false);
 
   const getProfileImageUrl = () => {
@@ -22,6 +45,9 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
 
   const profileImageUrl = getProfileImageUrl();
   const totalBookings = patient.appointments?.length || patient.appointmentsList?.length || 0;
+
+  // ✅ Get the display ID
+  const displayPatientId = getPatientDisplayId(patient);
 
   const getAppointmentBadgeVariant = (status) => {
     const statusMap = {
@@ -78,7 +104,8 @@ const ProfileTab = ({ patient, handleEditPatient, handleAddAppointment, handleVi
             <div className="flex-1">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm text-gray-500">#PT00{patient.id}</p>
+                  {/* ✅ FIXED: Use patientNumber instead of database ID */}
+                  <p className="text-sm text-gray-500">{displayPatientId}</p>
                   <h3 className="font-semibold text-lg">{patient.name}</h3>
                   <p className="text-sm text-gray-500">Last Visited: {patient.lastVisit}</p>
                 </div>

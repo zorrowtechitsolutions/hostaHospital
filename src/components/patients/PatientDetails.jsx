@@ -41,6 +41,18 @@ import { showSuccessToast, showErrorToast } from "../ui/Toast";
 // Import date formatter
 import { formatDate } from "../../utils/dateFormatter";
 
+// ============ HELPER: Get Patient Display ID ============
+const getPatientDisplayId = (patient) => {
+  if (patient?.patientNumber !== undefined && patient?.patientNumber !== null) {
+    return `#PT${String(patient.patientNumber).padStart(4, '0')}`;
+  }
+  if (patient?.patientId) {
+    return patient.patientId;
+  }
+  const id = patient?.id || patient?._id;
+  return id ? `#PT${String(id).slice(-4)}` : '#PT0000';
+};
+
 // ============ SKELETON LOADING COMPONENTS ============
 
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
@@ -137,6 +149,7 @@ const PatientDetails = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // ✅ KEEP THIS: Use database ID for API calls
   const patientId = id || passedPatient?.id || passedPatient?._id;
 
   const { 
@@ -252,11 +265,16 @@ const PatientDetails = () => {
       .map((booking, index) => {
         const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
         
+        // ✅ FIXED: Use patientNumber for patient ID display
+        const patientDisplayId = patientData?.patientNumber 
+          ? `#PT${String(patientData.patientNumber).padStart(4, "0")}`
+          : patientData?.patientId || "#PT0000";
+        
         return {
           id: booking.id || booking._id || index,
           visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
           patientName: booking.patient_name || booking.patientName || patientData?.name || "N/A",
-          patientId: `#PT${String(booking.userId || index + 1).padStart(4, "0")}`,
+          patientId: patientDisplayId,
           doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
           department: booking.doctor_department || booking.department || "General",
           visitDate: booking.booking_date ? formatDate(booking.booking_date) : "",
@@ -532,8 +550,11 @@ const PatientDetails = () => {
     
   }, [vitalsResponse, prescriptionsResponse, bookingResponse, doctorMap]);
 
+  // ✅ UPDATED: Patient state with patientNumber and displayId
   const [patient, setPatient] = useState({
-    id: '',
+    id: '',              // Database ID - used for API calls
+    patientNumber: '',   // Hospital-specific display number
+    displayId: '',       // Formatted display ID (#PT0001)
     hospitalId: '',
     userId: '',
     name: '',
@@ -568,11 +589,18 @@ const PatientDetails = () => {
     visits: []
   });
 
+  // ✅ UPDATED: Set patient state with patientNumber
   useEffect(() => {
     if (patientData) {
+      const patientNumber = patientData.patientNumber;
+      const displayId = patientNumber !== undefined && patientNumber !== null
+        ? `#PT${String(patientNumber).padStart(4, '0')}`
+        : patientData.patientId || '#PT0000';
+      
       setPatient({
         id: patientData.id || patientData._id,
-        patientId: patientData.patientId || "",
+        patientNumber: patientNumber,
+        displayId: displayId,
         hospitalId: patientData.hospitalId || patientData.hospital?.id || '',
         userId: patientData.userId || patientData.user?.id || '',
         name: patientData.name || '',
@@ -1035,11 +1063,19 @@ const PatientDetails = () => {
     );
   }
 
+  // ✅ Get display ID for header
+  const displayPatientId = patient.displayId || getPatientDisplayId(patientData);
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-xl font-semibold text-gray-800">Patient Details</h2>
+          <h2 className="text-xl font-semibold text-gray-800">
+            Patient Details 
+            <span className="ml-2 text-sm font-normal text-gray-500">
+              {displayPatientId}
+            </span>
+          </h2>
           <p className="text-sm text-gray-500">Home » Patient Details</p>
         </div>
         <button onClick={handleBackToPatients} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-all shadow-sm">

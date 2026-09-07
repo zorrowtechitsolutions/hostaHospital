@@ -1,4 +1,4 @@
-// app/service/patients.ts - Fixed with proper authId vs hospitalId handling
+// app/service/patients.ts - Updated with patientNumber
 
 import { api } from "./api";
 import { getAuthUser } from "../../src/utils/auth";
@@ -18,6 +18,13 @@ export interface Location {
 export interface Patient {
   id?: string;
   _id?: string;
+  
+  // ✅ Hospital-specific display number
+  patientNumber?: number;
+  
+  // ✅ Virtual display ID returned by Sequelize
+  patientId?: string;
+  
   name: string;
   bloodGroup?: string;
   gender: string;
@@ -281,7 +288,6 @@ export const patientsApi = api.injectEndpoints({
           }
         }
         
-        
         return {
           url: "/patients",
           method: "POST",
@@ -314,7 +320,6 @@ export const patientsApi = api.injectEndpoints({
             hospitalId = authHospitalId;
           }
         }
-        
         
         return {
           url: `/patients/${id}`,
