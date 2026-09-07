@@ -60,6 +60,16 @@ const formatDateTime = (date, time) => {
   }
 };
 
+// ✅ FIXED: Format booking number to display ID (5 digits padding)
+const formatVisitId = (booking) => {
+  if (booking?.bookingNumber) {
+    return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
+  }
+  // Fallback to database ID if bookingNumber is not available
+  const id = booking?.id || booking?._id;
+  return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
+};
+
 const Visits = () => {
   const navigate = useNavigate();
   
@@ -169,6 +179,7 @@ const Visits = () => {
   const totalItems = bookingsResponse?.pagination?.totalItems || 0;
   const totalPages = bookingsResponse?.pagination?.totalPages || 1;
 
+  // ✅ FIXED: Transform bookings data - Use bookingNumber for display with DESCENDING order
   const allVisitsData = useMemo(() => {
     const bookingList =
       Array.isArray(bookingsResponse)
@@ -180,41 +191,51 @@ const Visits = () => {
 
     const acceptedBookings = bookingList;
 
-    return acceptedBookings.map((booking, index) => {
-      const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
-      
-      const tokenValue = 
-        booking.token ||
-        booking.appointment_token ||
-        booking.booking_token ||
-        booking.appointmentToken ||
-        booking.approveData?.token ||
-        "N/A";
-      
-      let actualPatientId = booking.patientId || booking.userId || index + 1;
-      
-      if (typeof actualPatientId === 'string' && actualPatientId.startsWith('#PT')) {
-        const match = actualPatientId.match(/\d+/);
-        actualPatientId = match ? parseInt(match[0]) : actualPatientId;
-      }
-      
-      return {
-        id: booking.id || booking._id,
-        visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
-        patientName: booking.patient_name || booking.patientName || "N/A",
-        patientId: actualPatientId,
-        patientIdDisplay: `PT${String(actualPatientId).padStart(4, '0')}`,
-        doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
-        department: booking.doctor_department || booking.department || "General",
-        visitDate: booking.booking_date || booking.date || "",
-        startTime: booking.consulting_time || booking.time || "",
-        token: Number(tokenValue || ""),
-        patientImageKey: patientImageKey,
-        patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
-        originalBooking: booking,
-        status: booking.status || "accepted"
-      };
-    });
+    // Transform and sort by bookingNumber in DESCENDING order (highest first)
+    return acceptedBookings
+      .map((booking, index) => {
+        const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+        
+        const tokenValue = 
+          booking.token ||
+          booking.appointment_token ||
+          booking.booking_token ||
+          booking.appointmentToken ||
+          booking.approveData?.token ||
+          "N/A";
+        
+        let actualPatientId = booking.patientId || booking.userId || index + 1;
+        
+        if (typeof actualPatientId === 'string' && actualPatientId.startsWith('#PT')) {
+          const match = actualPatientId.match(/\d+/);
+          actualPatientId = match ? parseInt(match[0]) : actualPatientId;
+        }
+        
+        return {
+          id: booking.id || booking._id,
+          
+          // ✅ Use bookingNumber for display
+          bookingNumber: booking.bookingNumber,
+          visitId: booking.bookingNumber 
+            ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
+            : `#VIS${String(index + 1).padStart(4, "0")}`,
+          
+          patientName: booking.patient_name || booking.patientName || "N/A",
+          patientId: actualPatientId,
+          patientIdDisplay: `PT${String(actualPatientId).padStart(4, '0')}`,
+          doctorName: booking.doctor_name || booking.displayName || booking.doctorName || "Doctor",
+          department: booking.doctor_department || booking.department || "General",
+          visitDate: booking.booking_date || booking.date || "",
+          startTime: booking.consulting_time || booking.time || "",
+          token: Number(tokenValue || ""),
+          patientImageKey: patientImageKey,
+          patientAvatar: patientImageKey || `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`,
+          originalBooking: booking,
+          status: booking.status || "accepted"
+        };
+      })
+      // ✅ Sort by bookingNumber in DESCENDING order (highest first)
+      .sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
   }, [bookingsResponse]);
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
@@ -300,7 +321,7 @@ const Visits = () => {
     showSuccessToast("Refreshed visits", 2000);
   };
   
-  // Updated Export handler with Excel functionality (exactly like Appointments)
+  // Updated Export handler with Excel functionality
   const handleExport = () => {
     if (allVisitsData.length === 0) {
       showErrorToast("No data available to export", 3000);
@@ -341,8 +362,6 @@ const Visits = () => {
       showErrorToast("Failed to export data. Please try again.", 3000);
     }
   };
-  
-  // ✅ REMOVED: handleImport function
   
   const clearAllFilters = () => { 
     setDepartmentFilter(''); 
@@ -570,7 +589,8 @@ const Visits = () => {
       startTime: visit.startTime,
       doctorName: visit.doctorName,
       department: visit.department,
-      token: visit.token
+      token: visit.token,
+      visitId: visit.visitId
     }));
   }, [filteredVisits]);
 
@@ -694,7 +714,6 @@ const Visits = () => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          {/* ✅ IMPORT BUTTON REMOVED */}
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>

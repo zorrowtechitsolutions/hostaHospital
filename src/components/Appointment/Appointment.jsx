@@ -263,16 +263,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   }, [refetch]);
 
   // Helper functions
-  const formatAppointmentId = (id) => {
-    if (!id) return '#APT00000';
-    let numericId;
-    if (typeof id === 'string') {
-      const match = id.match(/\d+/);
-      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-    } else {
-      numericId = parseInt(id) || 0;
+  // ✅ FIXED: Format booking number to display ID (5 digits padding)
+  const formatAppointmentId = (booking) => {
+    if (booking?.bookingNumber) {
+      return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
     }
-    return `#APT${String(numericId).padStart(4, '0')}`;
+    // Fallback to database ID if bookingNumber is not available
+    const id = booking?.id || booking?._id;
+    return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
   };
 
   const mapStatus = (status) => {
@@ -332,7 +330,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return null;
   };
 
-  // ⭐ TRANSFORM BOOKINGS DATA - UPDATED WITH booking_date AND token
+  // ✅ FIXED: Transform bookings data - Use bookingNumber for display
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -346,7 +344,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const displayStatus = mapStatus(booking.status);
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
       
-      // Get raw date from various possible sources
       const rawDate = booking.booking_date || booking.appointmentDate || booking.date || "";
       const actualPatientId = booking.patientId ||
         booking.patient?.id ||
@@ -357,22 +354,25 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const extractedGender = extractGender(booking);
       const finalGender = extractedGender || "N/A";
 
-      // ⭐ Get token from various possible sources
       const token = booking.token || booking.token_number || booking.tokenNumber || "";
 
-      // ✅ FIXED: Use patient_age from API if available, otherwise calculate from DOB
       const calculatedAge = calculateAge(booking.patient_dob || booking.dob);
       const age = booking.patient_age ?? calculatedAge;
 
       return {
         id: booking.id || booking._id,
-        formattedId: formatAppointmentId(booking.id || booking._id),
+        
+        // ✅ Use bookingNumber for display
+        bookingNumber: booking.bookingNumber,
+        formattedId: booking.bookingNumber 
+          ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
+          : '#BK00000',
         
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
         bookingStatus: booking.booking_status || booking.bookingStatus || "N/A",
-        age: age, // ✅ Now using patient_age from API with fallback
+        age: age,
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: finalGender,
         
@@ -380,11 +380,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
         
-        // ⭐ CRITICAL FIX: Keep RAW values for editing
         booking_date: rawDate,
         token: token,
         
-        // Existing display fields
         appointmentDateDisplay: formatDate(rawDate),
         consulting_time: booking.consulting_time || booking.time || "N/A",
         
@@ -405,7 +403,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   // Get data from API response - ALL DATA (not just current page)
-  // We need to fetch all data for frontend filtering
   const { 
     data: allBookingsResponse, 
     isLoading: allLoading
@@ -417,8 +414,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     limit: 1000 // Get all data for filtering
   });
 
+  // ✅ FIXED: Sort bookings by bookingNumber in DESCENDING order (highest first)
   const allBookingList = allBookingsResponse?.data || [];
-  const allAppointmentsData = transformBookingsData(allBookingList);
+  const allAppointmentsData = transformBookingsData(allBookingList).sort(
+    (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
+  );
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
   const filteredBySearch = useMemo(() => {

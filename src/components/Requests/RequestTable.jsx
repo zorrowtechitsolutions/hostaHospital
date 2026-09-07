@@ -40,16 +40,14 @@ const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transi
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
 
 // Helper functions
-const formatRequestId = (id) => {
-  if (!id) return '#REQ0000';
-  let numericId;
-  if (typeof id === 'string') {
-    const match = id.match(/\d+/);
-    numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-  } else {
-    numericId = parseInt(id) || 0;
+// ✅ FIXED: Format booking number to display ID (5 digits padding)
+const formatRequestId = (booking) => {
+  if (booking?.bookingNumber) {
+    return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
   }
-  return `#REQ${String(numericId).padStart(4, '0')}`;
+  // Fallback to database ID if bookingNumber is not available
+  const id = booking?.id || booking?._id;
+  return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
 };
 
 const calculateAge = (dob) => {
@@ -64,6 +62,7 @@ const calculateAge = (dob) => {
   return age;
 };
 
+// ✅ FIXED: Transform bookings data - Use bookingNumber for display
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -78,7 +77,13 @@ const transformBookingsData = (bookingList) => {
 
     return {
       id: bookingId,
-      formattedId: formatRequestId(bookingId),
+      
+      // ✅ Use bookingNumber for display
+      bookingNumber: booking.bookingNumber,
+      formattedId: booking.bookingNumber 
+        ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
+        : '#BK00000',
+      
       patientId: `PT${String(booking.userId || index).padStart(4, "0")}`,
       patientName: booking.patient_name || booking.patientName || "N/A",
       age: calculateAge(booking.patient_dob || booking.dob),
@@ -295,9 +300,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     };
   }, [refetch, eventsRegistered]);
 
-  // Transform API response
+  // ✅ FIXED: Transform API response with DESCENDING sorting (highest first)
   const safeData = useMemo(() => {
-    return transformBookingsData(bookingsResponse?.data || []);
+    const transformed = transformBookingsData(bookingsResponse?.data || []);
+    // ✅ Sort by bookingNumber in DESCENDING order (highest first)
+    return [...transformed].sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
   }, [bookingsResponse]);
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
@@ -357,16 +364,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return result;
   }, [filteredByDoctor, departmentFilter, dateFilter]);
 
-  // ✅ Get total items from filtered results
-  const totalItems = filteredRequests.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  // ✅ CRITICAL FIX: Use API pagination metadata for totals
+  const totalItems = bookingsResponse?.pagination?.totalItems ?? 0;
+  const totalPages = bookingsResponse?.pagination?.totalPages ?? 0;
 
-  // ✅ Paginate the filtered results
-  const paginatedRequests = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredRequests.slice(startIndex, endIndex);
-  }, [filteredRequests, currentPage, itemsPerPage]);
+  // ✅ Use the filtered data directly (no client-side pagination slice needed)
+  // The data is already paginated from the server
+  const paginatedRequests = filteredRequests;
 
   // Get all unique departments from the data
   const departments = useMemo(() => {
@@ -456,8 +460,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       showErrorToast("Failed to export data. Please try again.", TOAST_DURATION);
     }
   };
-
-  // ✅ REMOVED: handleImport function
 
   const handleApproveClick = (request) => {
     if (!request.id) {
@@ -611,7 +613,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 Showing requests for: <span className="font-semibold">{doctorName}</span>
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                Total requests: {filteredRequests.length}
+                Total requests: {totalItems}
               </p>
             </div>
             <button
@@ -629,7 +631,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <div>
             <p className="text-sm text-gray-700">
               <span className="font-medium">Showing all doctors' requests</span>
-              <span className="text-gray-500 ml-2">Total: {filteredRequests.length} requests</span>
+              <span className="text-gray-500 ml-2">Total: {totalItems} requests</span>
             </p>
           </div>
           <button
@@ -663,7 +665,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          {/* ✅ IMPORT BUTTON REMOVED */}
           <button
             onClick={handleExport}
             className={ICON_BUTTON_CLASS}
@@ -875,8 +876,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* Pagination - Uses client-side pagination */}
-              {totalPages > 1 && (
+              {/* ✅ CRITICAL FIX: Pagination - Uses API pagination metadata */}
+              {totalPages > 0 && (
                 <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                   <Pagination
                     currentPage={currentPage}

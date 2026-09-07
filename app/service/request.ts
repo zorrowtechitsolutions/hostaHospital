@@ -13,7 +13,18 @@ export type BookingStatus =
 export interface BookingRequest {
   id?: string | number;
   _id?: string;
+  
+  // ✅ Add bookingNumber for hospital-specific sequential ID
+  bookingNumber?: number;
+  
   userId?: number | string;
+
+  // Database patient ID. Used internally/API-side.
+  patientId?: string | number;
+
+  // Hospital-specific patient number. Used for display as #PTxxxx.
+  patientNumber?: number;
+
   patient_name?: string;
   patient_dob?: string;
   patient_place?: string;
@@ -28,7 +39,6 @@ export interface BookingRequest {
   patient_age?: number;
   patient_gender?: string;
   booking_status?: string;
-  patientId?: string;
   patientName?: string;
   contact?: string;
   doctorName?: string;
@@ -77,6 +87,7 @@ export interface GetBookingsParams {
   status?: BookingStatus;
   doctor_name?: string;
   patient_name?: string;
+  patientNumber?: number;
   gender?: string;
   startDate?: string;
   endDate?: string;
@@ -139,6 +150,10 @@ export const bookingApi = api.injectEndpoints({
 
         if (params.patient_name) {
           queryParams.append("patient_name", params.patient_name);
+        }
+
+        if (params.patientNumber !== undefined && params.patientNumber !== null) {
+          queryParams.append("patientNumber", String(params.patientNumber));
         }
 
         if (params.gender) {
@@ -240,67 +255,56 @@ export const bookingApi = api.injectEndpoints({
       providesTags: (result, error, id) => [{ type: "Booking", id }],
     }),
 
-createBooking: builder.mutation<
-  BookingResponse,
-  Partial<BookingRequest>
->({
-  query: (data) => {
-    // Explicit hospitalId from Super Admin takes priority.
-    // Hospital Admin falls back to its logged-in hospital.
-    const hospitalId =
-      data.hospitalId ?? getHospitalId();
+    createBooking: builder.mutation<
+      BookingResponse,
+      Partial<BookingRequest>
+    >({
+      query: (data) => {
+        const hospitalId = data.hospitalId ?? getHospitalId();
 
-    const authUser = getAuthUser();
+        const authUser = getAuthUser();
 
-    // For Super Admin, don't use "Super Admin" as the hospital name.
-    // Use the supplied hospital name if available.
-    const hospitalName =
-      data.hospitalName ??
-      authUser?.hospitalName ??
-      (
-        authUser?.name !== "Super Admin"
-          ? authUser?.name
-          : ""
-      );
+        const hospitalName =
+          data.hospitalName ??
+          authUser?.hospitalName ??
+          (authUser?.name !== "Super Admin" ? authUser?.name : "");
 
-    return {
-      url: "/booking",
-      method: "POST",
-      body: {
-        patient_name: data.patient_name,
-        patient_dob: data.patient_dob,
-        patient_place: data.patient_place,
-        patient_phone: data.patient_phone,
-        patient_age: data.patient_age,
-        patient_gender: data.patient_gender,
+        return {
+          url: "/booking",
+          method: "POST",
+          body: {
+            patient_name: data.patient_name,
+            patient_dob: data.patient_dob,
+            patient_place: data.patient_place,
+            patient_phone: data.patient_phone,
+            patient_age: data.patient_age,
+            patient_gender: data.patient_gender,
 
-        doctorId: data.doctorId,
-        displayName: data.displayName,
-        department: data.department,
+            doctorId: data.doctorId,
+            displayName: data.displayName,
+            department: data.department,
 
-        booking_date: data.booking_date,
-        consulting_time: data.consulting_time,
-        token: data.token,
+            booking_date: data.booking_date,
+            consulting_time: data.consulting_time,
+            token: data.token,
 
-        status: data.status || "accepted",
-        booking_status: data.booking_status,
+            status: data.status || "accepted",
+            booking_status: data.booking_status,
 
-        // IMPORTANT
-        hospitalId:
-          hospitalId !== undefined &&
-          hospitalId !== null
-            ? Number(hospitalId)
-            : undefined,
+            hospitalId: hospitalId !== undefined && hospitalId !== null ? Number(hospitalId) : undefined,
 
-        hospitalName: hospitalName,
+            hospitalName: hospitalName,
 
-        patientId: data.patientId,
+            // Keep database patient ID and hospital patient number separate.
+            patientId: data.patientId,
+            patientNumber: data.patientNumber,
+          },
+        };
       },
-    };
-  },
 
-  invalidatesTags: ["Booking"],
-}),
+      invalidatesTags: ["Booking"],
+    }),
+    
     approveBooking: builder.mutation<
       BookingResponse,
       {
@@ -401,6 +405,11 @@ createBooking: builder.mutation<
         body: {
           patient_name: data.patient_name,
           patient_phone: data.patient_phone,
+
+          // Preserve both patient identifiers when editing a booking.
+          patientId: data.patientId,
+          patientNumber: data.patientNumber,
+
           doctorId: data.doctorId,
           booking_date: data.booking_date,
           consulting_time: data.consulting_time,
