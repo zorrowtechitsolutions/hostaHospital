@@ -1,6 +1,7 @@
 // src/components/Doctor/Doctors.jsx
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { CalendarClock } from "lucide-react";
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Pagination, SearchBar } from '../ui';
@@ -891,7 +892,8 @@ const Doctors = () => {
                     <div className="w-full to-blue-50 rounded-lg p-3 mb-3 border border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] text-indigo-600 uppercase font-bold flex items-center gap-1">
-                          <span>📊</span> Today's Slots
+                          <CalendarClock size={20} className="text-black" />
+                          Today's Slots
                         </p>
                         <span className="text-[8px] font-medium text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full">
                           {utilization}% filled
