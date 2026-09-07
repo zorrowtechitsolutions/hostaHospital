@@ -137,11 +137,10 @@ const Ambulance = () => {
     localStorage.setItem('ambulanceViewMode', viewMode);
   }, [viewMode]);
 
-  // Helper function to format ambulance ID for display only
-  const formatAmbulanceId = (id) => {
-    if (!id) return '#AMB0000';
-    const numericId = parseInt(id) || 0;
-    return `#AMB${String(numericId).padStart(4, '0')}`;
+  // ✅ FIXED: Format ambulance number to display ID (5 digits padding)
+  const formatAmbulanceId = (ambulanceNumber) => {
+    if (!ambulanceNumber && ambulanceNumber !== 0) return '#AMB00000';
+    return `#AMB${String(ambulanceNumber).padStart(5, '0')}`;
   };
 
   // API Hooks - Passing pagination and filter parameters
@@ -214,24 +213,40 @@ const Ambulance = () => {
     };
   }, [refetch]);
 
-  // Transform API response - SEPARATE display ID from database ID
+  // ✅ FIXED: Transform API response - Use backend ambulanceNumber and ambulanceId
+  // ✅ ADDED: Sort by ambulanceNumber to ensure proper ordering (1, 2, 3, 4...)
   const transformAmbulanceData = (ambulanceList) => {
     if (!ambulanceList || !Array.isArray(ambulanceList)) return [];
-    
-    return ambulanceList.map((ambulance, index) => ({
-      id: ambulance.id,
-      formattedId: formatAmbulanceId(ambulance.id || index + 1),
-      serviceName: ambulance.serviceName || '',
-      phone: ambulance.phone || '',
-      vehicleType: ambulance.vehicleType || '',
-      address: ambulance.address || {},
-      hospitalId: ambulance.hospitalId,
-      createdAt: ambulance.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
-      lastUpdated: ambulance.updatedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
-    }));
+
+    return ambulanceList
+      .map((ambulance) => ({
+        // ✅ Keep database ID for edit/delete
+        id: ambulance.id,
+
+        // ✅ Use backend ambulanceNumber for display
+        ambulanceNumber: ambulance.ambulanceNumber,
+
+        // ✅ Backend virtual ID
+        ambulanceId: ambulance.ambulanceId || formatAmbulanceId(ambulance.ambulanceNumber),
+
+        // ✅ Use ambulanceId as formattedId for display
+        formattedId: ambulance.ambulanceId || formatAmbulanceId(ambulance.ambulanceNumber),
+
+        serviceName: ambulance.serviceName || '',
+        phone: ambulance.phone || '',
+        vehicleType: ambulance.vehicleType || '',
+        address: ambulance.address || {},
+        hospitalId: ambulance.hospitalId,
+
+        createdAt: ambulance.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+
+        lastUpdated: ambulance.updatedAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+      }))
+      // ✅ CRITICAL FIX: Sort by ambulanceNumber to ensure proper ordering
+      .sort((a, b) => Number(a.ambulanceNumber) - Number(b.ambulanceNumber));
   };
 
-  // No client-side filtering - use data directly from API
+  // Transform data from API response
   const ambulancesData = transformAmbulanceData(ambulancesResponse?.data || []);
   
   // Get pagination from API response
@@ -267,7 +282,7 @@ const Ambulance = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: handleAddAmbulance - Now throws errors to modal
+  // handleAddAmbulance - Now throws errors to modal
   // ============================================================
   const handleAddAmbulance = async (newAmbulance) => {
     // Check permission before adding
@@ -299,7 +314,7 @@ const Ambulance = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: handleEditAmbulance - Now throws errors to modal
+  // handleEditAmbulance - Now throws errors to modal
   // ============================================================
   const handleEditAmbulance = async (updatedAmbulance) => {
     // Check permission before editing

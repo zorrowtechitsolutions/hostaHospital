@@ -15,6 +15,11 @@ export interface AmbulanceAddress {
 
 export interface Ambulance {
   id?: number;
+  
+  // ✅ Added ambulanceNumber and ambulanceId fields
+  ambulanceNumber?: number;
+  ambulanceId?: string;
+  
   serviceName: string;
   phone: string;
   vehicleType: string;
@@ -229,8 +234,6 @@ export const ambulanceApi = api.injectEndpoints({
           }
         }
         
-        // Get userId (this is the authId)
-        
         return {
           url: "/ambulance",
           method: "POST",
@@ -270,8 +273,6 @@ export const ambulanceApi = api.injectEndpoints({
             hospitalId = authHospitalId;
           }
         }
-        
-        // Get userId (this is the authId)
         
         return {
           url: `/ambulance/${id}`,
