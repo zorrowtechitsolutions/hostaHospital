@@ -52,25 +52,29 @@ const formatBloodId = (stockNumber) => {
 };
 
 // ✅ FIXED: Transform API response - Use backend stockNumber and stockId
+// ✅ ADDED: Sort by stockNumber to ensure proper ordering (1, 2, 3, 4...)
 const transformBloodStockData = (stockList) => {
   if (!stockList || !Array.isArray(stockList)) return [];
-  
-  return stockList.map((stock) => ({
-    id: stock.id || stock._id,
-    
-    // ✅ Use backend values
-    stockNumber: stock.stockNumber,
-    stockId: stock.stockId || formatBloodId(stock.stockNumber),
-    
-    // Use stockId as formattedId for display
-    formattedId: stock.stockId || formatBloodId(stock.stockNumber),
-    
-    bloodGroup: stock.bloodGroup || '',
-    count: stock.count || 0,
-    hospitalId: stock.hospitalId,
-    
-    lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
-  }));
+
+  return stockList
+    .map((stock) => ({
+      id: stock.id || stock._id,
+      
+      // ✅ Use backend values
+      stockNumber: stock.stockNumber,
+      stockId: stock.stockId || formatBloodId(stock.stockNumber),
+      
+      // Use stockId as formattedId for display
+      formattedId: stock.stockId || formatBloodId(stock.stockNumber),
+      
+      bloodGroup: stock.bloodGroup || '',
+      count: stock.count || 0,
+      hospitalId: stock.hospitalId,
+      
+      lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
+    }))
+    // ✅ CRITICAL FIX: Sort by stockNumber to ensure proper ordering
+    .sort((a, b) => Number(a.stockNumber) - Number(b.stockNumber));
 };
 
 // Skeleton Loading Component
@@ -448,7 +452,7 @@ const BloodBank = () => {
     };
   }, [refetch]);
 
-  // Transform data from API response
+  // Transform data from API response with sorting
   const allBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
   
   // Frontend search filtering - fallback when API doesn't filter properly
