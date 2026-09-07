@@ -455,7 +455,17 @@ const Patients = () => {
     });
   };
 
-  const transformedPatients = transformPatientData(allPatients);
+  // ✅ CRITICAL FIX: Sort patients by patientNumber (ascending) before any filtering
+  const transformedPatients = useMemo(() => {
+    const patients = transformPatientData(allPatients);
+    
+    // ✅ Sort by patientNumber to ensure proper ordering (PT0001, PT0002, PT0003...)
+    return [...patients].sort((a, b) => {
+      const numberA = Number(a.patientNumber) || 0;
+      const numberB = Number(b.patientNumber) || 0;
+      return numberA - numberB;
+    });
+  }, [allPatients]);
 
   // ✅ CLIENT-SIDE FILTERING - Apply both gender and status filters
   const filteredPatients = useMemo(() => {
@@ -978,7 +988,7 @@ const Patients = () => {
           </div>
         )}
 
-        {/* GRID VIEW - Using patientNumber for display */}
+        {/* GRID VIEW - Using patientNumber for display with correct sorting */}
         {viewMode === 'grid' && filteredPatients.length > 0 && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1127,7 +1137,7 @@ const Patients = () => {
           </>
         )}
 
-        {/* LIST VIEW - Using patientNumber for display */}
+        {/* LIST VIEW - Using patientNumber for display with correct sorting */}
         {viewMode === 'list' && filteredPatients.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
