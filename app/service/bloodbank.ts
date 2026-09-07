@@ -8,6 +8,11 @@ import { getAuthUser } from "../../src/utils/auth";
 export interface BloodBank {
   id?: string | number;
   _id?: string;
+  
+  // ✅ Added stockNumber and stockId fields
+  stockNumber?: number;
+  stockId?: string;
+  
   bloodGroup: string;
   count: number;
   hospitalId?: string | number;
@@ -174,34 +179,34 @@ export const bloodBankApi = api.injectEndpoints({
 
     // ================= CREATE BLOOD BANK =================
     createBloodBank: builder.mutation<
-  BloodBankResponse,
-  Omit<BloodBank, 'id' | 'createdAt' | 'updatedAt' | 'lastUpdated'>
->({
-  query: (data) => {
-    const auth = getAuthUser();
+      BloodBankResponse,
+      Omit<BloodBank, 'id' | 'createdAt' | 'updatedAt' | 'lastUpdated'>
+    >({
+      query: (data) => {
+        const auth = getAuthUser();
 
-    // Explicit hospitalId from Super Admin page first.
-    // Otherwise use logged-in user's hospital.
-    const hospitalId =
-      data.hospitalId !== undefined &&
-      data.hospitalId !== null &&
-      data.hospitalId !== ""
-        ? Number(data.hospitalId)
-        : getHospitalIdFromAuth(auth);
+        // Explicit hospitalId from Super Admin page first.
+        // Otherwise use logged-in user's hospital.
+        const hospitalId =
+          data.hospitalId !== undefined &&
+          data.hospitalId !== null &&
+          data.hospitalId !== ""
+            ? Number(data.hospitalId)
+            : getHospitalIdFromAuth(auth);
 
-    return {
-      url: "/blood-banks",
-      method: "POST",
-      body: {
-        bloodGroup: data.bloodGroup,
-        count: Number(data.count),
-        hospitalId,
+        return {
+          url: "/blood-banks",
+          method: "POST",
+          body: {
+            bloodGroup: data.bloodGroup,
+            count: Number(data.count),
+            hospitalId,
+          },
+        };
       },
-    };
-  },
 
-  invalidatesTags: ["BloodBank"],
-}),
+      invalidatesTags: ["BloodBank"],
+    }),
 
     // ================= UPDATE BLOOD BANK =================
     updateBloodBank: builder.mutation<

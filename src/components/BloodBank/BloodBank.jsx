@@ -45,29 +45,30 @@ const safeToString = (value) => {
   return String(value);
 };
 
-// Helper function to format ID for display only
-const formatBloodId = (id) => {
-  if (!id) return '#BLD0000';
-  let numericId;
-  if (typeof id === 'string') {
-    const match = id.match(/\d+/);
-    numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-  } else {
-    numericId = parseInt(id) || 0;
-  }
-  return `#BLD${String(numericId).padStart(4, '0')}`;
+// ✅ FIXED: Format stock number to display ID (5 digits padding)
+const formatBloodId = (stockNumber) => {
+  if (!stockNumber && stockNumber !== 0) return '#BLD00000';
+  return `#BLD${String(stockNumber).padStart(5, '0')}`;
 };
 
-// Transform API response - SEPARATE display ID from database ID
+// ✅ FIXED: Transform API response - Use backend stockNumber and stockId
 const transformBloodStockData = (stockList) => {
   if (!stockList || !Array.isArray(stockList)) return [];
   
-  return stockList.map((stock, index) => ({
+  return stockList.map((stock) => ({
     id: stock.id || stock._id,
-    formattedId: formatBloodId(stock.id || stock._id || index + 1),
+    
+    // ✅ Use backend values
+    stockNumber: stock.stockNumber,
+    stockId: stock.stockId || formatBloodId(stock.stockNumber),
+    
+    // Use stockId as formattedId for display
+    formattedId: stock.stockId || formatBloodId(stock.stockNumber),
+    
     bloodGroup: stock.bloodGroup || '',
     count: stock.count || 0,
     hospitalId: stock.hospitalId,
+    
     lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
   }));
 };
@@ -157,7 +158,6 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Blood Stock" size="md">
       <div className="space-y-4">
-        {/* ✅ Display server error if provided */}
         {serverError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <p className="text-sm text-red-600">{serverError}</p>
@@ -254,7 +254,6 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Edit Blood Stock" size="md">
       <div className="space-y-4">
-        {/* ✅ Display server error if provided */}
         {serverError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <p className="text-sm text-red-600">{serverError}</p>
@@ -361,7 +360,7 @@ const BloodBank = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBloodStock, setSelectedBloodStock] = useState(null);
   
-  // ✅ Error states for modals
+  // Error states for modals
   const [addError, setAddError] = useState(null);
   const [editError, setEditError] = useState(null);
   
@@ -379,7 +378,7 @@ const BloodBank = () => {
   // Get hospital ID from auth
   const hospitalId = getHospitalId();
 
-  // ✅ API Hooks - WITH hospitalId from auth
+  // API Hooks - WITH hospitalId from auth
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
@@ -390,14 +389,14 @@ const BloodBank = () => {
     bloodGroup: bloodGroupFilter !== "all" ? bloodGroupFilter : undefined,
     search_query: searchTerm?.trim() && searchTerm.trim().length >= 2 ? searchTerm : undefined,
   }, {
-    skip: !hospitalId, // Skip if no hospital ID
+    skip: !hospitalId,
   });
 
   const [createBloodBank, { isLoading: isAdding }] = useCreateBloodBankMutation();
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
 
-  // ✅ Register socket event listeners
+  // Register socket event listeners
   useEffect(() => {
     registerBloodBankEvents({
       onStockCreated: async () => {
@@ -452,9 +451,8 @@ const BloodBank = () => {
   // Transform data from API response
   const allBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
   
-  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  // Frontend search filtering - fallback when API doesn't filter properly
   const filteredBloodStocks = React.useMemo(() => {
-    // If no search term or search term is too short, return all data
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allBloodStocks;
     }
@@ -472,11 +470,10 @@ const BloodBank = () => {
     });
   }, [allBloodStocks, searchTerm]);
 
-  // ✅ Apply blood group filter (frontend fallback)
+  // Apply blood group filter (frontend fallback)
   const paginatedBloodStocks = React.useMemo(() => {
     let result = filteredBloodStocks;
 
-    // Apply blood group filter
     if (bloodGroupFilter !== 'all') {
       result = result.filter(item => 
         safeToString(item.bloodGroup).toLowerCase() === bloodGroupFilter.toLowerCase()
@@ -517,13 +514,13 @@ const BloodBank = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ✅ Search handler - receives value directly from SearchBar
+  // Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
+  // Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -540,9 +537,8 @@ const BloodBank = () => {
     return true;
   };
 
-  // ✅ CRUD Handlers with Proper Error Handling
+  // CRUD Handlers with Proper Error Handling
   const handleAddBloodStock = async (newBloodStock) => {
-    // Check CREATE permission
     if (!checkPermission(PERMISSIONS.CREATE, 'create blood stock')) {
       return;
     }
@@ -562,7 +558,6 @@ const BloodBank = () => {
     } catch (error) {
       console.error("Error adding blood stock:", error);
       
-      // 🔥 FIXED: Properly handle nested error structure
       if (error.data?.error?.details?.length) {
         const messages = error.data.error.details
           .map(detail => detail.message)
@@ -583,7 +578,6 @@ const BloodBank = () => {
   };
 
   const handleEditBloodStock = async (updatedStock) => {
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit blood stock')) {
       return;
     }
@@ -607,7 +601,6 @@ const BloodBank = () => {
     } catch (error) {
       console.error("Error updating blood stock:", error);
       
-      // 🔥 FIXED: Properly handle nested error structure
       if (error.data?.error?.details?.length) {
         const messages = error.data.error.details
           .map(detail => detail.message)
@@ -628,7 +621,6 @@ const BloodBank = () => {
   };
 
   const handleDeleteBloodStock = async () => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete blood stock')) {
       return;
     }
@@ -645,7 +637,6 @@ const BloodBank = () => {
       } catch (error) {
         console.error("Error deleting blood stock:", error);
         
-        // 🔥 FIXED: Properly handle nested error structure
         if (error.data?.error?.details?.length) {
           const messages = error.data.error.details
             .map(detail => detail.message)
@@ -663,7 +654,6 @@ const BloodBank = () => {
   };
 
   const handleViewDetails = (stock) => {
-    // Check VIEW permission
     if (!checkPermission(PERMISSIONS.VIEW, 'view blood stock details')) {
       return;
     }
@@ -673,7 +663,6 @@ const BloodBank = () => {
   };
 
   const handleEditClick = (stock) => {
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit blood stock')) {
       setActiveMenu(null);
       return;
@@ -685,7 +674,6 @@ const BloodBank = () => {
   };
 
   const handleDeleteClick = (stock) => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete blood stock')) {
       setActiveMenu(null);
       return;
@@ -710,7 +698,6 @@ const BloodBank = () => {
   };
 
   const handleAddClick = () => {
-    // Check CREATE permission
     if (!checkPermission(PERMISSIONS.CREATE, 'add blood stock')) {
       return;
     }
@@ -726,7 +713,6 @@ const BloodBank = () => {
     }
 
     try {
-      // Transform data for Excel export
       const exportData = paginatedBloodStocks.map(stock => ({
         'Stock ID': stock.formattedId,
         'Blood Group': stock.bloodGroup,
@@ -734,11 +720,9 @@ const BloodBank = () => {
         'Last Updated': stock.lastUpdated || new Date().toISOString().split('T')[0]
       }));
 
-      // Generate filename with date
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `blood_bank_export_${dateStr}`;
 
-      // Export to Excel with column width
       exportToExcel({
         data: exportData,
         fileName: fileName,
@@ -795,7 +779,6 @@ const BloodBank = () => {
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
-            {/* ✅ Using global SearchBar component */}
             <SearchBar
               placeholder="Search by blood group or ID..."
               value={searchTerm}
@@ -803,7 +786,6 @@ const BloodBank = () => {
               onClear={handleClearSearch}
               className="flex-1 max-w-sm"
             />
-            {/* Blood Group Dropdown - Filter */}
             <select
               value={bloodGroupFilter}
               onChange={(e) => {
@@ -832,7 +814,6 @@ const BloodBank = () => {
               <Download size={16} />
             </button>
 
-            {/* Add Blood Stock Button with Permission Check */}
             <button 
               onClick={handleAddClick} 
               className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
@@ -842,7 +823,7 @@ const BloodBank = () => {
           </div>
         </div>
 
-        {/* No Results - Shows when no blood stock found */}
+        {/* No Results */}
         {!loading && paginatedBloodStocks.length === 0 && (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -859,7 +840,7 @@ const BloodBank = () => {
           </div>
         )}
 
-        {/* GRID VIEW - Always shown */}
+        {/* GRID VIEW */}
         {paginatedBloodStocks.length > 0 && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -905,7 +886,7 @@ const BloodBank = () => {
               })}
             </div>
 
-            {/* Pagination for Grid View */}
+            {/* Pagination */}
             {totalFilteredPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -968,7 +949,6 @@ const BloodBank = () => {
           itemName={selectedBloodStock?.bloodGroup}
         />
 
-        {/* Permission Denied Modal */}
         <PermissionDeniedModal
           isOpen={showPermissionDenied}
           onClose={() => setShowPermissionDenied(false)}
