@@ -1,6 +1,6 @@
-// RejectRequestModal.jsx (Simpler version - no API call)
+// src/components/Requests/RejectRequestModal.jsx
 import React from "react";
-import { XCircle } from "lucide-react";
+import { XCircle, Hash } from "lucide-react";
 import { Modal, Button, Textarea } from "../ui";
 import { showWarningToast } from "../ui/Toast";
 
@@ -9,14 +9,28 @@ const RejectRequestModal = ({
   onConfirm, 
   reason, 
   setReason,
+  requestData, // ✅ Added to show booking info
+  bookingId, // ✅ bookingNumber passed from parent
   isLoading = false
 }) => {
+  // Format booking number for display
+  const formattedBookingId = bookingId 
+    ? `#BK${String(bookingId).padStart(5, '0')}`
+    : 'N/A';
+
   const handleConfirm = () => {
     if (!reason.trim()) {
       showWarningToast("Please enter a reason for rejection", 3000);
       return;
     }
-    onConfirm();
+    
+    // ✅ Pass booking number to parent
+    if (onConfirm) {
+      onConfirm({
+        reason: reason.trim(),
+        bookingNumber: bookingId, // ✅ Pass booking number
+      });
+    }
   };
 
   return (
@@ -28,6 +42,24 @@ const RejectRequestModal = ({
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-1">Are you sure you want to reject this request?</p>
+        
+        {/* ✅ Show booking number */}
+        {bookingId && (
+          <p className="text-xs text-red-600 mt-2 font-medium">
+            Booking: {formattedBookingId}
+          </p>
+        )}
+        
+        {requestData?.patient_name && (
+          <p className="text-xs text-gray-400 mt-1">
+            Patient: {requestData.patient_name}
+          </p>
+        )}
+        {requestData?.displayName && (
+          <p className="text-xs text-gray-400 mt-1">
+            Doctor: {requestData.displayName}
+          </p>
+        )}
       </div>
 
       <div className="mt-4">

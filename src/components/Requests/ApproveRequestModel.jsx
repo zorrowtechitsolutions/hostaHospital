@@ -1,5 +1,6 @@
 // src/components/Requests/ApproveRequestModal.jsx - With Every Minute Time Slots
 import { useState } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { CalendarCheck, Hash } from "lucide-react";
 import { Modal, Button, Input, Select } from "../ui";
 import { showWarningToast } from "../ui/Toast";
@@ -202,6 +203,7 @@ const ApproveRequestModal = ({
   onClose,
   onConfirm,
   requestData,
+  bookingId, // ✅ bookingNumber passed from parent
   initialDate = "",
   initialTime = "",
   initialToken = "",
@@ -214,14 +216,20 @@ const ApproveRequestModal = ({
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Debug log
+  console.log("📝 ApproveRequestModal received bookingId:", bookingId);
+  console.log("📝 requestData:", requestData);
+
   const handleConfirm = async () => {
     if (!validateForm(date, consulting_time, token)) return;
 
+    // ✅ Pass booking number to parent
     if (onConfirm) {
       onConfirm({
         booking_date: date,
         consulting_time: consulting_time, // Already in 24-hour format
         token: token.trim(),
+        bookingNumber: bookingId, // ✅ Pass booking number
       });
     }
 
@@ -231,6 +239,11 @@ const ApproveRequestModal = ({
   const handleSaveEdit = () => {
     setIsEditing(false);
   };
+
+  // Format booking number for display
+  const formattedBookingId = bookingId 
+    ? `#BK${String(bookingId).padStart(5, '0')}`
+    : 'N/A';
 
   const PreviewMode = () => (
     <>
@@ -248,6 +261,16 @@ const ApproveRequestModal = ({
           >
             Edit
           </Button>
+        </div>
+
+        {/* ✅ Show booking number */}
+        <div className="mb-3 pb-3 border-b border-green-200">
+          <div className="flex items-center gap-2">
+            <Hash size={16} className="text-green-600" />
+            <span className="text-sm text-gray-700">
+              <span className="font-medium">Booking ID:</span> {formattedBookingId}
+            </span>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -277,7 +300,7 @@ const ApproveRequestModal = ({
 
       <div className="mt-4 p-3 bg-gray-50 rounded-lg">
         <p className="text-xs text-gray-500 text-center">
-          Appointment scheduled for{" "}
+          Appointment {formattedBookingId} scheduled for{" "}
           <span className="font-medium text-gray-700">{date}</span> at{" "}
           <span className="font-medium text-gray-700">{formatTimeDisplay(consulting_time)}</span>{" "}
           {token && (
@@ -290,6 +313,13 @@ const ApproveRequestModal = ({
 
   const EditMode = () => (
     <div className="mt-4 space-y-4">
+      {/* ✅ Show booking number in edit mode too */}
+      <div className="p-2 bg-gray-50 rounded-lg">
+        <p className="text-xs text-gray-500">
+          Booking ID: <span className="font-medium text-gray-700">{formattedBookingId}</span>
+        </p>
+      </div>
+
       <Input
         label="Appointment Date"
         name="date"
@@ -354,6 +384,12 @@ const ApproveRequestModal = ({
             Doctor: {requestData.displayName}
           </p>
         )}
+        {/* ✅ Show booking number in header */}
+        {bookingId && (
+          <p className="text-xs text-blue-600 mt-1 font-medium">
+            Booking: {formattedBookingId}
+          </p>
+        )}
       </div>
 
       {!isEditing ? <PreviewMode /> : <EditMode />}
@@ -363,14 +399,11 @@ const ApproveRequestModal = ({
           Cancel
         </Button>
         <Button variant="success" onClick={handleConfirm} disabled={isLoading} loading={isLoading}>
-          {isLoading ? 'Creating...' : 'Confirm Appointment'}
+          {isLoading ? 'Approving...' : 'Confirm Appointment'}
         </Button>
       </div>
     </Modal>
   );
 };
-
-// Add missing imports
-import { useRef, useMemo, useEffect } from "react";
 
 export default ApproveRequestModal;

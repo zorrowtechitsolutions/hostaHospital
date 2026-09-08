@@ -17,6 +17,7 @@ import {
   useGetBookingsQuery,
   useApproveBookingMutation,
   useRejectBookingMutation,
+  useUpdateBookingMutation, // ✅ ADDED
   useDeleteBookingMutation
 } from '../../../app/service/request';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
@@ -65,7 +66,7 @@ const convertTo12Hour = (time24h) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
-// ✅ FIXED: Calculate age from DOB with support for DD/MM/YYYY format
+// Calculate age from DOB with support for DD/MM/YYYY format
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
 
@@ -206,6 +207,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false); // ✅ ADDED
   const itemsPerPage = 10;
 
   // Permission Denied Modal State
@@ -230,6 +232,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
+  const [updateBooking] = useUpdateBookingMutation(); // ✅ ADDED
   const [deleteBooking] = useDeleteBookingMutation();
 
   // Register socket event listeners
@@ -263,14 +266,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   }, [refetch]);
 
   // Helper functions
-  // ✅ FIXED: Format booking number to display ID (5 digits padding)
+  // ✅ FIXED: Format booking number to display ID (5 digits padding) - No fallback to database ID
   const formatAppointmentId = (booking) => {
     if (booking?.bookingNumber) {
       return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
     }
-    // Fallback to database ID if bookingNumber is not available
-    const id = booking?.id || booking?._id;
-    return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
+    // No fallback to database ID - use default placeholder
+    return '#BK00000';
   };
 
   const mapStatus = (status) => {
@@ -330,7 +332,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return null;
   };
 
-  // ✅ FIXED: Transform bookings data - Use bookingNumber for display
+  // ✅ FIXED: Transform bookings data - Explicit separation of IDs
+  // - Database ID (id/_id) → stored but NOT used for API operations
+  // - bookingNumber → used for API operations (approve/reject) AND UI display
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -360,13 +364,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const age = booking.patient_age ?? calculatedAge;
 
       return {
+        // Database ID — stored but NOT used for approve/reject API
         id: booking.id || booking._id,
         
-        // ✅ Use bookingNumber for display
+        // ✅ Booking number — used for API operations (approve/reject) AND UI display
         bookingNumber: booking.bookingNumber,
         formattedId: booking.bookingNumber 
           ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
-          : '#BK00000',
+          : '#BK00000', // No fallback to database ID
         
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
@@ -414,7 +419,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     limit: 1000 // Get all data for filtering
   });
 
-  // ✅ FIXED: Sort bookings by bookingNumber in DESCENDING order (highest first)
+  // ✅ Sort bookings by bookingNumber in DESCENDING order (highest first)
   const allBookingList = allBookingsResponse?.data || [];
   const allAppointmentsData = transformBookingsData(allBookingList).sort(
     (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
@@ -508,13 +513,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = statusFilter !== 'all' || departmentFilter !== '' || dateFilter !== '';
 
-  // ✅ Search handler for SearchBar - receives value directly
+  // Search handler for SearchBar - receives value directly
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
+  // Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -622,7 +627,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowDetailsModal(true);
   };
 
-  // ✅ UPDATED: Edit handler with status validation
+  // UPDATED: Edit handler with status validation - Uses bookingNumber for display
   const handleEditClick = (appointment) => {
     // Edit is allowed only for accepted appointments
     if (appointment?.originalStatus?.toLowerCase() !== 'accepted') {
@@ -639,24 +644,37 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
 
     console.log("📝 [handleEditClick] Appointment data:", appointment);
-    console.log("📝 [handleEditClick] booking_date:", appointment.booking_date);
-    console.log("📝 [handleEditClick] token:", appointment.token);
+    console.log("📝 [handleEditClick] Booking Number:", appointment.bookingNumber);
+    console.log("📝 [handleEditClick] Formatted ID:", appointment.formattedId);
 
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
   };
 
+  // ✅ Approve handler - uses bookingNumber for API
   const handleApproveClick = (appointment) => {
     // Check EDIT permission (approving is an edit action)
     if (!checkPermission(PERMISSIONS.EDIT, 'approve appointment')) {
+      return;
+    }
+    if (!appointment.bookingNumber) {
+      showErrorToast("Invalid appointment: Missing booking number.", 3000);
       return;
     }
     setSelectedRequest(appointment);
     setShowApproveModal(true);
   };
 
+  // ✅ Confirm Approve - uses bookingNumber for API (not database ID)
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) return;
+    
+    if (!selectedRequest.bookingNumber) {
+      showErrorToast("Booking number is missing. Cannot approve.", 3000);
+      setShowApproveModal(false);
+      setSelectedRequest(null);
+      return;
+    }
     
     setIsApproving(true);
     
@@ -677,8 +695,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         consultingTime = `${hours.padStart(2, "0")}:${minutes}`;
       }
       
+      // ✅ FIXED: Using bookingNumber (not id)
       await approveBooking({
-        id: selectedRequest.id,
+        bookingNumber: selectedRequest.bookingNumber, // ✅ Changed from id to bookingNumber
         data: {
           date: appointmentData.booking_date,
           consulting_time: consultingTime,
@@ -691,6 +710,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         event: "BOOKING_ACCEPTED",
         data: {
           bookingId: selectedRequest.id,
+          bookingNumber: selectedRequest.bookingNumber,
+          formattedId: selectedRequest.formattedId,
           patientName: selectedRequest.patientName,
           doctorName: selectedRequest.doctorName,
           date: appointmentData.booking_date,
@@ -707,6 +728,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       await refetch();
     } catch (error) {
+      console.error("❌ Approve error:", error);
       showErrorToast(error?.data?.message || 'Failed to approve appointment', 3000);
     } finally {
       setIsApproving(false);
@@ -715,6 +737,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
+  // ✅ Reject handler - uses bookingNumber for API
   const handleRejectClick = (appointment) => {
     // Check EDIT permission (rejecting is an edit action)
     if (!checkPermission(PERMISSIONS.EDIT, 'reject appointment')) {
@@ -725,14 +748,23 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowRejectModal(true);
   };
 
+  // ✅ Confirm Reject - uses bookingNumber for API (not database ID)
   const handleConfirmReject = async () => {
     if (!selectedRequest) return;
+    
+    if (!selectedRequest.bookingNumber) {
+      showErrorToast("Booking number is missing. Cannot reject.", 3000);
+      setShowRejectModal(false);
+      setSelectedRequest(null);
+      return;
+    }
     
     setIsRejecting(true);
     
     try {
+      // ✅ FIXED: Using bookingNumber (not id)
       await rejectBooking({
-        id: selectedRequest.id,
+        bookingNumber: selectedRequest.bookingNumber, // ✅ Changed from id to bookingNumber
         data: { reason: rejectReason }
       }).unwrap();
       
@@ -740,6 +772,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         event: "BOOKING_CANCELLED",
         data: {
           bookingId: selectedRequest.id,
+          bookingNumber: selectedRequest.bookingNumber,
+          formattedId: selectedRequest.formattedId,
           patientName: selectedRequest.patientName,
           doctorName: selectedRequest.doctorName,
           reason: rejectReason,
@@ -754,6 +788,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       
       refetch();
     } catch (error) {
+      console.error("❌ Reject error:", error);
       showErrorToast(error?.data?.message || 'Failed to reject appointment', 3000);
     } finally {
       setIsRejecting(false);
@@ -763,22 +798,67 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  const handleSaveEdit = (updatedData) => {
-    if (appointmentToEdit) {
+  // ✅ FIXED: handleSaveEdit now calls updateBooking API with bookingNumber
+  const handleSaveEdit = async (updatedData) => {
+    if (!appointmentToEdit) {
+      showErrorToast("No appointment selected for editing.", 3000);
+      return;
+    }
+
+    const bookingNumber = appointmentToEdit.bookingNumber;
+
+    if (!bookingNumber) {
+      showErrorToast("Booking number is missing. Cannot update.", 3000);
+      return;
+    }
+
+    console.log("🔥 UPDATE bookingNumber:", bookingNumber);
+    console.log("🔥 UPDATE data:", updatedData);
+
+    setIsUpdating(true);
+
+    try {
+      // ✅ Call the updateBooking API with bookingNumber
+      await updateBooking({
+        bookingNumber: Number(bookingNumber),
+        data: updatedData,
+      }).unwrap();
+
+      // Emit socket event for real-time updates
       socket.emit("booking_event", {
         event: "BOOKING_UPDATED",
         data: {
           bookingId: appointmentToEdit.id,
+          bookingNumber: appointmentToEdit.bookingNumber,
+          formattedId: appointmentToEdit.formattedId,
           patientName: appointmentToEdit.patientName,
           doctorName: appointmentToEdit.doctorName,
-          updatedData: updatedData,
+          updatedData,
           timestamp: new Date().toISOString()
         }
       });
+
+      showSuccessToast(
+        `Appointment ${appointmentToEdit.formattedId} updated successfully!`,
+        3000
+      );
+
+      setShowEditModal(false);
+      setAppointmentToEdit(null);
+      await refetch();
+
+    } catch (error) {
+      console.error("❌ Update booking error:", error);
+      
+      showErrorToast(
+        error?.data?.message ||
+        error?.error ||
+        "Failed to update appointment",
+        4000
+      );
+    } finally {
+      setIsUpdating(false);
     }
-    setShowEditModal(false);
-    setAppointmentToEdit(null);
-    refetch();
   };
 
   const handleDeleteClick = (appointment) => {
@@ -796,12 +876,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setIsDeleting(true);
     
     try {
-      await deleteBooking(appointmentToDelete.id).unwrap();
+      // ✅ Using bookingNumber for delete API call
+      await deleteBooking(appointmentToDelete.bookingNumber).unwrap();
       
       socket.emit("booking_event", {
         event: "BOOKING_DELETED",
         data: {
           bookingId: appointmentToDelete.id,
+          bookingNumber: appointmentToDelete.bookingNumber,
+          formattedId: appointmentToDelete.formattedId,
           patientName: appointmentToDelete.patientName,
           doctorName: appointmentToDelete.doctorName,
           timestamp: new Date().toISOString()
@@ -818,6 +901,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       refetch();
       
     } catch (error) {
+      console.error("❌ Delete error:", error);
       showErrorToast(error?.data?.message || 'Failed to delete appointment. Please try again.', 4000);
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
@@ -856,7 +940,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // AppointmentDetailsModal Component
+  // AppointmentDetailsModal Component - Shows booking number
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
     
@@ -864,7 +948,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
         <div className="bg-white w-[520px] rounded-xl shadow-lg">
           <div className="flex items-center justify-between px-5 py-4 border-b">
-            <h2 className="text-lg font-semibold">Appointment Details</h2>
+            <div>
+              <h2 className="text-lg font-semibold">Appointment Details</h2>
+              <p className="text-xs text-gray-500">
+                Booking: <span className="font-medium text-[#1C62A0]">{appointment.formattedId}</span>
+              </p>
+            </div>
             <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -872,6 +961,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             </button>
           </div>
           <div className="p-5 space-y-5">
+            {/* Booking ID row */}
+            <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+              <span className="text-sm font-medium text-gray-600">Booking ID</span>
+              <span className="text-sm font-semibold text-[#1C62A0]">{appointment.formattedId}</span>
+            </div>
+            
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <ShadcnAvatar className="w-10 h-10">
@@ -958,7 +1053,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // ✅ UPDATED: RowActionMenu Component - Edit button only shows for accepted appointments
+  // UPDATED: RowActionMenu Component - Shows booking number in menu header
   const RowActionMenu = ({ appointment }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -977,10 +1072,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           <MoreVertical size={18} />
         </Button>
         {showMenu && (
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+          <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+            {/* Header with Booking Number */}
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 rounded-t-lg">
+              <p className="text-xs text-gray-500">
+                Booking: <span className="font-medium text-gray-700">{appointment.formattedId}</span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Patient: <span className="font-medium text-gray-700">{appointment.patientName}</span>
+              </p>
+            </div>
+            
             <button 
               onClick={() => { handleViewDetails(appointment); setShowMenu(false); }} 
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               <Eye size={16} /> View Details
             </button>
@@ -1009,7 +1114,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </>
             )}
             <div className="border-t border-gray-100 my-1"></div>
-            {/* ✅ Edit button only shows for accepted appointments */}
+            {/* Edit button only shows for accepted appointments */}
             {appointment.originalStatus === 'accepted' && (
               <button 
                 onClick={() => { handleEditClick(appointment); setShowMenu(false); }} 
@@ -1101,7 +1206,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ SearchBar with proper handlers */}
+          {/* SearchBar with proper handlers */}
           <SearchBar
             placeholder="Search by Appointment ID, Patient Name, Contact..."
             value={searchTerm}
@@ -1242,6 +1347,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 <tbody>
                   {paginatedAppointments.map((apt, index) => (
                     <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
+                      {/* ✅ UI displays formattedId (based on bookingNumber) */}
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -1310,9 +1416,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         />
       )}
 
+      {/* ✅ Approve Modal - receives bookingNumber (not database ID) */}
       {showApproveModal && selectedRequest && (
         <ApproveRequestModal 
-          bookingId={selectedRequest.id}
+          bookingId={selectedRequest.bookingNumber}
           requestData={selectedRequest}
           onClose={() => { 
             setShowApproveModal(false); 
@@ -1350,6 +1457,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         patient={null}
         onSave={handleSaveEdit}
         allPatients={[]}
+        isLoading={isUpdating} // ✅ Pass loading state to modal
       />
 
       <DeleteModal 

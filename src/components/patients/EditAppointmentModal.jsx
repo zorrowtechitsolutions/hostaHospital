@@ -181,8 +181,9 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       return;
     }
 
-    if (!appointment?.id) {
-      showErrorToast('Appointment ID is missing', 3000);
+    // ✅ FIXED: Check for bookingNumber instead of id
+    if (!appointment?.bookingNumber) {
+      showErrorToast('Booking number is missing', 3000);
       return;
     }
 
@@ -198,14 +199,21 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       const updateData = {
         patient_name: formData.patient_name,
         patient_phone: formData.patient_phone,
-        doctorId: formData.doctorId,
+        doctorId: Number(formData.doctorId),
         booking_date: formData.booking_date,
         consulting_time: consultingTime,
-        token: formData.token, // Token is preserved on save
+        token: formData.token ? Number(formData.token) : undefined,
       };
 
+      console.log('📝 Updating booking:', {
+        bookingNumber: appointment.bookingNumber,
+        formattedId: `#BK${String(appointment.bookingNumber).padStart(5, '0')}`,
+        updateData,
+      });
+
+      // ✅ FIXED: Use bookingNumber (not id)
       await updateBooking({
-        id: appointment.id,
+        bookingNumber: Number(appointment.bookingNumber),
         data: updateData,
       }).unwrap();
 
@@ -214,11 +222,16 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       if (onSave) {
         onSave(updateData);
       }
+      
       onClose();
     } catch (error) {
-      console.error('Update error:', error);
+      console.error('❌ Update error:', error);
+      console.error('❌ Update error data:', error?.data);
+
       showErrorToast(
-        error?.data?.message || 'Failed to update appointment. Please try again.',
+        error?.data?.message ||
+        error?.data?.error?.message ||
+        'Failed to update appointment. Please try again.',
         3000
       );
     } finally {

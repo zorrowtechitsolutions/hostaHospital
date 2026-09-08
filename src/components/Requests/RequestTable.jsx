@@ -1,4 +1,4 @@
-// src/components/Requests/RequestTable.jsx - With Server-Side Pagination
+// src/components/Requests/RequestTable.jsx - With Server-Side Pagination & Optimistic Updates
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Check,
@@ -40,16 +40,6 @@ const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transi
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
 
 // Helper functions
-// ✅ FIXED: Format booking number to display ID (5 digits padding)
-const formatRequestId = (booking) => {
-  if (booking?.bookingNumber) {
-    return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
-  }
-  // Fallback to database ID if bookingNumber is not available
-  const id = booking?.id || booking?._id;
-  return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
-};
-
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
   const birthDate = new Date(dob);
@@ -62,13 +52,17 @@ const calculateAge = (dob) => {
   return age;
 };
 
-// ✅ FIXED: Transform bookings data - Use bookingNumber for display
+// ✅ Transform bookings data - Explicit separation of IDs
+// - Database ID (id/_id) → stored but NOT used for API operations
+// - bookingNumber → used for API operations (approve/reject) AND UI display
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
   return bookingList.map((booking, index) => {
     const DEFAULT_PROFILE_IMAGE = `https://randomuser.me/api/portraits/lego/${(index % 10) + 1}.jpg`;
-    const bookingId = booking.id || booking._id;
+    
+    // Database ID - stored but NOT used for approve/reject API
+    const databaseId = booking.id || booking._id;
     
     const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
 
@@ -76,13 +70,14 @@ const transformBookingsData = (bookingList) => {
     const rawTime = booking.open || booking.consulting_time || booking.consulting_time || "N/A";
 
     return {
-      id: bookingId,
+      // Database ID — stored but NOT used for approve/reject API
+      id: databaseId,
       
-      // ✅ Use bookingNumber for display
+      // ✅ Booking number — used for API operations (approve/reject) AND UI display
       bookingNumber: booking.bookingNumber,
       formattedId: booking.bookingNumber 
         ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
-        : '#BK00000',
+        : '#BK00000', // No fallback to database ID
       
       patientId: `PT${String(booking.userId || index).padStart(4, "0")}`,
       patientName: booking.patient_name || booking.patientName || "N/A",
@@ -206,6 +201,18 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
+  // ✅ NEW: Optimistic update state - track removed booking numbers
+  const [removedRequestNumbers, setRemovedRequestNumbers] = useState(new Set());
+
+  // ✅ NEW: Function to remove booking from pending list optimistically
+  const removeFromPendingList = (bookingNumber) => {
+    setRemovedRequestNumbers((prev) => {
+      const next = new Set(prev);
+      next.add(Number(bookingNumber));
+      return next;
+    });
+  };
+
   // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
@@ -300,11 +307,22 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ FIXED: Transform API response with DESCENDING sorting (highest first)
+  // ✅ Transform API response with DESCENDING sorting (highest first)
+  // ✅ FIXED: Add additional frontend filter to ensure only pending statuses are shown
   const safeData = useMemo(() => {
     const transformed = transformBookingsData(bookingsResponse?.data || []);
-    // ✅ Sort by bookingNumber in DESCENDING order (highest first)
-    return [...transformed].sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
+    
+    // ✅ ADDED: Frontend filter to ensure only pending statuses are displayed
+    // This is a safety net in case the backend returns non-pending bookings
+    const pendingOnly = transformed.filter(item => 
+      item.status === "pending" || 
+      item.status === "Pending" || 
+      !item.status || 
+      item.status?.toLowerCase() === "pending"
+    );
+    
+    // Sort by bookingNumber in DESCENDING order (highest first)
+    return [...pendingOnly].sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
   }, [bookingsResponse]);
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
@@ -344,7 +362,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   }, [filteredBySearch, doctorId, doctorName, showAllData]);
 
   // ✅ Apply department filter (frontend fallback)
-  const filteredRequests = useMemo(() => {
+  const filteredByDepartmentAndDate = useMemo(() => {
     let result = filteredByDoctor;
 
     // Apply department filter if set
@@ -364,12 +382,19 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return result;
   }, [filteredByDoctor, departmentFilter, dateFilter]);
 
-  // ✅ CRITICAL FIX: Use API pagination metadata for totals
+  // ✅ NEW: Apply optimistic removal filter
+  const filteredRequests = useMemo(() => {
+    // Filter out any bookings that have been optimistically removed
+    return filteredByDepartmentAndDate.filter(
+      (item) => !removedRequestNumbers.has(Number(item.bookingNumber))
+    );
+  }, [filteredByDepartmentAndDate, removedRequestNumbers]);
+
+  // ✅ Use API pagination metadata for totals
   const totalItems = bookingsResponse?.pagination?.totalItems ?? 0;
   const totalPages = bookingsResponse?.pagination?.totalPages ?? 0;
 
   // ✅ Use the filtered data directly (no client-side pagination slice needed)
-  // The data is already paginated from the server
   const paginatedRequests = filteredRequests;
 
   // Get all unique departments from the data
@@ -392,6 +417,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter, showAllData]);
 
+  // ✅ NEW: Clear removed items when filters change or refetch happens
+  useEffect(() => {
+    setRemovedRequestNumbers(new Set());
+  }, [bookingsResponse?.pagination?.currentPage, searchTerm, departmentFilter, dateFilter]);
+
   // Handlers
   const handleRefresh = () => {
     resetFilters({
@@ -401,6 +431,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       setStatusFilter,
       setCurrentPage
     });
+    setRemovedRequestNumbers(new Set()); // Clear removed items on refresh
     refetch();
     showSuccessToast("Refreshed requests", TOAST_DURATION);
   };
@@ -413,6 +444,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       setStatusFilter,
       setCurrentPage
     });
+    setRemovedRequestNumbers(new Set()); // Clear removed items when clearing filters
     showSuccessToast("All filters cleared", TOAST_DURATION);
   };
 
@@ -461,23 +493,30 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
+  // ✅ Approve handler - uses bookingNumber for API
   const handleApproveClick = (request) => {
-    if (!request.id) {
-      showErrorToast("Invalid request: Missing ID. Please refresh and try again.", TOAST_DURATION);
+    if (!request.bookingNumber) {
+      showErrorToast("Invalid request: Missing booking number. Please refresh and try again.", TOAST_DURATION);
       return;
     }
     setSelectedRequest(request);
     setShowApproveModal(true);
   };
 
+  // ✅ FIXED: Confirm Approve with optimistic update
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) {
       showErrorToast("No request selected", TOAST_DURATION);
       return;
     }
 
-    if (!selectedRequest.id) {
-      showErrorToast("Request ID is missing. Cannot approve.", TOAST_DURATION);
+    const bookingNumber = Number(selectedRequest.bookingNumber);
+
+    if (!bookingNumber) {
+      showErrorToast(
+        "Booking number is missing. Cannot approve.",
+        TOAST_DURATION
+      );
       closeApproveModal();
       return;
     }
@@ -485,51 +524,84 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsApproving(true);
 
     try {
+      console.log("✅ Approving booking:", {
+        bookingNumber,
+        formattedId: selectedRequest.formattedId,
+        appointmentData,
+      });
+
+      // ✅ Use bookingNumber (not id) and appointmentData.booking_date (not date)
       await approveBooking({
-        id: selectedRequest.id,
+        bookingNumber,
         data: {
-          date: appointmentData.date,
+          date: appointmentData.booking_date,
           consulting_time: appointmentData.consulting_time,
           token: appointmentData.token,
-          notes: appointmentData.notes || ""
-        }
+          notes: appointmentData.notes || "",
+        },
       }).unwrap();
+
+      // ✅ OPTIMISTIC UPDATE: Remove immediately from pending UI
+      removeFromPendingList(bookingNumber);
+
+      // ✅ Refetch pending requests to sync with server
+      await refetch();
 
       showSuccessToast(
         `Request ${selectedRequest.formattedId} approved successfully!`,
         SUCCESS_DURATION,
         {
           'Patient': selectedRequest.patientName,
-          'Date': appointmentData.date,
+          'Date': appointmentData.booking_date,
           'Time': appointmentData.consulting_time,
           'Token': `#${appointmentData.token}`
         }
       );
 
-      refetch();
       closeApproveModal();
 
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to approve request', TOAST_DURATION);
+      console.error("❌ Approve error:", error);
+
+      // ✅ On error, remove from removed set to show it again
+      setRemovedRequestNumbers((prev) => {
+        const next = new Set(prev);
+        next.delete(bookingNumber);
+        return next;
+      });
+
+      showErrorToast(
+        error?.data?.message ||
+        error?.message ||
+        "Failed to approve request",
+        TOAST_DURATION
+      );
     } finally {
       setIsApproving(false);
     }
   };
 
+  // ✅ Reject handler - uses bookingNumber for API
   const handleRejectClick = (request) => {
     setSelectedRequest(request);
     setRejectReason("");
     setShowRejectModal(true);
   };
 
+  // ✅ FIXED: Confirm Reject with optimistic update
   const handleConfirmReject = async () => {
     if (!selectedRequest) {
       showErrorToast("No request selected", TOAST_DURATION);
       return;
     }
 
-    if (!selectedRequest.id) {
-      showErrorToast("Request ID is missing. Cannot reject.", TOAST_DURATION);
+    const bookingNumber = Number(selectedRequest.bookingNumber);
+
+    if (!bookingNumber) {
+      showErrorToast(
+        "Booking number is missing. Cannot reject.",
+        TOAST_DURATION
+      );
       closeRejectModal();
       return;
     }
@@ -537,26 +609,54 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsRejecting(true);
 
     try {
+      console.log("❌ Rejecting booking:", {
+        bookingNumber,
+        formattedId: selectedRequest.formattedId,
+        reason: rejectReason,
+      });
+
+      // ✅ Use bookingNumber (not id)
       await rejectBooking({
-        id: selectedRequest.id,
-        data: { reason: rejectReason }
+        bookingNumber,
+        data: {
+          reason: rejectReason.trim(),
+        },
       }).unwrap();
 
-      showErrorToast(
+      // ✅ OPTIMISTIC UPDATE: Remove immediately from pending UI
+      removeFromPendingList(bookingNumber);
+
+      // ✅ Refetch pending requests to sync with server
+      await refetch();
+
+      showSuccessToast(
         `Request ${selectedRequest.formattedId} rejected successfully!`,
         SUCCESS_DURATION,
         {
           'Patient': selectedRequest.patientName,
           'Doctor': selectedRequest.doctorName,
-          'Reason': rejectReason || "No reason provided"
+          'Reason': rejectReason.trim() || "No reason provided"
         }
       );
 
-      refetch();
       closeRejectModal();
 
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to reject request', TOAST_DURATION);
+      console.error("❌ Reject error:", error);
+
+      // ✅ On error, remove from removed set to show it again
+      setRemovedRequestNumbers((prev) => {
+        const next = new Set(prev);
+        next.delete(bookingNumber);
+        return next;
+      });
+
+      showErrorToast(
+        error?.data?.message ||
+        error?.message ||
+        "Failed to reject request",
+        TOAST_DURATION
+      );
     } finally {
       setIsRejecting(false);
     }
@@ -565,6 +665,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const toggleShowAllData = () => {
     setShowAllData(prev => !prev);
     setCurrentPage(1);
+    setRemovedRequestNumbers(new Set()); // Clear removed items when toggling
     resetFilters({
       setSearchTerm,
       setDepartmentFilter,
@@ -780,8 +881,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Pending Requests
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-                  {totalItems}
+                  {filteredRequests.length}
                 </span>
+                {removedRequestNumbers.size > 0 && (
+                  <span className="text-xs text-gray-400 ml-2">
+                    ({removedRequestNumbers.size} processed)
+                  </span>
+                )}
                 {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
                     (Filtered)
@@ -808,6 +914,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                   <tbody className="divide-y divide-gray-200">
                     {paginatedRequests.map((item, index) => (
                       <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
+                        {/* ✅ UI displays formattedId (based on bookingNumber) */}
                         <td className="px-6 py-4">
                           <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
                         </td>
@@ -854,6 +961,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-3">
+                            {/* ✅ Approve uses selectedRequest.bookingNumber for API */}
                             <button
                               onClick={() => handleApproveClick(item)}
                               className="w-9 h-9 flex items-center justify-center rounded-lg border border-green-200 text-green-500 hover:bg-green-50 hover:border-green-300 transition-all"
@@ -861,6 +969,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                             >
                               <Check size={18} />
                             </button>
+                            {/* ✅ Reject uses selectedRequest.bookingNumber for API */}
                             <button
                               onClick={() => handleRejectClick(item)}
                               className="w-9 h-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all"
@@ -876,7 +985,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 </table>
               </div>
 
-              {/* ✅ CRITICAL FIX: Pagination - Uses API pagination metadata */}
+              {/* ✅ Pagination - Uses API pagination metadata */}
               {totalPages > 0 && (
                 <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                   <Pagination
@@ -894,10 +1003,10 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Approve Modal */}
+      {/* ✅ Approve Modal - receives bookingNumber (not database ID) */}
       {showApproveModal && selectedRequest && (
         <ApproveRequestModal
-          bookingId={selectedRequest.id}
+          bookingId={selectedRequest.bookingNumber}
           requestData={selectedRequest}
           onClose={closeApproveModal}
           onConfirm={handleConfirmApprove}
@@ -908,9 +1017,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         />
       )}
 
-      {/* Reject Modal */}
+      {/* ✅ Reject Modal - passes bookingId and requestData */}
       {showRejectModal && selectedRequest && (
         <RejectRequestModal
+          bookingId={selectedRequest.bookingNumber}
+          requestData={selectedRequest}
           onClose={closeRejectModal}
           onConfirm={handleConfirmReject}
           reason={rejectReason}
