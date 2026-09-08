@@ -31,7 +31,6 @@ import { useGetStaffByIdQuery } from "../../app/service/staffApi";
 // Menu with permission IDs - Dashboard and Help have no permission (always visible)
 const menu = [
   {
-    title: "MAIN",
     items: [
       { 
         label: "Dashboard", 
