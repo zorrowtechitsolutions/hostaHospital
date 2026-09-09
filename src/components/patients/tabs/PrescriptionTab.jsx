@@ -14,22 +14,19 @@ const SkeletonRow = () => (
       <SkeletonText width="w-24" height="h-3" />
     </td>
     <td className="px-6 py-4">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse"></div>
-        <SkeletonText width="w-28" height="h-3" />
-      </div>
-    </td>
-    <td className="px-6 py-4">
-      <SkeletonText width="w-24" height="h-3" />
+      <SkeletonText width="w-20" height="h-3" />
     </td>
     <td className="px-6 py-4">
       <SkeletonText width="w-20" height="h-3" />
     </td>
     <td className="px-6 py-4">
-      <SkeletonText width="w-16" height="h-5" className="rounded-full" />
+      <SkeletonText width="w-16" height="h-3" />
+    </td>
+    <td className="px-6 py-4">
+      <SkeletonText width="w-12" height="h-3" />
     </td>
     <td className="px-6 py-4 text-right">
-      <SkeletonText width="w-8" height="h-4" className="ml-auto" />
+      <SkeletonText width="w-16" height="h-3" className="ml-auto" />
     </td>
   </tr>
 );
@@ -49,7 +46,7 @@ const PrescriptionSkeleton = () => (
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
             <tr>
               <th className="px-6 py-3">
-                <SkeletonText width="w-12" height="h-3" />
+                <SkeletonText width="w-20" height="h-3" />
               </th>
               <th className="px-6 py-3">
                 <SkeletonText width="w-20" height="h-3" />
@@ -102,12 +99,22 @@ const PrescriptionTab = ({
   openMenu, 
   setOpenMenu, 
   getStatusBadge,
-  isLoading = false // New prop for loading state
+  isLoading = false
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const prescriptionsList = patient?.prescriptionsList || [];
+  // ✅ DEFENSIVE: Check multiple possible locations for prescriptions
+  const prescriptionsList = 
+    patient?.prescriptionsList ||
+    patient?.prescriptions ||
+    patient?.data ||
+    patient?.rows ||
+    patient?.prescriptionData ||
+    patient?.prescriptionsData ||
+    patient?.items ||
+    [];
+
   const totalItems = prescriptionsList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -118,6 +125,21 @@ const PrescriptionTab = ({
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  // Helper function to get patient number for display
+  const getPatientNumberDisplay = (item) => {
+    const patientNumber = 
+      item.patientNumber ||
+      item.patient?.patientNumber ||
+      item.fullData?.patientNumber ||
+      item.patientId ||
+      null;
+
+    if (patientNumber) {
+      return `#${patientNumber}`;
+    }
+    return null;
   };
 
   // Helper function to get doctor display name
@@ -153,6 +175,60 @@ const PrescriptionTab = ({
     );
   };
 
+  // Helper function to get medicine count
+  const getMedicineCount = (item) => {
+    const medications = 
+      item.medications ||
+      item.medicines ||
+      item.prescribedMedications ||
+      item.fullData?.medications ||
+      item.fullData?.medicines ||
+      [];
+
+    if (Array.isArray(medications)) {
+      return medications.length;
+    }
+    
+    if (typeof medications === 'string') {
+      try {
+        const parsed = JSON.parse(medications);
+        if (Array.isArray(parsed)) {
+          return parsed.length;
+        }
+      } catch (e) {
+        const count = medications.split(',').filter(m => m.trim()).length;
+        return count || 1;
+      }
+    }
+
+    return item.quantity || 1;
+  };
+
+  // Helper function to get formatted date
+  const getFormattedDate = (item) => {
+    const date = 
+      item.date ||
+      item.createdAt ||
+      item.prescriptionDate ||
+      item.fullData?.date ||
+      item.fullData?.createdAt ||
+      null;
+
+    if (date) {
+      try {
+        const d = new Date(date);
+        return d.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      } catch (e) {
+        return date;
+      }
+    }
+    return "N/A";
+  };
+
   // Check if prescription is blacklisted (deleted)
   const isBlacklisted = (item) => {
     return item.isDelete === true || 
@@ -161,7 +237,7 @@ const PrescriptionTab = ({
            item.isDelete === 'true';
   };
 
-  // Get status badge variant like staff module
+  // Get status badge variant
   const getStatusVariant = (item) => {
     if (isBlacklisted(item)) {
       return "dark";
@@ -172,7 +248,7 @@ const PrescriptionTab = ({
     return "danger";
   };
 
-  // Get status text like staff module
+  // Get status text
   const getStatusText = (item) => {
     if (isBlacklisted(item)) {
       return "Blacklisted";
@@ -189,12 +265,14 @@ const PrescriptionTab = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
-        <h2 className="text-sm font-semibold text-gray-700">
-          Total Prescriptions
-          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-            {totalItems}
-          </span>
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-gray-700">
+            Total Prescriptions
+            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+              {totalItems}
+            </span>
+          </h2>
+        </div>
       </div>
 
       {totalItems === 0 ? (
@@ -211,6 +289,7 @@ const PrescriptionTab = ({
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
+                  {/* ✅ First column: Date */}
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3">Prescribed By</th>
                   <th className="px-6 py-3">Specialization</th>
@@ -222,16 +301,32 @@ const PrescriptionTab = ({
               <tbody>
                 {paginatedPrescriptions.map((item, index) => {
                   const isBlacklistedItem = isBlacklisted(item);
+                  const patientNumberDisplay = getPatientNumberDisplay(item);
                   
                   return (
                     <tr 
-                      key={item.id} 
+                      key={item.id || index} 
                       className={`hover:bg-gray-50 transition-colors border-b border-gray-100 ${
                         isBlacklistedItem ? 'opacity-60' : 'cursor-pointer'
                       }`}
                     >
-                      <td className="px-6 py-4 text-gray-600">
-                        {item.date}
+                      {/* ✅ First column: Date */}
+                      <td className="px-6 py-4">
+                        <div>
+                          <span className={`font-medium ${
+                            isBlacklistedItem ? 'text-gray-400' : 'text-gray-800'
+                          }`}>
+                            {getFormattedDate(item)}
+                          </span>
+                          {/* ✅ Patient number as subtitle under date */}
+                          {patientNumberDisplay && (
+                            <span className={`block text-[10px] ${
+                              isBlacklistedItem ? 'text-gray-300' : 'text-gray-400'
+                            }`}>
+                              Patient {patientNumberDisplay}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -261,7 +356,7 @@ const PrescriptionTab = ({
                       <td className={`px-6 py-4 ${
                         isBlacklistedItem ? 'text-gray-400' : 'text-gray-600'
                       }`}>
-                        {item.quantity} medicine{item.quantity !== 1 ? 's' : ''}
+                        {getMedicineCount(item)} medicine{getMedicineCount(item) !== 1 ? 's' : ''}
                       </td>
                       <td className="px-6 py-4">
                         <Badge

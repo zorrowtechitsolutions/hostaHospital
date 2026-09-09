@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { 
   X, Calendar, User, Stethoscope, FileText, 
   MessageSquare, UserCircle, Briefcase, Mail,
-  AlertCircle
+  AlertCircle, Hash
 } from "lucide-react";
 
 const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
@@ -42,6 +42,7 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
               reason: appointmentData.reason || data.reason,
               notes: appointmentData.notes || appointmentData.doctorNotes || data.notes,
               appointmentId: appointmentData.appointmentId || data.appointmentId,
+              bookingNumber: appointmentData.bookingNumber || data.bookingNumber,
             });
           }
         } catch (err) {
@@ -68,6 +69,12 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
     } catch {
       return dateString;
     }
+  };
+
+  // ✅ NEW: Format booking number for display
+  const formatBookingNumber = (bookingNumber) => {
+    if (!bookingNumber) return null;
+    return `#BK${String(bookingNumber).padStart(5, '0')}`;
   };
 
   const getStatusBadge = (status) => {
@@ -154,7 +161,8 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
             </div>
           </div>
 
-          {/* Appointment Details - Only Date, No Time */}
+
+          {/* Appointment Details - Date and Appointment ID */}
           <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
             <div className="flex items-start gap-6">
               {/* Date */}
@@ -176,7 +184,7 @@ const AppointmentDetailsModal = ({ data, onClose, patientId, doctorData }) => {
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Appointment ID</p>
                 </div>
                 <p className="font-semibold text-gray-800">
-                  {displayData.appointmentId || displayData.id || "N/A"}
+                  {formatBookingNumber(displayData.bookingNumber)}
                 </p>
                 <p className="text-xs text-gray-400">Reference number</p>
               </div>

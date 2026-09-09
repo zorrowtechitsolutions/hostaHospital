@@ -13,9 +13,6 @@ const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
 const SkeletonRow = () => (
   <tr className="border-t border-gray-100">
     <td className="px-4 py-3">
-      <SkeletonText width="w-20" height="h-3" />
-    </td>
-    <td className="px-4 py-3">
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse"></div>
         <SkeletonText width="w-28" height="h-3" />
@@ -52,9 +49,6 @@ const VisitHistorySkeleton = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase sticky top-0 z-10">
             <tr>
-              <TableHeader>
-                <SkeletonText width="w-12" height="h-3" />
-              </TableHeader>
               <TableHeader>
                 <SkeletonText width="w-20" height="h-3" />
               </TableHeader>
@@ -153,7 +147,6 @@ const VisitHistoryTab = ({
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase sticky top-0 z-10">
                 <tr>
-                  <TableHeader>Visit ID</TableHeader>
                   <TableHeader>Doctor Name</TableHeader>
                   <TableHeader>Department</TableHeader>
                   <TableHeader>Visit Date</TableHeader>
@@ -164,12 +157,6 @@ const VisitHistoryTab = ({
               <tbody>
                 {paginatedVisitHistory.map((item) => (
                   <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td
-                      className="px-4 py-3 text-[#1C62A0] font-medium cursor-pointer"
-                      onClick={() => handleViewVisitDetails(item)}
-                    >
-                      {item.visitId || item.id}
-                    </td>
                     <td
                       className="px-4 py-3 cursor-pointer"
                       onClick={() => handleViewVisitDetails(item)}

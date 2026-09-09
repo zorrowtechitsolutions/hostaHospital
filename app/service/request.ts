@@ -1,4 +1,6 @@
 // app/service/request.ts - Booking/Request API service
+// UPDATED: completeBooking now uses bookingNumber as the primary identifier
+
 import { api } from "./api";
 import { getHospitalId, getAuthUser } from "../../src/utils/auth";
 
@@ -40,7 +42,7 @@ export interface BookingRequest {
   appointmentDate?: string;
   hospitalId?: string | number;
   hospitalName?: string;
-  token?: string | number;
+  token?: string | number;  // ✅ Backend generates this
   rejectionReason?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -49,7 +51,7 @@ export interface BookingRequest {
 export interface ApproveBookingData {
   date: string;
   consulting_time: string;
-  token: string | number;
+  // ❌ NO token field - backend generates it
   notes?: string;
 }
 
@@ -180,7 +182,7 @@ export const bookingApi = api.injectEndpoints({
         return `/booking?${queryParams.toString()}`;
       },
 
-      // ✅ FIXED: providesTags with proper bookingNumber tracking
+      // ✅ providesTags with proper bookingNumber tracking
       providesTags: (result) => {
         const bookings = Array.isArray(result?.data)
           ? result.data
@@ -317,6 +319,7 @@ export const bookingApi = api.injectEndpoints({
     }),
     
     // ✅ APPROVE - route: /booking/{bookingNumber}
+    // ✅ NO token in request - backend generates it
     approveBooking: builder.mutation<
       BookingResponse,
       {
@@ -330,12 +333,11 @@ export const bookingApi = api.injectEndpoints({
         body: {
           date: data.date,
           consulting_time: data.consulting_time,
-          token: data.token,
-          notes: data.notes,
+          notes: data.notes || "",
           status: "accepted",
+          // ❌ NO token - backend generates it
         },
       }),
-      // ✅ FIXED: invalidatesTags properly invalidates LIST and specific booking
       invalidatesTags: (result, error, { bookingNumber }) => [
         { type: "Booking", id: "LIST" },
         { type: "Booking", id: `number-${bookingNumber}` },
@@ -358,7 +360,6 @@ export const bookingApi = api.injectEndpoints({
           status: "declined",
         },
       }),
-      // ✅ FIXED: invalidatesTags properly invalidates LIST and specific booking
       invalidatesTags: (result, error, { bookingNumber }) => [
         { type: "Booking", id: "LIST" },
         { type: "Booking", id: `number-${bookingNumber}` },
@@ -388,24 +389,25 @@ export const bookingApi = api.injectEndpoints({
     }),
 
     // ✅ COMPLETE - route: /booking/{bookingNumber}/complete
+    // ✅ FIXED: Uses bookingNumber as the primary identifier
     completeBooking: builder.mutation<
       BookingResponse,
       {
-        bookingNumber: number;
+        bookingNumber: string | number;  // ✅ Changed from 'id' to 'bookingNumber'
         notes?: string;
       }
     >({
       query: ({ bookingNumber, notes }) => ({
-        url: `/booking/${bookingNumber}/complete`, // ✅ Route: /booking/1001/complete
+        url: `/booking/${bookingNumber}/complete`, // ✅ Route: /booking/1/complete
         method: "PUT",
         body: {
-          notes: notes,
+          notes,
           status: "completed",
         },
       }),
       invalidatesTags: (result, error, { bookingNumber }) => [
         { type: "Booking", id: "LIST" },
-        { type: "Booking", id: `number-${bookingNumber}` },
+        { type: "Booking", id: `number-${bookingNumber}` }, // ✅ Proper cache invalidation
       ],
     }),
 
@@ -494,7 +496,7 @@ export const {
   useApproveBookingMutation,
   useRejectBookingMutation,
   useCancelBookingMutation,
-  useCompleteBookingMutation,
+  useCompleteBookingMutation,  // ✅ Now uses bookingNumber
   useUpdateBookingMutation,
   useDeleteBookingMutation,
   useGetBookingsByStatusQuery,

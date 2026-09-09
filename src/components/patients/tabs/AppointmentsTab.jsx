@@ -1,6 +1,6 @@
-// src/components/patients/tabs/AppointmentsTab.jsx - Fixed to show Appointment ID instead of Patient ID
+// src/components/patients/tabs/AppointmentsTab.jsx - Fixed to show Booking Number
 import React from "react";
-import { Calendar, MoreVertical, Eye, Edit, Trash2 } from "lucide-react";
+import { Calendar, MoreVertical, Eye, Edit, Trash2, Hash } from "lucide-react";
 import { Button, Input, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Pagination, SearchBar } from "../../ui";
 
 // ============ SKELETON LOADING COMPONENTS ============
@@ -56,10 +56,10 @@ const AppointmentsSkeleton = () => (
                 <SkeletonText width="w-20" height="h-3" />
               </TableHeader>
               <TableHeader>
-                <SkeletonText width="w-20" height="h-3" />
+                <SkeletonText width="w-24" height="h-3" />
               </TableHeader>
               <TableHeader>
-                <SkeletonText width="w-24" height="h-3" />
+                <SkeletonText width="w-20" height="h-3" />
               </TableHeader>
               <TableHeader>
                 <SkeletonText width="w-12" height="h-3" />
@@ -115,17 +115,10 @@ const AppointmentsTab = ({
 }) => {
   const totalItems = filteredAppointments.length;
 
-  // Helper function to format appointment ID
-  const formatAppointmentId = (id) => {
-    if (!id) return '#APT0000';
-    let numericId;
-    if (typeof id === 'string') {
-      const match = id.match(/\d+/);
-      numericId = match ? parseInt(match[0]) : parseInt(id) || 0;
-    } else {
-      numericId = parseInt(id) || 0;
-    }
-    return `#APT${String(numericId).padStart(4, '0')}`;
+  // ✅ NEW: Format booking number for display
+  const formatBookingNumber = (bookingNumber) => {
+    if (!bookingNumber) return null;
+    return `#BK${String(bookingNumber).padStart(5, '0')}`;
   };
 
   // Get badge variant based on status
@@ -183,7 +176,7 @@ const AppointmentsTab = ({
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
-                  <TableHeader>Appointment ID</TableHeader>
+                  <TableHeader>Booking #</TableHeader>
                   <TableHeader>Doctor Name</TableHeader>
                   <TableHeader>Department</TableHeader>
                   <TableHeader>Appointment Date</TableHeader>
@@ -199,7 +192,7 @@ const AppointmentsTab = ({
                         className="text-[#1C62A0] font-medium cursor-pointer"
                         onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
                       >
-                        {formatAppointmentId(apt.id)}
+                        {apt.bookingNumber ? formatBookingNumber(apt.bookingNumber) : 'N/A'}
                       </TableCell>
                       <TableCell 
                         className="cursor-pointer"

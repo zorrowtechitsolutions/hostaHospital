@@ -80,13 +80,32 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const { data: prescriptionData, isLoading: isLoadingPrescriptions } = useGetPrescriptionsQuery({
-    patientId: patient?.id,
-    page: 1,
-    limit: 100,
-  });
+  // ✅ FIXED: Use patientNumber instead of patient.id
+  // patient.id = 81 (database ID) - DO NOT USE
+  // patient.patientNumber = 2 (business patient number) - USE THIS
+  const patientNumber = patient?.patientNumber;
+
+  const { data: prescriptionData, isLoading: isLoadingPrescriptions } = useGetPrescriptionsQuery(
+    {
+      patientNumber: patientNumber,  // ✅ ONLY patientNumber
+      page: 1,
+      limit: 100,
+    },
+    {
+      skip: !patientNumber,  // ✅ Skip if no patientNumber
+    }
+  );
 
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery();
+
+  // Debug logging
+  console.log("========== MEDICAL HISTORY DEBUG ==========");
+  console.log("Patient DB id (❌ DO NOT USE):", patient?.id);
+  console.log("Patient Number (✅ USE THIS):", patientNumber);
+  console.log("Prescriptions Query params:", { patientNumber });
+  console.log("Expected URL: /prescription?hospitalId=62&patientId=" + patientNumber);
+  console.log("Prescription Data:", prescriptionData);
+  console.log("============================================");
 
   // Show skeleton while either query is loading
   const isLoading = isLoadingPrescriptions || isLoadingDoctors;
@@ -98,10 +117,14 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
 
     return {
       id: item.id,
-      illnessName: item.complaint,
-      illnessDate: new Date(item.createdAt).toLocaleDateString(),
-      doctorName: doctor?.displayName || doctor?.name || "Not Assigned",
-      department: doctor?.specialization || doctor?.department || "Not Specified",
+      illnessName: item.complaint || "No complaint recorded",
+      illnessDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }) : "N/A",
+      doctorName: doctor?.displayName || doctor?.name || item.doctorName || "Not Assigned",
+      department: doctor?.specialization || doctor?.department || item.doctorSpecialization || "Not Specified",
       advice: item.advice,
       investigations: item.investigations || [],
       medications: item.medications || [],
@@ -130,12 +153,14 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
-        <h2 className="text-sm font-semibold text-gray-700">
-          Total Medical History
-          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
-            {totalItems}
-          </span>
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-gray-700">
+            Total Medical History
+            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+              {totalItems}
+            </span>
+          </h2>          
+        </div>
       </div>
 
       {totalItems === 0 ? (
@@ -154,7 +179,8 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                 <tr>
                   <TableHeader>Illness Name</TableHeader>
                   <TableHeader>Illness Date</TableHeader>
-                  <TableHeader className="text-right w-16"></TableHeader>
+                  <TableHeader>Department</TableHeader>
+                  <TableHeader className="text-right w-16">Actions</TableHeader>
                 </tr>
               </thead>
               <tbody>
@@ -172,6 +198,12 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                         onClick={() => handleViewMedicalDetails(item)}
                       >
                         {item.illnessDate}
+                      </td>
+                      <td 
+                        className="px-4 py-3 text-gray-500 text-sm cursor-pointer hover:text-[#1C62A0]"
+                        onClick={() => handleViewMedicalDetails(item)}
+                      >
+                        {item.department}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end">
@@ -205,7 +237,7 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteClick('medical', item.id, item.illnessName);
+                                    handleDeleteClick('medical', item.id, null, item.illnessName);
                                     setOpenMenu(null);
                                   }}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-b-lg"
@@ -221,7 +253,7 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={3} className="text-center text-gray-500 py-12">
+                    <td colSpan={4} className="text-center text-gray-500 py-12">
                       No medical history found
                     </td>
                   </tr>

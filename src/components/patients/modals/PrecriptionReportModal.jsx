@@ -99,9 +99,7 @@ const PrescriptionReportModal = ({
     }
     
     // 🔴 PRIORITY 2: Use custom template for THIS hospital (if available)
-    // IMPORTANT: Only use if customTemplate belongs to the current hospital
     if (designToUse.length === 0 && customTemplate && customTemplate.design) {
-      // Verify this custom template belongs to the current hospital
       if (Number(customTemplate.hospitalId) === Number(hospitalId)) {
         const hasPositioning = customTemplate.design.some(item => 
           typeof item.x === 'number' && typeof item.y === 'number'
@@ -193,19 +191,35 @@ const PrescriptionReportModal = ({
   const doctorName = doctor?.displayName || doctor?.name || existingPrescription?.doctorName || "Dr. Unknown";
   const doctorSpecialty = doctor?.specialization || doctor?.department || existingPrescription?.doctorSpecialization || "General Medicine";
   const doctorContact = doctor?.contact || doctor?.phone || "";
-  
+
+  // ✅ FIXED: Use patientNumber for display, not database ID
   const patientName = patient?.name || patient?.fullName || "N/A";
-  const patientId = patient?.id || patient?.patientId || "N/A";
+  
+  // ✅ CRITICAL: Use patientNumber - this is the business patient number (e.g., 2)
+  // NOT the database ID (e.g., 81)
+  const patientNumber = patient?.patientNumber;
+  const patientDisplayId = patientNumber !== undefined && patientNumber !== null
+    ? `#PT${String(patientNumber).padStart(4, '0')}`
+    : patient?.patientId || patient?.id || "N/A";
+  
   const patientAge = patient?.age || "N/A";
   const patientGender = patient?.gender || "N/A";
-  const patientPhone = patient?.contact || patient?.phone || "N/A";
+  const patientPhone = patient?.contact || patient?.mobileNumber || patient?.phone || "N/A";
+
+  // ✅ Debug logging
+  console.log("========== PRESCRIPTION MODAL DEBUG ==========");
+  console.log("Patient DB id (❌ DO NOT USE):", patient?.id);
+  console.log("Patient Number (✅ USE THIS):", patientNumber);
+  console.log("Patient Display ID:", patientDisplayId);
+  console.log("==============================================");
 
   const replaceContent = (content) => {
     if (!content) return "";
     
     let replaced = content
       .replace(/\{patientName\}/g, patientName)
-      .replace(/\{patientId\}/g, patientId)
+      .replace(/\{patientId\}/g, patientDisplayId)  // ✅ Use patientDisplayId
+      .replace(/\{patientNumber\}/g, patientNumber !== undefined && patientNumber !== null ? String(patientNumber) : "N/A")
       .replace(/\{age\}/g, patientAge)
       .replace(/\{gender\}/g, patientGender)
       .replace(/\{contact\}/g, patientPhone)
@@ -339,7 +353,7 @@ const PrescriptionReportModal = ({
                 fontSize: "14px",
                 fontWeight: "600",
                 color: "#0f172a"
-              }}>{patientId}</p>
+              }}>{patientDisplayId}</p>
             </div>
             <div style={{
               padding: "12px",
@@ -561,7 +575,9 @@ const PrescriptionReportModal = ({
         <div className="flex justify-between items-center px-6 py-4 border-b bg-white sticky top-0 z-10 no-print">
           <div>
             <h2 className="text-xl font-bold text-gray-800">Prescription Details</h2>
-            <p className="text-sm text-gray-500">Home &gt; Patient Details</p>
+            <p className="text-sm text-gray-500">
+              Patient: {patientName} {patientDisplayId && `• ${patientDisplayId}`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onClose} className="p-2">

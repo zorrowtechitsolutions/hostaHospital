@@ -1,4 +1,4 @@
-// src/components/patients/PatientDetails.jsx - With Optimistic Updates & Skeleton Loading
+// src/components/patients/PatientDetails.jsx - With bookingNumber in both appointments and visits
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
@@ -166,14 +166,35 @@ const PatientDetails = () => {
     isLoading: isLoadingBookings
   } = useGetBookingsQuery({});
 
+  // ✅ CRITICAL FIX: Use patientNumber for prescriptions, NOT database ID
+  // The patient data may not be available yet, so we use the patientData variable
+  // that gets set after the API call completes
+  const patientData = patientResponse?.data || patientResponse || passedPatient;
+  
+  // ✅ Get patientNumber from the patient data - this is the business patient number (e.g., 2)
+  const patientNumber = patientData?.patientNumber;
+
+  // ✅ Use patientNumber in the prescriptions query
   const {
     data: prescriptionsResponse,
     isLoading: isLoadingPrescriptions,
     refetch: refetchPrescriptions
   } = useGetPrescriptionsQuery(
-    { patientId: patientId },
-    { skip: !patientId }
+    { 
+      patientNumber: patientNumber  // ✅ ONLY use patientNumber, NOT database ID
+    },
+    { 
+      skip: !patientId || !patientNumber  // Skip if no patientNumber
+    }
   );
+
+  // Debug logging for prescriptions query
+  console.log("========== PRESCRIPTION QUERY DEBUG ==========");
+  console.log("Patient DB id (❌ DO NOT USE):", patientId);
+  console.log("Patient Number (✅ USE THIS):", patientNumber);
+  console.log("Query params:", { patientNumber });
+  console.log("Expected URL: /prescription?hospitalId=62&patientId=" + patientNumber);
+  console.log("==============================================");
 
   const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
 
@@ -201,8 +222,6 @@ const PatientDetails = () => {
   const [recoverPrescription] = useRecoverPrescriptionMutation();
   const [updatePrescription] = useUpdatePrescriptionMutation();
 
-  const patientData = patientResponse?.data || patientResponse || passedPatient;
-
   const doctorMap = useMemo(() => {
     const map = {};
     const doctors = doctorsData?.data || doctorsData?.rows || doctorsData?.doctors || [];
@@ -220,6 +239,7 @@ const PatientDetails = () => {
     return map;
   }, [doctorsData]);
 
+  // ✅ UPDATED: patientAppointments mapping with bookingNumber
   const patientAppointments = useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
@@ -233,6 +253,8 @@ const PatientDetails = () => {
       })
       .map((booking, index) => ({
         id: booking.id || booking._id || index,
+        // ✅ IMPORTANT: preserve booking number for appointments
+        bookingNumber: booking.bookingNumber,
         doctorName: booking.displayName || booking.doctor_name || "N/A",
         doctor: booking.displayName || booking.doctor_name || "N/A",
         department: booking.department || booking.doctor_department || "N/A",
@@ -250,6 +272,7 @@ const PatientDetails = () => {
       }));
   }, [bookingResponse, patientData]);
 
+  // ✅ UPDATED: patientVisits mapping with bookingNumber
   const patientVisits = useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
@@ -272,6 +295,8 @@ const PatientDetails = () => {
         
         return {
           id: booking.id || booking._id || index,
+          // ✅ IMPORTANT: preserve booking number for visits
+          bookingNumber: booking.bookingNumber,
           visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
           patientName: booking.patient_name || booking.patientName || patientData?.name || "N/A",
           patientId: patientDisplayId,
@@ -455,6 +480,7 @@ const PatientDetails = () => {
           patientId: prescription.patientId,
           doctorId: prescription.doctorId,
           bookingId: prescription.bookingId,
+          bookingNumber: booking?.bookingNumber, // ✅ Include booking number
           temperature: prescription.vitals?.temperature,
           pulse: prescription.vitals?.pulse,
           heartRate: prescription.vitals?.heartRate || prescription.vitals?.pulse,
@@ -504,6 +530,7 @@ const PatientDetails = () => {
         patientId: vital.patientId,
         doctorId: vital.doctorId,
         bookingId: vital.bookingId,
+        bookingNumber: booking?.bookingNumber, // ✅ Include booking number
         temperature: vital.temperature,
         heartRate: vital.heartRate || vital.pulse,
         pulse: vital.pulse,
@@ -984,8 +1011,9 @@ const PatientDetails = () => {
       itemsPerPage,
       totalPages,
       startIndex,
-      paginatedAppointments: patientAppointments,
-      filteredAppointments: patientAppointments,
+      // ✅ Use the actual filtered/paginated values
+      paginatedAppointments,
+      filteredAppointments,
       paginatedVisits: patientVisits,
       filteredVisits: patientVisits,
       handlePageChange,
@@ -1072,9 +1100,6 @@ const PatientDetails = () => {
         <div>
           <h2 className="text-xl font-semibold text-gray-800">
             Patient Details 
-            <span className="ml-2 text-sm font-normal text-gray-500">
-              {displayPatientId}
-            </span>
           </h2>
           <p className="text-sm text-gray-500">Home » Patient Details</p>
         </div>

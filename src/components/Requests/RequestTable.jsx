@@ -883,11 +883,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {filteredRequests.length}
                 </span>
-                {removedRequestNumbers.size > 0 && (
-                  <span className="text-xs text-gray-400 ml-2">
-                    ({removedRequestNumbers.size} processed)
-                  </span>
-                )}
                 {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
                     (Filtered)

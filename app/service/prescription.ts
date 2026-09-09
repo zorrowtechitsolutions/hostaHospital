@@ -1,4 +1,4 @@
-// prescription.js - Complete file with recovery
+// prescription.js - Complete with ONLY patientNumber support (no DB id fallback)
 
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
@@ -9,14 +9,15 @@ export interface PrescriptionPayload {
   bookingId: number | string;
   doctorId: number | string;
 
-  patientId?: number | string | null;
+  // ✅ ONLY patientNumber - DO NOT use database ID
+  patientNumber?: number | string | null;
   userId?: number | string | null;
 
   // ✅ PATIENT DETAILS - Backend field names
   patientName?: string;
-  age?: number | string;        // ✅ Backend field: age
-  contact?: string;              // ✅ Backend field: contact
-  gender?: string;               // ✅ Backend field: gender
+  age?: number | string;
+  contact?: string;
+  gender?: string;
   
   hospitalName?: string;
   prescribedBy?: string;
@@ -47,12 +48,46 @@ export interface PrescriptionPayload {
   bsa?: number;
 
   hospitalId?: number | string;
+  
+  // ✅ Additional fields that may come from API
+  id?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  isDelete?: boolean;
+  status?: string;
 }
 
 export interface PrescriptionResponse {
   success: boolean;
   message: string;
-  data?: any;
+  data?: PrescriptionPayload | PrescriptionPayload[] | any;
+  error?: string | null;
+}
+
+// ✅ Typed list response
+export interface PrescriptionListResponse {
+  success: boolean;
+  message?: string;
+  data: PrescriptionPayload[];
+  pagination?: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+  };
+  error?: string | null;
+}
+
+// ✅ Query params - ONLY patientNumber, NO patientId
+export interface GetPrescriptionsParams {
+  patientNumber?: number | string;  // ✅ This is the business patient number
+  doctorId?: number | string;
+  bookingId?: number | string;
+  page?: number;
+  limit?: number;
+  status?: string;
+  search_query?: string;
+  hospitalId?: number | string;
 }
 
 // ================= API =================
@@ -60,7 +95,7 @@ export interface PrescriptionResponse {
 export const prescriptionApi = api.injectEndpoints({
   endpoints: (builder) => ({
 
-    // CREATE PRESCRIPTION
+    // ✅ CREATE PRESCRIPTION - ONLY patientNumber
     createPrescription: builder.mutation<
       PrescriptionResponse,
       PrescriptionPayload
@@ -68,7 +103,14 @@ export const prescriptionApi = api.injectEndpoints({
       query: (data) => {
         const hospitalId = getHospitalId();
 
-        console.log("Creating prescription with data:", data);
+        // ✅ CRITICAL: ONLY use patientNumber - NEVER fallback to database ID
+        // If patientNumber is missing, the backend will handle it
+        const patientIdentifier = data.patientNumber;
+
+        // ✅ Warn if patientNumber is missing
+        if (!patientIdentifier) {
+          console.warn("⚠️ patientNumber is missing in prescription payload!");
+        }
 
         const payload = {
           bookingId: data.bookingId,
@@ -82,15 +124,16 @@ export const prescriptionApi = api.injectEndpoints({
 
           // ✅ PATIENT DETAILS - Using exact backend field names
           patientName: data.patientName,
-          age: data.age,              // ✅ Backend field: age
-          contact: data.contact,      // ✅ Backend field: contact
-          gender: data.gender,        // ✅ Backend field: gender
+          age: data.age,
+          contact: data.contact,
+          gender: data.gender,
 
-          // Hospital name
-          hospitalName: data.hospitalName,
+          // ✅ CRITICAL: This is Patient Number, NOT DB patient.id
+          patientId: patientIdentifier,  // Backend expects patientNumber here
 
-          patientId: data.patientId,
           userId: data.userId,
+
+          hospitalName: data.hospitalName,
 
           complaint: data.complaint,
           medications: data.medications,
@@ -115,8 +158,11 @@ export const prescriptionApi = api.injectEndpoints({
           bsa: data?.bsa || 0,
         };
 
-
-        console.log("payload:", payload);
+        console.log("📋 Creating prescription with patientNumber:", {
+          patientNumber: patientIdentifier,
+          patientName: data.patientName,
+          bookingId: data.bookingId,
+        });
 
         return {
           url: "/prescription",
@@ -127,18 +173,25 @@ export const prescriptionApi = api.injectEndpoints({
       invalidatesTags: ["Prescription"],
     }),
 
-    
-
-    // GET ALL PRESCRIPTIONS
-    getPrescriptions: builder.query({
-      query: (params) => {
+    // ✅ GET ALL PRESCRIPTIONS - ONLY patientNumber (NO database ID)
+    getPrescriptions: builder.query<
+      PrescriptionListResponse,
+      GetPrescriptionsParams
+    >({
+      query: (params = {}) => {
         const hospitalId = getHospitalId();
         
         let url = `/prescription?hospitalId=${hospitalId}`;
         
-        if (params?.patientId) {
-          url += `&patientId=${params.patientId}`;
+        // ✅ IMPORTANT: ONLY use patientNumber - NO patientId fallback
+        // patientNumber is the business patient number (e.g., 2, not 81)
+        if (params.patientNumber !== undefined && params.patientNumber !== null) {
+          url += `&patientId=${encodeURIComponent(String(params.patientNumber))}`;
+          console.log("📋 Fetching prescriptions for patientNumber:", params.patientNumber);
+        } else {
+          console.warn("⚠️ patientNumber is missing in getPrescriptions query!");
         }
+        
         if (params?.doctorId) {
           url += `&doctorId=${params.doctorId}`;
         }
@@ -154,6 +207,11 @@ export const prescriptionApi = api.injectEndpoints({
         if (params?.status) {
           url += `&status=${params.status}`;
         }
+        if (params?.search_query) {
+          url += `&search_query=${encodeURIComponent(params.search_query)}`;
+        }
+        
+        console.log("📋 Prescriptions URL:", url);
         
         return {
           url,
@@ -161,10 +219,60 @@ export const prescriptionApi = api.injectEndpoints({
         };
       },
       providesTags: ["Prescription"],
+      
+      // ✅ Transform response to ensure consistent data shape
+      transformResponse: (response: any): PrescriptionListResponse => {
+        // If response already has the right shape
+        if (response && response.success !== undefined && response.data !== undefined) {
+          // Ensure data is always an array
+          if (!Array.isArray(response.data)) {
+            return {
+              ...response,
+              data: response.data ? [response.data] : [],
+            };
+          }
+          return response;
+        }
+        
+        // If response is an array directly
+        if (Array.isArray(response)) {
+          return {
+            success: true,
+            message: 'Prescriptions fetched successfully',
+            data: response,
+          };
+        }
+        
+        // If response has rows (Sequelize format)
+        if (response && response.rows && Array.isArray(response.rows)) {
+          return {
+            success: true,
+            message: 'Prescriptions fetched successfully',
+            data: response.rows,
+            pagination: {
+              totalItems: response.count || response.rows.length,
+              totalPages: Math.ceil((response.count || response.rows.length) / 10),
+              currentPage: 1,
+              limit: 10,
+            },
+          };
+        }
+        
+        // Fallback: return empty array
+        return {
+          success: false,
+          message: 'Unexpected response format',
+          data: [],
+          error: 'Invalid response structure',
+        };
+      },
     }),
 
     // GET SINGLE PRESCRIPTION BY ID
-    getPrescriptionById: builder.query({
+    getPrescriptionById: builder.query<
+      PrescriptionResponse,
+      string | number
+    >({
       query: (id) => {
         const hospitalId = getHospitalId();
         
@@ -177,24 +285,39 @@ export const prescriptionApi = api.injectEndpoints({
     }),
 
     // UPDATE/EDIT PRESCRIPTION
-    updatePrescription: builder.mutation({
+    updatePrescription: builder.mutation<
+      PrescriptionResponse,
+      { id: string | number; data: Partial<PrescriptionPayload> }
+    >({
       query: ({ id, data }) => {
         const hospitalId = getHospitalId();
+
+        // ✅ If patientNumber is provided, use it as patientId
+        const updateData: any = {
+          ...data,
+          hospitalId: hospitalId,
+        };
+        
+        // ✅ ONLY use patientNumber if available
+        if (data.patientNumber) {
+          updateData.patientId = data.patientNumber;
+          delete updateData.patientNumber;
+        }
 
         return {
           url: `/prescription/${id}`,
           method: "PUT",
-          body: {
-            hospitalId: hospitalId,
-            ...data,
-          },
+          body: updateData,
         };
       },
       invalidatesTags: (result, error, { id }) => [{ type: "Prescription", id }],
     }),
 
     // DELETE PRESCRIPTION
-    deletePrescription: builder.mutation({
+    deletePrescription: builder.mutation<
+      { success: boolean; message: string },
+      string | number
+    >({
       query: (id) => {
         const hospitalId = getHospitalId();
 
@@ -206,9 +329,11 @@ export const prescriptionApi = api.injectEndpoints({
       invalidatesTags: ["Prescription"],
     }),
 
-    // ================= RECOVER PRESCRIPTION =================
-    // PUT /prescription/recover/:id
-    recoverPrescription: builder.mutation({
+    // RECOVER PRESCRIPTION
+    recoverPrescription: builder.mutation<
+      { success: boolean; message: string; data?: PrescriptionPayload },
+      string | number
+    >({
       query: (id) => {
         const hospitalId = getHospitalId();
 
@@ -228,5 +353,5 @@ export const {
   useGetPrescriptionByIdQuery,
   useUpdatePrescriptionMutation,
   useDeletePrescriptionMutation,
-  useRecoverPrescriptionMutation, // 👈 Added
+  useRecoverPrescriptionMutation,
 } = prescriptionApi;
