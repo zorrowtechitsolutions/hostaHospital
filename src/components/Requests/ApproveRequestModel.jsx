@@ -94,17 +94,14 @@ const InfoRow = ({ icon: Icon, label, value }) => {
   );
 };
 
-const validateForm = (date, consulting_time, token) => {
+// ✅ UPDATED: Removed token validation
+const validateForm = (date, consulting_time) => {
   if (!date) {
     showWarningToast('Please select appointment date', 3000);
     return false;
   }
   if (!consulting_time) {
     showWarningToast('Please select appointment time', 3000);
-    return false;
-  }
-  if (!token?.trim()) {
-    showWarningToast('Please enter token number', 3000);
     return false;
   }
   return true;
@@ -220,16 +217,16 @@ const ApproveRequestModal = ({
   console.log("📝 ApproveRequestModal received bookingId:", bookingId);
   console.log("📝 requestData:", requestData);
 
+  // ✅ UPDATED: Pass token as null if empty
   const handleConfirm = async () => {
-    if (!validateForm(date, consulting_time, token)) return;
+    if (!validateForm(date, consulting_time)) return;
 
-    // ✅ Pass booking number to parent
     if (onConfirm) {
       onConfirm({
         booking_date: date,
-        consulting_time: consulting_time, // Already in 24-hour format
-        token: token.trim(),
-        bookingNumber: bookingId, // ✅ Pass booking number
+        consulting_time: consulting_time,
+        token: token?.trim() || null,  // ✅ null triggers automatic token generation
+        bookingNumber: bookingId,
       });
     }
 
@@ -277,22 +274,25 @@ const ApproveRequestModal = ({
           <InfoRow icon={CalendarCheck} label="Date" value={date} />
           <InfoRow icon={CalendarCheck} label="Consulting Time" value={consulting_time} />
 
+          {/* ✅ UPDATED: Token input with no required, placeholder "Leave empty for automatic token" */}
           <div className="flex items-start gap-2">
             <Hash size={16} className="text-green-600 mt-3" />
             <div className="w-full">
               <label className="text-sm font-medium text-gray-700 block mb-1">
-                Token Number <span className="text-red-500">*</span>
+                Token Number
               </label>
               <input
                 type="text"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="Enter token number"
+                placeholder="Leave empty for automatic token"
                 autoFocus
                 disabled={isLoading}
-                className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                required
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Leave empty to automatically assign the next available token.
+              </p>
             </div>
           </div>
         </div>
@@ -305,6 +305,9 @@ const ApproveRequestModal = ({
           <span className="font-medium text-gray-700">{formatTimeDisplay(consulting_time)}</span>{" "}
           {token && (
             <>with Token <span className="font-medium text-gray-700">#{token}</span></>
+          )}
+          {!token && (
+            <>with <span className="font-medium text-gray-700">automatic token</span></>
           )}
         </p>
       </div>
@@ -341,14 +344,14 @@ const ApproveRequestModal = ({
         renderOption={(option) => formatTimeDisplay(option)}
       />
 
+      {/* ✅ UPDATED: Token input with no required, placeholder "Leave empty for automatic token" */}
       <Input
         label="Token Number"
         name="token"
         type="text"
         value={token}
         onChange={(e) => setToken(e.target.value)}
-        placeholder="Enter token number"
-        required
+        placeholder="Leave empty for automatic token"
         disabled={isLoading}
       />
 

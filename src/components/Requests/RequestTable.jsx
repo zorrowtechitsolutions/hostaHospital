@@ -530,13 +530,13 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         appointmentData,
       });
 
-      // ✅ Use bookingNumber (not id) and appointmentData.booking_date (not date)
+      // ✅ UPDATED: Use bookingNumber and ensure token is explicitly null if empty
       await approveBooking({
         bookingNumber,
         data: {
           date: appointmentData.booking_date,
           consulting_time: appointmentData.consulting_time,
-          token: appointmentData.token,
+          token: appointmentData.token?.trim() || null, // ✅ Explicitly pass null for auto-generation
           notes: appointmentData.notes || "",
         },
       }).unwrap();
@@ -547,6 +547,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       // ✅ Refetch pending requests to sync with server
       await refetch();
 
+      const tokenDisplay = appointmentData.token?.trim() ? `#${appointmentData.token}` : 'Automatic';
+      
       showSuccessToast(
         `Request ${selectedRequest.formattedId} approved successfully!`,
         SUCCESS_DURATION,
@@ -554,7 +556,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           'Patient': selectedRequest.patientName,
           'Date': appointmentData.booking_date,
           'Time': appointmentData.consulting_time,
-          'Token': `#${appointmentData.token}`
+          'Token': tokenDisplay
         }
       );
 
