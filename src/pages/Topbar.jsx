@@ -619,8 +619,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           >
             <Bell size={20} className="!text-white" stroke="white" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {unreadCount}
+              <span className="absolute -top-0.5 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                {unreadCount > 999 ? '999+' : unreadCount}
               </span>
             )}
           </button>
