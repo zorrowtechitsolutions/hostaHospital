@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Filter, Download, MoreVertical, Eye, 
+import {
+  Filter, Download, MoreVertical, Eye,
   Edit, Users as UsersIcon, RefreshCcw, Search, Trash2,
   PlayCircle, Check, X
 } from 'lucide-react';
-import { 
+import {
   Button, Pagination, SearchBar
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
@@ -13,24 +13,21 @@ import EditAppointmentModal from '../patients/EditAppointmentModal';
 import ApproveRequestModal from "../Requests/ApproveRequestModel";
 import RejectRequestModal from "../Requests/RejectRequestModel";
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
-import { 
+import {
   useGetBookingsQuery,
   useApproveBookingMutation,
   useRejectBookingMutation,
-  useUpdateBookingMutation, // ✅ ADDED
+  useUpdateBookingMutation,
   useDeleteBookingMutation
 } from '../../../app/service/request';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
 
-import { socket } from '../../socket/socket';
-import { registerBookingEvents, unregisterBookingEvents } from '../../socket/bookingEvents';
+// ✅ Only registerBookingEvents — no unregisterBookingEvents, no socket import
+import { registerBookingEvents } from '../../socket/bookingEvents';
 
-// Import the export function
 import { exportToExcel } from "../../utils/excelExport";
-
-// Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
 
 // Permission IDs for Booking module (33-36)
@@ -41,24 +38,20 @@ const PERMISSIONS = {
   DELETE: 36
 };
 
-const DEFAULT_PROFILE_IMAGE = (index) =>
-  `https://randomuser.me/api/portraits/lego/${index}.jpg`;
-
 // Helper function to safely convert to string for search
 const safeToString = (value) => {
   if (value === null || value === undefined) return '';
   return String(value);
 };
 
-// Helper function to convert 24-hour time to 12-hour format with AM/PM
+// Helper: 24-hour → 12-hour format
 const convertTo12Hour = (time24h) => {
   if (!time24h || time24h === "N/A") return "";
-  
-  // If already in 12-hour format, return as is
+
   if (time24h.includes("AM") || time24h.includes("PM")) {
     return time24h;
   }
-  
+
   const [hours, minutes] = time24h.split(":");
   const hour = parseInt(hours, 10);
   const ampm = hour >= 12 ? "PM" : "AM";
@@ -72,21 +65,17 @@ const calculateAge = (dob) => {
 
   let birthDate;
 
-  // Check if DOB is in DD/MM/YYYY format (contains '/')
   if (typeof dob === "string" && dob.includes("/")) {
     const parts = dob.split("/");
-    // Check if it's DD/MM/YYYY (day first)
     if (parts.length === 3) {
       const day = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10);
       const year = parseInt(parts[2], 10);
-      
-      // Validate the parts
+
       if (!day || !month || !year || isNaN(day) || isNaN(month) || isNaN(year)) {
         return "N/A";
       }
-      
-      // Create date with year, month-1 (0-indexed), day
+
       birthDate = new Date(year, month - 1, day);
     } else {
       birthDate = new Date(dob);
@@ -95,7 +84,6 @@ const calculateAge = (dob) => {
     birthDate = new Date(dob);
   }
 
-  // Invalid date protection
   if (isNaN(birthDate.getTime())) {
     return "N/A";
   }
@@ -108,9 +96,8 @@ const calculateAge = (dob) => {
     age--;
   }
 
-  // Ensure age is positive
   if (age < 0) return "N/A";
-  
+
   return age;
 };
 
@@ -144,29 +131,21 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
-              <th className="px-6 py-3"><div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div></th>
+              {[...Array(9)].map((_, i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {[...Array(5)].map((_, i) => (
               <tr key={i} className="border-b border-gray-100">
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
-                <td className="px-6 py-4"><div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div></td>
+                {[...Array(9)].map((_, j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-5 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -207,7 +186,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false); // ✅ ADDED
+  const [isUpdating, setIsUpdating] = useState(false);
   const itemsPerPage = 10;
 
   // Permission Denied Modal State
@@ -215,80 +194,83 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
   const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
 
-  // API Hooks - Server-side pagination
-  const { 
-    data: bookingsResponse, 
-    isLoading: loading, 
-    refetch,
-    isFetching
+  // ============================================================
+  // ✅ SINGLE QUERY — this is the one that feeds the table.
+  //    Client-side search/filter/pagination is done below on
+  //    allBookingsResponse, so we only need one query.
+  // ============================================================
+  const {
+    data: allBookingsResponse,
+    isLoading: loading,
+    isFetching,
+    refetch
   } = useGetBookingsQuery({
     ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
-    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter }),
-    page: currentPage,
-    limit: itemsPerPage
+    page: 1,
+    limit: 1000
   });
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
-  const [updateBooking] = useUpdateBookingMutation(); // ✅ ADDED
+  const [updateBooking] = useUpdateBookingMutation();
   const [deleteBooking] = useDeleteBookingMutation();
 
-  // Register socket event listeners
+  // ============================================================
+  // ✅ SOCKET LISTENER — refetch() is the one and only query,
+  //    so events immediately update the table.
+  // ============================================================
   useEffect(() => {
-    registerBookingEvents({
-      onBookingRegistered: () => {
-        showSuccessToast(`New booking received!`, 3000);
-        refetch();
+    const cleanup = registerBookingEvents({
+      onBookingRegistered: async (data) => {
+        console.log("🔥 Appointments BOOKING_REGISTERED:", data);
+        showSuccessToast("New booking received!", 3000);
+        await refetch();
       },
-      onBookingUpdated: () => {
-        showSuccessToast(`Booking updated!`, 3000);
-        refetch();
+      onBookingUpdated: async (data) => {
+        console.log("🔥 Appointments BOOKING_UPDATED:", data);
+        showSuccessToast("Booking updated!", 3000);
+        await refetch();
+        console.log("🔄 Appointments list refetched");
       },
-      onBookingCancelled: () => {
-        showWarningToast(`Booking cancelled!`, 3000);
-        refetch();
+      onBookingCancelled: async (data) => {
+        console.log("🔥 Appointments BOOKING_CANCELLED:", data);
+        showWarningToast("Booking cancelled!", 3000);
+        await refetch();
       },
-      onBookingAccepted: () => {
-        showSuccessToast(`Booking accepted!`, 3000);
-        refetch();
+      onBookingAccepted: async (data) => {
+        console.log("🔥 Appointments BOOKING_ACCEPTED:", data);
+        showSuccessToast("Booking accepted!", 3000);
+        await refetch();
       },
-      onBookingCompleted: () => {
-        showSuccessToast(`Booking completed!`, 3000);
-        refetch();
-      }
+      onBookingCompleted: async (data) => {
+        console.log("🔥 Appointments BOOKING_COMPLETED:", data);
+        showSuccessToast("Booking completed!", 3000);
+        await refetch();
+      },
     });
 
-    return () => {
-      unregisterBookingEvents();
-    };
+    return cleanup;
   }, [refetch]);
 
-  // Helper functions
-  // ✅ FIXED: Format booking number to display ID (5 digits padding) - No fallback to database ID
+  // Helpers
   const formatAppointmentId = (booking) => {
     if (booking?.bookingNumber) {
       return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
     }
-    // No fallback to database ID - use default placeholder
     return '#BK00000';
   };
 
   const mapStatus = (status) => {
     switch(status?.toLowerCase()) {
-      case 'accepted':
-        return 'Accepted';
-      case 'pending':
-        return 'Pending';
+      case 'accepted': return 'Accepted';
+      case 'pending': return 'Pending';
       case 'declined':
       case 'rejected':
-      case 'cancel':
-        return 'Cancelled';
-      case 'completed':
-        return 'Completed';
-      default:
-        return 'Pending';
+      case 'cancel': return 'Cancelled';
+      case 'completed': return 'Completed';
+      default: return 'Pending';
     }
   };
 
@@ -311,16 +293,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return classes[bookingStatus?.toLowerCase()] || "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
   };
 
-  // Helper function to extract gender from multiple sources
   const extractGender = (booking) => {
-    const gender = 
+    const gender =
       booking?.patient_gender ||
       booking?.patient?.gender ||
       booking?.gender ||
       booking?.patientGender ||
       booking?.genderDisplay ||
       null;
-    
+
     if (gender) {
       const normalized = gender.toLowerCase();
       if (normalized === 'male') return 'Male';
@@ -328,13 +309,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-    
+
     return null;
   };
 
-  // ✅ FIXED: Transform bookings data - Explicit separation of IDs
-  // - Database ID (id/_id) → stored but NOT used for API operations
-  // - bookingNumber → used for API operations (approve/reject) AND UI display
+  // ✅ Transform bookings data
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -347,7 +326,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       const displayStatus = mapStatus(booking.status);
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
-      
+
       const rawDate = booking.booking_date || booking.appointmentDate || booking.date || "";
       const actualPatientId = booking.patientId ||
         booking.patient?.id ||
@@ -364,15 +343,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       const age = booking.patient_age ?? calculatedAge;
 
       return {
-        // Database ID — stored but NOT used for approve/reject API
         id: booking.id || booking._id,
-        
-        // ✅ Booking number — used for API operations (approve/reject) AND UI display
         bookingNumber: booking.bookingNumber,
-        formattedId: booking.bookingNumber 
+        formattedId: booking.bookingNumber
           ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
-          : '#BK00000', // No fallback to database ID
-        
+          : '#BK00000',
         patientId: actualPatientId,
         patientDisplayId: `#PT${String(actualPatientId || index + 1).padStart(4, '0')}`,
         patientName: booking.patient_name || booking.patientName || "N/A",
@@ -380,26 +355,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         age: age,
         contact: booking.patient_phone || booking.contact || "N/A",
         gender: finalGender,
-        
         doctorId: booking.doctorId || booking.doctor?.id || booking.doctor_id || null,
         doctorName: booking.doctor_name || booking.doctorName || "N/A",
         department: booking.doctor_department || booking.department || "N/A",
-        
         booking_date: rawDate,
         token: token,
-        
         appointmentDateDisplay: formatDate(rawDate),
         consulting_time: booking.consulting_time || booking.time || "N/A",
-        
         status: displayStatus,
         statusClass: getStatusBadgeClass(displayStatus),
         reason: booking.reason || "",
         notes: booking.notes || "",
-        
         patientImageKey: patientImageKey,
         originalStatus: booking.status || booking.booking_status || booking.bookingStatus || null,
         userId: booking.userId || booking.user_id || null,
-        
         rawGender: booking.gender,
         patientGender: booking.patient_gender,
         patientGenderNested: booking.patient?.gender
@@ -407,33 +376,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     });
   };
 
-  // Get data from API response - ALL DATA (not just current page)
-  const { 
-    data: allBookingsResponse, 
-    isLoading: allLoading
-  } = useGetBookingsQuery({
-    ...(statusFilter !== 'all' && { status: statusFilter.toLowerCase() }),
-    ...(departmentFilter && { department: departmentFilter }),
-    ...(dateFilter && { date: dateFilter }),
-    page: 1,
-    limit: 1000 // Get all data for filtering
-  });
-
-  // ✅ Sort bookings by bookingNumber in DESCENDING order (highest first)
+  // ✅ Everything below now derives from the single query.
   const allBookingList = allBookingsResponse?.data || [];
   const allAppointmentsData = transformBookingsData(allBookingList).sort(
     (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
   );
 
-  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
   const filteredBySearch = useMemo(() => {
-    // If no search term or search term is too short, return all data
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allAppointmentsData;
     }
 
     const searchLower = searchTerm.toLowerCase().trim();
-    
+
     return allAppointmentsData.filter(item => {
       const searchFields = [
         safeToString(item.formattedId).toLowerCase(),
@@ -450,36 +405,33 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     });
   }, [allAppointmentsData, searchTerm]);
 
-  // ✅ Apply department and date filters (frontend fallback)
   const filteredAppointments = useMemo(() => {
     let result = filteredBySearch;
 
-    // Apply status filter
     if (statusFilter !== 'all') {
-      result = result.filter(item => 
+      result = result.filter(item =>
         safeToString(item.status).toLowerCase() === statusFilter.toLowerCase() ||
         safeToString(item.originalStatus).toLowerCase() === statusFilter.toLowerCase()
       );
     }
 
-    // Apply department filter
     if (departmentFilter) {
-      result = result.filter(item => 
+      result = result.filter(item =>
         safeToString(item.department).toLowerCase() === departmentFilter.toLowerCase()
       );
     }
 
-    // Apply date filter
     if (dateFilter) {
       result = result.filter(item => {
-        const visitDate = item.appointmentDateDisplay ? new Date(item.appointmentDateDisplay).toISOString().split('T')[0] : '';
+        const visitDate = item.appointmentDateDisplay
+          ? new Date(item.appointmentDateDisplay).toISOString().split('T')[0]
+          : '';
         return visitDate === dateFilter;
       });
     }
 
-    // Apply doctor filter
     if (doctorId && !showAllData) {
-      result = result.filter(apt => 
+      result = result.filter(apt =>
         apt.doctorId === doctorId || apt.doctorName === doctorName
       );
     }
@@ -487,45 +439,37 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return result;
   }, [filteredBySearch, statusFilter, departmentFilter, dateFilter, doctorId, doctorName, showAllData]);
 
-  // ✅ Get total items from filtered results
   const totalFilteredItems = filteredAppointments.length;
   const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
 
-  // ✅ Paginate the filtered results
   const paginatedAppointments = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredAppointments.slice(startIndex, endIndex);
   }, [filteredAppointments, currentPage, itemsPerPage]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, departmentFilter, dateFilter, showAllData]);
 
-  // Get unique departments from API data
   const getAllDepartments = () => {
     const departments = [...new Set(allAppointmentsData.map(a => a.department).filter(Boolean))];
     return departments.sort();
   };
 
-  // Check if any filters are active
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = statusFilter !== 'all' || departmentFilter !== '' || dateFilter !== '';
 
-  // Search handler for SearchBar - receives value directly
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
   };
 
-  // Permission check helper with modal
   const checkPermission = (permissionId, actionName) => {
     if (!hasPermission(permissionId)) {
       setPermissionDeniedAction(actionName);
@@ -536,7 +480,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return true;
   };
 
-  // Handlers
   const handleRefresh = () => {
     setSearchTerm("");
     setStatusFilter("all");
@@ -547,7 +490,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     showSuccessToast("Refreshed appointments", 2000);
   };
 
-  // Updated Export handler with Excel functionality
   const handleExport = () => {
     if (filteredAppointments.length === 0) {
       showErrorToast("No data available to export", 3000);
@@ -555,7 +497,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
 
     try {
-      // Transform data for Excel export
       const exportData = filteredAppointments.map(apt => ({
         'Appointment ID': apt.formattedId,
         'Patient ID': apt.patientDisplayId || apt.patientId,
@@ -574,11 +515,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         'Notes': apt.notes || "N/A"
       }));
 
-      // Generate filename with date
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `appointments_export_${dateStr}`;
 
-      // Export to Excel with column width
       exportToExcel({
         data: exportData,
         fileName: fileName,
@@ -597,7 +536,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleStartConsultation = (appointment) => {
-    // Check VIEW permission for consultation
     if (!checkPermission(PERMISSIONS.VIEW, 'start consultation')) {
       return;
     }
@@ -619,7 +557,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleViewDetails = (appointment) => {
-    // Check VIEW permission
     if (!checkPermission(PERMISSIONS.VIEW, 'view appointment details')) {
       return;
     }
@@ -627,18 +564,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowDetailsModal(true);
   };
 
-  // UPDATED: Edit handler with status validation - Uses bookingNumber for display
   const handleEditClick = (appointment) => {
-    // Edit is allowed only for accepted appointments
     if (appointment?.originalStatus?.toLowerCase() !== 'accepted') {
-      showWarningToast(
-        'Only accepted appointments can be edited.',
-        3000
-      );
+      showWarningToast('Only accepted appointments can be edited.', 3000);
       return;
     }
 
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) {
       return;
     }
@@ -651,9 +582,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowEditModal(true);
   };
 
-  // ✅ Approve handler - uses bookingNumber for API
   const handleApproveClick = (appointment) => {
-    // Check EDIT permission (approving is an edit action)
     if (!checkPermission(PERMISSIONS.EDIT, 'approve appointment')) {
       return;
     }
@@ -665,26 +594,25 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowApproveModal(true);
   };
 
-  // ✅ Confirm Approve - uses bookingNumber for API (not database ID)
   const handleConfirmApprove = async (appointmentData) => {
     if (!selectedRequest) return;
-    
+
     if (!selectedRequest.bookingNumber) {
       showErrorToast("Booking number is missing. Cannot approve.", 3000);
       setShowApproveModal(false);
       setSelectedRequest(null);
       return;
     }
-    
+
     setIsApproving(true);
-    
+
     try {
       let consultingTime = appointmentData.consulting_time;
-      
+
       if (consultingTime.includes("AM") || consultingTime.includes("PM")) {
         const [time, modifier] = consultingTime.split(" ");
         let [hours, minutes] = time.split(":");
-        
+
         if (hours === "12" && modifier === "AM") {
           hours = "00";
         } else if (hours === "12" && modifier === "PM") {
@@ -694,10 +622,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         }
         consultingTime = `${hours.padStart(2, "0")}:${minutes}`;
       }
-      
-      // ✅ FIXED: Using bookingNumber (not id)
+
       await approveBooking({
-        bookingNumber: selectedRequest.bookingNumber, // ✅ Changed from id to bookingNumber
+        bookingNumber: selectedRequest.bookingNumber,
         data: {
           date: appointmentData.booking_date,
           consulting_time: consultingTime,
@@ -705,27 +632,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           notes: appointmentData.notes
         }
       }).unwrap();
-      
-      socket.emit("booking_event", {
-        event: "BOOKING_ACCEPTED",
-        data: {
-          bookingId: selectedRequest.id,
-          bookingNumber: selectedRequest.bookingNumber,
-          formattedId: selectedRequest.formattedId,
-          patientName: selectedRequest.patientName,
-          doctorName: selectedRequest.doctorName,
-          date: appointmentData.booking_date,
-          consulting_time: appointmentData.consulting_time,
-          token: appointmentData.token,
-          timestamp: new Date().toISOString()
-        }
-      });
-      
+
+      // ✅ No socket.emit — backend publishes BOOKING_ACCEPTED
+
       showSuccessToast(
         `Appointment ${selectedRequest.formattedId} approved successfully!`,
         4000
       );
-      
+
       await refetch();
     } catch (error) {
       console.error("❌ Approve error:", error);
@@ -737,9 +651,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  // ✅ Reject handler - uses bookingNumber for API
   const handleRejectClick = (appointment) => {
-    // Check EDIT permission (rejecting is an edit action)
     if (!checkPermission(PERMISSIONS.EDIT, 'reject appointment')) {
       return;
     }
@@ -748,45 +660,32 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setShowRejectModal(true);
   };
 
-  // ✅ Confirm Reject - uses bookingNumber for API (not database ID)
   const handleConfirmReject = async () => {
     if (!selectedRequest) return;
-    
+
     if (!selectedRequest.bookingNumber) {
       showErrorToast("Booking number is missing. Cannot reject.", 3000);
       setShowRejectModal(false);
       setSelectedRequest(null);
       return;
     }
-    
+
     setIsRejecting(true);
-    
+
     try {
-      // ✅ FIXED: Using bookingNumber (not id)
       await rejectBooking({
-        bookingNumber: selectedRequest.bookingNumber, // ✅ Changed from id to bookingNumber
+        bookingNumber: selectedRequest.bookingNumber,
         data: { reason: rejectReason }
       }).unwrap();
-      
-      socket.emit("booking_event", {
-        event: "BOOKING_CANCELLED",
-        data: {
-          bookingId: selectedRequest.id,
-          bookingNumber: selectedRequest.bookingNumber,
-          formattedId: selectedRequest.formattedId,
-          patientName: selectedRequest.patientName,
-          doctorName: selectedRequest.doctorName,
-          reason: rejectReason,
-          timestamp: new Date().toISOString()
-        }
-      });
-      
+
+      // ✅ No socket.emit — backend publishes BOOKING_CANCELLED
+
       showErrorToast(
         `Appointment ${selectedRequest.formattedId} rejected successfully!`,
         4000
       );
-      
-      refetch();
+
+      await refetch();
     } catch (error) {
       console.error("❌ Reject error:", error);
       showErrorToast(error?.data?.message || 'Failed to reject appointment', 3000);
@@ -798,7 +697,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  // ✅ FIXED: handleSaveEdit now calls updateBooking API with bookingNumber
+  // ✅ handleSaveEdit — no socket.emit; refetch() hits the one query that feeds the table
   const handleSaveEdit = async (updatedData) => {
     if (!appointmentToEdit) {
       showErrorToast("No appointment selected for editing.", 3000);
@@ -818,25 +717,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     setIsUpdating(true);
 
     try {
-      // ✅ Call the updateBooking API with bookingNumber
-      await updateBooking({
+      // 1. UPDATE DATABASE — backend publishes BOOKING_UPDATED
+      const response = await updateBooking({
         bookingNumber: Number(bookingNumber),
         data: updatedData,
       }).unwrap();
 
-      // Emit socket event for real-time updates
-      socket.emit("booking_event", {
-        event: "BOOKING_UPDATED",
-        data: {
-          bookingId: appointmentToEdit.id,
-          bookingNumber: appointmentToEdit.bookingNumber,
-          formattedId: appointmentToEdit.formattedId,
-          patientName: appointmentToEdit.patientName,
-          doctorName: appointmentToEdit.doctorName,
-          updatedData,
-          timestamp: new Date().toISOString()
-        }
-      });
+      console.log("✅ Booking updated successfully:", response);
+
+      // ❌ DO NOT socket.emit() HERE
+      // The backend's PUT /booking/:bookingNumber handler already publishes
+      // BOOKING_UPDATED to the correct rooms via publishEvent().
 
       showSuccessToast(
         `Appointment ${appointmentToEdit.formattedId} updated successfully!`,
@@ -845,15 +736,18 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       setShowEditModal(false);
       setAppointmentToEdit(null);
-      await refetch();
 
+      // 2. REFRESH IMMEDIATELY — same query that renders the table
+      await refetch();
+      console.log("🔄 Appointments list refetched after edit");
     } catch (error) {
       console.error("❌ Update booking error:", error);
-      
+
       showErrorToast(
         error?.data?.message ||
-        error?.error ||
-        "Failed to update appointment",
+          error?.error ||
+          error?.message ||
+          "Failed to update appointment",
         4000
       );
     } finally {
@@ -862,7 +756,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleDeleteClick = (appointment) => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete appointment')) {
       return;
     }
@@ -872,34 +765,22 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const handleConfirmDelete = async () => {
     if (!appointmentToDelete) return;
-    
+
     setIsDeleting(true);
-    
+
     try {
-      // ✅ Using bookingNumber for delete API call
       await deleteBooking(appointmentToDelete.bookingNumber).unwrap();
-      
-      socket.emit("booking_event", {
-        event: "BOOKING_DELETED",
-        data: {
-          bookingId: appointmentToDelete.id,
-          bookingNumber: appointmentToDelete.bookingNumber,
-          formattedId: appointmentToDelete.formattedId,
-          patientName: appointmentToDelete.patientName,
-          doctorName: appointmentToDelete.doctorName,
-          timestamp: new Date().toISOString()
-        }
-      });
-      
+
+      // ✅ No socket.emit — backend publishes BOOKING_DELETED
+
       showErrorToast(
         `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
         4000
       );
-      
+
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
-      refetch();
-      
+      await refetch();
     } catch (error) {
       console.error("❌ Delete error:", error);
       showErrorToast(error?.data?.message || 'Failed to delete appointment. Please try again.', 4000);
@@ -940,10 +821,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // AppointmentDetailsModal Component - Shows booking number
+  // AppointmentDetailsModal
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
         <div className="bg-white w-[520px] rounded-xl shadow-lg">
@@ -961,17 +842,16 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             </button>
           </div>
           <div className="p-5 space-y-5">
-            {/* Booking ID row */}
             <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
               <span className="text-sm font-medium text-gray-600">Booking ID</span>
               <span className="text-sm font-semibold text-[#1C62A0]">{appointment.formattedId}</span>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <ShadcnAvatar className="w-10 h-10">
-                  <AvatarImage 
-                    src={getS3ImageUrl(appointment.patientImageKey)} 
+                  <AvatarImage
+                    src={getS3ImageUrl(appointment.patientImageKey)}
                     alt={appointment.patientName}
                   />
                   <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
@@ -985,12 +865,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </div>
               <span className={appointment.statusClass}>{appointment.status}</span>
             </div>
-            
+
             <div>
               <p className="font-medium text-sm mb-1">Date & Time</p>
               <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {convertTo12Hour(appointment.consulting_time)}</p>
             </div>
-            
+
             <div>
               <p className="font-medium text-sm mb-1">Contact</p>
               <p className="text-sm text-gray-800">{appointment.contact}</p>
@@ -1000,13 +880,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               <p className="font-medium text-sm mb-1">Gender</p>
               <p className="text-sm text-gray-800">{appointment.gender}</p>
             </div>
-            
+
             <div>
               <p className="font-medium text-sm mb-1">Consultation With</p>
               <p className="text-sm font-medium">{appointment.doctorName}</p>
               <p className="text-sm text-gray-500">{appointment.department}</p>
             </div>
-            
+
             <div>
               <p className="font-medium text-sm mb-1">Reason</p>
               <p className="text-sm text-gray-600">{appointment.reason || "No reason provided"}</p>
@@ -1016,20 +896,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             <button onClick={onClose} className="px-4 py-2 border rounded-md text-sm">Close</button>
             {appointment.originalStatus === 'pending' && (
               <>
-                <button 
-                  onClick={() => {
-                    handleApproveClick(appointment);
-                    onClose();
-                  }} 
+                <button
+                  onClick={() => { handleApproveClick(appointment); onClose(); }}
                   className="px-4 py-2 bg-green-600 text-white rounded-md text-sm"
                 >
                   Approve
                 </button>
-                <button 
-                  onClick={() => {
-                    handleRejectClick(appointment);
-                    onClose();
-                  }} 
+                <button
+                  onClick={() => { handleRejectClick(appointment); onClose(); }}
                   className="px-4 py-2 bg-red-600 text-white rounded-md text-sm"
                 >
                   Reject
@@ -1037,11 +911,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </>
             )}
             {appointment.originalStatus === 'accepted' && (
-              <button 
-                onClick={() => {
-                  handleStartConsultation(appointment);
-                  onClose();
-                }} 
+              <button
+                onClick={() => { handleStartConsultation(appointment); onClose(); }}
                 className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 Start Consultation
@@ -1053,11 +924,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // UPDATED: RowActionMenu Component - Shows booking number in menu header
+  // RowActionMenu
   const RowActionMenu = ({ appointment }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
-    
+
     useEffect(() => {
       const handleClickOutside = (e) => {
         if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
@@ -1065,7 +936,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
-    
+
     return (
       <div className="relative inline-block" ref={menuRef}>
         <Button variant="ghost" size="sm" onClick={() => setShowMenu(!showMenu)} className="p-2">
@@ -1073,7 +944,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </Button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            {/* Header with Booking Number */}
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 rounded-t-lg">
               <p className="text-xs text-gray-500">
                 Booking: <span className="font-medium text-gray-700">{appointment.formattedId}</span>
@@ -1082,16 +952,16 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 Patient: <span className="font-medium text-gray-700">{appointment.patientName}</span>
               </p>
             </div>
-            
-            <button 
-              onClick={() => { handleViewDetails(appointment); setShowMenu(false); }} 
+
+            <button
+              onClick={() => { handleViewDetails(appointment); setShowMenu(false); }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               <Eye size={16} /> View Details
             </button>
             {appointment.originalStatus === 'accepted' && (
-              <button 
-                onClick={() => { handleStartConsultation(appointment); setShowMenu(false); }} 
+              <button
+                onClick={() => { handleStartConsultation(appointment); setShowMenu(false); }}
                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
               >
                 <PlayCircle size={16} /> Start Consultation
@@ -1099,14 +969,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             )}
             {appointment.originalStatus === 'pending' && (
               <>
-                <button 
-                  onClick={() => { handleApproveClick(appointment); setShowMenu(false); }} 
+                <button
+                  onClick={() => { handleApproveClick(appointment); setShowMenu(false); }}
                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
                 >
                   <Check size={16} /> Approve
                 </button>
-                <button 
-                  onClick={() => { handleRejectClick(appointment); setShowMenu(false); }} 
+                <button
+                  onClick={() => { handleRejectClick(appointment); setShowMenu(false); }}
                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
                 >
                   <X size={16} /> Reject
@@ -1114,17 +984,16 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </>
             )}
             <div className="border-t border-gray-100 my-1"></div>
-            {/* Edit button only shows for accepted appointments */}
             {appointment.originalStatus === 'accepted' && (
-              <button 
-                onClick={() => { handleEditClick(appointment); setShowMenu(false); }} 
+              <button
+                onClick={() => { handleEditClick(appointment); setShowMenu(false); }}
                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
               >
                 <Edit size={16} /> Edit
               </button>
             )}
-            <button 
-              onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }} 
+            <button
+              onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
             >
               <Trash2 size={16} /> Delete
@@ -1135,8 +1004,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // Loading state
-  if (loading || allLoading) {
+  // ✅ Only one loading flag now
+  if (loading) {
     return <SkeletonLoader />;
   }
 
@@ -1206,7 +1075,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* SearchBar with proper handlers */}
           <SearchBar
             placeholder="Search by Appointment ID, Patient Name, Contact..."
             value={searchTerm}
@@ -1217,8 +1085,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <button 
-            onClick={handleRefresh} 
+          <button
+            onClick={handleRefresh}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
             disabled={isFetching}
           >
@@ -1301,7 +1169,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Appointments Table - WITH FRONTEND FILTERING */}
+      {/* Appointments Table */}
       {filteredAppointments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -1309,7 +1177,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             {hasSearchTerm || hasActiveFilters ? 'No appointments found' : 'No appointments available'}
           </h3>
           <p className="text-gray-500 mb-4">
-            {hasSearchTerm 
+            {hasSearchTerm
               ? `No results found for "${searchTerm}". Try adjusting your search.`
               : hasActiveFilters
               ? 'No appointments match the selected filters. Try adjusting your filters.'
@@ -1320,14 +1188,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
-              Total Appointments 
+              Total Appointments
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalFilteredItems}</span>
               {(hasSearchTerm || hasActiveFilters) && totalFilteredItems > 0 && (
                 <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
               )}
             </h2>
           </div>
-          
+
           <div className="flex flex-col min-h-[500px]">
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
@@ -1347,13 +1215,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 <tbody>
                   {paginatedAppointments.map((apt, index) => (
                     <tr key={apt.id || index} className="hover:bg-gray-50 border-b border-gray-100">
-                      {/* ✅ UI displays formattedId (based on bookingNumber) */}
                       <td className="px-6 py-4 text-[#1C62A0] font-medium">{apt.formattedId}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <ShadcnAvatar className="w-8 h-8">
-                            <AvatarImage 
-                              src={getS3ImageUrl(apt.patientImageKey)} 
+                            <AvatarImage
+                              src={getS3ImageUrl(apt.patientImageKey)}
                               alt={apt.patientName}
                               className="object-cover"
                             />
@@ -1391,7 +1258,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </table>
             </div>
 
-            {/* Pagination */}
             {totalFilteredPages > 1 && (
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
@@ -1410,21 +1276,20 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       {/* Modals */}
       {showDetailsModal && selectedRequest && (
-        <AppointmentDetailsModal 
-          appointment={selectedRequest} 
-          onClose={() => setShowDetailsModal(false)} 
+        <AppointmentDetailsModal
+          appointment={selectedRequest}
+          onClose={() => setShowDetailsModal(false)}
         />
       )}
 
-      {/* ✅ Approve Modal - receives bookingNumber (not database ID) */}
       {showApproveModal && selectedRequest && (
-        <ApproveRequestModal 
+        <ApproveRequestModal
           bookingId={selectedRequest.bookingNumber}
           requestData={selectedRequest}
-          onClose={() => { 
-            setShowApproveModal(false); 
-            setSelectedRequest(null); 
-          }} 
+          onClose={() => {
+            setShowApproveModal(false);
+            setSelectedRequest(null);
+          }}
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDateDisplay !== "N/A" ? selectedRequest.appointmentDateDisplay : ""}
           initialTime={selectedRequest.consulting_time !== "N/A" ? convertTo12Hour(selectedRequest.consulting_time) : ""}
@@ -1432,16 +1297,16 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           isLoading={isApproving}
         />
       )}
-      
+
       {showRejectModal && selectedRequest && (
-        <RejectRequestModal 
-          onClose={() => { 
-            setShowRejectModal(false); 
-            setSelectedRequest(null); 
-            setRejectReason(""); 
-          }} 
-          onConfirm={handleConfirmReject} 
-          reason={rejectReason} 
+        <RejectRequestModal
+          onClose={() => {
+            setShowRejectModal(false);
+            setSelectedRequest(null);
+            setRejectReason("");
+          }}
+          onConfirm={handleConfirmReject}
+          reason={rejectReason}
           setReason={setRejectReason}
           isLoading={isRejecting}
         />
@@ -1457,20 +1322,19 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         patient={null}
         onSave={handleSaveEdit}
         allPatients={[]}
-        isLoading={isUpdating} // ✅ Pass loading state to modal
+        isLoading={isUpdating}
       />
 
-      <DeleteModal 
-        isOpen={showDeleteModal} 
-        onClose={() => setShowDeleteModal(false)} 
-        onConfirm={handleConfirmDelete} 
-        title="Delete Appointment" 
-        message="Are you sure you want to delete this appointment? This action cannot be undone." 
-        itemName={appointmentToDelete?.formattedId} 
+      <DeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Appointment"
+        message="Are you sure you want to delete this appointment? This action cannot be undone."
+        itemName={appointmentToDelete?.formattedId}
         isDeleting={isDeleting}
       />
 
-      {/* Permission Denied Modal */}
       <PermissionDeniedModal
         isOpen={showPermissionDenied}
         onClose={() => setShowPermissionDenied(false)}

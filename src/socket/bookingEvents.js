@@ -9,6 +9,11 @@ export const registerBookingEvents = (handlers = {}) => {
     console.log("📡 Event name:", event);
     console.log("📦 Event data:", payload?.data);
 
+    if (!event) {
+      console.warn("⚠️ booking_event received without event name:", payload);
+      return;
+    }
+
     switch (event) {
       case "BOOKING_REGISTERED":
         handlers.onBookingRegistered?.(payload.data);
@@ -39,14 +44,17 @@ export const registerBookingEvents = (handlers = {}) => {
         break;
 
       default:
-        console.log("⚠️ Unknown booking event:", event);
+        console.warn("⚠️ Unknown booking event:", event, payload);
     }
   };
 
   socket.on("booking_event", handleBookingEvent);
 
+  console.log("✅ Booking event listener registered");
+
   return () => {
     socket.off("booking_event", handleBookingEvent);
+    console.log("🧹 Booking event listener removed");
   };
 };
 

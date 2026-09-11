@@ -7,42 +7,72 @@ export const socket = io("https://zorrowtek.in", {
 });
 
 export const initSocket = () => {
-  socket.connect();
+  if (!socket.connected) {
+    socket.connect();
+  }
 
-  socket.on("connect", () => {
+  const handleConnect = () => {
     const authUser = getAuthUser();
-    if (!authUser) return;
 
-    // Doctor's own room — DOCTOR_PASSWORD_CHANGED_BY_ADMIN is sent here.
+    console.log("🟢 SOCKET CONNECTED:", socket.id);
+    console.log("👤 AUTH USER:", authUser);
+
+    if (!authUser) {
+      console.warn("⚠️ No authenticated user found");
+      return;
+    }
+
+    // Doctor's own room
     if (authUser.doctorId) {
-      socket.emit("join-room", `doctor_${authUser.doctorId}`);
+      const room = `doctor_${authUser.doctorId}`;
+      console.log("🏥 Joining doctor room:", room);
+      socket.emit("join-room", room);
     }
 
+    // Staff room
     if (authUser.staffId) {
-      socket.emit("join-room", `staff_${authUser.staffId}`);
+      const room = `staff_${authUser.staffId}`;
+      console.log("👨‍💼 Joining staff room:", room);
+      socket.emit("join-room", room);
     }
 
-    // Hospital's room — most doctor lifecycle events go here.
+    // Hospital room — where most booking events go
     if (authUser.hospitalId) {
-      socket.emit("join-room", `hospital_${authUser.hospitalId}`);
+      const room = `hospital_${authUser.hospitalId}`;
+      console.log("🏥 Joining hospital room:", room);
+      socket.emit("join-room", room);
     }
 
-    // Backend hardcodes the super-admin broadcast room as the literal
-    // string "role_1" (see handleDoctorEvent -> safeSocketEmit("role_1", ...)).
-    // It is NOT `role_${roleId}` — join the literal room the backend
-    // actually broadcasts to, for whichever role should receive it.
+    // Super-admin broadcast room (literal "role_1" — matches backend)
     if (authUser.role === "superadmin" || authUser.roleId === 1) {
+      console.log("👑 Joining role_1");
       socket.emit("join-room", "role_1");
     }
 
-    // Personal room, e.g. for booking_alert / blood_stock_alert (unrelated
-    // to doctor events, kept from your original setup).
+    // Personal user room — for booking_alert / blood_stock_alert
     if (authUser.id) {
-      socket.emit("join-room", `user_${authUser.id}`);
+      const room = `user_${authUser.id}`;
+      console.log("👤 Joining user room:", room);
+      socket.emit("join-room", room);
     }
+  };
+
+  // Prevent duplicate listeners on hot reload
+  socket.off("connect", handleConnect);
+  socket.on("connect", handleConnect);
+
+  socket.on("disconnect", (reason) => {
+    console.log("🔴 SOCKET DISCONNECTED:", reason);
   });
 
-  socket.on("disconnect", () => {});
+  socket.on("connect_error", (error) => {
+    console.error("❌ SOCKET CONNECTION ERROR:", error.message);
+  });
+
+  // If already connected when initSocket() is called, run handler immediately
+  if (socket.connected) {
+    handleConnect();
+  }
 
   return socket;
 };
