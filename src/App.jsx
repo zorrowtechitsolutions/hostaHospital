@@ -14,6 +14,10 @@ import Sidebar from "./pages/Sidebar";
 import TopBar from "./pages/Topbar";
 import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/Toast";
+
+// ✅ Global reusable Button
+import { Button } from "./components/ui/Button";
+
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
 import HelpSupport from "./components/help/HelpSupport";
@@ -91,7 +95,6 @@ function App() {
   useEffect(() => {
     // ✅ Initialize socket connection when app loads
     const socketInstance = initSocket();
-    
 
     // ✅ Cleanup on unmount
     return () => {
@@ -162,7 +165,7 @@ function App() {
     const urlParams = new URLSearchParams(location.search);
     const action = urlParams.get('action');
     const modal = urlParams.get('modal');
-    
+
     if (action === 'approve' && modal === 'approve') {
       setShowApproveModal(true);
       // Clean URL
@@ -190,7 +193,7 @@ function App() {
 
   // If not authenticated, show login/register pages with ToastProvider
   if (!isAuthenticated) {
-    return (  
+    return (
       <ToastProvider>
         <Routes>
           {/* Home page for non-authenticated users */}
@@ -230,7 +233,7 @@ function App() {
     <ToastProvider>
       <div className="flex h-screen bg-gray-50 font-sans">
         <Sidebar sidebarOpen={sidebarOpen} />
-        
+
         {/* ✅ FIX 1: Added min-w-0 to allow content to shrink properly */}
         <div
           className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
@@ -250,27 +253,31 @@ function App() {
                 <h3 className="text-lg font-semibold mb-2">{booking.title}</h3>
                 <p className="text-gray-500 mb-4">{booking.body}</p>
 
+                {/* ✅ Using the global reusable Button component */}
                 <div className="flex gap-3 justify-center">
-                  <button
-                    className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg text-sm font-medium transition-colors"
+                  <Button
+                    variant="secondary"
+                    size="md"
                     onClick={() => setBooking(null)}
                   >
                     Cancel
-                  </button>
-                  <button
-                    className="px-4 py-2 bg-[#3d79ad] hover:bg-[#2c5a7d] text-white rounded-lg text-sm font-medium transition-colors"
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => {
                       setBooking(null);
                       navigate("/requests");
                     }}
                   >
                     Accept
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
           )}
-          
+
           {/* Approve Request Modal from Chrome Notification */}
           {showApproveModal && (
             <ApproveRequestModal
@@ -304,30 +311,30 @@ function App() {
               setReason={setRejectReason}
             />
           )}
-          
+
           {/* ✅ FIX 2: Added overflow-x-hidden and min-w-0 */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
             <Routes>
               {/* Public routes within authenticated area */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              
+
               {/* Dashboard - No specific permission needed, just authentication */}
               <Route path="/dashboard" element={<Dashboard />} />
-              
+
               {/* Settings - No specific permission needed */}
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/help" element={<HelpSupport />} />
               <Route path="/notifications" element={<NotificationsPage />} />
-              <Route 
-              path="/audit-login" 
+              <Route
+              path="/audit-login"
               element={
                 <ProtectedRoute permissionId={111}>
                   <SessionHistory />
                 </ProtectedRoute>
               } />
-              <Route 
-              path="/email-notifications" 
+              <Route
+              path="/email-notifications"
               element={
               <ProtectedRoute permissionId={104}>
               <EmailComposer />
@@ -355,264 +362,264 @@ function App() {
               } />
 
               <Route path="/calendar" element={<CalendarPage />} />
-              
+
               {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
-              <Route 
-                path="/doctors" 
+              <Route
+                path="/doctors"
                 element={
                   <ProtectedRoute permissionId={2}> {/* view */}
                     <Doctors />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/add-doctor" 
+              <Route
+                path="/add-doctor"
                 element={
                   <ProtectedRoute permissionId={1}> {/* create */}
                     <AddDoctor />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/edit-doctor/:id" 
+              <Route
+                path="/edit-doctor/:id"
                 element={
                   <ProtectedRoute permissionId={3}> {/* edit */}
                     <EditDoctor />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/doctor/:id" 
+              <Route
+                path="/doctor/:id"
                 element={
                   <ProtectedRoute permissionId={2}> {/* view */}
                     <ViewDoctor />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Patient routes with permission checks - IDs from CSV: patient module (13-16) */}
-              <Route 
-                path="/patients" 
+              <Route
+                path="/patients"
                 element={
                   <ProtectedRoute permissionId={14}> {/* view */}
                     <Patients />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/add-patient" 
+              <Route
+                path="/add-patient"
                 element={
                   <ProtectedRoute permissionId={13}> {/* create */}
                     <AddPatient />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/edit-patient/:id" 
+              <Route
+                path="/edit-patient/:id"
                 element={
                   <ProtectedRoute permissionId={15}> {/* edit */}
                     <EditPatientModal />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/patients/:id" 
+              <Route
+                path="/patients/:id"
                 element={
                   <ProtectedRoute permissionId={14}> {/* view */}
                     <PatientDetails />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Staff routes with permission checks - IDs from CSV: staff module (9-12) */}
-              <Route 
-                path="/staffs" 
+              <Route
+                path="/staffs"
                 element={
                   <ProtectedRoute permissionId={10}> {/* view */}
                     <Staffs />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/add-staff" 
+              <Route
+                path="/add-staff"
                 element={
                   <ProtectedRoute permissionId={9}> {/* create */}
                     <AddStaff />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/edit-staff/:id" 
+              <Route
+                path="/edit-staff/:id"
                 element={
                   <ProtectedRoute permissionId={11}> {/* edit */}
                     <EditStaff />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Lab routes with permission checks - IDs from CSV: lab module (21-24) and labresult module (81-84) */}
-              <Route 
-                path="/lab/results" 
+              <Route
+                path="/lab/results"
                 element={
                   <ProtectedRoute permissionId={82}> {/* labresult view */}
                     <AllLabResults />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/lab/tests" 
+              <Route
+                path="/lab/tests"
                 element={
                   <ProtectedRoute permissionId={82}> {/* labresult view */}
                     <LabTests />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/lab/results/add" 
+              <Route
+                path="/lab/results/add"
                 element={
                   <ProtectedRoute permissionId={81}> {/* labresult create */}
                     <AddEditLabResults />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/lab/results/edit/:id" 
+              <Route
+                path="/lab/results/edit/:id"
                 element={
                   <ProtectedRoute permissionId={83}> {/* labresult edit */}
                     <AddEditLabResults />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/laboratory" 
+              <Route
+                path="/laboratory"
                 element={
                   <ProtectedRoute permissionId={22}> {/* lab view */}
                     <LaboratoryRegistrationForm />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Ambulance route - IDs from CSV: ambulance module (29-32) */}
-              <Route 
-                path="/ambulance" 
+              <Route
+                path="/ambulance"
                 element={
                   <ProtectedRoute permissionId={30}> {/* ambulance view */}
                     <Ambulance />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Blood Bank route - IDs from CSV: blood_bank module (25-28) */}
-              <Route 
-                path="/blood" 
+              <Route
+                path="/blood"
                 element={
                   <ProtectedRoute permissionId={26}> {/* blood_bank view */}
                     <BloodBank />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Pharmacy route - IDs from CSV: pharmacy module (53-56) */}
-              <Route 
-                path="/pharmacy" 
+              <Route
+                path="/pharmacy"
                 element={
                   <ProtectedRoute permissionId={54}> {/* pharmacy view */}
                     <Pharmacy />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/product/:id" 
+              <Route
+                path="/product/:id"
                 element={
                   <ProtectedRoute permissionId={54}> {/* pharmacy view */}
                     <ViewProduct />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Appointment/Consultation routes - IDs from CSV: booking module (33-36) */}
-              <Route 
-                path="/appointments/consultation" 
+              <Route
+                path="/appointments/consultation"
                 element={
                   <ProtectedRoute permissionId={34}> {/* booking view */}
                     <Consultation />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/appointments/medical-history" 
+              <Route
+                path="/appointments/medical-history"
                 element={
                   <ProtectedRoute permissionId={34}> {/* booking view */}
                     <ViewMedicalHistory />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/appointments" 
+              <Route
+                path="/appointments"
                 element={
                   <ProtectedRoute permissionId={34}> {/* booking view */}
                     <Appointments />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Role & Permission routes - IDs from CSV: role module (57-60) and permission module (61-64) */}
-              <Route 
-                path="/roles" 
+              <Route
+                path="/roles"
                 element={
                   <ProtectedRoute permissionId={58}> {/* role view */}
                     <UserPermissions/>
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/permissions/:roleId" 
+              <Route
+                path="/permissions/:roleId"
                 element={
                   <ProtectedRoute permissionId={58}> {/* role view */}
                     <PermissionList />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* User management routes - IDs from CSV: users module (77-80) */}
-              <Route 
-                path="/users" 
+              <Route
+                path="/users"
                 element={
                   <ProtectedRoute permissionId={58}> {/* users view */}
                     <Users />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/add-user" 
+              <Route
+                path="/add-user"
                 element={
                   <ProtectedRoute permissionId={58}> {/* users create */}
                     <AddNewUser />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/edit-user/:id" 
+              <Route
+                path="/edit-user/:id"
                 element={
                   <ProtectedRoute permissionId={58}> {/* users edit */}
                     <EditUser />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Visits - IDs from CSV: visits module */}
-              <Route 
-                path="/visits" 
+              <Route
+                path="/visits"
                 element={
                   <ProtectedRoute permissionId={34}> {/* booking view */}
                     <Visits />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               {/* Requests - No specific permission needed */}
               <Route path="/requests" element={<RequestsTable />} />
-              
+
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
