@@ -793,7 +793,6 @@ const Visits = () => {
                     </ShadcnAvatar>
                     <div>
                       <div className="font-semibold text-gray-900">{visit.patientName}</div>
-                      <div className="text-xs text-gray-500">ID: {visit.patientId}</div>
                       <div className="text-xs text-gray-500">Token: #{visit.token || 'N/A'}</div>
                     </div>
                   </div>
@@ -884,7 +883,6 @@ const Visits = () => {
                           </ShadcnAvatar>
                           <div>
                             <span className="font-medium text-gray-800">{visit.patientName}</span>
-                            <p className="text-xs text-gray-400">ID: {visit.patientId}</p>
                           </div>
                         </div>
                       </td>
