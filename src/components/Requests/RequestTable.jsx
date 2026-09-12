@@ -182,7 +182,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   // Loading states
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-  // ❌ REMOVED: const [eventsRegistered, setEventsRegistered] = useState(false);
 
   // ✅ Optimistic update state - track removed booking numbers
   const [removedRequestNumbers, setRemovedRequestNumbers] = useState(new Set());
@@ -196,46 +195,71 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   // ✅ API Hooks - Server-side pagination with status fixed to "pending"
+  // ✅ Added refetchOnMountOrArgChange & refetchOnFocus for cross-laptop/tab freshness
   const {
     data: bookingsResponse,
     isLoading: loading,
     refetch,
-    isFetching
-  } = useGetBookingsQuery({
-    page: currentPage,
-    limit: itemsPerPage,
-    status: "pending",
-    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
-    ...(departmentFilter && { department: departmentFilter }),
-    ...(dateFilter && { date: dateFilter }),
-  });
+    isFetching,
+  } = useGetBookingsQuery(
+    {
+      page: currentPage,
+      limit: itemsPerPage,
+      status: "pending",
+
+      ...(searchTerm && searchTerm.trim().length >= 2 && {
+        search_query: searchTerm,
+      }),
+
+      ...(departmentFilter && {
+        department: departmentFilter,
+      }),
+
+      ...(dateFilter && {
+        date: dateFilter,
+      }),
+    },
+    {
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+    }
+  );
 
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
 
-  // ✅ SINGLE socket registration effect (removed the duplicate)
+  // ✅ SINGLE socket registration effect
+  // ✅ Simplified handlers: non-async, fire-and-forget refetch()
   useEffect(() => {
     const cleanup = registerBookingEvents({
-      onBookingRegistered: async () => {
-        showSuccessToast("New booking registered!", 3000);
-        await refetch();
+      onBookingRegistered: () => {
+        console.log("🔥 BOOKING_REGISTERED");
+        showSuccessToast("New booking registered!", TOAST_DURATION);
+        refetch();
       },
-      onBookingUpdated: async () => {
-        console.log("🔥 RequestTable BOOKING_UPDATED");
-        showSuccessToast("Booking updated!", 3000);
-        await refetch();
+
+      onBookingUpdated: () => {
+        console.log("🔥 BOOKING_UPDATED");
+        showSuccessToast("Booking updated!", TOAST_DURATION);
+        refetch();
       },
-      onBookingCancelled: async () => {
-        showSuccessToast("Booking cancelled!", 3000);
-        await refetch();
+
+      onBookingCancelled: () => {
+        console.log("🔥 BOOKING_CANCELLED");
+        showSuccessToast("Booking cancelled!", TOAST_DURATION);
+        refetch();
       },
-      onBookingAccepted: async () => {
-        showSuccessToast("Booking accepted!", 3000);
-        await refetch();
+
+      onBookingAccepted: () => {
+        console.log("🔥 BOOKING_ACCEPTED");
+        showSuccessToast("Booking accepted!", TOAST_DURATION);
+        refetch();
       },
-      onBookingCompleted: async () => {
-        showSuccessToast("Booking completed!", 3000);
-        await refetch();
+
+      onBookingCompleted: () => {
+        console.log("🔥 BOOKING_COMPLETED");
+        showSuccessToast("Booking completed!", TOAST_DURATION);
+        refetch();
       },
     });
 
@@ -448,8 +472,10 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         },
       }).unwrap();
 
+      // ✅ Optimistic removal — RTK Query's invalidatesTags already refetches
+      // the active getBookings query on this laptop, so a manual refetch()
+      // here is redundant. Kept out intentionally for cleaner flow.
       removeFromPendingList(bookingNumber);
-      await refetch();
 
       const tokenDisplay = appointmentData.token?.trim() ? `#${appointmentData.token}` : 'Automatic';
 
@@ -469,6 +495,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     } catch (error) {
       console.error("❌ Approve error:", error);
 
+      // Rollback optimistic removal on failure
       setRemovedRequestNumbers((prev) => {
         const next = new Set(prev);
         next.delete(bookingNumber);
@@ -522,8 +549,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         },
       }).unwrap();
 
+      // ✅ Optimistic removal — invalidatesTags handles the refetch
       removeFromPendingList(bookingNumber);
-      await refetch();
 
       showSuccessToast(
         `Request ${selectedRequest.formattedId} rejected successfully!`,
@@ -540,6 +567,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     } catch (error) {
       console.error("❌ Reject error:", error);
 
+      // Rollback optimistic removal on failure
       setRemovedRequestNumbers((prev) => {
         const next = new Set(prev);
         next.delete(bookingNumber);
