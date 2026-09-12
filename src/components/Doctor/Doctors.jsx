@@ -87,7 +87,7 @@ const getAppointmentValue = (doctor) =>
         0
       );
 
-// ✅ FIXED: Format doctor number to display ID (4 digits padding)
+// Format doctor number to display ID (4 digits padding)
 const getDoctorId = (doctor) => {
   if (doctor?.doctorId) {
     return doctor.doctorId;
@@ -107,14 +107,29 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
-// Helper function to calculate slots
+// ✅ Helper function to calculate slots using backend fields
 const calculateSlots = (doctor) => {
-  const totalSlots = Number(doctor.totalSlots) || 0;
-  const takenSlots = Number(doctor.takenSlots) || 0;
-  const leftSlots = Math.max(0, totalSlots - takenSlots);
+  const totalSlots = Number(doctor.appointmentCount) || 0;
+  const takenSlots = Number(doctor.todayBookingAcceptCount) || 0;
 
-  return { totalSlots, takenSlots, leftSlots };
+  const hasLimit = totalSlots > 0;
+  const leftSlots = hasLimit
+    ? Math.max(totalSlots - takenSlots, 0)
+    : null;
+
+  const bookingAvailable =
+    doctor.bookingOpen === true &&
+    (!hasLimit || leftSlots > 0);
+
+  return {
+    totalSlots,
+    takenSlots,
+    leftSlots,
+    bookingAvailable,
+    hasLimit,
+  };
 };
+
 // Helper to check if auto decline is enabled
 const hasAutoDecline = (doctor) => {
   return doctor.autoDecline && Number(doctor.autoDecline) > 0;
@@ -387,7 +402,7 @@ const Doctors = () => {
     return true;
   };
 
-  // ✅ FIXED: Transform doctors with doctorNumber and doctorId, and sort by doctorNumber
+  // Transform doctors with proper field mapping from backend
   const doctors = useMemo(() => {
     if (!response?.data) return [];
 
@@ -395,13 +410,13 @@ const Doctors = () => {
       .map((doctor) => ({
         ...doctor,
         
-        // ✅ Keep database ID for CRUD
+        // Keep database ID for CRUD
         id: doctor.id,
         
-        // ✅ Hospital-specific sequential number
+        // Hospital-specific sequential number
         doctorNumber: doctor.doctorNumber,
         
-        // ✅ Use backend virtual ID if available
+        // Use backend virtual ID if available
         doctorId: doctor.doctorId || 
           (doctor.doctorNumber !== undefined 
             ? `#DR${String(doctor.doctorNumber).padStart(4, '0')}`
@@ -412,16 +427,14 @@ const Doctors = () => {
         authId: doctor.authId || doctor.userId || doctor.id,
         hospitalId: doctor.hospitalId || hospitalId,
 
-        totalSlots: Number(doctor.appointmentCount) || 0,
-        takenSlots: Number(
-          doctor.takenSlots ??
-          doctor.todayTakenSlots ??
-          doctor.bookedSlots ??
-          doctor.todayBookings ??
-          0
-        ),
+        // IMPORTANT: Map backend fields for slot calculation
+        appointmentCount: Number(doctor.appointmentCount) || 0,
+        todayBookingAcceptCount: Number(doctor.todayBookingAcceptCount) || 0,
+        bookingOpen: doctor.bookingOpen === true,
+        bookingAvailable: doctor.bookingAvailable === true,
+        leftSlots: doctor.leftSlots !== undefined ? Number(doctor.leftSlots) : null,
       }))
-      // ✅ CRITICAL FIX: Sort by doctorNumber to ensure proper ordering
+      // Sort by doctorNumber to ensure proper ordering
       .sort((a, b) => Number(a.doctorNumber) - Number(b.doctorNumber));
   }, [response?.data, hospitalId]);
 
@@ -559,7 +572,6 @@ const Doctors = () => {
     setSelectedSpecialty('All');
   }, []);
 
-  // ✅ FIXED: Export uses getDoctorId(doctor) instead of getDoctorId(doctor.id)
   const getExportData = useCallback(() => {
     return doctors.map((doctor) => {
       const formattedAddress = formatAddress(doctor.address);
@@ -802,15 +814,19 @@ const Doctors = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {doctors.map((doctor) => {
                 const isBlacklisted = doctor.isDelete === true;
-                const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
+                const slotData = calculateSlots(doctor);
+                const { totalSlots, takenSlots, leftSlots, bookingAvailable, hasLimit } = slotData;
                 const autoDecline = hasAutoDecline(doctor);
                 const appointmentLimit = getAppointmentCountDisplay(doctor);
-                const utilization = totalSlots > 0 ? Math.round((takenSlots / totalSlots) * 100) : 0;
+                
+                // ✅ Calculate utilization based on booked / total
+                const utilization = totalSlots > 0
+                  ? Math.round((takenSlots / totalSlots) * 100)
+                  : 0;
                 
                 return (
-                  <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow">
+                  <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow min-h-[400px]">
                     <div className="w-full flex justify-between items-start mb-4">
-                      {/* ✅ FIXED: Use getDoctorId(doctor) instead of getDoctorId(doctor.id) */}
                       <Badge variant="info" className="text-[10px]">
                         {getDoctorId(doctor)}
                       </Badge>
@@ -889,36 +905,97 @@ const Doctors = () => {
                       </div>
                     </div>
 
-                    <div className="w-full to-blue-50 rounded-lg p-3 mb-3 border border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[9px] text-indigo-600 uppercase font-bold flex items-center gap-1">
-                          <CalendarClock size={20} className="text-black" />
-                          Today's Slots
-                        </p>
-                        <span className="text-[8px] font-medium text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full">
-                          {utilization}% filled
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center px-2">
-                        <div className="text-center">
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Taken</p>
-                          <p className="text-sm font-bold text-gray-800">{takenSlots}</p>
+                    {/* TODAY'S APPOINTMENT AVAILABILITY */}
+                    <div className="w-full mt-3 pt-3 border-t border-gray-100">
+                      {doctor.bookingOpen === false ? (
+                        <div className="flex items-center justify-between min-h-[52px]">
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                              Today's Appointments
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Booking is currently closed
+                            </p>
+                          </div>
+
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 border border-red-100">
+                            Closed
+                          </span>
                         </div>
-                        <div className="text-center">
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Left</p>
-                          <p className="text-sm font-bold text-gray-800">{leftSlots}</p>
+                      ) : hasLimit ? (
+                        <div className="space-y-2.5">
+
+                          {/* Header */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                                Today's Appointments
+                              </p>
+
+                              <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                                {takenSlots}
+                                <span className="text-gray-400 font-normal"> / </span>
+                                {totalSlots}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold ${
+                                leftSlots === 0
+                                  ? "bg-red-50 text-red-600 border border-red-100"
+                                  : "bg-green-50 text-green-600 border border-green-100"
+                              }`}
+                            >
+                              {leftSlots === 0 ? "Full" : "Available"}
+                            </span>
+                          </div>
+
+                          {/* Progress */}
+                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                leftSlots === 0 ? "bg-red-400" : "bg-green-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(utilization, 100)}%`
+                              }}
+                            />
+                          </div>
+
+                          {/* Footer */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-gray-400">
+                              {takenSlots} booked
+                            </span>
+
+                            <span
+                              className={`text-[11px] ${
+                                leftSlots === 0
+                                  ? "text-red-500 font-semibold"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {leftSlots} remaining
+                            </span>
+                          </div>
+
                         </div>
-                        <div className="text-center">
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wider">Total</p>
-                          <p className="text-sm font-bold text-gray-800">{totalSlots}</p>
+                      ) : (
+                        <div className="flex items-center justify-between min-h-[52px]">
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                              Today's Appointments
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              No daily limit
+                            </p>
+                          </div>
+
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-50 text-green-600 border border-green-100">
+                            Available
+                          </span>
                         </div>
-                      </div>
-                      <div className="mt-2 w-full h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-200 to-indigo-500 transition-all duration-500"
-                          style={{ width: `${Math.min(utilization, 100)}%` }}
-                        />
-                      </div>
+                      )}
                     </div>
                     
                     {isBlacklisted && (
@@ -931,7 +1008,7 @@ const Doctors = () => {
                           }
                           handleRecoverDoctor(doctor);
                         }} 
-                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2 mt-3"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1000,7 +1077,6 @@ const Doctors = () => {
                       
                       return (
                         <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
-                          {/* ✅ FIXED: Use getDoctorId(doctor) instead of getDoctorId(doctor.id) */}
                           <td className="px-6 py-4 text-[#1C62A0] font-medium">
                             {getDoctorId(doctor)}
                           </td>
@@ -1124,7 +1200,7 @@ const Doctors = () => {
           }}
           onSave={handleSaveAppointmentSettings}
           doctor={selectedDoctorForManagement}
-          refetchDoctors={refetch}
+          refetchDoctors={refetch} 
         />
       </div>
 
