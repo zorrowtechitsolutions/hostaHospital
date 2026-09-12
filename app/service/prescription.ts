@@ -1,4 +1,5 @@
 // prescription.js - Complete with ONLY patientNumber support (no DB id fallback)
+// + Added prescriptionNumber / prescriptionId support
 
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
@@ -12,6 +13,11 @@ export interface PrescriptionPayload {
   // ✅ ONLY patientNumber - DO NOT use database ID
   patientNumber?: number | string | null;
   userId?: number | string | null;
+
+  // ✅ NEW: Server-generated identifiers (read-only on the client)
+  // These are returned by the backend after creation.
+  prescriptionNumber?: number;
+  prescriptionId?: string;
 
   // ✅ PATIENT DETAILS - Backend field names
   patientName?: string;
@@ -156,6 +162,9 @@ export const prescriptionApi = api.injectEndpoints({
           bmi: data?.bmi || 0,
           waist: data?.waist || 0,
           bsa: data?.bsa || 0,
+
+          // ✅ NOTE: Do NOT send prescriptionNumber / prescriptionId here.
+          // The backend generates these. They are only READ from the response.
         };
 
         console.log("📋 Creating prescription with patientNumber:", {
@@ -303,6 +312,10 @@ export const prescriptionApi = api.injectEndpoints({
           updateData.patientId = data.patientNumber;
           delete updateData.patientNumber;
         }
+
+        // ✅ Do not let the client accidentally overwrite server-generated IDs
+        delete updateData.prescriptionNumber;
+        delete updateData.prescriptionId;
 
         return {
           url: `/prescription/${id}`,

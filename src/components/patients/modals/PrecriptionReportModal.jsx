@@ -206,11 +206,27 @@ const PrescriptionReportModal = ({
   const patientGender = patient?.gender || "N/A";
   const patientPhone = patient?.contact || patient?.mobileNumber || patient?.phone || "N/A";
 
+  // ✅ NEW: Server-generated prescription identifiers
+  const prescriptionNumber = existingPrescription?.prescriptionNumber;
+  const prescriptionId = existingPrescription?.prescriptionId;
+
+  // ✅ Compute the display string for the prescription number
+  // Priority: explicit prescriptionId (e.g. "#PRS00015") > formatted prescriptionNumber > "N/A"
+  const prescriptionDisplayId = prescriptionId
+    ? prescriptionId
+    : prescriptionNumber !== undefined && prescriptionNumber !== null
+      ? `#PRS${String(prescriptionNumber).padStart(5, "0")}`
+      : "N/A";
+
   // ✅ Debug logging
   console.log("========== PRESCRIPTION MODAL DEBUG ==========");
   console.log("Patient DB id (❌ DO NOT USE):", patient?.id);
   console.log("Patient Number (✅ USE THIS):", patientNumber);
   console.log("Patient Display ID:", patientDisplayId);
+  console.log("Prescription DB id (❌ DO NOT USE):", existingPrescription?.id);
+  console.log("Prescription Number (✅ USE THIS):", prescriptionNumber);
+  console.log("Prescription ID (✅ USE THIS):", prescriptionId);
+  console.log("Prescription Display ID:", prescriptionDisplayId);
   console.log("==============================================");
 
   const replaceContent = (content) => {
@@ -228,6 +244,14 @@ const PrescriptionReportModal = ({
       .replace(/\{doctorContact\}/g, doctorContact)
       .replace(/\{complaint\}/g, complaint)
       .replace(/\{advice\}/g, advice)
+      // ✅ NEW: Prescription placeholders for drag-and-drop templates
+      .replace(/\{prescriptionId\}/g, prescriptionDisplayId)
+      .replace(
+        /\{prescriptionNumber\}/g,
+        prescriptionNumber !== undefined && prescriptionNumber !== null
+          ? String(prescriptionNumber)
+          : "N/A"
+      )
       .replace(/\{date\}/g, new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
     
     return replaced;
@@ -511,15 +535,76 @@ const PrescriptionReportModal = ({
       case "prescriptionInfo":
         return (
           <div key="prescription-info" style={blockStyle}>
-            <div style={{ color: block.style?.color || "#4b5563", fontSize: "14px" }}>
-              Prescription ID: <span style={{ color: block.style?.color || "#1f2937" }}>{existingPrescription?.id || "N/A"}</span>
+
+            {/* Prescription Number */}
+            <div
+              style={{
+                color: block.style?.color || "#4b5563",
+                fontSize: "14px",
+              }}
+            >
+              Prescription No:{" "}
+              <span
+                style={{
+                  color: block.style?.color || "#1f2937",
+                  fontWeight: "600",
+                }}
+              >
+                {prescriptionDisplayId}
+              </span>
             </div>
-            <div style={{ color: block.style?.color || "#4b5563", fontSize: "14px", marginTop: "4px" }}>
-              Date: <span style={{ color: block.style?.color || "#1f2937" }}>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+
+            {/* Date */}
+            <div
+              style={{
+                color: block.style?.color || "#4b5563",
+                fontSize: "14px",
+                marginTop: "4px",
+              }}
+            >
+              Date:{" "}
+              <span
+                style={{
+                  color: block.style?.color || "#1f2937",
+                }}
+              >
+                {existingPrescription?.date
+                  ? new Date(existingPrescription.date).toLocaleDateString(
+                      "en-US",
+                      {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      }
+                    )
+                  : new Date().toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+              </span>
             </div>
-            <div style={{ color: block.style?.color || "#4b5563", fontSize: "14px", marginTop: "4px" }}>
-              Next Consultation: <span style={{ color: block.style?.color || "#1f2937" }}>{nextConsultation ? new Date(nextConsultation).toLocaleDateString() : "Not scheduled"}</span>
+
+            {/* Next Consultation */}
+            <div
+              style={{
+                color: block.style?.color || "#4b5563",
+                fontSize: "14px",
+                marginTop: "4px",
+              }}
+            >
+              Next Consultation:{" "}
+              <span
+                style={{
+                  color: block.style?.color || "#1f2937",
+                }}
+              >
+                {nextConsultation
+                  ? new Date(nextConsultation).toLocaleDateString()
+                  : "Not scheduled"}
+              </span>
             </div>
+
           </div>
         );
       
@@ -577,6 +662,7 @@ const PrescriptionReportModal = ({
             <h2 className="text-xl font-bold text-gray-800">Prescription Details</h2>
             <p className="text-sm text-gray-500">
               Patient: {patientName} {patientDisplayId && `• ${patientDisplayId}`}
+              {prescriptionDisplayId !== "N/A" && ` • Rx: ${prescriptionDisplayId}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
