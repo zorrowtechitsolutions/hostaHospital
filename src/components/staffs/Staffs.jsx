@@ -27,7 +27,8 @@ import {
   Badge,
   SearchBar,
   Modal,
-  Pagination
+  Pagination,
+  FilterBar
 } from '../ui';
 
 import DeleteModal from '../patients/DeleteModel';
@@ -911,20 +912,13 @@ const Staffs = () => {
               <Download size={16} />
             </Button>
 
-            <button
+            {/* ✅ FilterBar — icon always stays gray */}
+            <FilterBar
               onClick={() => setShowFilters(prev => !prev)}
-              className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-                showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-              } hover:bg-gray-50`}
+              isOpen={showFilters}
+              activeFilterCount={activeFilterCount}
               title="Toggle Filters"
-            >
-              <Filter size={16} />
-              {activeFilterCount > 0 && !showFilters && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+            />
             
             {/* New Staff Button with Permission Check */}
             <Button 

@@ -8,7 +8,7 @@ import {
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, 
   TableHeader, TableCell, Badge, Avatar, SearchBar, 
-  Pagination, Modal, Loader 
+  Pagination, Modal, Loader, FilterBar
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
@@ -717,20 +717,14 @@ const Visits = () => {
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>
-          <button
+
+          {/* ✅ FilterBar — icon always stays gray */}
+          <FilterBar
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
             title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          />
         </div>
       </div>
 

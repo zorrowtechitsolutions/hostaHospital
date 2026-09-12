@@ -1,3 +1,4 @@
+// src/components/Appointments/Appointments.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,7 +7,7 @@ import {
   PlayCircle, Check, X
 } from 'lucide-react';
 import {
-  Button, Pagination, SearchBar
+  Button, Pagination, SearchBar, FilterBar
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
@@ -196,8 +197,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   // ============================================================
   // ✅ SINGLE QUERY — this is the one that feeds the table.
-  //    Client-side search/filter/pagination is done below on
-  //    allBookingsResponse, so we only need one query.
   // ============================================================
   const {
     data: allBookingsResponse,
@@ -218,8 +217,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [deleteBooking] = useDeleteBookingMutation();
 
   // ============================================================
-  // ✅ SOCKET LISTENER — refetch() is the one and only query,
-  //    so events immediately update the table.
+  // ✅ SOCKET LISTENER
   // ============================================================
   useEffect(() => {
     const cleanup = registerBookingEvents({
@@ -232,7 +230,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         console.log("🔥 Appointments BOOKING_UPDATED:", data);
         showSuccessToast("Booking updated!", 3000);
         await refetch();
-        console.log("🔄 Appointments list refetched");
       },
       onBookingCancelled: async (data) => {
         console.log("🔥 Appointments BOOKING_CANCELLED:", data);
@@ -313,7 +310,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return null;
   };
 
-  // ✅ Transform bookings data
   const transformBookingsData = (bookingList) => {
     if (!bookingList || !Array.isArray(bookingList)) return [];
 
@@ -376,7 +372,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     });
   };
 
-  // ✅ Everything below now derives from the single query.
   const allBookingList = allBookingsResponse?.data || [];
   const allAppointmentsData = transformBookingsData(allBookingList).sort(
     (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
@@ -574,10 +569,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
-    console.log("📝 [handleEditClick] Appointment data:", appointment);
-    console.log("📝 [handleEditClick] Booking Number:", appointment.bookingNumber);
-    console.log("📝 [handleEditClick] Formatted ID:", appointment.formattedId);
-
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
   };
@@ -633,8 +624,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         }
       }).unwrap();
 
-      // ✅ No socket.emit — backend publishes BOOKING_ACCEPTED
-
       showSuccessToast(
         `Appointment ${selectedRequest.formattedId} approved successfully!`,
         4000
@@ -678,8 +667,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         data: { reason: rejectReason }
       }).unwrap();
 
-      // ✅ No socket.emit — backend publishes BOOKING_CANCELLED
-
       showErrorToast(
         `Appointment ${selectedRequest.formattedId} rejected successfully!`,
         4000
@@ -697,7 +684,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     }
   };
 
-  // ✅ handleSaveEdit — no socket.emit; refetch() hits the one query that feeds the table
   const handleSaveEdit = async (updatedData) => {
     if (!appointmentToEdit) {
       showErrorToast("No appointment selected for editing.", 3000);
@@ -711,23 +697,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       return;
     }
 
-    console.log("🔥 UPDATE bookingNumber:", bookingNumber);
-    console.log("🔥 UPDATE data:", updatedData);
-
     setIsUpdating(true);
 
     try {
-      // 1. UPDATE DATABASE — backend publishes BOOKING_UPDATED
       const response = await updateBooking({
         bookingNumber: Number(bookingNumber),
         data: updatedData,
       }).unwrap();
-
-      console.log("✅ Booking updated successfully:", response);
-
-      // ❌ DO NOT socket.emit() HERE
-      // The backend's PUT /booking/:bookingNumber handler already publishes
-      // BOOKING_UPDATED to the correct rooms via publishEvent().
 
       showSuccessToast(
         `Appointment ${appointmentToEdit.formattedId} updated successfully!`,
@@ -737,9 +713,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       setShowEditModal(false);
       setAppointmentToEdit(null);
 
-      // 2. REFRESH IMMEDIATELY — same query that renders the table
       await refetch();
-      console.log("🔄 Appointments list refetched after edit");
     } catch (error) {
       console.error("❌ Update booking error:", error);
 
@@ -770,8 +744,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
     try {
       await deleteBooking(appointmentToDelete.bookingNumber).unwrap();
-
-      // ✅ No socket.emit — backend publishes BOOKING_DELETED
 
       showErrorToast(
         `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
@@ -1004,7 +976,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // ✅ Only one loading flag now
   if (loading) {
     return <SkeletonLoader />;
   }
@@ -1092,79 +1063,103 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
+          <button
+            onClick={handleExport}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            title="Export to Excel"
+          >
             <Download size={16} />
           </button>
-          <button
+
+          {/* ✅ FilterBar — icon always stays gray */}
+          <FilterBar
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0]' : 'text-gray-500'
-            } hover:bg-gray-50`}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
             title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          />
         </div>
       </div>
 
-      {/* Filters */}
+      {/* ✅ Filters panel — only rendered when showFilters is true */}
       {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                <Filter size={18} className="text-[#1C62A0]" />
-              </div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-semibold text-gray-800">Filters</h2>
-                {activeFilterCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
+              <Filter className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+              {activeFilterCount > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
-            <button onClick={clearAllFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
+            <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
               Clear All Filters
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="all">All Status</option>
-              <option value="accepted">Accepted</option>
-              <option value="pending">Pending</option>
-              <option value="declined">Declined</option>
-              <option value="completed">Completed</option>
-              <option value="cancel">Cancelled</option>
-            </select>
+            {/* Status */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.preventDefault();
+                    setStatusFilter("all");
+                  }
+                }}
+                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="accepted">Accepted</option>
+                <option value="pending">Pending</option>
+                <option value="declined">Declined</option>
+                <option value="completed">Completed</option>
+                <option value="cancel">Cancelled</option>
+              </select>
+            </div>
 
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="">All Departments</option>
-              {getAllDepartments().map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
+            {/* Department */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.preventDefault();
+                    setDepartmentFilter("");
+                  }
+                }}
+                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
+              >
+                <option value="">All Departments</option>
+                {getAllDepartments().map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
 
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
-            />
+            {/* Appointment Date */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.preventDefault();
+                    setDateFilter("");
+                  }
+                }}
+                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white"
+              />
+            </div>
           </div>
         </div>
       )}

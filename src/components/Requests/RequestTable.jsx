@@ -9,11 +9,12 @@ import {
   RefreshCcw,
   Download,
   Users as UsersIcon,
-  Phone
+  Phone,
 } from "lucide-react";
 import {
   Pagination,
-  SearchBar
+  SearchBar,
+  FilterBar,
 } from "../ui";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
@@ -195,7 +196,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   // ✅ API Hooks - Server-side pagination with status fixed to "pending"
-  // ✅ Added refetchOnMountOrArgChange & refetchOnFocus for cross-laptop/tab freshness
   const {
     data: bookingsResponse,
     isLoading: loading,
@@ -229,7 +229,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [rejectBooking] = useRejectBookingMutation();
 
   // ✅ SINGLE socket registration effect
-  // ✅ Simplified handlers: non-async, fire-and-forget refetch()
   useEffect(() => {
     const cleanup = registerBookingEvents({
       onBookingRegistered: () => {
@@ -472,9 +471,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         },
       }).unwrap();
 
-      // ✅ Optimistic removal — RTK Query's invalidatesTags already refetches
-      // the active getBookings query on this laptop, so a manual refetch()
-      // here is redundant. Kept out intentionally for cleaner flow.
       removeFromPendingList(bookingNumber);
 
       const tokenDisplay = appointmentData.token?.trim() ? `#${appointmentData.token}` : 'Automatic';
@@ -495,7 +491,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     } catch (error) {
       console.error("❌ Approve error:", error);
 
-      // Rollback optimistic removal on failure
       setRemovedRequestNumbers((prev) => {
         const next = new Set(prev);
         next.delete(bookingNumber);
@@ -549,7 +544,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         },
       }).unwrap();
 
-      // ✅ Optimistic removal — invalidatesTags handles the refetch
       removeFromPendingList(bookingNumber);
 
       showSuccessToast(
@@ -567,7 +561,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     } catch (error) {
       console.error("❌ Reject error:", error);
 
-      // Rollback optimistic removal on failure
       setRemovedRequestNumbers((prev) => {
         const next = new Set(prev);
         next.delete(bookingNumber);
@@ -696,20 +689,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           >
             <Download size={16} />
           </button>
-          <button
+
+          {/* ✅ FilterBar — icon always stays gray */}
+          <FilterBar
             onClick={() => setShowFilters(prev => !prev)}
-            className={`relative ${ICON_BUTTON_CLASS} ${
-              showFilters || activeFilterCount > 0 ? 'text-[#1C62A0] border-[#1C62A0]' : 'text-gray-500'
-            }`}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
             title="Toggle Filters"
-          >
-            <Filter size={16} />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          />
         </div>
       </div>
 
@@ -732,36 +719,101 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Department — native select matching Appointments UI, Backspace clears */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
               <select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.preventDefault();
+                    setDepartmentFilter("");
+                  }
+                }}
+                className="
+                  w-full
+                  h-12
+                  px-6
+                  border
+                  border-gray-200
+                  rounded-xl
+                  outline-none
+                  focus:ring-2
+                  focus:ring-[#1C62A0]
+                  focus:border-transparent
+                  text-gray-700
+                  text-sm
+                  bg-white
+                  cursor-pointer
+                "
               >
                 <option value="">All Departments</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
+
+                {departments.map((department) => (
+                  <option
+                    key={department}
+                    value={department}
+                  >
+                    {department}
+                  </option>
                 ))}
               </select>
             </div>
 
+            {/* Appointment Date */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
               <input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="
+                  w-full
+                  h-12
+                  px-6
+                  border
+                  border-gray-200
+                  rounded-xl
+                  outline-none
+                  focus:ring-2
+                  focus:ring-[#1C62A0]
+                  focus:border-transparent
+                  text-gray-700
+                  text-sm
+                  bg-white
+                "
               />
             </div>
 
+            {/* Status — Backspace clears */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.preventDefault();
+                    setStatusFilter("");
+                  }
+                }}
+                className="
+                  w-full
+                  h-12
+                  px-6
+                  border
+                  border-gray-200
+                  rounded-xl
+                  outline-none
+                  focus:ring-2
+                  focus:ring-[#1C62A0]
+                  focus:border-transparent
+                  text-gray-700
+                  text-sm
+                  bg-white
+                  cursor-pointer
+                "
               >
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
