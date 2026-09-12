@@ -16,7 +16,7 @@ import Dashboard from "./pages/Dashboard";
 import { ToastProvider } from "./components/ui/Toast";
 
 // ✅ Global reusable Button
-import { Button } from "./components/ui/Button";
+import { Button } from "./components/ui/button";
 
 import ApproveRequestModal from "./components/Requests/ApproveRequestModel";
 import RejectRequestModal from "./components/Requests/RejectRequestModel";
