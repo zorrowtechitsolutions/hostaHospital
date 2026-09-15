@@ -40,7 +40,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
     if (appointment) {
       const booking = appointment;
       
-      // FIXED: More robust date parsing with multiple possible field names
       let formattedDate = '';
       const rawDate = 
         booking.booking_date ||
@@ -51,7 +50,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
       if (rawDate && rawDate !== 'N/A' && rawDate !== '') {
         try {
-          // Handle YYYY-MM-DD directly
           if (/^\d{4}-\d{2}-\d{2}$/.test(String(rawDate))) {
             formattedDate = String(rawDate);
           } else {
@@ -65,7 +63,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         }
       }
 
-      // Format time for input (HH:mm) - 24-hour format for time input
       let formattedTime = '';
       const rawTime = booking.consulting_time || booking.time || '';
       
@@ -77,10 +74,8 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         }
       }
 
-      // Get doctor ID from various possible sources
       const doctorId = booking.doctorId || booking.doctor?.id || booking.doctor_id || '';
 
-      // FIXED: More robust token extraction
       const existingToken = 
         booking.token ??
         booking.token_number ??
@@ -181,7 +176,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       return;
     }
 
-    // ✅ FIXED: Check for bookingNumber instead of id
     if (!appointment?.bookingNumber) {
       showErrorToast('Booking number is missing', 3000);
       return;
@@ -196,17 +190,42 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         consultingTime = convertTo24Hour(consultingTime);
       }
 
+      // Find the selected doctor to sync doctor_name and doctor_department
+      const selectedDoctor = doctors.find(
+        (doctor) => String(doctor.id) === String(formData.doctorId)
+      );
+
       const updateData = {
         patient_name: formData.patient_name,
         patient_phone: formData.patient_phone,
+
+        // New doctor
         doctorId: Number(formData.doctorId),
+
+        // Keep doctor details synchronized in the booking
+        doctor_name:
+          selectedDoctor?.displayName ||
+          selectedDoctor?.name ||
+          "",
+
+        doctor_department:
+          selectedDoctor?.department ||
+          selectedDoctor?.doctor_department ||
+          "",
+
         booking_date: formData.booking_date,
         consulting_time: consultingTime,
-        token: formData.token ? Number(formData.token) : undefined,
+        token: formData.token
+          ? Number(formData.token)
+          : undefined,
       };
 
+      console.log('📝 Updating booking:', {
+        bookingNumber: appointment.bookingNumber,
+        formattedId: `#BK${String(appointment.bookingNumber).padStart(5, '0')}`,
+        updateData,
+      });
 
-      // ✅ FIXED: Use bookingNumber (not id)
       await updateBooking({
         bookingNumber: Number(appointment.bookingNumber),
         data: updateData,
