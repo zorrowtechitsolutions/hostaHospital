@@ -183,8 +183,12 @@ const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
                 </p>
               </div>
               <div>
-                <p className="text-gray-500">Patient ID</p>
-                <p className="font-medium text-gray-800">{patient?.id || 'N/A'}</p>
+                <p className="text-gray-500">Patient Number</p>
+                <p className="font-medium text-gray-800">
+                  {patient?.patientNumber != null
+                    ? `#PT${String(patient.patientNumber).padStart(4, '0')}`
+                    : 'N/A'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
