@@ -188,13 +188,6 @@ const PatientDetails = () => {
     }
   );
 
-  // Debug logging for prescriptions query
-  console.log("========== PRESCRIPTION QUERY DEBUG ==========");
-  console.log("Patient DB id (❌ DO NOT USE):", patientId);
-  console.log("Patient Number (✅ USE THIS):", patientNumber);
-  console.log("Query params:", { patientNumber });
-  console.log("Expected URL: /prescription?hospitalId=62&patientId=" + patientNumber);
-  console.log("==============================================");
 
   const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
 

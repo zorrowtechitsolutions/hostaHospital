@@ -98,14 +98,7 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
 
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery();
 
-  // Debug logging
-  console.log("========== MEDICAL HISTORY DEBUG ==========");
-  console.log("Patient DB id (❌ DO NOT USE):", patient?.id);
-  console.log("Patient Number (✅ USE THIS):", patientNumber);
-  console.log("Prescriptions Query params:", { patientNumber });
-  console.log("Expected URL: /prescription?hospitalId=62&patientId=" + patientNumber);
-  console.log("Prescription Data:", prescriptionData);
-  console.log("============================================");
+
 
   // Show skeleton while either query is loading
   const isLoading = isLoadingPrescriptions || isLoadingDoctors;

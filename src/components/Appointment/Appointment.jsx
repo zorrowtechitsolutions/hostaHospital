@@ -222,27 +222,22 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   useEffect(() => {
     const cleanup = registerBookingEvents({
       onBookingRegistered: async (data) => {
-        console.log("🔥 Appointments BOOKING_REGISTERED:", data);
         showSuccessToast("New booking received!", 3000);
         await refetch();
       },
       onBookingUpdated: async (data) => {
-        console.log("🔥 Appointments BOOKING_UPDATED:", data);
         showSuccessToast("Booking updated!", 3000);
         await refetch();
       },
       onBookingCancelled: async (data) => {
-        console.log("🔥 Appointments BOOKING_CANCELLED:", data);
         showWarningToast("Booking cancelled!", 3000);
         await refetch();
       },
       onBookingAccepted: async (data) => {
-        console.log("🔥 Appointments BOOKING_ACCEPTED:", data);
         showSuccessToast("Booking accepted!", 3000);
         await refetch();
       },
       onBookingCompleted: async (data) => {
-        console.log("🔥 Appointments BOOKING_COMPLETED:", data);
         showSuccessToast("Booking completed!", 3000);
         await refetch();
       },

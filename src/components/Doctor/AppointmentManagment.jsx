@@ -207,7 +207,6 @@ const handleSave = async () => {
           autoDeclineMinutes: Number(autoDeclineMinutes),
         }).unwrap();
 
-        console.log('Auto-decline started successfully');
 
       } catch (error) {
         console.error(
@@ -229,12 +228,8 @@ const handleSave = async () => {
           doctorId: bookingId,
         }).unwrap();
 
-        console.log('Auto-decline canceled successfully');
 
       } catch (error) {
-        console.log(
-          'No active auto-decline task found'
-        );
       }
     }
 

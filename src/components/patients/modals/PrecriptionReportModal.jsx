@@ -218,16 +218,7 @@ const PrescriptionReportModal = ({
       ? `#PRS${String(prescriptionNumber).padStart(5, "0")}`
       : "N/A";
 
-  // ✅ Debug logging
-  console.log("========== PRESCRIPTION MODAL DEBUG ==========");
-  console.log("Patient DB id (❌ DO NOT USE):", patient?.id);
-  console.log("Patient Number (✅ USE THIS):", patientNumber);
-  console.log("Patient Display ID:", patientDisplayId);
-  console.log("Prescription DB id (❌ DO NOT USE):", existingPrescription?.id);
-  console.log("Prescription Number (✅ USE THIS):", prescriptionNumber);
-  console.log("Prescription ID (✅ USE THIS):", prescriptionId);
-  console.log("Prescription Display ID:", prescriptionDisplayId);
-  console.log("==============================================");
+  
 
   const replaceContent = (content) => {
     if (!content) return "";

@@ -232,31 +232,26 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   useEffect(() => {
     const cleanup = registerBookingEvents({
       onBookingRegistered: () => {
-        console.log("🔥 BOOKING_REGISTERED");
         showSuccessToast("New booking registered!", TOAST_DURATION);
         refetch();
       },
 
       onBookingUpdated: () => {
-        console.log("🔥 BOOKING_UPDATED");
         showSuccessToast("Booking updated!", TOAST_DURATION);
         refetch();
       },
 
       onBookingCancelled: () => {
-        console.log("🔥 BOOKING_CANCELLED");
         showSuccessToast("Booking cancelled!", TOAST_DURATION);
         refetch();
       },
 
       onBookingAccepted: () => {
-        console.log("🔥 BOOKING_ACCEPTED");
         showSuccessToast("Booking accepted!", TOAST_DURATION);
         refetch();
       },
 
       onBookingCompleted: () => {
-        console.log("🔥 BOOKING_COMPLETED");
         showSuccessToast("Booking completed!", TOAST_DURATION);
         refetch();
       },
@@ -455,12 +450,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsApproving(true);
 
     try {
-      console.log("✅ Approving booking:", {
-        bookingNumber,
-        formattedId: selectedRequest.formattedId,
-        appointmentData,
-      });
-
+     
       await approveBooking({
         bookingNumber,
         data: {
@@ -531,11 +521,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsRejecting(true);
 
     try {
-      console.log("❌ Rejecting booking:", {
-        bookingNumber,
-        formattedId: selectedRequest.formattedId,
-        reason: rejectReason,
-      });
 
       await rejectBooking({
         bookingNumber,

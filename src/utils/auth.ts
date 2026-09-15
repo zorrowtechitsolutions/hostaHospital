@@ -307,9 +307,6 @@ export const isTokenExpired = (): boolean => {
 */
 
 export const clearAuth = (): void => {
-  console.log(
-    "🚪 Clearing authentication"
-  );
 
   /*
    * Access token

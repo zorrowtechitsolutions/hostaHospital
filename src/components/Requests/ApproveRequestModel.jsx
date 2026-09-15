@@ -213,9 +213,6 @@ const ApproveRequestModal = ({
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Debug log
-  console.log("📝 ApproveRequestModal received bookingId:", bookingId);
-  console.log("📝 requestData:", requestData);
 
   // ✅ UPDATED: Pass token as null if empty
   const handleConfirm = async () => {

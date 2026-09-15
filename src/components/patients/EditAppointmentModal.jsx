@@ -205,11 +205,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         token: formData.token ? Number(formData.token) : undefined,
       };
 
-      console.log('📝 Updating booking:', {
-        bookingNumber: appointment.bookingNumber,
-        formattedId: `#BK${String(appointment.bookingNumber).padStart(5, '0')}`,
-        updateData,
-      });
 
       // ✅ FIXED: Use bookingNumber (not id)
       await updateBooking({

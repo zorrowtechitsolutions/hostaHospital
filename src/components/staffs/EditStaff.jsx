@@ -489,7 +489,6 @@ const EditStaff = () => {
   // Initialize form with staff data - ALL FIELDS INCLUDING LOCATION
   useEffect(() => {
     if (staff && staff.id && !formInitialized) {
-      console.log('📋 Staff data received:', staff);
       
       // Get image key from staff
       const imageKey = 
@@ -517,7 +516,6 @@ const EditStaff = () => {
       const place = address.place || '';
       const pincode = address.pincode || '';
       
-      console.log('📍 Location data extracted:', { countryName, countryCode, stateName, stateCode, district, place, pincode });
       
       const newFormData = {
         profileImage: imageKey,
@@ -549,7 +547,6 @@ const EditStaff = () => {
         isActive: staff.isActive ?? true
       };
       
-      console.log('📝 Form data set:', newFormData);
       
       setFormData(newFormData);
       
@@ -857,7 +854,6 @@ const EditStaff = () => {
         }
       });
 
-      console.log('📤 Submitting staff data:', updatedStaffData);
 
       // STEP 1: Update staff basic info
       await updateStaff({

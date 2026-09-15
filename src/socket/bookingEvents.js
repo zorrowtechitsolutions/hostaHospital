@@ -2,12 +2,9 @@ import { socket } from "./socket";
 
 export const registerBookingEvents = (handlers = {}) => {
   const handleBookingEvent = (payload) => {
-    console.log("🔥 BOOKING EVENT RECEIVED:", payload);
 
     const event = payload?.event;
 
-    console.log("📡 Event name:", event);
-    console.log("📦 Event data:", payload?.data);
 
     if (!event) {
       console.warn("⚠️ booking_event received without event name:", payload);
@@ -50,11 +47,9 @@ export const registerBookingEvents = (handlers = {}) => {
 
   socket.on("booking_event", handleBookingEvent);
 
-  console.log("✅ Booking event listener registered");
 
   return () => {
     socket.off("booking_event", handleBookingEvent);
-    console.log("🧹 Booking event listener removed");
   };
 };
 

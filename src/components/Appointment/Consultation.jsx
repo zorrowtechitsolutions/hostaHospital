@@ -247,14 +247,7 @@ const Consultation = () => {
     ? `#BK${String(bookingNumber).padStart(5, "0")}` 
     : "N/A";
 
-  // ✅ Debug logging for booking number
-  console.log("========== BOOKING NUMBER DEBUG ==========");
-  console.log("appointmentData:", appointmentData);
-  console.log("DB id (DO NOT USE):", appointmentData?.id);
-  console.log("bookingNumber (USE THIS):", appointmentData?.bookingNumber);
-  console.log("final bookingNumber:", bookingNumber);
-  console.log("formatted bookingNumber:", formattedBookingNumber);
-  console.log("==========================================");
+  
 
   // ✅ Track current patient ID to detect changes
   const [currentPatientId, setCurrentPatientId] = useState(patientId);
@@ -657,12 +650,6 @@ const Consultation = () => {
     setIsSubmitting(true);
 
     try {
-      console.log("========== COMPLETE BOOKING ==========");
-      console.log("appointmentData:", appointmentData);
-      console.log("DB id (DO NOT USE):", appointmentData?.id);
-      console.log("bookingNumber (USE THIS):", appointmentData?.bookingNumber);
-      console.log("final bookingNumber:", bookingNumber);
-      console.log("======================================");
 
       if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
         throw new Error("Invalid booking number: " + bookingNumber);
@@ -816,13 +803,6 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      console.log("📋 Prescription Data:", {
-        bookingId: prescriptionData.bookingId,
-        patientId: prescriptionData.patientId,
-        patientNumber: prescriptionData.patientNumber,
-        patientName: prescriptionData.patientName
-      });
-
       // ✅ Create prescription
       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
 
@@ -832,8 +812,7 @@ const Consultation = () => {
       const prescriptionId =
         prescriptionResponse?.data?.prescriptionId;
 
-      console.log("Prescription Number:", prescriptionNumber);
-      console.log("Prescription ID:", prescriptionId);
+    
 
       // ✅ Store them so they can be displayed (e.g., in prescriptionInfo section)
       setCreatedPrescriptionNumber(prescriptionNumber ?? null);
@@ -855,7 +834,6 @@ const Consultation = () => {
       }
 
       // ✅ COMPLETE BOOKING - Using updateBooking with status: "completed"
-      console.log("✅ Completing booking with bookingNumber:", bookingNumber);
 
       await updateBooking({
         bookingNumber: bookingNumber,

@@ -167,11 +167,6 @@ export const prescriptionApi = api.injectEndpoints({
           // The backend generates these. They are only READ from the response.
         };
 
-        console.log("📋 Creating prescription with patientNumber:", {
-          patientNumber: patientIdentifier,
-          patientName: data.patientName,
-          bookingId: data.bookingId,
-        });
 
         return {
           url: "/prescription",
@@ -196,7 +191,6 @@ export const prescriptionApi = api.injectEndpoints({
         // patientNumber is the business patient number (e.g., 2, not 81)
         if (params.patientNumber !== undefined && params.patientNumber !== null) {
           url += `&patientId=${encodeURIComponent(String(params.patientNumber))}`;
-          console.log("📋 Fetching prescriptions for patientNumber:", params.patientNumber);
         } else {
           console.warn("⚠️ patientNumber is missing in getPrescriptions query!");
         }
@@ -220,7 +214,6 @@ export const prescriptionApi = api.injectEndpoints({
           url += `&search_query=${encodeURIComponent(params.search_query)}`;
         }
         
-        console.log("📋 Prescriptions URL:", url);
         
         return {
           url,

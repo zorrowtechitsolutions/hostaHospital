@@ -167,9 +167,7 @@ const baseQueryWithReauth: BaseQueryFn<
   const token = getToken();
 
   if (token && isTokenExpired()) {
-    console.log(
-      "⏰ Access token already expired. Refreshing..."
-    );
+    
 
     const refreshResult =
       await baseQuery(
@@ -190,16 +188,10 @@ const baseQueryWithReauth: BaseQueryFn<
         data.token;
 
       if (newAccessToken) {
-        console.log(
-          "✅ Access token refreshed before request"
-        );
 
         setToken(newAccessToken);
       } else {
-        console.log(
-          "❌ Refresh response has no access token"
-        );
-
+        
         clearAuth();
 
         return {
@@ -213,9 +205,7 @@ const baseQueryWithReauth: BaseQueryFn<
         };
       }
     } else {
-      console.log(
-        "❌ Refresh request failed"
-      );
+     
 
       clearAuth();
 
@@ -269,10 +259,6 @@ const baseQueryWithReauth: BaseQueryFn<
   |--------------------------------------------------------------------------
   */
 
-  console.log(
-    "🔄 API returned 401. Trying refresh..."
-  );
-
   /*
   |--------------------------------------------------------------------------
   | 6. Refresh using HttpOnly cookie
@@ -304,9 +290,7 @@ const baseQueryWithReauth: BaseQueryFn<
       data.token;
 
     if (newAccessToken) {
-      console.log(
-        "✅ New access token received"
-      );
+     
 
       setToken(newAccessToken);
 
@@ -316,9 +300,7 @@ const baseQueryWithReauth: BaseQueryFn<
       |--------------------------------------------------------------------------
       */
 
-      console.log(
-        "🔁 Retrying original request..."
-      );
+    
 
       result = await baseQuery(
         args,
@@ -336,9 +318,6 @@ const baseQueryWithReauth: BaseQueryFn<
   |--------------------------------------------------------------------------
   */
 
-  console.log(
-    "❌ Refresh failed. Logging out."
-  );
 
   clearAuth();
 
