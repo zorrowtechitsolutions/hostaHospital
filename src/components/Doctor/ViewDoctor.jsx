@@ -399,7 +399,9 @@ const ViewDoctor = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
-                <SmallBadge>ID: DR{String(doctor?.id).padStart(4, '0')}</SmallBadge>
+                <SmallBadge>
+                  ID: DR{String(doctor?.doctorNumber ?? doctor?.id ?? "").padStart(4, "0")}
+                </SmallBadge>
                 <SmallBadge variant={isBookingOpen(doctor) ? "success" : "danger"}>
                   {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
                 </SmallBadge>
