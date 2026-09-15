@@ -1,9 +1,18 @@
-// src/components/patients/AddAppointmentModal.jsx - Updated with gender from patient data
+// src/components/patients/AddAppointmentModal.jsx - Updated with patientNumber formatting
 import React, { useState, useMemo } from "react";
 import { Calendar, FileText } from "lucide-react";
 import { Modal, Textarea, Button, Avatar, Badge, Loader } from "../ui";
 import { showWarningToast } from "../ui/Toast";
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
+
+const getPatientDisplayId = (patient) => {
+  if (patient?.patientNumber) {
+    return `#PT${String(patient.patientNumber).padStart(4, "0")}`;
+  }
+
+  const id = patient?.id || patient?._id;
+  return id ? `#PT${String(id).padStart(4, "0")}` : "#PT0000";
+};
 
 const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospitalId }) => {
   const [formData, setFormData] = useState({
@@ -16,23 +25,23 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const {
-  data: doctorsResponse,
-  isLoading: isLoadingDoctors,
-  isFetching: isFetchingDoctors,
-} = useGetDoctorsQuery(
-  {
-    hospitalId: hospitalId || patient?.hospitalId,
-  },
-  {
-    skip: !isOpen || !patient?.hospitalId,
-  }
-);
+    data: doctorsResponse,
+    isLoading: isLoadingDoctors,
+    isFetching: isFetchingDoctors,
+  } = useGetDoctorsQuery(
+    {
+      hospitalId: hospitalId || patient?.hospitalId,
+    },
+    {
+      skip: !isOpen || !patient?.hospitalId,
+    }
+  );
 
   const doctorsList = useMemo(() => {
     if (!doctorsResponse?.data) return [];
-    
+
     return doctorsResponse.data.map(doc => ({
       id: doc.id,
       name: doc.displayName || `${doc.firstName || ''} ${doc.lastName || ''}`.trim() || doc.name,
@@ -57,11 +66,11 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsSubmitting(true);
-    
+
     if (onProceedApprove) {
       onProceedApprove({
         userId: patient?.userId,
@@ -79,7 +88,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
         notes: formData.quickNotes
       });
     }
-    
+
     setIsSubmitting(false);
     onClose();
   };
@@ -106,7 +115,9 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
           <Avatar src={patient?.imageUrl || "https://randomuser.me/api/portraits/men/32.jpg"} alt={patient?.name} size="md" rounded="full" />
           <div>
             <div className="flex items-center gap-2">
-              <Badge variant="default" className="text-xs font-mono bg-white">#{patient?.id || "PT0025"}</Badge>
+              <Badge variant="default" className="text-xs font-mono bg-white">
+                {getPatientDisplayId(patient)}
+              </Badge>
               <Badge variant="success" className="text-xs">Last Visit: {patient?.lastVisitDisplay || "N/A"}</Badge>
             </div>
             <h3 className="font-semibold text-gray-900">{patient?.name || "Patient Name"}</h3>
@@ -145,7 +156,7 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
               </div>
             )}
           </div>
-          
+
           {/* Appointment Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -153,28 +164,28 @@ const AddAppointmentModal = ({ isOpen, onClose, patient, onProceedApprove, hospi
             </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input 
-                type="date" 
-                required 
-                min={today} 
-                value={formData.date} 
-                onChange={(e) => setFormData({...formData, date: e.target.value})} 
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+              <input
+                type="date"
+                required
+                min={today}
+                value={formData.date}
+                onChange={(e) => setFormData({...formData, date: e.target.value})}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
           </div>
-          
+
           {/* Quick Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Quick Notes (Optional)</label>
             <div className="relative">
               <FileText className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-              <textarea 
-                rows="3" 
-                value={formData.quickNotes} 
-                onChange={(e) => setFormData({...formData, quickNotes: e.target.value})} 
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Additional information about the appointment..." 
+              <textarea
+                rows="3"
+                value={formData.quickNotes}
+                onChange={(e) => setFormData({...formData, quickNotes: e.target.value})}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Additional information about the appointment..."
               />
             </div>
           </div>
