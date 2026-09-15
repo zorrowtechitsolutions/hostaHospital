@@ -1,76 +1,105 @@
 // src/utils/auth.ts
+
 import { jwtDecode } from "jwt-decode";
 
 export interface JwtPayload {
   id: number;
-  name: string;
+
+  name?: string;
+
   hospitalName?: string;
+
   email?: string;
+
   role: string;
+
   roleId: number;
+
   hospitalId?: number;
+
   doctorId?: number;
+
   staffId?: number;
-  iat: number;
-  exp: number;
+
+  superadminId?: number;
+
   userId?: number;
+
+  iat: number;
+
+  exp: number;
 }
 
-// ================= TOKEN MANAGEMENT =================
+/*
+|--------------------------------------------------------------------------
+| Get Access Token
+|--------------------------------------------------------------------------
+*/
 
 export const getToken = (): string | null => {
   return localStorage.getItem("accessToken");
 };
 
+/*
+|--------------------------------------------------------------------------
+| Save Access Token
+|--------------------------------------------------------------------------
+*/
+
 export const setToken = (token: string): void => {
   localStorage.setItem("accessToken", token);
 };
+
+/*
+|--------------------------------------------------------------------------
+| Remove Access Token
+|--------------------------------------------------------------------------
+*/
 
 export const clearToken = (): void => {
   localStorage.removeItem("accessToken");
 };
 
-// ================= DECODE TOKEN =================
+/*
+|--------------------------------------------------------------------------
+| Decode Token
+|--------------------------------------------------------------------------
+*/
 
-export const decodeToken = (token?: string | null): JwtPayload | null => {
+export const decodeToken = (
+  token?: string | null
+): JwtPayload | null => {
+  const accessToken = token || getToken();
+
+  if (!accessToken) {
+    return null;
+  }
+
   try {
-    const tokenToDecode = token || getToken();
-    if (!tokenToDecode) {
-      return null;
-    }
+    return jwtDecode<JwtPayload>(accessToken);
+  } catch (error) {
+    console.error(
+      "Failed to decode token:",
+      error
+    );
 
-    try {
-      const decoded = jwtDecode<JwtPayload>(tokenToDecode);
-      return decoded;
-    } catch {
-      try {
-        const parts = tokenToDecode.split(".");
-        if (parts.length !== 3) {
-          return null;
-        }
-
-        const payload = parts[1];
-        const decodedString = atob(payload);
-        const decoded = JSON.parse(decodedString);
-        return decoded as JwtPayload;
-      } catch {
-        return null;
-      }
-    }
-  } catch {
     return null;
   }
 };
 
-// ================= AUTH USER =================
+/*
+|--------------------------------------------------------------------------
+| Get Auth User
+|--------------------------------------------------------------------------
+*/
 
 export const getAuthUser = (): JwtPayload | null => {
-  const authData = localStorage.getItem("authData");
+  const authData =
+    localStorage.getItem("authData");
 
   if (authData) {
     try {
-      const parsed = JSON.parse(authData);
-      return parsed;
+      return JSON.parse(authData);
     } catch {
       return decodeToken();
     }
@@ -79,12 +108,11 @@ export const getAuthUser = (): JwtPayload | null => {
   return decodeToken();
 };
 
-// ================= HOSPITAL ID HELPER =================
-
-// export const getHospitalId = (): number | string | null => {
-//   const auth = getAuthUser();
-//   return auth?.hospitalId || auth?.id || null;
-// };
+/*
+|--------------------------------------------------------------------------
+| Get Hospital ID
+|--------------------------------------------------------------------------
+*/
 
 export const getHospitalId = (): number | null => {
   const auth = getAuthUser();
@@ -93,104 +121,307 @@ export const getHospitalId = (): number | null => {
     return null;
   }
 
-  return Number(auth.hospitalId);
+  const hospitalId = Number(
+    auth.hospitalId
+  );
+
+  return Number.isNaN(hospitalId)
+    ? null
+    : hospitalId;
 };
 
-// ================= HOSPITAL NAME HELPER =================
+/*
+|--------------------------------------------------------------------------
+| Get Hospital Name
+|--------------------------------------------------------------------------
+*/
 
 export const getHospitalName = (): string | null => {
   const auth = getAuthUser();
+
   return auth?.hospitalName || null;
 };
 
-// ================= USER INFO HELPERS =================
+/*
+|--------------------------------------------------------------------------
+| Get User Name
+|--------------------------------------------------------------------------
+*/
 
 export const getUserName = (): string | null => {
   const auth = getAuthUser();
+
   return auth?.name || null;
 };
 
+/*
+|--------------------------------------------------------------------------
+| Get User Email
+|--------------------------------------------------------------------------
+*/
+
 export const getUserEmail = (): string | null => {
   const auth = getAuthUser();
+
   return auth?.email || null;
 };
 
-// ================= USER ROLE HELPERS =================
+/*
+|--------------------------------------------------------------------------
+| Get User Role
+|--------------------------------------------------------------------------
+*/
 
 export const getUserRole = (): string | null => {
   const auth = getAuthUser();
+
   return auth?.role || null;
 };
 
+/*
+|--------------------------------------------------------------------------
+| Get User Role ID
+|--------------------------------------------------------------------------
+*/
+
 export const getUserRoleId = (): number | null => {
   const auth = getAuthUser();
-  return auth?.roleId || null;
+
+  return auth?.roleId ?? null;
 };
 
-// ================= USER TYPE CHECKS =================
+/*
+|--------------------------------------------------------------------------
+| User Type Checks
+|--------------------------------------------------------------------------
+*/
 
 export const isDoctor = (): boolean => {
   const role = getUserRole();
-  return role === 'doctor';
+
+  return role === "doctor";
 };
 
 export const isStaff = (): boolean => {
   const role = getUserRole();
-  return role === 'staff';
+
+  return role === "staff";
 };
 
 export const isHospitalAdmin = (): boolean => {
   const role = getUserRole();
-  return role === 'hospital' || role === 'admin';
+
+  return (
+    role === "hospital" ||
+    role === "admin"
+  );
 };
 
 export const isSuperAdmin = (): boolean => {
   const roleId = getUserRoleId();
+
   return roleId === 1;
 };
 
-// ================= AUTH CHECK =================
+/*
+|--------------------------------------------------------------------------
+| Authentication Check
+|--------------------------------------------------------------------------
+*/
 
 export const isAuthenticated = (): boolean => {
   return !!getToken();
 };
 
-// ================= TOKEN EXPIRY CHECK =================
+/*
+|--------------------------------------------------------------------------
+| Get Token Expiry
+|--------------------------------------------------------------------------
+*/
 
 export const getTokenExpiry = (): number | null => {
   const token = getToken();
-  if (!token) return null;
+
+  if (!token) {
+    return null;
+  }
 
   try {
     const decoded = decodeToken(token);
-    if (!decoded) return null;
+
+    if (!decoded?.exp) {
+      return null;
+    }
+
     return decoded.exp * 1000;
   } catch {
     return null;
   }
 };
 
+/*
+|--------------------------------------------------------------------------
+| Check Token Expired
+|--------------------------------------------------------------------------
+|
+| Returns true if:
+|   - no token exists
+|   - token has no exp claim
+|   - token is expired
+|   - token will expire within the next 5 seconds
+|
+| The 5-second safety buffer prevents sending a token
+| that would expire mid-flight.
+|
+*/
+
+const EXPIRY_BUFFER_MS = 5_000;
+
 export const isTokenExpired = (): boolean => {
   const expiry = getTokenExpiry();
-  if (!expiry) return true;
-  return expiry < Date.now();
+
+  if (!expiry) {
+    return true;
+  }
+
+  return expiry < Date.now() + EXPIRY_BUFFER_MS;
 };
 
-// ================= CLEAR ALL AUTH DATA =================
+/*
+|--------------------------------------------------------------------------
+| Clear Authentication
+|--------------------------------------------------------------------------
+|
+| Removes all localStorage + sessionStorage auth keys.
+|
+| NOTE:
+| The real refreshToken lives in an HttpOnly cookie
+| and CANNOT be cleared from JavaScript. Only the
+| backend can clear it, via /auth/logout responding with:
+|
+|   Set-Cookie: refreshToken=; Max-Age=0
+|
+| The refreshToken / refresh_token entries below are only
+| for cleaning up legacy localStorage values.
+|
+*/
 
 export const clearAuth = (): void => {
-  console.trace("🚨 clearAuth called");
-    clearToken();
-  localStorage.removeItem("authData");
-  localStorage.removeItem("permissions");
-  localStorage.removeItem("userData");
-  localStorage.removeItem("userRole");
-  localStorage.removeItem("roleId");
-  localStorage.removeItem("hospitalInfo");
-  localStorage.removeItem("hospitalName");
-  localStorage.removeItem("doctorId");
-  localStorage.removeItem("staffId");
-  localStorage.removeItem("superAdminId");
+  console.log(
+    "🚪 Clearing authentication"
+  );
+
+  /*
+   * Access token
+   */
+  clearToken();
+
+  /*
+   * Authentication data
+   */
+  localStorage.removeItem(
+    "authData"
+  );
+
+  localStorage.removeItem(
+    "permissions"
+  );
+
+  localStorage.removeItem(
+    "userData"
+  );
+
+  localStorage.removeItem(
+    "userRole"
+  );
+
+  localStorage.removeItem(
+    "roleId"
+  );
+
+  /*
+   * Hospital data
+   */
+  localStorage.removeItem(
+    "hospitalInfo"
+  );
+
+  localStorage.removeItem(
+    "hospitalName"
+  );
+
+  localStorage.removeItem(
+    "hospitalId"
+  );
+
+  /*
+   * User IDs
+   */
+  localStorage.removeItem(
+    "authId"
+  );
+
+  localStorage.removeItem(
+    "userId"
+  );
+
+  localStorage.removeItem(
+    "doctorId"
+  );
+
+  localStorage.removeItem(
+    "staffId"
+  );
+
+  localStorage.removeItem(
+    "superAdminId"
+  );
+
+  /*
+   * Device data
+   */
+  localStorage.removeItem(
+    "deviceId"
+  );
+
+  /*
+   * Old token keys
+   */
+  localStorage.removeItem(
+    "token"
+  );
+
+  /*
+   * Refresh token keys
+   *
+   * The actual refresh token should be
+   * managed by the backend as an
+   * HttpOnly cookie.
+   *
+   * These are removed only for compatibility
+   * with old localStorage data.
+   */
+  localStorage.removeItem(
+    "refreshToken"
+  );
+
+  localStorage.removeItem(
+    "refresh_token"
+  );
+
+  /*
+   * Profile images
+   */
+  localStorage.removeItem(
+    "profilePicture"
+  );
+
+  localStorage.removeItem(
+    "userImage"
+  );
+
+  /*
+   * Clear session storage
+   */
   sessionStorage.clear();
-  
 };

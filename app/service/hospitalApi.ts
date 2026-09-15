@@ -1,5 +1,6 @@
 // hospitalApi.ts - COMPLETE CLEAN VERSION WITH FIXED LOGOUT AND MULTI-HOSPITAL LOGIN
 // Working-hours conversion logic in the API layer
+// ✅ refreshToken is now managed by backend via HttpOnly cookie — NOT stored in localStorage
 
 import { api } from "./api";
 import { tokenManager } from '../../src/utils/fcmTokenManager';
@@ -144,9 +145,10 @@ export interface AuthResponse {
   success?: boolean;
   token?: string;
   accessToken?: string;
-  refreshToken?: string;
-  requiresHospitalSelection?: boolean;  // ✅ Added for multi-hospital flow
-  hospitals?: Array<{                    // ✅ Added for multi-hospital flow
+  refreshToken?: string;                // Kept in type for backward-compat; never stored
+  requiresHospitalSelection?: boolean;
+  requireHospitalSelection?: boolean;
+  hospitals?: Array<{
     hospitalId: number;
     hospitalName?: string;
     status?: string;
@@ -165,6 +167,9 @@ export interface AuthResponse {
   id?: string;
   staffId?: string;
   doctorId?: string;
+  authPermission?: { data?: any };
+  permissions?: any;
+  userType?: string;
 }
 
 export interface HospitalListResponse {
@@ -252,6 +257,7 @@ const convertWorkingHoursToApi = (workingHours: any) => {
 
 // ============================================
 // HELPER: Store dual IDs in localStorage
+// ✅ refreshToken is NOT stored — backend uses HttpOnly cookie
 // ============================================
 
 const storeUserIds = (response: AuthResponse) => {
@@ -259,34 +265,35 @@ const storeUserIds = (response: AuthResponse) => {
   if (token) {
     localStorage.setItem("accessToken", token);
   }
-  if (response.refreshToken) {
-    localStorage.setItem("refreshToken", response.refreshToken);
-  }
+
+  // ❌ DO NOT store refreshToken.
+  // ✅ Backend manages it using an HttpOnly cookie.
+
   if (response.roleId !== undefined) {
     localStorage.setItem("roleId", String(response.roleId));
   }
 
   // Extract and store authId (from Auth table)
   let authId = response.authId || '';
-  
+
   if (!authId && response.user?.id) {
     authId = response.user.id.toString();
   }
-  
+
   if (!authId && response.data) {
     if (isHospital(response.data)) {
       authId = response.data.authId || response.data.userId || '';
     }
   }
-  
+
   if (!authId && response.hospital) {
     authId = response.hospital.authId || response.hospital.userId || '';
   }
-  
+
   if (!authId && response.id) {
     authId = response.id.toString();
   }
-  
+
   if (authId) {
     localStorage.setItem("authId", authId);
     localStorage.setItem("userId", authId);
@@ -294,20 +301,20 @@ const storeUserIds = (response: AuthResponse) => {
 
   // Extract and store hospitalId (from Hospital table)
   let hospitalId = response.hospitalId || '';
-  
+
   if (!hospitalId && response.hospital?.id) {
     hospitalId = response.hospital.id;
   }
-  
+
   if (!hospitalId && response.data) {
     if (isHospital(response.data)) {
       hospitalId = response.data.id || '';
     }
   }
-  
+
   // Ensure hospitalId is a string
   hospitalId = hospitalId?.toString() || '';
-  
+
   if (hospitalId) {
     localStorage.setItem("hospitalId", hospitalId);
   }
@@ -319,27 +326,26 @@ const storeUserIds = (response: AuthResponse) => {
   const userData: UserData = {
     authId: authId,
     hospitalId: hospitalId,
-    name: response.hospital?.name || 
+    name: response.hospital?.name ||
           (isHospital(response.data) ? response.data.name : '') ||
-          response.user?.name || 
+          response.user?.name ||
           '',
-    email: response.hospital?.email || 
+    email: response.hospital?.email ||
            (isHospital(response.data) ? response.data.email : '') ||
-           response.user?.email || 
+           response.user?.email ||
            '',
     role: response.role || 'hospital',
   };
-  
+
   localStorage.setItem("userData", JSON.stringify(userData));
-  
+
   const authData: AuthData = {
     authId: authId,
     hospitalId: hospitalId,
     role: response.role || 'hospital',
   };
-  
-  localStorage.setItem("authData", JSON.stringify(authData));
 
+  localStorage.setItem("authData", JSON.stringify(authData));
 };
 
 const getStoredIds = () => {
@@ -366,7 +372,7 @@ export const hospitalApi = api.injectEndpoints({
           password: hospitalData.password,
           phone: hospitalData.phone,
         };
-        
+
         // Optional fields
         if (hospitalData.address) body.address = hospitalData.address;
         if (hospitalData.type) body.type = hospitalData.type;
@@ -374,16 +380,15 @@ export const hospitalApi = api.injectEndpoints({
         if (hospitalData.latitude) body.latitude = hospitalData.latitude;
         if (hospitalData.longitude) body.longitude = hospitalData.longitude;
         if (hospitalData.about) body.about = hospitalData.about;
-        
+
         // Working Hours - Convert if needed
         const workingHourType = hospitalData.workingHourType || 'normal';
         let workingHoursData = hospitalData.workingHoursData;
-        
-        // Automatically convert from frontend format if workingHours is provided
+
         if (!workingHoursData && hospitalData.workingHours) {
           workingHoursData = convertWorkingHoursToApi(hospitalData.workingHours);
         }
-        
+
         if (workingHoursData && workingHoursData.length > 0) {
           if (workingHourType === 'normal') {
             body.working_hours_general = workingHoursData;
@@ -399,12 +404,11 @@ export const hospitalApi = api.injectEndpoints({
             body.working_hours_clinic = [];
           }
         } else {
-          // Fallback - empty arrays
           body.working_hours_general = [];
           body.working_hours_clinic = [];
           body.working_hours_clinic_nobreak = [];
         }
-        
+
         return {
           url: `/hospital`,
           method: "POST",
@@ -420,7 +424,7 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // ✅ LOGIN - First request - /auth/login
-    // IMPORTANT: Does NOT store token for multi-hospital users
+    // Does NOT store token for multi-hospital users
     // ============================================
     login: builder.mutation<AuthResponse, LoginCredentials>({
       query: (loginData) => {
@@ -429,8 +433,6 @@ export const hospitalApi = api.injectEndpoints({
           password: loginData.password,
         };
 
-        // Backend also supports selecting a hospital directly during login
-        // when multiple Auth records exist for the same email/phone.
         if (loginData.hospitalId !== undefined && loginData.hospitalId !== null) {
           payload.hospitalId = Number(loginData.hospitalId);
         }
@@ -447,10 +449,7 @@ export const hospitalApi = api.injectEndpoints({
           body: payload,
         };
       },
-      // ✅ FIXED: Do NOT store token here for multi-hospital users
       transformResponse: (response: AuthResponse) => {
-        // Only store if it's NOT a multi-hospital selection response
-        // Or if it's a super_admin (roleId === 1)
         if (!response.requiresHospitalSelection || Number(response.roleId) === 1) {
           storeUserIds(response);
         }
@@ -467,9 +466,6 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // MULTI-HOSPITAL LOGIN - Selection-token flow
-    // Backend: POST /auth/select-hospital
-    // Authorization: Bearer <temporary selection token>
-    // Body: { hospitalId }
     // ============================================
     selectHospital: builder.mutation<
       AuthResponse,
@@ -487,7 +483,6 @@ export const hospitalApi = api.injectEndpoints({
         },
       }),
       transformResponse: (response: AuthResponse) => {
-        // Backend returns the FINAL 15-minute JWT here.
         storeUserIds(response);
         return response;
       },
@@ -525,6 +520,8 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // REFRESH TOKEN
+    // ✅ Reads HttpOnly cookie automatically (credentials: 'include' in baseQuery)
+    // ✅ Response contains only new accessToken — never stores refreshToken
     // ============================================
     refreshToken: builder.mutation<AuthResponse, void>({
       query: () => ({
@@ -532,7 +529,7 @@ export const hospitalApi = api.injectEndpoints({
         method: "POST",
       }),
       transformResponse: (response: AuthResponse) => {
-        const token = response.token || response.accessToken;
+        const token = response.accessToken || response.token;
         if (token) {
           localStorage.setItem("accessToken", token);
         }
@@ -542,14 +539,15 @@ export const hospitalApi = api.injectEndpoints({
 
     // ============================================
     // ✅ LOGOUT - FIXED
+    // ✅ refreshToken removed from clear list (backend clears HttpOnly cookie)
     // ============================================
     logout: builder.mutation<{ message: string; success?: boolean }, LogoutParams | void>({
       query: (params) => {
         let { authId, hospitalId } = getStoredIds();
-        
+
         if (params?.authId) authId = params.authId;
         if (params?.hospitalId) hospitalId = params.hospitalId;
-        
+
         // Fallback: try to get authId from localStorage
         if (!authId) {
           try {
@@ -557,30 +555,25 @@ export const hospitalApi = api.injectEndpoints({
             authId = userData.authId || userData.id || '';
           } catch (e) {}
         }
-        
+
         if (!authId) {
           try {
             const authData = JSON.parse(localStorage.getItem('authData') || '{}') as AuthData;
             authId = authData.authId || authData.id || '';
           } catch (e) {}
         }
-        
-        // Get role from localStorage
+
         const role = params?.role || localStorage.getItem('userRole') || 'hospital';
-        
-        // Get deviceId
         const deviceId = params?.deviceId || localStorage.getItem('deviceId') || '';
-        
-        // Build URL with authId
+
         let url = `/auth/logout/${authId || 'unknown'}`;
-        
-        // Send all required fields in the body
+
         let body: any = {
-          id: Number(authId),      // Convert to number as backend expects
-          role: role,                    // Include role
-          deviceId: deviceId             // Include deviceId
+          id: Number(authId),
+          role: role,
+          deviceId: deviceId
         };
-        
+
         return {
           url: url,
           method: "POST",
@@ -594,9 +587,9 @@ export const hospitalApi = api.injectEndpoints({
           console.error('Logout error:', error);
         } finally {
           // Clear all localStorage items
+          // ✅ 'refreshToken' removed — backend clears it via HttpOnly cookie
           const localStorageItems = [
             'accessToken',
-            'refreshToken',
             'roleId',
             'userRole',
             'userData',
@@ -617,13 +610,13 @@ export const hospitalApi = api.injectEndpoints({
             'profilePicture',
             'userImage'
           ];
-          
+
           localStorageItems.forEach(key => {
             localStorage.removeItem(key);
           });
-          
+
           sessionStorage.clear();
-          
+
           try {
             if (tokenManager && typeof tokenManager.deleteDatabase === 'function') {
               await tokenManager.deleteDatabase();
@@ -697,7 +690,7 @@ export const hospitalApi = api.injectEndpoints({
       query: (resetData) => ({
         url: `/auth/reset-password`,
         method: "POST",
-        body: resetData, // { email, newPassword }
+        body: resetData,
       }),
       transformResponse: (response: ResetPasswordResponse) => {
         return response;
@@ -713,28 +706,27 @@ export const hospitalApi = api.injectEndpoints({
     // ============================================
     // ✅ HOSPITAL OPERATIONS - Clean RESTful routes
     // ============================================
-    
-    // Get all hospitals - /hospital
+
     getAllHospitals: builder.query<HospitalListResponse | Hospital[], GetHospitalsParams | void>({
       query: (params) => {
         const queryParams = new URLSearchParams();
-        
+
         if (params?.includeDeleted !== undefined) {
           queryParams.append("includeDeleted", String(params.includeDeleted));
         }
-        
+
         if (params?.search_query) {
           queryParams.append("search_query", params.search_query);
         }
-        
+
         if (params?.page) {
           queryParams.append("page", String(params.page));
         }
-        
+
         if (params?.limit) {
           queryParams.append("limit", String(params.limit));
         }
-        
+
         const url = `/hospital${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
         return url;
       },
@@ -758,7 +750,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // Get hospital by ID - /hospital/:id
     getHospitalById: builder.query<Hospital, string>({
       query: (id) => ({
         url: `/hospital/${id}`,
@@ -773,7 +764,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // Get current hospital - /hospital/current
     getCurrentHospital: builder.query<Hospital, void>({
       query: () => {
         const hospitalId = localStorage.getItem('hospitalId') || '';
@@ -791,8 +781,6 @@ export const hospitalApi = api.injectEndpoints({
       },
     }),
 
-    // ✅ UPDATE Hospital - /hospital/:id (PUT)
-    // Automatically converts workingHours from Settings.jsx format
     updateHospital: builder.mutation<Hospital, { id: string; updateHospital: any }>({
       query: ({ id, updateHospital }) => {
         const body: any = {
@@ -802,7 +790,6 @@ export const hospitalApi = api.injectEndpoints({
           phone: updateHospital.phone,
         };
 
-        // Optional fields
         if (updateHospital.address) {
           body.address = updateHospital.address;
         }
@@ -823,13 +810,10 @@ export const hospitalApi = api.injectEndpoints({
           body.about = updateHospital.about;
         }
 
-        // ---------- Working Hours ----------
-        // Determine which type of working hours to use
         const workingHourType = updateHospital.workingHourType || "normal";
 
         let workingHoursData = updateHospital.workingHoursData;
 
-        // Automatically convert from Settings.jsx format (workingHours)
         if (!workingHoursData && updateHospital.workingHours) {
           workingHoursData = convertWorkingHoursToApi(
             updateHospital.workingHours
@@ -851,13 +835,10 @@ export const hospitalApi = api.injectEndpoints({
             body.working_hours_clinic = [];
           }
         } else {
-          // If no working hours provided, preserve existing data
-          // by sending empty arrays (backend will handle this)
           body.working_hours_general = [];
           body.working_hours_clinic = [];
           body.working_hours_clinic_nobreak = [];
         }
-
 
         return {
           url: `/hospital/${id}`,
@@ -873,16 +854,14 @@ export const hospitalApi = api.injectEndpoints({
         return response;
       },
       transformErrorResponse: (response: { status: number; data?: any }) => {
-  return {
-    status: response.status,
-    data: response.data,
-    message: response.data?.message || "Failed to update hospital",
-  };
-},
-      
+        return {
+          status: response.status,
+          data: response.data,
+          message: response.data?.message || "Failed to update hospital",
+        };
+      },
     }),
 
-    // DELETE Hospital - /hospital/:id (DELETE)
     deleteHospital: builder.mutation<{ message: string }, string>({
       query: (id) => ({
         url: `/hospital/${id}`,
@@ -891,7 +870,6 @@ export const hospitalApi = api.injectEndpoints({
       invalidatesTags: ["Hospital"],
     }),
 
-    // RECOVER Hospital - /hospital/recover/:id
     recoverHospital: builder.mutation<
       { success: boolean; message: string; data?: Hospital },
       string
@@ -922,8 +900,8 @@ export const hospitalApi = api.injectEndpoints({
 // ============================================
 
 export const {
-  // Auth hooks 
-  useRegisterMutation,  
+  // Auth hooks
+  useRegisterMutation,
   useLoginMutation,
   useSelectHospitalMutation,
   useRequestHospitalOtpMutation,
@@ -931,12 +909,12 @@ export const {
   useRefreshTokenMutation,
   useLogoutMutation,
   useChangePasswordMutation,
-  
+
   // Forgot Password hooks
   useSendOtpMutation,
   useVerifyOtpMutation,
   useResetPasswordMutation,
-  
+
   // Hospital management hooks
   useGetAllHospitalsQuery,
   useGetHospitalByIdQuery,

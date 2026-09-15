@@ -1,4 +1,7 @@
 // src/Authentication/Login.jsx - WITH SKELETON LOADING (Neutral Colors)
+// ✅ Does NOT store refreshToken — backend uses HttpOnly cookie
+// ✅ Optionally uses setToken() utility
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
@@ -16,7 +19,12 @@ import logo from "../assets/logo.jpeg";
 import { tokenManager } from '../utils/fcmTokenManager';
 import { getDeviceId } from '../utils/deviceManager';
 
-// ✅ Skeleton Loader Component for Login (Neutral Colors - Matching Doctor Skeleton)
+// ✅ Optional utility (create it if you don't have one)
+// import { setToken } from "../utils/auth";
+
+// ============================================
+// ✅ Skeleton Loader Component for Login
+// ============================================
 const LoginSkeletonLoader = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -30,18 +38,15 @@ const LoginSkeletonLoader = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Logo/Icon Placeholder */}
           <div className="flex justify-center mb-6">
             <div className="h-16 w-16 bg-gray-200 rounded-full animate-pulse"></div>
           </div>
 
-          {/* Email Field Skeleton */}
           <div className="space-y-2 mb-4">
             <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
             <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
           </div>
 
-          {/* Password Field Skeleton */}
           <div className="space-y-2 mb-6">
             <div className="flex justify-between">
               <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
@@ -50,10 +55,8 @@ const LoginSkeletonLoader = () => {
             <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
           </div>
 
-          {/* Submit Button Skeleton - Neutral gray like Doctor skeleton */}
           <div className="h-11 w-full bg-gray-200 rounded-lg animate-pulse"></div>
 
-          {/* Footer Links Skeleton */}
           <div className="mt-6 flex justify-center">
             <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
           </div>
@@ -72,14 +75,14 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  
+
   const [showHospitalSelect, setShowHospitalSelect] = useState(false);
   const [hospitalOptions, setHospitalOptions] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [detectedRole, setDetectedRole] = useState('');
   const [pendingResponse, setPendingResponse] = useState(null);
   const [pendingFcmToken, setPendingFcmToken] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -99,7 +102,6 @@ const Login = () => {
       } catch (error) {
         console.error('❌ Failed to initialize IndexedDB:', error);
       } finally {
-        // ✅ Hide skeleton after initialization (or after a minimum time)
         setTimeout(() => {
           setIsInitialLoading(false);
         }, 500);
@@ -108,7 +110,6 @@ const Login = () => {
     initDB();
   }, []);
 
-  // ✅ Show skeleton while initializing
   if (isInitialLoading) {
     return <LoginSkeletonLoader />;
   }
@@ -168,9 +169,6 @@ const Login = () => {
       const pending = pendingResponse || {};
       const fcmToken = pendingFcmToken;
 
-      // Backend has two valid multi-hospital flows:
-      // 1) membership flow -> temporary selection token -> /auth/select-hospital
-      // 2) duplicate Auth records -> /auth/login with email/password/hospitalId
       const tempToken =
         pending.token ||
         pending.accessToken ||
@@ -180,13 +178,11 @@ const Login = () => {
       let finalResponse;
 
       if (tempToken) {
-
         finalResponse = await selectHospital({
           hospitalId: Number(hospitalId),
           tempToken,
         }).unwrap();
       } else {
-
         finalResponse = await loginUser({
           email: formData.email,
           password: formData.password,
@@ -198,7 +194,6 @@ const Login = () => {
           } : undefined,
         }).unwrap();
       }
-
 
       const finalToken =
         finalResponse?.token ||
@@ -221,7 +216,6 @@ const Login = () => {
         }
       }
 
-      // Only the FINAL JWT reaches processSuccessfulLogin.
       processSuccessfulLogin(finalResponse, fcmToken, selectedHospital);
 
     } catch (error) {
@@ -244,64 +238,69 @@ const Login = () => {
     const token = response.token || response.accessToken || response.data?.token || response.data?.accessToken;
     const roleId = response.roleId || response.data?.roleId;
     const deviceId = getDeviceId();
-    
-    let role = 
+
+    let role =
       response.roleDetected ||
       response.role ||
       response.data?.role ||
       response.user?.role ||
       response.userType ||
       "hospital";
-    
-    
+
     if (Number(roleId) === 1) {
       role = "super_admin";
     }
-    
+
     if (role && role.includes('/')) {
       if (role.includes('doctor')) role = 'doctor';
       else if (role.includes('staff')) role = 'staff';
       else if (role.includes('hospital')) role = 'hospital';
       else if (role.includes('super_admin')) role = 'super_admin';
     }
-    
-    
+
     if (token) {
+      // ✅ Option A: use setToken utility (if you have it)
+      // setToken(token);
+
+      // ✅ Option B: direct localStorage (works the same)
       localStorage.setItem("accessToken", token);
+
       localStorage.setItem("deviceId", deviceId);
-      
+
       if (roleId) {
         localStorage.setItem("roleId", roleId.toString());
       }
-      
+
       localStorage.setItem("userRole", role);
-      
+
       if (response.authPermission?.data) {
         localStorage.setItem("permissions", JSON.stringify(response.authPermission.data));
       } else if (response.permissions) {
         localStorage.setItem("permissions", JSON.stringify(response.permissions));
       }
-      
+
       if (hospital) {
         localStorage.setItem("hospitalInfo", JSON.stringify(hospital));
       }
-      
+
       try {
         jwtDecode(token);
       } catch (decodeError) {
         // Silent
       }
     }
-    
+
+    // ❌ NEVER store refreshToken here — backend uses HttpOnly cookie
+
     const userData = response.data || response.user || response;
     localStorage.setItem("userData", JSON.stringify(userData));
-    
+
     let authData = {
       deviceId: deviceId,
       fcmToken: fcmToken,
       platform: 'web',
     };
-    
+
     if (role === 'super_admin') {
       authData = {
         ...authData,
@@ -313,13 +312,12 @@ const Login = () => {
         roleId: roleId,
         isSuperAdmin: true,
       };
-      
+
       if (userData?.id || response.id) {
         localStorage.setItem("superAdminId", (userData?.id || response.id).toString());
       }
-      
+
     } else if (role === 'doctor') {
-      // ✅ FIXED: Doctor block now matches Staff pattern exactly
       const authId = userData?.id || response.id;
       const doctorTableId =
         userData?.doctorId ||
@@ -332,7 +330,6 @@ const Login = () => {
         userData?.name ||
         `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
         "Doctor";
-
 
       authData = {
         ...authData,
@@ -349,7 +346,6 @@ const Login = () => {
           hospital?.hospitalName ||
           response.data?.hospitalName,
 
-        // ✅ Fixed - Same as Staff
         name: doctorName,
         displayName: doctorName,
 
@@ -373,7 +369,7 @@ const Login = () => {
       if (authId) {
         localStorage.setItem("authId", authId.toString());
       }
-      
+
     } else if (role === 'staff') {
       const authId = userData?.id || response.id;
       const staffTableId =
@@ -387,7 +383,6 @@ const Login = () => {
         userData?.name ||
         `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
         "Staff";
-
 
       authData = {
         ...authData,
@@ -404,7 +399,6 @@ const Login = () => {
           hospital?.hospitalName ||
           response.data?.hospitalName,
 
-        // ✅ Fixed
         name: staffName,
         displayName: staffName,
 
@@ -426,7 +420,7 @@ const Login = () => {
       if (authId) {
         localStorage.setItem("authId", authId.toString());
       }
-      
+
     } else {
       authData = {
         ...authData,
@@ -440,11 +434,10 @@ const Login = () => {
         role: role,
       };
     }
-    
-    
+
     localStorage.setItem("authData", JSON.stringify(authData));
     login(authData);
-    
+
     let welcomeMessage = '';
     if (role === 'super_admin') {
       welcomeMessage = `Welcome Super Admin ${authData.name}!`;
@@ -455,16 +448,16 @@ const Login = () => {
     } else {
       welcomeMessage = `Welcome back, ${authData.name}!`;
     }
-    
+
     showSuccessToast(welcomeMessage, 4000);
     setIsSubmitting(false);
     setShowHospitalSelect(false);
     setPendingResponse(null);
     setPendingFcmToken(null);
-    
+
     const storedRoleId = Number(localStorage.getItem("roleId"));
     const userRole = localStorage.getItem("userRole");
-    
+
     if (storedRoleId === 1 || userRole === "super_admin") {
       navigate("/super-admin/dashboard", { replace: true });
     } else {
@@ -474,16 +467,16 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
       setLoginError('');
-      
+
       try {
         const deviceId = getDeviceId();
-        
+
         let fcmToken = null;
-        
+
         if (isFCMAvailable()) {
           try {
             fcmToken = await generateTokenWithTimeout(10000);
@@ -491,7 +484,7 @@ const Login = () => {
             console.warn('⚠️ FCM token generation failed:', tokenError.message);
           }
         }
-        
+
         const loginPayload = {
           email: formData.email,
           password: formData.password,
@@ -501,11 +494,11 @@ const Login = () => {
             fcmToken: fcmToken
           } : undefined
         };
-        
+
         const response = await loginUser(loginPayload).unwrap();
-        
+
         const roleId = response.roleId || response.data?.roleId;
-        
+
         if (fcmToken) {
           try {
             await tokenManager.addFCMToken(fcmToken);
@@ -513,15 +506,12 @@ const Login = () => {
             console.error('❌ Failed to save token to IndexedDB:', dbError);
           }
         }
-        
+
         if (Number(roleId) === 1) {
           processSuccessfulLogin(response, fcmToken, null);
           return;
         }
-        
-        // Backend returns a temporary selection token for doctor/staff membership flow.
-        // It can also return requireHospitalSelection (singular) when duplicate Auth
-        // records exist; that flow is completed by POST /auth/login + hospitalId.
+
         const requiresSelection =
           response.requiresHospitalSelection === true ||
           response.requireHospitalSelection === true;
@@ -537,18 +527,18 @@ const Login = () => {
           showWarningToast('⚠️ Please select a hospital to continue', 3000);
           return;
         }
-        
-        const singleHospital = response.hospitals && response.hospitals.length === 1 
-          ? response.hospitals[0] 
+
+        const singleHospital = response.hospitals && response.hospitals.length === 1
+          ? response.hospitals[0]
           : null;
         processSuccessfulLogin(response, fcmToken, singleHospital);
-        
+
       } catch (error) {
         localStorage.clear();
-        
+
         console.error('❌ Login error:', error);
         let errorMessage = "Invalid email or password. Please try again.";
-        
+
         if (error.data?.message) {
           errorMessage = error.data.message;
         } else if (error.status === 401) {
@@ -560,7 +550,7 @@ const Login = () => {
         } else if (error.status === 403) {
           errorMessage = "You don't have permission to access this account.";
         }
-        
+
         setLoginError(errorMessage);
         showErrorToast(`❌ ${errorMessage}`, 4000);
         setIsSubmitting(false);
@@ -665,8 +655,8 @@ const Login = () => {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       className={`w-full pl-9 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:outline-none transition-all text-sm
-                        ${errors.password && touched.password 
-                          ? 'border-red-500 focus:ring-red-500' 
+                        ${errors.password && touched.password
+                          ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-[#154A7D]'
                         }`}
                       placeholder="Enter your password"

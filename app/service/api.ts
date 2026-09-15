@@ -6,31 +6,32 @@ import {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
-import { getToken, clearAuth, getAuthUser } from "../../src/utils/auth";
+import {
+  getToken,
+  setToken,
+  clearAuth,
+  isTokenExpired,
+} from "../../src/utils/auth";
 
-interface RefreshResponse {
-  token?: string;
-  accessToken?: string;
-}
-
-const publicEndpoints = [
-  "loginDoctor",
-  "loginHospital",
-  "loginSuperAdmin",
-  "refreshDoctor",
-  "refreshHospital",
-  "refreshStaff",
-  "registerHospital",
-  "forgotPassword",
-  "resetPassword",
-  "verifyEmail",
-];
+/*
+|--------------------------------------------------------------------------
+| Base Query
+|--------------------------------------------------------------------------
+*/
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_URL || "http://localhost:5173/api",
+  baseUrl:
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:5173/api",
+
+  /*
+   * IMPORTANT:
+   * This allows the browser to send the HttpOnly
+   * refreshToken cookie to /auth/refresh.
+   */
   credentials: "include",
 
-  prepareHeaders: (headers, { endpoint, arg }) => {
+  prepareHeaders: (headers, { arg }) => {
     const token = getToken();
 
     const url =
@@ -38,97 +39,306 @@ const baseQuery = fetchBaseQuery({
         ? arg
         : arg?.url || "";
 
-    const isRefreshRequest =
+    /*
+     * These requests don't need the access token.
+     */
+    const isPublicRequest =
+      url === "/auth/login" ||
+      url === "/auth/login/phone" ||
       url === "/auth/refresh" ||
-      url === "/doctor/refresh" ||
-      url === "/hospital/refresh" ||
-      url === "/staff/refresh" ||
-      publicEndpoints.includes(endpoint as string);
+      url === "/auth/otp" ||
+      url === "/auth/send-otp" ||
+      url === "/auth/verify-otp" ||
+      url === "/auth/reset-password";
 
-    if (token && !isRefreshRequest) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-
-    if (!headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
+    /*
+     * Add access token to protected requests.
+     */
+    if (token && !isPublicRequest) {
+      headers.set(
+        "Authorization",
+        `Bearer ${token}`
+      );
     }
 
     return headers;
   },
 });
 
+
+/*
+|--------------------------------------------------------------------------
+| Refresh Response
+|--------------------------------------------------------------------------
+*/
+
+interface RefreshResponse {
+  accessToken?: string;
+  token?: string;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Public (auth) request URLs
+|--------------------------------------------------------------------------
+*/
+
+const PUBLIC_AUTH_URLS = [
+  "/auth/login",
+  "/auth/login/phone",
+  "/auth/refresh",
+  "/auth/otp",
+  "/auth/send-otp",
+  "/auth/verify-otp",
+  "/auth/reset-password",
+];
+
+const isPublicAuthUrl = (
+  url: string | undefined
+): boolean => {
+  if (!url) return false;
+  return PUBLIC_AUTH_URLS.includes(url);
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Base Query With Reauthentication
+|--------------------------------------------------------------------------
+|
+| Flow (proactive + reactive):
+|
+| Request starts
+|   ├── token valid ──→ API
+|   └── token expired
+|          ↓
+|       refresh
+|          ↓
+|       API
+|
+| Plus reactive safety net:
+|
+| API
+|  ↓
+| 401
+|  ↓
+| refresh
+|  ↓
+| retry API
+|
+|--------------------------------------------------------------------------
+*/
+
 const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
   FetchBaseQueryError
-> = async (args, api, extraOptions) => {
-  let result = await baseQuery(args, api, extraOptions);
+> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  const requestUrl =
+    typeof args === "string"
+      ? args
+      : args.url;
 
-  if (result.error?.status !== 401) {
-    return result;
+  /*
+  |--------------------------------------------------------------------------
+  | Never refresh auth endpoints
+  |--------------------------------------------------------------------------
+  */
+
+  if (isPublicAuthUrl(requestUrl)) {
+    return baseQuery(
+      args,
+      api,
+      extraOptions
+    );
   }
 
-  // ----------------------------------------
-  // Determine logged-in user's role
-  // ----------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | 1. Check access token BEFORE request
+  |--------------------------------------------------------------------------
+  */
 
-  const auth = getAuthUser();
-  const userRole = localStorage.getItem("userRole");
+  const token = getToken();
 
-  const role = auth?.role || userRole;
+  if (token && isTokenExpired()) {
+    console.log(
+      "⏰ Access token already expired. Refreshing..."
+    );
 
-  // ----------------------------------------
-  // Select correct refresh endpoint
-  // ----------------------------------------
+    const refreshResult =
+      await baseQuery(
+        {
+          url: "/auth/refresh",
+          method: "POST",
+        },
+        api,
+        extraOptions
+      );
 
-  let refreshUrl = "/auth/refresh";
+    if (refreshResult.data) {
+      const data =
+        refreshResult.data as RefreshResponse;
 
-  if (role === "doctor") {
-    refreshUrl = "/doctor/refresh";
-  } else if (role === "staff") {
-    refreshUrl = "/staff/refresh";
-  } else if (role === "hospital") {
-    refreshUrl = "/hospital/refresh";
-  } else if (role === "super_admin") {
-    refreshUrl = "/auth/refresh";
+      const newAccessToken =
+        data.accessToken ||
+        data.token;
+
+      if (newAccessToken) {
+        console.log(
+          "✅ Access token refreshed before request"
+        );
+
+        setToken(newAccessToken);
+      } else {
+        console.log(
+          "❌ Refresh response has no access token"
+        );
+
+        clearAuth();
+
+        return {
+          error: {
+            status: 401,
+            data: {
+              message:
+                "Session expired. Please login again.",
+            },
+          },
+        };
+      }
+    } else {
+      console.log(
+        "❌ Refresh request failed"
+      );
+
+      clearAuth();
+
+      return {
+        error: {
+          status: 401,
+          data: {
+            message:
+              "Session expired. Please login again.",
+          },
+        },
+      };
+    }
   }
 
-  // ----------------------------------------
-  // Refresh access token
-  // ----------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | 2. Make original request
+  |--------------------------------------------------------------------------
+  */
 
-  const refreshResult = await baseQuery(
-    {
-      url: refreshUrl,
-      method: "POST",
-    },
+  let result = await baseQuery(
+    args,
     api,
     extraOptions
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | 3. Request succeeded
+  |--------------------------------------------------------------------------
+  */
+
+  if (!result.error) {
+    return result;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 4. If not 401, return original error
+  |--------------------------------------------------------------------------
+  */
+
+  if (result.error.status !== 401) {
+    return result;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 5. Access token rejected by backend
+  |--------------------------------------------------------------------------
+  */
+
+  console.log(
+    "🔄 API returned 401. Trying refresh..."
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | 6. Refresh using HttpOnly cookie
+  |--------------------------------------------------------------------------
+  */
+
+  const refreshResult =
+    await baseQuery(
+      {
+        url: "/auth/refresh",
+        method: "POST",
+      },
+      api,
+      extraOptions
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | 7. Refresh successful
+  |--------------------------------------------------------------------------
+  */
+
   if (refreshResult.data) {
-    const data = refreshResult.data as RefreshResponse;
+    const data =
+      refreshResult.data as RefreshResponse;
 
-    const newToken = data.token || data.accessToken;
+    const newAccessToken =
+      data.accessToken ||
+      data.token;
 
-    if (newToken) {
-      localStorage.setItem("accessToken", newToken);
+    if (newAccessToken) {
+      console.log(
+        "✅ New access token received"
+      );
 
-      // ----------------------------------------
-      // Retry original request
-      // prepareHeaders() will automatically
-      // attach the new access token.
-      // ----------------------------------------
+      setToken(newAccessToken);
 
-      result = await baseQuery(args, api, extraOptions);
+      /*
+      |--------------------------------------------------------------------------
+      | 8. Retry original request
+      |--------------------------------------------------------------------------
+      */
+
+      console.log(
+        "🔁 Retrying original request..."
+      );
+
+      result = await baseQuery(
+        args,
+        api,
+        extraOptions
+      );
 
       return result;
     }
   }
 
-  // ----------------------------------------
-  // Refresh token expired / invalid
-  // ----------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | 9. Refresh failed
+  |--------------------------------------------------------------------------
+  */
+
+  console.log(
+    "❌ Refresh failed. Logging out."
+  );
 
   clearAuth();
 
@@ -136,16 +346,26 @@ const baseQueryWithReauth: BaseQueryFn<
     error: {
       status: 401,
       data: {
-        message: "Session expired. Please login again.",
+        message:
+          "Session expired. Please login again.",
       },
     },
   };
 };
 
+
+/*
+|--------------------------------------------------------------------------
+| API
+|--------------------------------------------------------------------------
+*/
+
 export const api = createApi({
+
   reducerPath: "api",
 
-  baseQuery: baseQueryWithReauth,
+  baseQuery:
+    baseQueryWithReauth,
 
   tagTypes: [
     "Hospital",
@@ -182,5 +402,6 @@ export const api = createApi({
 
   endpoints: () => ({}),
 });
+
 
 export default api;
