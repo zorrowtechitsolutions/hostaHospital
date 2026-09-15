@@ -241,6 +241,21 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         showSuccessToast("Booking completed!", 3000);
         await refetch();
       },
+
+      // ✅ ADDED: Handle real-time deletion from other clients
+      onBookingDeleted: async (data) => {
+
+        const deletedId = data?.bookingNumber
+          ? `#BK${String(data.bookingNumber).padStart(5, "0")}`
+          : "An appointment";
+
+        showSuccessToast(
+          `${deletedId} was deleted.`,
+          3000
+        );
+
+        await refetch();
+      },
     });
 
     return cleanup;
