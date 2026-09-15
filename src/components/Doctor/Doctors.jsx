@@ -107,6 +107,42 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
+// ✅ Helper to check if doctor is unavailable today (no schedule for today's weekday)
+const isDoctorUnavailableToday = (doctor) => {
+  if (!doctor) return false;
+
+  const dayNames = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ];
+
+  const today = dayNames[new Date().getDay()];
+
+  const consultingOne = Array.isArray(doctor.consultingOne)
+    ? doctor.consultingOne
+    : [];
+
+  const consultingTwo = Array.isArray(doctor.consultingTwo)
+    ? doctor.consultingTwo
+    : [];
+
+  const hasTodaySchedule =
+    consultingOne.some(
+      (item) => String(item.day).toLowerCase() === today
+    ) ||
+    consultingTwo.some(
+      (item) => String(item.day).toLowerCase() === today
+    );
+
+  // If today's schedule does not exist, doctor is unavailable today
+  return !hasTodaySchedule;
+};
+
 // ✅ Helper function to calculate slots using backend fields
 const calculateSlots = (doctor) => {
   const totalSlots = Number(doctor.appointmentCount) || 0;
@@ -433,6 +469,10 @@ const Doctors = () => {
         bookingOpen: doctor.bookingOpen === true,
         bookingAvailable: doctor.bookingAvailable === true,
         leftSlots: doctor.leftSlots !== undefined ? Number(doctor.leftSlots) : null,
+
+        // IMPORTANT: preserve consulting schedules for leave/unavailable check
+        consultingOne: Array.isArray(doctor.consultingOne) ? doctor.consultingOne : [],
+        consultingTwo: Array.isArray(doctor.consultingTwo) ? doctor.consultingTwo : [],
       }))
       // Sort by doctorNumber to ensure proper ordering
       .sort((a, b) => Number(a.doctorNumber) - Number(b.doctorNumber));
@@ -577,6 +617,7 @@ const Doctors = () => {
       const formattedAddress = formatAddress(doctor.address);
       const formattedDOB = doctor.dob ? formatDate(doctor.dob) : 'N/A';
       const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
+      const onLeaveToday = isDoctorUnavailableToday(doctor);
       
       return {
         'Doctor ID': getDoctorId(doctor),
@@ -591,6 +632,7 @@ const Doctors = () => {
         'Email': doctor.email || 'N/A',
         'Phone': doctor.phone || 'N/A',
         'Status': doctor.isDelete ? 'Blacklisted' : (doctor.isActive ? 'Active' : 'Inactive'),
+        'Available Today': onLeaveToday ? 'On Leave' : 'Yes',
         'DOB': formattedDOB,
         'Gender': doctor.gender || 'N/A',
         'Address': formattedAddress,
@@ -814,6 +856,7 @@ const Doctors = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {doctors.map((doctor) => {
                 const isBlacklisted = doctor.isDelete === true;
+                const isUnavailableToday = isDoctorUnavailableToday(doctor);
                 const slotData = calculateSlots(doctor);
                 const { totalSlots, takenSlots, leftSlots, bookingAvailable, hasLimit } = slotData;
                 const autoDecline = hasAutoDecline(doctor);
@@ -907,7 +950,22 @@ const Doctors = () => {
 
                     {/* TODAY'S APPOINTMENT AVAILABILITY */}
                     <div className="w-full mt-3 pt-3 border-t border-gray-100">
-                      {doctor.bookingOpen === false ? (
+                      {isUnavailableToday ? (
+                        <div className="flex items-center justify-between min-h-[52px]">
+                          <div>
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                              Today's Appointments
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Doctor is on leave today
+                            </p>
+                          </div>
+
+                          <span className="inline-flex items-center whitespace-nowrap shrink-0 px-3 py-1.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">
+  Not Available Today
+</span>
+                        </div>
+                      ) : doctor.bookingOpen === false ? (
                         <div className="flex items-center justify-between min-h-[52px]">
                           <div>
                             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
@@ -1071,6 +1129,7 @@ const Doctors = () => {
                   <tbody>
                     {doctors.map((doctor) => {
                       const isBlacklisted = doctor.isDelete === true;
+                      const isUnavailableToday = isDoctorUnavailableToday(doctor);
                       const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
                       const autoDecline = hasAutoDecline(doctor);
                       const appointmentLimit = getAppointmentCountDisplay(doctor);
@@ -1126,6 +1185,8 @@ const Doctors = () => {
                               variant={
                                 isBlacklisted
                                   ? "dark"
+                                  : isUnavailableToday
+                                  ? "info"
                                   : doctor.isActive
                                   ? "success"
                                   : "danger"
@@ -1134,6 +1195,8 @@ const Doctors = () => {
                             >
                               {isBlacklisted
                                 ? "Blacklisted"
+                                : isUnavailableToday
+                                ? "On Leave"
                                 : doctor.isActive
                                 ? "Active"
                                 : "Inactive"}
