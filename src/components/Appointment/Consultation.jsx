@@ -1,22 +1,36 @@
 // Consultation.js - COMPLETE FIXED VERSION with updateBooking for completion
 // + prescriptionNumber / prescriptionId extraction after create
+// + Flatpickr for Next Consultation date
+// + Skeleton loader instead of spinner
+// + Robust scroll-to-top (handles internal scroll containers)
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Flatpickr from "react-flatpickr";
+import "flatpickr/dist/flatpickr.css";
 import ViewMedicalHistory from "./ViewMedicalHistory";
 import { Button, Card, Badge } from "../ui";
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 import { useCreateVitalMutation } from "../../../app/service/vitals";
 import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth";
-// ✅ Use updateBooking instead of completeBooking
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
 import { useGetPatientByIdQuery } from "../../../app/service/patients";
 
-// ✅ Import socket
 import { socket } from '../../socket/socket';
 import { registerPrescriptionEvents, unregisterPrescriptionEvents } from '../../socket/prescriptionEvents';
+
+/* =====================================================
+   Helper: convert YYYY-MM-DD → DD/MM/YYYY (for Flatpickr display)
+   ===================================================== */
+const toDisplayDate = (isoDate) => {
+  if (!isoDate || typeof isoDate !== "string") return "";
+  const parts = isoDate.split("-");
+  if (parts.length !== 3) return "";
+  const [year, month, day] = parts;
+  return `${day}/${month}/${year}`;
+};
 
 // Helper function to calculate age from DOB
 const calculateAge = (dob) => {
@@ -63,7 +77,7 @@ const getPatientIdFromAppointment = (appointmentData) => {
       if (numericId) return numericId;
     }
   }
-  
+
   if (appointmentData.patientId) {
     const numericId = extractNumericId(appointmentData.patientId);
     if (numericId) return numericId;
@@ -71,17 +85,17 @@ const getPatientIdFromAppointment = (appointmentData) => {
       return Number(appointmentData.patientId);
     }
   }
-  
+
   if (appointmentData.userId) {
     const numericId = extractNumericId(appointmentData.userId);
     if (numericId) return numericId;
   }
-  
+
   if (appointmentData.patientData?.id) {
     const numericId = extractNumericId(appointmentData.patientData.id);
     if (numericId) return numericId;
   }
-  
+
   console.warn("⚠️ No valid patient ID found in appointment data");
   return null;
 };
@@ -221,44 +235,49 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
   );
 };
 
+/* =====================================================
+   Skeleton Loader Primitives
+   ===================================================== */
+const SkeletonLine = ({ className = "" }) => (
+  <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+);
+
+const SkeletonCircle = ({ className = "" }) => (
+  <div className={`bg-gray-200 rounded-full animate-pulse ${className}`} />
+);
+
+const SkeletonBox = ({ className = "" }) => (
+  <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+);
+
 const Consultation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const appointmentData = location.state?.appointment || location.state || {};
-  
+
   const [createPrescription, { isLoading: isCreateLoading }] = useCreatePrescriptionMutation();
   const [createVital, { isLoading: isVitalLoading }] = useCreateVitalMutation();
-  
-  // ✅ Use updateBooking instead of completeBooking
+
   const [updateBooking, { isLoading: isCompleteLoading }] = useUpdateBookingMutation();
-  
-  // Fetch prescription templates
+
   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
-  // ✅ Get patient ID using the helper function
   const patientId = getPatientIdFromAppointment(appointmentData);
   const patientNameFromAppointment = getPatientNameFromAppointment(appointmentData);
 
-  // ✅ CRITICAL: Get bookingNumber - NEVER use database ID
   const bookingNumber = Number(appointmentData?.bookingNumber);
 
-  // ✅ Format booking number for display
   const formattedBookingNumber = bookingNumber && Number.isFinite(bookingNumber) && bookingNumber > 0
-    ? `#BK${String(bookingNumber).padStart(5, "0")}` 
+    ? `#BK${String(bookingNumber).padStart(5, "0")}`
     : "N/A";
 
-  
-
-  // ✅ Track current patient ID to detect changes
   const [currentPatientId, setCurrentPatientId] = useState(patientId);
 
-  // ✅ NEW: store the prescription number/id returned by the server
   const [createdPrescriptionNumber, setCreatedPrescriptionNumber] = useState(null);
   const [createdPrescriptionId, setCreatedPrescriptionId] = useState(null);
 
-  // ✅ Fetch patient data if patientId exists - with proper cache key
-  const { 
-    data: patientData, 
+  const {
+    data: patientData,
     isLoading: isPatientLoading,
     isFetching: isPatientFetching,
     refetch: refetchPatient
@@ -270,7 +289,6 @@ const Consultation = () => {
     }
   );
 
-  // ✅ Extract patient from array response - with proper handling
   const patient = React.useMemo(() => {
     if (!patientData?.data) return null;
     if (Array.isArray(patientData.data)) {
@@ -279,7 +297,6 @@ const Consultation = () => {
     return patientData.data;
   }, [patientData]);
 
-  // ✅ Force refetch when patientId changes
   useEffect(() => {
     if (patientId && patientId !== currentPatientId) {
       setCurrentPatientId(patientId);
@@ -287,17 +304,78 @@ const Consultation = () => {
     }
   }, [patientId, currentPatientId, refetchPatient]);
 
-  // ✅ Get current hospital ID
+  /* =====================================================
+     ✅ Scroll to top — handles window AND internal containers
+     Resets:
+       - window / document / body scroll
+       - <main> and [role="main"] elements
+       - any .overflow-y-auto / .overflow-auto container
+     Runs 3 times (immediate + double rAF) so it survives
+     layout reflow after route change.
+     ===================================================== */
+  useEffect(() => {
+    const scrollToTop = () => {
+      // 1. Browser / page scroll
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+
+      // 2. App's internal scroll containers
+      const selectors = [
+        "main",
+        '[role="main"]',
+        ".overflow-y-auto",
+        ".overflow-auto",
+        ".h-screen.overflow-y-auto",
+        ".min-h-screen.overflow-y-auto",
+      ];
+
+      selectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((element) => {
+          element.scrollTop = 0;
+          element.scrollLeft = 0;
+        });
+      });
+    };
+
+    // Reset immediately
+    scrollToTop();
+
+    // Reset again after layout / render
+    const frame1 = requestAnimationFrame(scrollToTop);
+
+    // Triple-check after two paints (React commit + browser paint)
+    const frame2 = requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToTop);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+    };
+  }, [patientId]);
+
+  /* =====================================================
+     Redirect if no patient context (e.g., direct URL visit)
+     ===================================================== */
+  useEffect(() => {
+    if (!patientId && !isPatientLoading && !isPatientFetching) {
+      const timer = setTimeout(() => {
+        navigate("/appointments");
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [patientId, isPatientLoading, isPatientFetching, navigate]);
+
   const currentHospitalId = getHospitalId();
 
-  // ✅ Get the correct template for this hospital
   const getHospitalTemplate = () => {
     const allTemplates = existingTemplates?.data || [];
-    
+
     const customTemplate = allTemplates.find(
       t => t.templateType === "custom" && Number(t.hospitalId) === Number(currentHospitalId)
     );
-    
+
     if (customTemplate) {
       return customTemplate;
     }
@@ -305,7 +383,7 @@ const Consultation = () => {
     const demoTemplate = allTemplates.find(
       t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
     );
-    
+
     if (demoTemplate) {
       return demoTemplate;
     }
@@ -332,7 +410,6 @@ const Consultation = () => {
   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ✅ Register socket event listeners
   useEffect(() => {
     registerPrescriptionEvents({
       onPrescriptionCreated: async (data) => {
@@ -351,7 +428,6 @@ const Consultation = () => {
     };
   }, []);
 
-  // ✅ Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {};
     const handleDisconnect = () => {};
@@ -365,7 +441,6 @@ const Consultation = () => {
     };
   }, []);
 
-  // ✅ Log all socket events for debugging
   useEffect(() => {
     const handleAnyEvent = (event, ...args) => {};
     socket.onAny(handleAnyEvent);
@@ -405,20 +480,20 @@ const Consultation = () => {
 
   const validateAppointmentData = () => {
     const missingData = [];
-    
+
     if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
       missingData.push("Booking Number");
     }
-    
+
     if (!patientId) {
       missingData.push("Patient ID");
     }
-    
+
     const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
     if (!doctorId) {
       missingData.push("Doctor ID");
     }
-    
+
     const hospitalId = getHospitalId() || appointmentData.hospitalId;
     if (!hospitalId) {
       missingData.push("Hospital ID");
@@ -431,7 +506,7 @@ const Consultation = () => {
       console.warn("Could not get hospital name:", error);
       hospitalName = appointmentData.hospitalName || appointmentData.hospital?.name || null;
     }
-    
+
     if (missingData.length > 0) {
       showErrorToast(`Missing required data: ${missingData.join(", ")}. Please go back and select a valid appointment.`);
       return false;
@@ -480,7 +555,7 @@ const Consultation = () => {
   };
 
   const updateVital = (field, value) => setVitals({ ...vitals, [field]: value });
-  
+
   const calculateBMI = () => {
     if (vitals.height && vitals.weight) {
       const heightInMeters = vitals.height / 100;
@@ -489,12 +564,12 @@ const Consultation = () => {
       showSuccessToast("BMI calculated: " + bmiValue, 2000);
     }
   };
-  
+
   const saveVitals = () => {
     setIsEditingVitals(false);
     showSuccessToast("Vital signs saved locally", 3000);
   };
-  
+
   const cancelVitalsEdit = () => setIsEditingVitals(false);
 
   const handleBackToAppointments = () => {
@@ -503,7 +578,7 @@ const Consultation = () => {
 
   const getPatientGender = () => {
     const patientGender = patient?.gender || patient?.patient_gender || null;
-    
+
     if (patientGender) {
       const gender = String(patientGender);
       const normalized = gender.toLowerCase();
@@ -512,7 +587,7 @@ const Consultation = () => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-    
+
     if (appointmentData.patient_gender) {
       const gender = String(appointmentData.patient_gender);
       const normalized = gender.toLowerCase();
@@ -521,7 +596,7 @@ const Consultation = () => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-    
+
     if (appointmentData.patient?.gender) {
       const gender = String(appointmentData.patient.gender);
       const normalized = gender.toLowerCase();
@@ -530,7 +605,7 @@ const Consultation = () => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-    
+
     if (appointmentData.gender) {
       const gender = String(appointmentData.gender);
       const normalized = gender.toLowerCase();
@@ -539,7 +614,7 @@ const Consultation = () => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-    
+
     return "N/A";
   };
 
@@ -550,7 +625,7 @@ const Consultation = () => {
     if (patient?.patientName) {
       return patient.patientName;
     }
-    
+
     if (appointmentData.patientName) {
       return appointmentData.patientName;
     }
@@ -563,7 +638,7 @@ const Consultation = () => {
     if (appointmentData.patient?.patientName) {
       return appointmentData.patient.patientName;
     }
-    
+
     return "Patient";
   };
 
@@ -574,7 +649,7 @@ const Consultation = () => {
     if (patient?.patientAge) {
       return patient.patientAge;
     }
-    
+
     if (appointmentData.age) {
       return appointmentData.age;
     }
@@ -584,7 +659,7 @@ const Consultation = () => {
     if (appointmentData.patientAge) {
       return appointmentData.patientAge;
     }
-    
+
     return "N/A";
   };
 
@@ -601,7 +676,7 @@ const Consultation = () => {
     if (patient?.patientPhone) {
       return patient.patientPhone;
     }
-    
+
     if (appointmentData.contact) {
       return appointmentData.contact;
     }
@@ -617,7 +692,7 @@ const Consultation = () => {
     if (appointmentData.patient?.mobileNumber) {
       return appointmentData.patient.mobileNumber;
     }
-    
+
     return "N/A";
   };
 
@@ -641,7 +716,7 @@ const Consultation = () => {
 
   const handleEndConsultation = async () => {
     if (!validateAppointmentData()) return;
-    
+
     const isComplaintValid = validateComplaint();
     const isMedicationsValid = validateAllMedications();
 
@@ -656,38 +731,38 @@ const Consultation = () => {
       }
 
       const extractedPatientId = patientId || extractNumericId(
-        appointmentData.patientId || 
-        appointmentData.patient?.id || 
-        appointmentData.patient?.patientId || 
-        appointmentData.userId || 
-        appointmentData.patient?.userId || 
+        appointmentData.patientId ||
+        appointmentData.patient?.id ||
+        appointmentData.patient?.patientId ||
+        appointmentData.userId ||
+        appointmentData.patient?.userId ||
         null
       );
-      
+
       const patientNumber = patient?.patientNumber || extractedPatientId;
-      
+
       const extractedUserId = extractNumericId(
-        appointmentData.userId || 
-        appointmentData.patient?.userId || 
+        appointmentData.userId ||
+        appointmentData.patient?.userId ||
         null
       );
-      
+
       const extractedDoctorId = extractNumericId(
-        appointmentData.doctorId || 
-        appointmentData.doctor?.id || 
+        appointmentData.doctorId ||
+        appointmentData.doctor?.id ||
         appointmentData.doctor?.doctorId
       );
-      
+
       const extractedHospitalId = extractNumericId(
-        getHospitalId() || 
-        appointmentData.hospitalId || 
+        getHospitalId() ||
+        appointmentData.hospitalId ||
         appointmentData.hospital?.id
       );
-      
+
       const extractedPatientName = getPatientName();
-      
+
       let extractedAge = null;
-      
+
       if (patient?.age) {
         extractedAge = patient.age;
       } else if (patient?.dob || patient?.dateOfBirth) {
@@ -698,15 +773,15 @@ const Consultation = () => {
       } else if (appointmentData.patient?.age) {
         extractedAge = appointmentData.patient.age;
       } else {
-        const dob = appointmentData.dob || 
-                   appointmentData.patient?.dob || 
+        const dob = appointmentData.dob ||
+                   appointmentData.patient?.dob ||
                    appointmentData.dateOfBirth ||
                    appointmentData.patient?.dateOfBirth;
         if (dob) {
           extractedAge = calculateAge(dob);
         }
       }
-      
+
       const extractedContact = getPatientContact();
       const extractedGender = getPatientGender();
 
@@ -720,24 +795,24 @@ const Consultation = () => {
         appointmentData.hospital?.name ||
         "";
 
-      const extractedDoctorName = 
-        appointmentData.doctor?.name || 
-        appointmentData.doctorName || 
-        appointmentData.displayName || 
-        appointmentData.doctor?.displayName || 
+      const extractedDoctorName =
+        appointmentData.doctor?.name ||
+        appointmentData.doctorName ||
+        appointmentData.displayName ||
+        appointmentData.doctor?.displayName ||
         null;
-      
-      const extractedDoctorSpecialization = 
-        appointmentData.doctor?.specialization || 
-        appointmentData.doctor?.department || 
-        appointmentData.department || 
-        appointmentData.specialization || 
+
+      const extractedDoctorSpecialization =
+        appointmentData.doctor?.specialization ||
+        appointmentData.doctor?.department ||
+        appointmentData.department ||
+        appointmentData.specialization ||
         null;
-      
+
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
-      
+
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
         dosage: med.dosage,
@@ -746,11 +821,11 @@ const Consultation = () => {
         timing: med.timing,
         instructions: med.instructions || "",
       }));
-      
+
       const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
 
       const selectedTemplate = getHospitalTemplate();
-      
+
       const defaultTemplate = getDefaultTemplate();
       const templateDesign = selectedTemplate?.design || defaultTemplate.design;
       const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
@@ -758,40 +833,38 @@ const Consultation = () => {
 
       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
 
-      // ✅ Build prescription data with bookingNumber (NOT database ID)
-      // ✅ NOTE: We do NOT send prescriptionNumber / prescriptionId — server generates them.
       const prescriptionData = {
         bookingId: bookingNumber,
-        
+
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
-        
+
         prescribedBy: extractedDoctorName,
         doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
-        
+
         patientName: extractedPatientName,
         age: ageAsNumber,
         contact: extractedContact,
         gender: extractedGender,
-        
+
         hospitalName: extractedHospitalName,
-        
+
         patientId: patientNumber,
         patientNumber: patientNumber,
         userId: extractedUserId || undefined,
-        
+
         complaint: complaint.trim(),
         medications: validMedications,
         investigations: investigations.filter(i => i.trim() !== ""),
         advice: advice.trim() || "",
         next_consultation: nextConsultationDate || null,
         empty_stomach: emptyStomach === "yes",
-        
+
         templateType: templateType,
         canvasBg: templateBg,
         design: templateDesign,
-        
+
         temperature: Number(vitals.temperature) || 0,
         pulse: Number(vitals.pulse) || 0,
         respiratoryRate: Number(vitals.respiratoryRate) || 0,
@@ -803,22 +876,16 @@ const Consultation = () => {
         bsa: Number(vitals.bsa) || 0,
       };
 
-      // ✅ Create prescription
       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
 
-      // ✅ NEW: Extract server-generated prescription identifiers
       const prescriptionNumber =
         prescriptionResponse?.data?.prescriptionNumber;
       const prescriptionId =
         prescriptionResponse?.data?.prescriptionId;
 
-    
-
-      // ✅ Store them so they can be displayed (e.g., in prescriptionInfo section)
       setCreatedPrescriptionNumber(prescriptionNumber ?? null);
       setCreatedPrescriptionId(prescriptionId ?? null);
 
-      // ✅ Socket event
       if (socket && socket.connected) {
         socket.emit('PRESCRIPTION_CREATED', {
           prescriptionId:
@@ -833,8 +900,6 @@ const Consultation = () => {
         });
       }
 
-      // ✅ COMPLETE BOOKING - Using updateBooking with status: "completed"
-
       await updateBooking({
         bookingNumber: bookingNumber,
         data: {
@@ -842,7 +907,6 @@ const Consultation = () => {
         },
       }).unwrap();
 
-      // ✅ Optional: include the prescription number in the toast so the doctor sees it
       const displayNumber = prescriptionId
         ? prescriptionId
         : prescriptionNumber
@@ -854,7 +918,7 @@ const Consultation = () => {
           ? `Consultation completed — Prescription ${displayNumber}`
           : "Consultation completed successfully"
       );
-      
+
       navigate("/visits", {
         state: {
           completedPatientId: patientNumber || prescriptionResponse?.patientId,
@@ -865,8 +929,8 @@ const Consultation = () => {
     } catch (error) {
       console.error("❌ Consultation error:", error);
       showErrorToast(
-        error?.data?.message || 
-        error?.message || 
+        error?.data?.message ||
+        error?.message ||
         "Failed to complete consultation"
       );
     } finally {
@@ -874,10 +938,14 @@ const Consultation = () => {
     }
   };
 
-  if (isPatientLoading || isPatientFetching) {
+  /* =====================================================
+     Skeleton loader
+     ===================================================== */
+  if (patientId && (isPatientLoading || isPatientFetching)) {
     return (
       <div className="p-4 bg-gray-50 min-h-screen font-sans">
         <div className="max-w-6xl mx-auto">
+          {/* ===== Header ===== */}
           <div className="mb-4">
             <div className="flex items-center gap-3 mb-2">
               <button
@@ -893,12 +961,133 @@ const Consultation = () => {
             <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
             <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-8 flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1C62A0] mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading patient data...</p>
+
+          {/* ===== Basic Information Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+              <SkeletonLine className="h-3.5 w-32" />
+              <SkeletonLine className="h-3 w-28" />
             </div>
-          </div>
+            <div className="p-4 flex flex-wrap justify-between items-center gap-3">
+              <div className="flex items-center gap-3">
+                <SkeletonBox className="w-10 h-10 rounded-lg" />
+                <div className="space-y-2">
+                  <SkeletonLine className="h-4 w-16 rounded-full" />
+                  <SkeletonLine className="h-4 w-40" />
+                  <SkeletonLine className="h-3 w-32" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4 bg-gray-50 px-3 py-2 rounded-lg">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="space-y-1">
+                    <SkeletonLine className="h-2.5 w-16" />
+                    <SkeletonLine className="h-3 w-24" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {/* ===== Vital Signs Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+              <SkeletonLine className="h-3.5 w-24" />
+              <SkeletonLine className="h-3 w-12" />
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {[...Array(9)].map((_, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <SkeletonLine className="h-2.5 w-20" />
+                    <SkeletonBox className="h-7 w-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {/* ===== Complaint Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100">
+              <SkeletonLine className="h-3.5 w-24" />
+            </div>
+            <div className="p-4 space-y-2">
+              <SkeletonBox className="h-8 w-full" />
+              <SkeletonLine className="h-2.5 w-48" />
+            </div>
+          </Card>
+
+          {/* ===== Medications Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+              <SkeletonLine className="h-3.5 w-28" />
+              <SkeletonLine className="h-3 w-20" />
+            </div>
+            <div className="p-4">
+              <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="space-y-1.5">
+                      <SkeletonLine className="h-2.5 w-20" />
+                      <SkeletonBox className="h-8 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="space-y-1.5">
+                      <SkeletonLine className="h-2.5 w-20" />
+                      <SkeletonBox className="h-8 w-full" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* ===== Investigations Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100">
+              <SkeletonLine className="h-3.5 w-40" />
+            </div>
+            <div className="p-4">
+              <div className="flex gap-2">
+                <SkeletonBox className="h-8 flex-1" />
+                <SkeletonBox className="h-8 w-16" />
+              </div>
+            </div>
+          </Card>
+
+          {/* ===== Advice Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100">
+              <SkeletonLine className="h-3.5 w-16" />
+            </div>
+            <div className="p-4">
+              <SkeletonBox className="h-14 w-full" />
+            </div>
+          </Card>
+
+          {/* ===== Follow Up Skeleton ===== */}
+          <Card className="mb-4 overflow-hidden">
+            <div className="px-4 py-2 border-b border-gray-100">
+              <SkeletonLine className="h-3.5 w-20" />
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <SkeletonLine className="h-3 w-24" />
+                    <SkeletonBox className="h-8 w-full" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
+                <SkeletonBox className="h-8 w-20" />
+                <SkeletonBox className="h-8 w-32" />
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
     );
@@ -923,7 +1112,7 @@ const Consultation = () => {
           <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
         </div>
 
-        {/* Basic Information Card - Showing bookingNumber */}
+        {/* Basic Information Card */}
         <Card className="mb-4 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-medium text-gray-800">Basic Information</h3>
@@ -941,11 +1130,9 @@ const Consultation = () => {
                 <p className="font-semibold text-gray-800 text-sm mt-1">
                   {displayPatientName}
                 </p>
-                {/* ✅ Display bookingNumber (NOT database ID) */}
                 <p className="text-xs text-gray-500">
                   Booking #: {formattedBookingNumber}
                 </p>
-                {/* ✅ Display patientNumber */}
                 {patient?.patientNumber && (
                   <p className="text-xs text-blue-600 font-medium">Patient #: {patient.patientNumber}</p>
                 )}
@@ -953,7 +1140,6 @@ const Consultation = () => {
                   <p className="text-xs text-gray-400">Patient ID: #{patientId}</p>
                 )}
 
-                {/* ✅ NEW: Show the generated prescription number/id once available */}
                 {createdPrescriptionId && (
                   <p className="text-xs text-green-600 font-medium">
                     Prescription: {createdPrescriptionId}
@@ -1090,10 +1276,38 @@ const Consultation = () => {
           </div>
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ============ Next Consultation (Flatpickr) ============ */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Next Consultation</label>
-                <input type="date" className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" value={nextConsultationDate} onChange={(e) => setNextConsultationDate(e.target.value)} />
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Next Consultation
+                </label>
+
+                <Flatpickr
+                  value={toDisplayDate(nextConsultationDate)}
+                  options={{
+                    dateFormat: "d/m/Y",
+                    minDate: "today",
+                    allowInput: false,
+                  }}
+                  onChange={(selectedDates) => {
+                    if (!selectedDates.length) {
+                      setNextConsultationDate("");
+                      return;
+                    }
+
+                    const date = selectedDates[0];
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, "0");
+                    const day = String(date.getDate()).padStart(2, "0");
+
+                    setNextConsultationDate(`${year}-${month}-${day}`);
+                  }}
+                  placeholder="Select next consultation date"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white"
+                />
               </div>
+
+              {/* ============ Empty Stomach ============ */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Empty Stomach Required?</label>
                 <select className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white" value={emptyStomach} onChange={(e) => setEmptyStomach(e.target.value)}>
@@ -1105,11 +1319,11 @@ const Consultation = () => {
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
               <Button variant="outline" size="sm" onClick={handleBackToAppointments}>Cancel</Button>
-              <Button 
-                variant="primary" 
-                size="sm" 
-                onClick={handleEndConsultation} 
-                disabled={isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isTemplatesLoading || isPatientLoading} 
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleEndConsultation}
+                disabled={isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isTemplatesLoading || isPatientLoading}
                 loading={isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isPatientLoading}
               >
                 {isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isPatientLoading ? "Processing..." : "End Consultation"}

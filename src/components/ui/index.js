@@ -20,6 +20,7 @@ export { Avatar } from './avatar';
 export { Checkbox } from './CheckBox';
 export { RadioGroup } from './RadioGroup';
 export { Pagination } from './Pagination';
+export { default as DatePicker } from "./DatePicker"; 
 
 
 // ---------- Fixed lines: source files use "export default" ----------

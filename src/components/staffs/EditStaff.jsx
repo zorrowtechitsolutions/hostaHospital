@@ -7,6 +7,7 @@ import {
   GraduationCap, DollarSign, ChevronDown, Users, Home, Clock
 } from 'lucide-react';
 import { Button, Input, Select, Card, Alert, Loader } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import {
   showUpdateToast, showDeleteToast, showSuccessToast,
   showErrorToast, showWarningToast
@@ -1011,17 +1012,38 @@ const EditStaff = () => {
                 </div>
               </div>
 
+              {/* Date of Birth & Joining Date — using custom DatePicker */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input 
-                  label="Date of Birth" name="dob" type="date" icon={Calendar} 
-                  value={formData.dob} 
-                  onChange={(e) => handleFieldChange('dob', e.target.value)} 
-                />
-                <Input 
-                  label="Joining Date" name="joiningDate" type="date" icon={Calendar} 
-                  value={formData.joiningDate} 
-                  onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.dob}
+                      onChange={(iso) => handleFieldChange('dob', iso)}
+                      mode="dob"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Joining Date
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.joiningDate}
+                      onChange={(iso) => handleFieldChange('joiningDate', iso)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Role */}

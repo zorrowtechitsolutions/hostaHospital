@@ -9,6 +9,7 @@ import {
 import { 
   Button, Input, Select, Textarea, Card, Alert, Loader 
 } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 import {
   useGetDoctorByIdQuery,
@@ -946,7 +947,6 @@ const EditDoctor = () => {
     showSuccessToast(`Booking status changed to ${!formData.bookingOpen ? 'Open' : 'Closed'}`, 2000);
   }, [formData.bookingOpen]);
 
-  // 🔥 FIXED: handleSubmit with proper error handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -1080,21 +1080,17 @@ const EditDoctor = () => {
     } catch (error) {
       console.error("Update Error:", error);
       
-      // 🔥 FIXED: Properly handle nested error structure
       if (error.status === 409) {
         showErrorToast('Email already exists! Please use a different email address.');
       } else if (error.data?.error?.details?.length) {
-        // Backend validation errors
         const validationMessages = error.data.error.details
           .map(detail => detail.message)
           .filter(Boolean);
         
         showErrorToast(`❌ ${validationMessages.join(', ')}`);
       } else if (error.data?.error?.message) {
-        // Backend general error
         showErrorToast(`❌ ${error.data.error.message}`);
       } else if (error.data?.message) {
-        // Fallback - works for the old format too
         showErrorToast(`❌ ${error.data.message}`);
       } else {
         showErrorToast("Failed to update doctor. Please try again.");
@@ -1305,15 +1301,23 @@ const EditDoctor = () => {
                     />
                   </div>
 
+                  {/* Joining Date & Experience — DatePicker for Joining Date */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Joining Date" 
-                      name="joiningDate" 
-                      type="date" 
-                      icon={Calendar} 
-                      value={formData.joiningDate} 
-                      onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Joining Date
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                        <DatePicker
+                          value={formData.joiningDate}
+                          onChange={(iso) => handleFieldChange('joiningDate', iso)}
+                          mode="any"
+                          placeholder="DD/MM/YYYY"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
                     <Input 
                       label="Experience (years)" 
                       name="experience" 
@@ -1427,16 +1431,23 @@ const EditDoctor = () => {
                     />
                   </div>
 
+                  {/* Date of Birth & Gender — DatePicker for DOB */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Date of Birth" 
-                      name="dob" 
-                      type="date" 
-                      icon={Calendar} 
-                      value={formData.dob} 
-                      onChange={(e) => handleFieldChange('dob', e.target.value)} 
-                      required 
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Date of Birth <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                        <DatePicker
+                          value={formData.dob}
+                          onChange={(iso) => handleFieldChange('dob', iso)}
+                          mode="dob"
+                          placeholder="DD/MM/YYYY"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
                     <Select 
                       label="Gender" 
                       name="gender" 

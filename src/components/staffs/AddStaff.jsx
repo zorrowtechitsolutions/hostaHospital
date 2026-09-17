@@ -30,6 +30,7 @@ import {
   Card,
   Switch
 } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
@@ -475,6 +476,17 @@ const AddStaff = () => {
     if (errors[name]) clearFieldError(name);
   };
 
+  /* =====================================================
+     DatePicker handler — receives ISO string (YYYY-MM-DD)
+     and routes through existing validation logic.
+     ===================================================== */
+  const handleDateChange = (field, isoDate) => {
+    updateFormData({ [field]: isoDate });
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateField(field, isoDate, { ...formData, [field]: isoDate });
+    setErrors(prev => ({ ...prev, [field]: error }));
+  };
+
   const handleShiftTimeBlur = (e) => {
     const { name } = e.target;
     setTouched(prev => ({ ...prev, [name]: true }));
@@ -857,11 +869,30 @@ const AddStaff = () => {
                   value={formData.phone} onChange={handleChange}
                   error={errors.phone} touched={touched.phone}
                 />
-                <Input 
-                  label="Date of Birth" name="dob" type="date" icon={Calendar}
-                  value={formData.dob} onChange={handleChange} onBlur={handleBlur}
-                  error={errors.dob} touched={touched.dob}
-                />
+
+                {/* Date of Birth — using custom DatePicker */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.dob}
+                      onChange={(iso) => handleDateChange('dob', iso)}
+                      mode="dob"
+                      placeholder="DD/MM/YYYY"
+                      className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent ${
+                        errors.dob && touched.dob
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#1C62A0]'
+                      }`}
+                    />
+                  </div>
+                  {errors.dob && touched.dob && (
+                    <p className="mt-1 text-sm text-red-500">{errors.dob}</p>
+                  )}
+                </div>
               </div>
 
               <div className={GRID_CLASS}>
@@ -919,10 +950,23 @@ const AddStaff = () => {
                     <p className="text-sm text-red-600 mt-1">{errors.designation}</p>
                   )}
                 </div>
-                <Input 
-                  label="Joining Date" name="joiningDate" type="date" icon={Calendar}
-                  value={formData.joiningDate} onChange={handleChange} 
-                />
+
+                {/* Joining Date — using custom DatePicker */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Joining Date
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.joiningDate}
+                      onChange={(iso) => handleDateChange('joiningDate', iso)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Staff Type and Job Type */}

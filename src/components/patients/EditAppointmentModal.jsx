@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Modal, Button } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { useUpdateBookingMutation } from '../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
@@ -28,8 +29,8 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
   useEffect(() => {
     if (doctorsData?.data) {
-      const doctorList = Array.isArray(doctorsData.data) 
-        ? doctorsData.data 
+      const doctorList = Array.isArray(doctorsData.data)
+        ? doctorsData.data
         : doctorsData.data?.rows || [];
       setDoctors(doctorList);
     }
@@ -39,9 +40,9 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
   useEffect(() => {
     if (appointment) {
       const booking = appointment;
-      
+
       let formattedDate = '';
-      const rawDate = 
+      const rawDate =
         booking.booking_date ||
         booking.appointmentDate ||
         booking.appointment_date ||
@@ -65,7 +66,7 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
       let formattedTime = '';
       const rawTime = booking.consulting_time || booking.time || '';
-      
+
       if (rawTime && rawTime !== 'N/A' && rawTime !== '') {
         if (rawTime.includes('AM') || rawTime.includes('PM')) {
           formattedTime = convertTo24Hour(rawTime);
@@ -76,7 +77,7 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
       const doctorId = booking.doctorId || booking.doctor?.id || booking.doctor_id || '';
 
-      const existingToken = 
+      const existingToken =
         booking.token ??
         booking.token_number ??
         booking.tokenNumber ??
@@ -148,24 +149,42 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
     }
   };
 
+  /* =====================================================
+     DatePicker handler — receives ISO string (YYYY-MM-DD)
+     from the DatePicker component.
+     ===================================================== */
+  const handleDateChange = (isoDate) => {
+    setFormData(prev => ({ ...prev, booking_date: isoDate }));
+    setTouched(prev => ({ ...prev, booking_date: true }));
+
+    // Clear any existing date error
+    setErrors(prev => ({ ...prev, booking_date: '' }));
+
+    // Re-validate if it was previously touched
+    const error = validateDate(isoDate);
+    if (error) {
+      setErrors(prev => ({ ...prev, booking_date: error }));
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
-    
+
     const patientNameError = validatePatientName(formData.patient_name);
     if (patientNameError) newErrors.patient_name = patientNameError;
-    
+
     const phoneError = validatePhone(formData.patient_phone);
     if (phoneError) newErrors.patient_phone = phoneError;
-    
+
     const doctorError = validateDoctor(formData.doctorId);
     if (doctorError) newErrors.doctorId = doctorError;
-    
+
     const dateError = validateDate(formData.booking_date);
     if (dateError) newErrors.booking_date = dateError;
-    
+
     const timeError = validateTime(formData.consulting_time);
     if (timeError) newErrors.consulting_time = timeError;
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -220,18 +239,18 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
           : undefined,
       };
 
-    
+
       await updateBooking({
         bookingNumber: Number(appointment.bookingNumber),
         data: updateData,
       }).unwrap();
 
       showSuccessToast('Appointment updated successfully!', 3000);
-      
+
       if (onSave) {
         onSave(updateData);
       }
-      
+
       onClose();
     } catch (error) {
       console.error('❌ Update error:', error);
@@ -334,18 +353,20 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
               )}
             </div>
 
+            {/* Appointment Date — using custom DatePicker */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Appointment Date *
               </label>
-              <input
-                type="date"
-                name="booking_date"
+              <DatePicker
                 value={formData.booking_date}
-                onChange={handleChange}
-                onBlur={handleBlur}
+                onChange={handleDateChange}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-                  errors.booking_date && touched.booking_date ? 'border-red-500' : 'border-gray-300'
+                  errors.booking_date && touched.booking_date
+                    ? 'border-red-500'
+                    : 'border-gray-300'
                 }`}
               />
               {errors.booking_date && touched.booking_date && (
@@ -394,9 +415,9 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
         <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button 
-          variant="primary" 
-          onClick={handleSubmit} 
+        <Button
+          variant="primary"
+          onClick={handleSubmit}
           disabled={isSubmitting}
           className="bg-blue-600 hover:bg-blue-700"
         >
