@@ -20,6 +20,8 @@ import {
   Mail,
   History,
   FileText,
+  // 👇 NEW: Attendance icon (choose any you like)
+  CalendarCheck,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -47,6 +49,8 @@ const menu = [
       { label: "Requests", icon: ClipboardList, path: "/requests", permissionId: 34 },
       { label: "Appointments", icon: FileClock, path: "/appointments", permissionId: 34 },
       { label: "Visits", icon: Activity, path: "/visits", permissionId: 34 },
+      // 👇 NEW: Attendance menu item
+      { label: "Attendance", icon: CalendarCheck, path: "/attendance" },
       { label: "Ambulance", icon: Ambulance, path: "/ambulance", permissionId: 30 },
       { label: "Blood Bank", icon: Droplet, path: "/blood", permissionId: 26 },
     ],

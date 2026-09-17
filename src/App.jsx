@@ -72,6 +72,7 @@ import AddPatient from "./components/patients/AddPatientModal";
 import ForgotPassword from "./Authentication/ForgotPassword";
 import Ambulance from "./components/Ambulance/Ambulance";
 import BloodBank from "./components/BloodBank/BloodBank";
+import Attendance from "./components/Attendance/Attendance";
 
 // Loading fallback component
 const PageLoader = () => (
@@ -362,6 +363,7 @@ function App() {
               } />
 
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/attendance" element={<Attendance/>} />
 
               {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
               <Route
