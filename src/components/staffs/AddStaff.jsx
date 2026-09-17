@@ -1,4 +1,4 @@
-// src/components/staffs/AddStaff.jsx - Single Tab Version
+// src/components/staffs/AddStaff.jsx - Single Tab Version with Shift Times
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,8 @@ import {
   Home,
   ChevronDown,
   CheckCircle,
-  XCircle
+  XCircle,
+  Clock
 } from 'lucide-react';
 import {
   Button,
@@ -46,23 +47,22 @@ const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
 
 // Static arrays
 const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
-const jobTypes = ['Day Shift', 'Night Shift', 'Remote', 'Hybrid'];
+const jobTypes = ['Day Shift', 'Night Shift'];
 const staffTypes = ['Permanent', 'Contract', 'Temporary', 'Intern'];
 const genders = ['male', 'female', 'other'];
 const languages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Arabic', 'Hindi', 'Bengali', 'Portuguese', 'Malayalam', 'Tamil', 'Telugu', 'Kannada'];
 
+// Shift types that require start & end time
+const SHIFT_TYPES_WITH_TIME = ['Day Shift', 'Night Shift'];
+
 // Helper function to get hospital ID
 const getHospitalId = () => {
   const storedHospitalId = localStorage.getItem('hospitalId');
-  if (storedHospitalId) {
-    return storedHospitalId;
-  }
-  
+  if (storedHospitalId) return storedHospitalId;
+
   const authUser = getAuthUser();
-  if (authUser?.hospitalId) {
-    return authUser.hospitalId;
-  }
-  
+  if (authUser?.hospitalId) return authUser.hospitalId;
+
   return null;
 };
 
@@ -70,16 +70,12 @@ const getHospitalId = () => {
 const removeUndefined = obj => {
   if (!obj) return obj;
   Object.keys(obj).forEach(key => {
-    if (obj[key] === undefined) {
-      delete obj[key];
-    }
+    if (obj[key] === undefined) delete obj[key];
   });
   return obj;
 };
 
 const buildPlace = (line1, line2) => `${line1} ${line2}`.trim();
-
-// ❌ REMOVED: Phone validation from frontend - let backend handle it
 
 // Validation functions
 const validateName = (name) => {
@@ -129,13 +125,9 @@ const validateDob = (dob) => {
 
 const validateImage = (file) => {
   if (!file) return '';
-  if (file.size > MAX_FILE_SIZE) {
-    return 'File size must be less than 5MB';
-  }
+  if (file.size > MAX_FILE_SIZE) return 'File size must be less than 5MB';
   const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  if (!validTypes.includes(file.type)) {
-    return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
-  }
+  if (!validTypes.includes(file.type)) return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
   return '';
 };
 
@@ -150,22 +142,14 @@ const validators = {
 };
 
 const validateField = (name, value, formData) => {
-  if (name === 'confirmPassword') {
-    return validateConfirmPassword(value, formData.password);
-  }
+  if (name === 'confirmPassword') return validateConfirmPassword(value, formData.password);
   return validators[name]?.(value) || '';
 };
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
-  icon: Icon,
-  disabled = false,
-  required = false,
+  label, options, value, onChange, placeholder, icon: Icon,
+  disabled = false, required = false,
   getOptionLabel = (option) => option.name || option,
   getOptionValue = (option) => option.isoCode || option,
   optionKey = (option, index) => option.isoCode || index,
@@ -213,14 +197,8 @@ const SearchableDropdown = ({
         <input
           type="text"
           value={isOpen ? searchTerm : displayValue()}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-            setSearchTerm("");
-          }}
+          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
           placeholder={isLoading ? "Loading..." : placeholder}
           disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
@@ -228,9 +206,7 @@ const SearchableDropdown = ({
           }`}
         />
         <ChevronDown 
-          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${isOpen ? 'rotate-180' : ''}`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
@@ -255,33 +231,14 @@ const SearchableDropdown = ({
           No options found
         </div>
       )}
-
-      {isLoading && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          <div className="flex items-center justify-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1C62A0]"></div>
-            <span>Loading...</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 // Password Input Component
 const PasswordInput = ({ 
-  label, 
-  name, 
-  value, 
-  onChange, 
-  onBlur, 
-  error, 
-  touched, 
-  showPassword, 
-  setShowPassword,
-  placeholder,
-  icon: Icon,
-  required
+  label, name, value, onChange, onBlur, error, touched,
+  showPassword, setShowPassword, placeholder, icon: Icon, required
 }) => (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -308,9 +265,7 @@ const PasswordInput = ({
         {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
       </button>
     </div>
-    {error && touched && (
-      <p className="mt-1 text-sm text-red-500">{error}</p>
-    )}
+    {error && touched && <p className="mt-1 text-sm text-red-500">{error}</p>}
     {name === 'password' && value && !error && (
       <p className="text-xs text-green-600 mt-1">✓ Password is strong</p>
     )}
@@ -325,6 +280,89 @@ const PasswordInput = ({
   </div>
 );
 
+// Shift Time Input Component (Clean - matches form styling)
+const ShiftTimeInput = ({ 
+  shiftStartTime, shiftEndTime, onChange, errors, touched, onBlur 
+}) => {
+  const getDurationDisplay = () => {
+    if (!shiftStartTime || !shiftEndTime) return null;
+    const [startH, startM] = shiftStartTime.split(':').map(Number);
+    const [endH, endM] = shiftEndTime.split(':').map(Number);
+    let startMinutes = startH * 60 + startM;
+    let endMinutes = endH * 60 + endM;
+    if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+    const durationMinutes = endMinutes - startMinutes;
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
+  const duration = getDurationDisplay();
+  const isOvernight = shiftStartTime && shiftEndTime && shiftEndTime <= shiftStartTime;
+
+  return (
+    <div className={GRID_CLASS}>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift Start Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftStartTime"
+            value={shiftStartTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftStartTime && touched.shiftStartTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftStartTime && touched.shiftStartTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftStartTime}</p>
+        )}
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift End Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftEndTime"
+            value={shiftEndTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftEndTime && touched.shiftEndTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftEndTime && touched.shiftEndTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftEndTime}</p>
+        )}
+      </div>
+
+      {/* Duration + Overnight badges (only when both times are filled) */}
+      {duration && (
+        <div className="md:col-span-2 flex items-center gap-2 flex-wrap -mt-2">
+          <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+            ⏱ Duration: {duration}
+          </span>
+          {isOvernight && (
+            <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              🌙 Overnight Shift
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AddStaff = () => {
   const navigate = useNavigate();
   const [createStaff, { isLoading: isApiLoading }] = useCreateStaffMutation();
@@ -334,16 +372,10 @@ const AddStaff = () => {
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
 
-  // Fetch roles
-  const {
-    data: rolesData,
-    isLoading: rolesLoading,
-  } = useGetRolesQuery({
-    hospitalId,
-    limit: 100
-  }, {
-    skip: !hospitalId
-  });
+  const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery(
+    { hospitalId, limit: 100 },
+    { skip: !hospitalId }
+  );
 
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
@@ -352,35 +384,18 @@ const AddStaff = () => {
 
   // Form state
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    phone: '',
-    designation: '',
-    roleId: '',
-    joiningDate: '',
-    jobType: '',
-    staffType: '',
-    dob: '',
-    gender: 'male',
-    knowLanguages: [],
-    qualification: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
-    stateName: '',
-    district: '',
-    place: '',
-    pincode: '',
-    addressLine1: '',
-    addressLine2: '',
-    status: 'active',
-    profileImage: null,
-    imageKey: '',
+    name: '', email: '', password: '', confirmPassword: '',
+    phone: '', designation: '', roleId: '', joiningDate: '',
+    jobType: '', staffType: '', dob: '', gender: 'male',
+    knowLanguages: [], qualification: '',
+    countryCode: '', countryName: '', stateCode: '', stateName: '',
+    district: '', place: '', pincode: '',
+    addressLine1: '', addressLine2: '',
+    status: 'active', profileImage: null, imageKey: '',
+    // ✅ Shift time fields
+    shiftStartTime: '', shiftEndTime: '',
   });
 
-  // Countries/States/Cities
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(formData.countryCode);
   const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
@@ -393,52 +408,30 @@ const AddStaff = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
 
-  // Helper functions
-  const updateFormData = (updates) => {
-    setFormData(prev => ({
-      ...prev,
-      ...updates
-    }));
-  };
+  // ✅ Whether shift time fields should be shown
+  const requiresShiftTime = SHIFT_TYPES_WITH_TIME.includes(formData.jobType);
 
-  const clearFieldError = (field) => {
-    setErrors(prev => ({
-      ...prev,
-      [field]: ''
-    }));
-  };
+  const updateFormData = (updates) => setFormData(prev => ({ ...prev, ...updates }));
+  const clearFieldError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
 
-  // Navigation
-  const handleGoBack = () => {
-    navigate(STAFFS_ROUTE);
-  };
+  const handleGoBack = () => navigate(STAFFS_ROUTE);
 
   // Address handlers
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
-      ...prev,
-      countryCode: code,
-      countryName: name,
-      stateCode: '',
-      stateName: '',
-      district: ''
+      ...prev, countryCode: code, countryName: name,
+      stateCode: '', stateName: '', district: ''
     }));
   };
 
   const handleStateChange = (code, name) => {
     setFormData(prev => ({
-      ...prev,
-      stateCode: code,
-      stateName: name,
-      district: ''
+      ...prev, stateCode: code, stateName: name, district: ''
     }));
   };
 
   const handleCityChange = (name) => {
-    setFormData(prev => ({
-      ...prev,
-      district: name
-    }));
+    setFormData(prev => ({ ...prev, district: name }));
   };
 
   // Form handlers
@@ -459,7 +452,18 @@ const AddStaff = () => {
         address: { ...prev.address, [addressField]: value }
       }));
     } else {
-      // ❌ REMOVED: Phone restriction - let backend handle validation
+      // ✅ Clear shift time fields if job type changes away from shift types
+      if (name === 'jobType' && !SHIFT_TYPES_WITH_TIME.includes(value)) {
+        setFormData(prev => ({
+          ...prev,
+          jobType: value,
+          shiftStartTime: '',
+          shiftEndTime: ''
+        }));
+        setErrors(prev => ({ ...prev, shiftStartTime: '', shiftEndTime: '' }));
+        setTouched(prev => ({ ...prev, shiftStartTime: false, shiftEndTime: false }));
+        return;
+      }
       updateFormData({ [name]: type === 'checkbox' ? checked : value });
     }
     
@@ -471,22 +475,28 @@ const AddStaff = () => {
     if (errors[name]) clearFieldError(name);
   };
 
+  const handleShiftTimeBlur = (e) => {
+    const { name } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
+    if (!e.target.value) {
+      setErrors(prev => ({ 
+        ...prev, 
+        [name]: name === 'shiftStartTime' ? 'Shift start time is required' : 'Shift end time is required' 
+      }));
+    } else {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
   const handleAddressLineChange = (e) => {
     const { name, value } = e.target;
-    
     setFormData(prev => {
-      const updatedData = {
-        ...prev,
-        [name]: value
-      };
-      
+      const updatedData = { ...prev, [name]: value };
       const combinedPlace = buildPlace(
         name === 'addressLine1' ? value : prev.addressLine1,
         name === 'addressLine2' ? value : prev.addressLine2
       );
-      
       updatedData.place = combinedPlace;
-      
       return updatedData;
     });
   };
@@ -511,24 +521,19 @@ const AddStaff = () => {
   // Image handlers
   const handleImageUpload = async (file) => {
     if (!file) return false;
-    
     const imageError = validateImage(file);
     if (imageError) {
       setErrors(prev => ({ ...prev, profileImage: imageError }));
       showWarningToast(imageError, TOAST_DURATION);
       return false;
     }
-
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
 
     try {
       const uploaded = await uploadToS3(file);
-      updateFormData({
-        profileImage: uploaded.key,
-        imageKey: uploaded.key
-      });
+      updateFormData({ profileImage: uploaded.key, imageKey: uploaded.key });
       showSuccessToast('Image uploaded successfully!', TOAST_DURATION);
       return true;
     } catch {
@@ -549,7 +554,6 @@ const AddStaff = () => {
     showSuccessToast('Image removed', TOAST_DURATION);
   };
 
-  // Status toggle
   const handleStatusToggle = () => {
     setFormData(prev => ({
       ...prev,
@@ -557,7 +561,6 @@ const AddStaff = () => {
     }));
   };
 
-  // Role helpers
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
@@ -574,7 +577,6 @@ const AddStaff = () => {
   // Validation
   const validateForm = () => {
     const newErrors = {};
-    // ❌ REMOVED: 'phone' from required fields - let backend handle it
     const requiredFields = ['name', 'email', 'password', 'designation', 'roleId'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field], formData);
@@ -586,12 +588,17 @@ const AddStaff = () => {
     
     const dobError = validateDob(formData.dob);
     if (dobError) newErrors.dob = dobError;
+
+    // ✅ Shift time validation
+    if (requiresShiftTime) {
+      if (!formData.shiftStartTime) newErrors.shiftStartTime = 'Shift start time is required';
+      if (!formData.shiftEndTime) newErrors.shiftEndTime = 'Shift end time is required';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -600,11 +607,14 @@ const AddStaff = () => {
       return;
     }
 
-    // Mark all fields as touched
     const touchedFields = {};
     ['name', 'email', 'password', 'confirmPassword', 'designation', 'roleId'].forEach(field => {
       touchedFields[field] = true;
     });
+    if (requiresShiftTime) {
+      touchedFields.shiftStartTime = true;
+      touchedFields.shiftEndTime = true;
+    }
     setTouched(touchedFields);
 
     if (!validateForm()) {
@@ -624,7 +634,7 @@ const AddStaff = () => {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        roleId: Number(formData.roleId),
+        roleId: roleId,
         phone: formData.phone,
         designation: formData.designation,
         joiningDate: formData.joiningDate || undefined,
@@ -636,6 +646,9 @@ const AddStaff = () => {
         qualification: formData.qualification || undefined,
         hospitalName: hospitalName,
         hospitalId: hospitalId,
+        // ✅ Shift times (only send when applicable)
+        shiftStartTime: requiresShiftTime ? formData.shiftStartTime : undefined,
+        shiftEndTime: requiresShiftTime ? formData.shiftEndTime : undefined,
         address: {
           country: formData.countryName || undefined,
           state: formData.stateName || undefined,
@@ -649,9 +662,7 @@ const AddStaff = () => {
       };
 
       removeUndefined(staffData);
-      if (staffData.address) {
-        removeUndefined(staffData.address);
-      }
+      if (staffData.address) removeUndefined(staffData.address);
 
       const response = await createStaff(staffData).unwrap();
       const staff = response.data;
@@ -661,12 +672,7 @@ const AddStaff = () => {
           hospitalId: Number(hospitalId),
           roleId: roleId,
           userType: "staff",
-          staffIds: [
-            {
-              id: Number(staff.id),
-              roleId: roleId
-            }
-          ]
+          staffIds: [{ id: Number(staff.id), roleId: roleId }]
         };
         await assignPermissions(payload).unwrap();
       }
@@ -681,26 +687,24 @@ const AddStaff = () => {
           'Designation': formData.designation,
           'Role': selectedRoleName,
           'Hospital': hospitalName,
-          'Status': isActive ? 'Active' : 'Inactive'
+          'Status': isActive ? 'Active' : 'Inactive',
+          ...(requiresShiftTime ? {
+            'Shift Start': formData.shiftStartTime,
+            'Shift End': formData.shiftEndTime
+          } : {})
         }
       );
 
       setIsSubmitting(false);
-      setTimeout(() => {
-        navigate(STAFFS_ROUTE);
-      }, 2000);
+      setTimeout(() => navigate(STAFFS_ROUTE), 2000);
 
     } catch (error) {
       console.error('Create Staff Error:', error);
-      
-      // ✅ IMPROVED: Extract error message from various response formats
       const status = error?.status || error?.originalStatus;
       
       if (status === 401) {
         showErrorToast('Session expired. Please login again.', TOAST_DURATION);
-        setTimeout(() => {
-          window.location.href = '/sign-in';
-        }, 2000);
+        setTimeout(() => { window.location.href = '/sign-in'; }, 2000);
         return;
       }
       
@@ -811,97 +815,56 @@ const AddStaff = () => {
                 </div>
               </div>
 
-              {/* Basic Info Grid */}
+              {/* Basic Info */}
               <div className={GRID_CLASS}>
                 <Input 
-                  label="Full Name" 
-                  name="name" 
-                  icon={User}
+                  label="Full Name" name="name" icon={User}
                   placeholder="Enter full name"
-                  value={formData.name} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.name} 
-                  touched={touched.name}
-                  required 
+                  value={formData.name} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.name} touched={touched.name} required 
                 />
-                
                 <Input 
-                  label="Email" 
-                  name="email" 
-                  type="email" 
-                  icon={Mail}
+                  label="Email" name="email" type="email" icon={Mail}
                   placeholder="staff@example.com"
-                  value={formData.email} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.email} 
-                  touched={touched.email}
-                  required 
+                  value={formData.email} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.email} touched={touched.email} required 
                 />
               </div>
 
               <div className={GRID_CLASS}>
                 <PasswordInput
-                  label="Password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.password}
-                  touched={touched.password}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
+                  label="Password" name="password"
+                  value={formData.password} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.password} touched={touched.password}
+                  showPassword={showPassword} setShowPassword={setShowPassword}
                   placeholder="Create password (min 8 characters)"
-                  icon={Lock}
-                  required
+                  icon={Lock} required
                 />
-                
                 <PasswordInput
-                  label="Confirm Password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.confirmPassword}
-                  touched={touched.confirmPassword}
-                  showPassword={showConfirmPassword}
-                  setShowPassword={setShowConfirmPassword}
+                  label="Confirm Password" name="confirmPassword"
+                  value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.confirmPassword} touched={touched.confirmPassword}
+                  showPassword={showConfirmPassword} setShowPassword={setShowConfirmPassword}
                   placeholder="Confirm your password"
-                  icon={Lock}
-                  required
+                  icon={Lock} required
                 />
               </div>
 
               <div className={GRID_CLASS}>
                 <Input 
-                  label="Phone Number" 
-                  name="phone" 
-                  type="tel" 
-                  icon={Phone}
+                  label="Phone Number" name="phone" type="tel" icon={Phone}
                   placeholder="10 digit phone number"
-                  value={formData.phone} 
-                  onChange={handleChange} 
-                  // ❌ REMOVED: onBlur validation for phone - let backend handle it
-                  error={errors.phone} 
-                  touched={touched.phone}
+                  value={formData.phone} onChange={handleChange}
+                  error={errors.phone} touched={touched.phone}
                 />
-
                 <Input 
-                  label="Date of Birth" 
-                  name="dob" 
-                  type="date" 
-                  icon={Calendar}
-                  value={formData.dob} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.dob} 
-                  touched={touched.dob}
+                  label="Date of Birth" name="dob" type="date" icon={Calendar}
+                  value={formData.dob} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.dob} touched={touched.dob}
                 />
               </div>
 
               <div className={GRID_CLASS}>
-                {/* Gender Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Gender <span className="text-red-500">*</span>
@@ -922,14 +885,10 @@ const AddStaff = () => {
                     </select>
                   </div>
                 </div>
-
                 <Input 
-                  label="Qualification" 
-                  name="qualification" 
-                  icon={GraduationCap}
+                  label="Qualification" name="qualification" icon={GraduationCap}
                   placeholder="MBA, B.Tech, etc."
-                  value={formData.qualification} 
-                  onChange={handleChange} 
+                  value={formData.qualification} onChange={handleChange} 
                 />
               </div>
 
@@ -960,17 +919,13 @@ const AddStaff = () => {
                     <p className="text-sm text-red-600 mt-1">{errors.designation}</p>
                   )}
                 </div>
-
                 <Input 
-                  label="Joining Date" 
-                  name="joiningDate" 
-                  type="date" 
-                  icon={Calendar}
-                  value={formData.joiningDate} 
-                  onChange={handleChange} 
+                  label="Joining Date" name="joiningDate" type="date" icon={Calendar}
+                  value={formData.joiningDate} onChange={handleChange} 
                 />
               </div>
 
+              {/* Staff Type and Job Type */}
               <div className={GRID_CLASS}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Staff Type</label>
@@ -1009,7 +964,19 @@ const AddStaff = () => {
                 </div>
               </div>
 
-              {/* Role Assignment */}
+              {/* ✅ Shift Time Fields — only for Day Shift / Night Shift */}
+              {requiresShiftTime && (
+                <ShiftTimeInput
+                  shiftStartTime={formData.shiftStartTime}
+                  shiftEndTime={formData.shiftEndTime}
+                  onChange={handleChange}
+                  onBlur={handleShiftTimeBlur}
+                  errors={errors}
+                  touched={touched}
+                />
+              )}
+
+              {/* Role */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Assign Role <span className="text-red-500">*</span>
@@ -1045,12 +1012,9 @@ const AddStaff = () => {
                 )}
               </div>
 
-              {/* Languages Known */}
+              {/* Languages */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Known Languages
-                </label>
-                
+                <label className="block text-sm font-medium text-gray-700">Known Languages</label>
                 {formData.knowLanguages.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
                     {formData.knowLanguages.map(lang => (
@@ -1063,7 +1027,6 @@ const AddStaff = () => {
                     ))}
                   </div>
                 )}
-                
                 <div className="relative">
                   <button
                     type="button"
@@ -1075,7 +1038,6 @@ const AddStaff = () => {
                     </span>
                     <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  
                   {isLanguageDropdownOpen && (
                     <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
                       {languages.map(lang => (
@@ -1094,81 +1056,55 @@ const AddStaff = () => {
                 </div>
               </div>
 
-              {/* Address Information */}
+              {/* Address */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                 <div className="space-y-5">
                   <SearchableDropdown
-                    label="Country"
-                    options={countries}
-                    value={formData.countryCode}
-                    onChange={handleCountryChange}
-                    placeholder="Search for a country..."
-                    icon={MapPin}
+                    label="Country" options={countries}
+                    value={formData.countryCode} onChange={handleCountryChange}
+                    placeholder="Search for a country..." icon={MapPin}
                   />
-
                   <SearchableDropdown
-                    label="State"
-                    options={states}
-                    value={formData.stateCode}
-                    onChange={handleStateChange}
-                    placeholder="Search for a state..."
-                    icon={MapPin}
+                    label="State" options={states}
+                    value={formData.stateCode} onChange={handleStateChange}
+                    placeholder="Search for a state..." icon={MapPin}
                     disabled={!formData.countryCode}
                   />
-
                   <SearchableDropdown
-                    label="District"
-                    options={cities}
-                    value={formData.district}
-                    onChange={handleCityChange}
-                    placeholder="Search for a district..."
-                    icon={MapPin}
+                    label="District" options={cities}
+                    value={formData.district} onChange={handleCityChange}
+                    placeholder="Search for a district..." icon={MapPin}
                     disabled={!formData.stateCode}
                     getOptionLabel={(option) => option.name}
                     getOptionValue={(option) => option.name}
                   />
-
                   <div className={GRID_CLASS}>
                     <Input 
-                      label="Address Line 1" 
-                      name="addressLine1" 
-                      icon={Home}
+                      label="Address Line 1" name="addressLine1" icon={Home}
                       placeholder="Street address"
-                      value={formData.addressLine1} 
-                      onChange={handleAddressLineChange} 
+                      value={formData.addressLine1} onChange={handleAddressLineChange} 
                     />
                     <Input 
-                      label="Address Line 2" 
-                      name="addressLine2" 
-                      icon={Home}
+                      label="Address Line 2" name="addressLine2" icon={Home}
                       placeholder="Apt, suite, unit (optional)"
-                      value={formData.addressLine2} 
-                      onChange={handleAddressLineChange} 
+                      value={formData.addressLine2} onChange={handleAddressLineChange} 
                     />
                   </div>
-
                   <div className={GRID_CLASS}>
                     <Input 
-                      label="Place" 
-                      name="place" 
-                      placeholder="Place/Locality"
-                      value={formData.place} 
-                      onChange={handleChange} 
+                      label="Place" name="place" placeholder="Place/Locality"
+                      value={formData.place} onChange={handleChange} 
                     />
                     <Input 
-                      label="Pincode" 
-                      name="pincode" 
-                      placeholder="Postal code"
-                      value={formData.pincode} 
-                      onChange={handleChange} 
-                      maxLength={6}
+                      label="Pincode" name="pincode" placeholder="Postal code"
+                      value={formData.pincode} onChange={handleChange} maxLength={6}
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Status Toggle */}
+              {/* Status */}
               <div className="pt-4 border-t border-gray-200">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-center justify-between">
@@ -1202,16 +1138,14 @@ const AddStaff = () => {
               </div>
             </div>
 
-            {/* Form Actions */}
+            {/* Actions */}
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
               <Button variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
                 Cancel
               </Button>
               <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={isFormSubmitting}
-                loading={isFormSubmitting}
+                type="submit" variant="primary" 
+                disabled={isFormSubmitting} loading={isFormSubmitting}
               >
                 {isFormSubmitting ? 'Saving...' : 'Save Staff'}
               </Button>
