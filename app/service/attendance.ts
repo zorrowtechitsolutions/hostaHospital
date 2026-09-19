@@ -43,6 +43,9 @@ export interface GetAttendancesParams {
   status?: string;
   type?: string;
   department?: string;
+  search?: string;
+  today?: boolean;
+  date?: string;
   page?: number;
   limit?: number;
   skipHospitalFilter?: boolean;
@@ -129,6 +132,21 @@ export const attendanceApi = api.injectEndpoints({
         // Employee type filter
         if (params.employeeType) {
           queryParams.append("employeeType", params.employeeType);
+        }
+
+        // ✅ Search filter (name / employeeType)
+        if (params.search?.trim()) {
+          queryParams.append("search", params.search.trim());
+        }
+
+        // ✅ Today filter (IST day range)
+        if (params.today === true) {
+          queryParams.append("today", "true");
+        }
+
+        // ✅ Date filter (specific day)
+        if (params.date) {
+          queryParams.append("date", params.date);
         }
 
         // Status filter
