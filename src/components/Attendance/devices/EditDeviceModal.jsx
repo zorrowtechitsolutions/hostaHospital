@@ -32,15 +32,6 @@ import {
 /* ------------------------------------------------------------------ */
 /* Option lists                                                        */
 /* ------------------------------------------------------------------ */
-const LOCATION_OPTIONS = [
-  { value: 'Main Entrance', label: 'Main Entrance' },
-  { value: 'Staff Lobby', label: 'Staff Lobby' },
-  { value: 'Reception', label: 'Reception' },
-  { value: 'Ward A', label: 'Ward A' },
-  { value: 'Emergency', label: 'Emergency' },
-  { value: 'Parking Area', label: 'Parking Area' },
-];
-
 const DEVICE_TYPE_OPTIONS = [
   { value: 'rfid', label: 'RFID' },
   { value: 'fingerprint', label: 'Fingerprint' },
@@ -209,7 +200,7 @@ const EditDevicePage = () => {
 
   const [formData, setFormData] = useState({
     deviceName: '',
-    location: 'Main Entrance',
+    location: '',
     deviceType: 'rfid',
     status: 'Active',
     description: '',
@@ -259,7 +250,7 @@ const EditDevicePage = () => {
 
     setFormData({
       deviceName: device.deviceName ?? '',
-      location: device.location ?? 'Main Entrance',
+      location: device.location ?? '',
       deviceType: DEVICE_TYPE_OPTIONS.some((o) => o.value === incomingType)
         ? incomingType
         : DEVICE_TYPE_OPTIONS[0].value,
@@ -423,7 +414,7 @@ const EditDevicePage = () => {
     try {
       const payload = {
         deviceName: formData.deviceName.trim(),
-        location: formData.location,
+        location: formData.location.trim(),
         deviceType: formData.deviceType,
         status: formData.status,
         ...(formData.description?.trim()
@@ -571,12 +562,12 @@ const EditDevicePage = () => {
                     hint="Friendly name for the device"
                     required
                   />
-                  <EditableSelect
+                  <EditableField
                     label="Location"
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    options={LOCATION_OPTIONS}
+                    placeholder="e.g., Main Entrance"
                     hint="Physical location of the device"
                     required
                   />
@@ -682,7 +673,7 @@ const EditDevicePage = () => {
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Location</p>
                     <p className="text-sm font-medium text-gray-800">
-                      {formData.location}
+                      {formData.location || '—'}
                     </p>
                   </div>
 

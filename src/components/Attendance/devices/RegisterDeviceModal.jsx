@@ -29,14 +29,15 @@ const DEVICE_TYPE_OPTIONS = [
   { value: 'face', label: 'Face Recognition' },
 ];
 
-const LOCATION_OPTIONS = [
-  { value: 'Main Entrance', label: 'Main Entrance' },
-  { value: 'Staff Lobby', label: 'Staff Lobby' },
-  { value: 'Reception', label: 'Reception' },
-  { value: 'Ward A', label: 'Ward A' },
-  { value: 'Emergency', label: 'Emergency' },
-  { value: 'Parking Area', label: 'Parking Area' },
-];
+/* Kept OUTSIDE the component so it's not re-created on every render */
+const INITIAL_FORM_DATA = {
+  deviceId: '',
+  deviceName: '',
+  location: '',
+  hospitalId: '',
+  deviceType: 'rfid',
+  description: '',
+};
 
 /* --------------------------- Primitives --------------------------- */
 const Card = ({ children, className = '' }) => (
@@ -79,18 +80,24 @@ const EditableField = ({ label, name, value, onChange, placeholder, required, hi
 
 const EditableSelect = ({ label, name, value, onChange, options, required, hint }) => (
   <div className="mb-4 min-w-0">
-    <label className="block text-xs font-medium text-gray-600 mb-1">
+    <label
+      htmlFor={name}
+      className="block text-xs font-medium text-gray-600 mb-1"
+    >
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <select
+      id={name}
       name={name}
-      value={value}
+      value={value ?? ''}
       onChange={onChange}
       required={required}
       className="w-full min-w-0 border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-gray-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]/30 focus:border-[#1C62A0] transition-all cursor-pointer"
     >
       {options.map(({ value: v, label: l }) => (
-        <option key={v} value={v}>{l}</option>
+        <option key={v} value={v} style={{ color: '#111' }}>
+          {l}
+        </option>
       ))}
     </select>
     {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
@@ -195,16 +202,7 @@ const ImagePanel = ({
 const RegisterDevicePage = () => {
   const navigate = useNavigate();
 
-  const initialFormData = {
-    deviceId: '',
-    deviceName: '',
-    location: 'Main Entrance',
-    hospitalId: '',
-    deviceType: 'rfid',
-    description: '',
-  };
-
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [errorMessage, setErrorMessage] = useState('');
   const [credentials, setCredentials] = useState(null);
 
@@ -229,6 +227,7 @@ const RegisterDevicePage = () => {
         auth?.hospitalId ||
         (auth?.hospital?.id ? String(auth.hospital.id) : ''),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -297,7 +296,7 @@ const RegisterDevicePage = () => {
         hospitalId: Number(formData.hospitalId),
         deviceId: formData.deviceId.trim(),
         deviceName: formData.deviceName.trim(),
-        location: formData.location,
+        location: formData.location.trim(),
         deviceType: formData.deviceType,
       };
 
@@ -438,12 +437,12 @@ const RegisterDevicePage = () => {
                     hint="Friendly name for the device"
                     required
                   />
-                  <EditableSelect
+                  <EditableField
                     label="Location"
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    options={LOCATION_OPTIONS}
+                    placeholder="e.g., Main Entrance"
                     hint="Physical location of the device"
                     required
                   />
@@ -525,7 +524,7 @@ const RegisterDevicePage = () => {
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Location</p>
                     <p className="text-sm font-medium text-gray-800">
-                      {formData.location}
+                      {formData.location || '—'}
                     </p>
                   </div>
 
