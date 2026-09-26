@@ -9,7 +9,7 @@ import {
 import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
-import SalarySlipTemplate from './SalarySlipTemplate'; // ✅ NEW IMPORT
+// import SalarySlipTemplate from './SalarySlipTemplate'; // ✅ NEW IMPORT
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import {
