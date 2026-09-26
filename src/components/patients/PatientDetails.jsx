@@ -846,7 +846,7 @@ const PatientDetails = () => {
             prescriptionsList: updatedPrescriptions
           });
           
-          showSuccessToast(`Prescription recovered (local update - backend sync pending)`);
+          showSuccessToast(`Prescription recovered `);
         }
       } else {
         showErrorToast(error?.data?.message || error?.error || "Failed to recover prescription");

@@ -1,6 +1,6 @@
 // src/components/devices/Device.jsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // ✅ CHANGED: added
+import { useNavigate } from 'react-router-dom';
 import {
   XCircle,
   Search,
@@ -20,8 +20,6 @@ import {
 import { Breadcrumb } from '../../ui/Breadcrumb';
 import { Pagination, SearchBar } from '../../ui';
 import { Button } from '../../ui/button';
-// ✅ CHANGED: removed EditDeviceModal import (no more edit modal)
-// ✅ CHANGED: removed RegisterDeviceModal import (already gone)
 import DeviceDetails from './DeviceDetails';
 import DeviceCredentialsModal from './credentials/DeviceCredentialsModal';
 import DeleteModal from '../../patients/DeleteModel';
@@ -33,6 +31,12 @@ import {
   useRestoreDeviceMutation,
 } from '../../../../app/service/device';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+
+// ✅ Real-time device events (matches backend handleDeviceEvent)
+import {
+  registerDeviceEvents,
+  unregisterDeviceEvents,
+} from '../../../socket/deviceEvents';
 
 /* ------------------------------------------------------------------ */
 /* Popup: Confirm dialog (replaces window.confirm)                     */
@@ -180,7 +184,7 @@ const AlertModal = ({ isOpen, type = 'info', title, message, onClose }) => {
 /* Main component                                                      */
 /* ------------------------------------------------------------------ */
 const Device = () => {
-  const navigate = useNavigate(); // ✅ CHANGED: used for register + edit navigation
+  const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -192,9 +196,6 @@ const Device = () => {
 
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const dropdownRef = useRef(null);
-
-  // ✅ CHANGED: removed isModalOpen (register modal)
-  // ✅ CHANGED: removed isEditModalOpen + deviceToEdit (edit modal)
 
   // Selected device for the details view
   const [selectedDevice, setSelectedDevice] = useState(null);
@@ -280,6 +281,44 @@ const Device = () => {
   const deviceData = deviceResponse?.data ?? [];
 
   // ============================================================
+  // REAL-TIME DEVICE EVENTS
+  // Mirrors backend handleDeviceEvent routing keys.
+  // SuperAdmin is in room "role_1"; hospital admins in "hospital_<id>".
+  // ============================================================
+  useEffect(() => {
+    registerDeviceEvents({
+      onRegistered: ({ message }) => {
+        showSuccessToast(message || 'A new device was registered.');
+        refetch();
+      },
+      onUpdated: ({ message }) => {
+        showSuccessToast(message || 'A device was updated.');
+        refetch();
+      },
+      onUnregistered: ({ message }) => {
+        showErrorToast(message || 'A device was unregistered.');
+        refetch();
+      },
+      onRestored: ({ message }) => {
+        showSuccessToast(message || 'A device was restored.');
+        refetch();
+      },
+      onDeleted: ({ message }) => {
+        showErrorToast(message || 'A device was permanently deleted.');
+        refetch();
+      },
+      onCredentialsRegenerated: ({ message }) => {
+        showSuccessToast(message || 'Device credentials regenerated.');
+        refetch();
+      },
+    });
+
+    return () => {
+      unregisterDeviceEvents();
+    };
+  }, [refetch]);
+
+  // ============================================================
   // NORMALIZE ROW (matches backend fields)
   // ============================================================
   const normalizeRow = (row, index) => {
@@ -348,18 +387,14 @@ const Device = () => {
     setCurrentPage(1);
   };
 
-  // ✅ CHANGED: navigate to the standalone register page
   const handleRegisterDevice = () => {
     navigate('/devices/register');
   };
 
-  // ✅ CHANGED: navigate to the standalone edit page instead of opening a modal
   const handleEdit = (row) => {
     setOpenDropdownId(null);
     navigate(`/devices/edit/${row.id}`);
   };
-
-  // ✅ CHANGED: removed handleDeviceUpdated (no longer needed — the edit page handles refetch)
 
   // ── Unregister (soft delete) — confirm popup + toast ──
   const doUnregister = async (row) => {
@@ -479,7 +514,7 @@ const Device = () => {
 
       showSuccessToast(`"${row.name}" restored successfully.`);
 
-      // 🆕 Show the NEW credentials returned by the restore endpoint
+      // Show the NEW credentials returned by the restore endpoint
       const creds = res?.credentials;
       if (creds?.apiKey || creds?.secretKey) {
         setRestoredCredentials({
@@ -845,9 +880,6 @@ const Device = () => {
           )}
         </div>
       </div>
-
-      {/* ✅ CHANGED: RegisterDeviceModal removed — now on its own route (/devices/register) */}
-      {/* ✅ CHANGED: EditDeviceModal removed — now on its own route (/devices/edit/:id) */}
 
       {/* ── Restore Credentials Modal (shows NEW api key after restore) ── */}
       <DeviceCredentialsModal
