@@ -28,7 +28,8 @@ import {
   Link as LinkIcon,
   School,
   Heart,
-  Monitor, // Add this import
+  Monitor,
+  ClipboardCheck, // ✅ Added for Attendance card
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
@@ -721,9 +722,19 @@ const HospitalDetails = () => {
     });
   };
 
-  // NEW: Navigation to Session History
+  // Navigation to Session History
   const navigateToSessions = () => {
     navigate(`/super-admin/hospitals/${id}/sessions`, { 
+      state: { 
+        hospitalId: hospital.id,
+        hospitalName: hospital.name 
+      } 
+    });
+  };
+
+  // ✅ NEW: Navigation to Attendance
+  const navigateToAttendance = () => {
+    navigate(`/super-admin/hospital-attendance`, { 
       state: { 
         hospitalId: hospital.id,
         hospitalName: hospital.name 
@@ -861,7 +872,7 @@ const HospitalDetails = () => {
       description: `${notificationCount} unread notification${notificationCount !== 1 ? 's' : ''}`,
       actionLabel: 'View Notifications'
     },
-    // NEW: Session History Card
+    // Session History Card
     { 
       title: 'Session History', 
       value: 'View', 
@@ -874,6 +885,20 @@ const HospitalDetails = () => {
       onClick: navigateToSessions,
       description: 'View user login sessions',
       actionLabel: 'View Sessions'
+    },
+    // ✅ NEW: Attendance Card 
+    { 
+      title: 'Attendance', 
+      value: 'View', 
+      icon: ClipboardCheck, 
+      bgColor: 'bg-emerald-50',
+      iconBgColor: 'bg-emerald-100',
+      textColor: 'text-emerald-600',
+      borderColor: 'border-emerald-200',
+      hoverBg: 'hover:bg-emerald-50/50',
+      onClick: navigateToAttendance,
+      description: 'View attendance records',
+      actionLabel: 'View Attendance'
     }
   ];
 
@@ -891,14 +916,6 @@ const HospitalDetails = () => {
           </Button>
           
           <div className="flex gap-2">
-            <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={navigateToSessions}
-              className="mb-4"
-            >
-              <Monitor size={18} className="mr-1" /> Session History
-            </Button>
             <Button 
               variant="primary" 
               size="sm" 

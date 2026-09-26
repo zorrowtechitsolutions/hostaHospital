@@ -18,7 +18,8 @@ import {
   Calendar,
   Mail,
   Phone,
-  MapPin
+  MapPin,
+  Clock
 } from 'lucide-react';
 
 import {
@@ -104,6 +105,16 @@ const getS3ImageUrlWithCache = (imageKey) => {
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
+// ✅ Helper to format shift time for display
+const formatShiftTime = (time) => {
+  if (!time) return '';
+  // Convert "HH:MM" to "HH:MM AM/PM"
+  const [hours, minutes] = time.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  return `${String(displayHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
 // ✅ Staff Action Menu Component with Permission Checks
 const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelete, onRecover }) => {
   if (activeMenu !== staff.id) return null;
@@ -151,22 +162,34 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
   );
 });
 
-// ✅ Skeleton Loader Component
+// ✅ Skeleton Loader Component (matches Doctor pattern — full card look)
 const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
   if (viewMode === 'grid') {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[...Array(8)].map((_, index) => (
-          <div key={index} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm">
+          <div
+            key={index}
+            className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm"
+          >
+            {/* ID + menu */}
             <div className="w-full flex justify-between items-start mb-4">
               <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
               <div className="w-7 h-7 bg-gray-200 rounded-full animate-pulse"></div>
             </div>
+
+            {/* Avatar */}
             <div className="relative mb-3">
               <div className="w-16 h-16 rounded-full bg-gray-200 animate-pulse"></div>
             </div>
+
+            {/* Name */}
             <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+
+            {/* Designation */}
             <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-4"></div>
+
+            {/* Info row */}
             <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
               <div className="text-center">
                 <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
@@ -183,6 +206,7 @@ const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
     );
   }
 
+  // List view skeleton — keeps the card wrapper so rows are still readable
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -224,7 +248,6 @@ const Staffs = () => {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
-    // Load view mode from localStorage
     return localStorage.getItem('staffViewMode') || 'grid';
   });
   
@@ -295,7 +318,6 @@ const Staffs = () => {
     limit: itemsPerPage
   };
 
-  // Always filter by hospital for all users
   if (hospitalId) {
     queryParams.hospitalId = String(hospitalId);
   } else {
@@ -405,7 +427,7 @@ const Staffs = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ FIXED: Transform API response - Use staffNumber for display
+  // ✅ Transform API response with shift time fields
   const transformStaffData = (staffList) => {
     if (!staffList || !Array.isArray(staffList)) return [];
     
@@ -421,13 +443,10 @@ const Staffs = () => {
       
       return {
         id: staff.id,
-        
-        // ✅ Use hospital-specific staffNumber for display
         staffNumber: staff.staffNumber,
         formattedId: staff.staffNumber 
           ? `#STF${String(staff.staffNumber).padStart(5, '0')}`
           : '#STF00000',
-        
         originalId: staff.id || staff._id,
         name: staff.name || '',
         firstName: staff.name?.split(' ')[0] || '',
@@ -444,6 +463,9 @@ const Staffs = () => {
         imageUrl: imageKey,
         status: staffStatus,
         jobType: staff.jobType || '',
+        // ✅ Shift time fields
+        shiftStartTime: staff.shiftStartTime || '',
+        shiftEndTime: staff.shiftEndTime || '',
         dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
         address: staff.address ? `${staff.address.place || ''}, ${staff.address.district || ''}, ${staff.address.state || ''}` : '',
         joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
@@ -460,11 +482,9 @@ const Staffs = () => {
     });
   };
 
-  // ✅ FIXED: Sort staff by staffNumber (ascending) after transformation
   const staffsData = useMemo(() => {
     const transformed = transformStaffData(staffApiResponse?.data || []);
     
-    // ✅ Sort by staffNumber to ensure proper ordering (STF00001, STF00002, STF00003...)
     return [...transformed].sort((a, b) => {
       const numberA = Number(a.staffNumber) || 0;
       const numberB = Number(b.staffNumber) || 0;
@@ -472,11 +492,9 @@ const Staffs = () => {
     });
   }, [staffApiResponse?.data]);
 
-  // ✅ FIXED: Apply frontend search AND filter filtering on sorted data
   const filteredStaffsData = useMemo(() => {
     let filtered = staffsData;
 
-    // 1. Apply search filter
     const searchLower = debouncedSearchTerm?.trim().toLowerCase();
     if (searchLower && searchLower.length >= 2) {
       filtered = filtered.filter(staff => {
@@ -498,21 +516,18 @@ const Staffs = () => {
       });
     }
 
-    // 2. Apply designation filter
     if (designationFilter !== 'all') {
       filtered = filtered.filter(staff => 
         staff.designation?.toLowerCase() === designationFilter.toLowerCase()
       );
     }
 
-    // 3. Apply gender filter
     if (genderFilter !== 'all') {
       filtered = filtered.filter(staff => 
         staff.gender?.toLowerCase() === genderFilter.toLowerCase()
       );
     }
 
-    // 4. Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(staff => {
         if (statusFilter === 'Active') {
@@ -526,7 +541,6 @@ const Staffs = () => {
       });
     }
 
-    // 5. Apply date filter (if implemented)
     if (dateFilter) {
       filtered = filtered.filter(staff => {
         if (!staff.appointmentDate) return false;
@@ -537,14 +551,11 @@ const Staffs = () => {
     return filtered;
   }, [staffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
-  // ✅ Use filtered data for display
   const displayStaffsData = filteredStaffsData;
   
-  // ✅ Use API response pagination for total items and pages
   const totalItems = staffApiResponse?.pagination?.totalItems || 0;
   const totalPages = staffApiResponse?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
-  // Get unique hospitals
   const uniqueHospitals = useMemo(() => {
     const hospitals = new Set();
     displayStaffsData.forEach(staff => {
@@ -578,7 +589,6 @@ const Staffs = () => {
     showSuccessToast("Refreshed staff list", 2000);
   };
 
-  // Updated Export handler with Excel functionality
   const handleExport = () => {
     if (displayStaffsData.length === 0) {
       showErrorToast("No data available to export", 3000);
@@ -586,7 +596,6 @@ const Staffs = () => {
     }
 
     try {
-      // Transform data for Excel export
       const exportData = displayStaffsData.map(staff => ({
         'Staff ID': staff.formattedId,
         'Staff Name': staff.name,
@@ -600,14 +609,15 @@ const Staffs = () => {
         'Status': staff.isDelete ? 'Blacklisted' : staff.status || 'Active',
         'Joining Date': staff.joiningDate || 'N/A',
         'Date of Birth': staff.dob || 'N/A',
+        'Job Type': staff.jobType || 'N/A',
+        'Shift Start': staff.shiftStartTime ? formatShiftTime(staff.shiftStartTime) : 'N/A',
+        'Shift End': staff.shiftEndTime ? formatShiftTime(staff.shiftEndTime) : 'N/A',
         'Address': staff.address || 'N/A'
       }));
 
-      // Generate filename with date
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `staffs_export_${dateStr}`;
 
-      // Export to Excel with column width
       exportToExcel({
         data: exportData,
         fileName: fileName,
@@ -625,7 +635,6 @@ const Staffs = () => {
     }
   };
 
-  // Permission check helper with modal
   const checkPermission = (permissionId, actionName) => {
     if (!hasPermission(permissionId)) {
       setPermissionDeniedAction(actionName);
@@ -636,7 +645,6 @@ const Staffs = () => {
   };
 
   const handleViewDetails = (staff) => {
-    // Check VIEW permission
     if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
       return;
     }
@@ -651,7 +659,6 @@ const Staffs = () => {
   };
 
   const handleEditStaff = (staff) => {
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit staff')) {
       return;
     }
@@ -666,7 +673,6 @@ const Staffs = () => {
   };
 
   const handleDeleteClick = (staff) => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete staff')) {
       return;
     }
@@ -704,7 +710,6 @@ const Staffs = () => {
   };
 
   const handleAddStaff = () => {
-    // Check CREATE permission
     if (!checkPermission(PERMISSIONS.CREATE, 'create staff')) {
       return;
     }
@@ -725,11 +730,12 @@ const Staffs = () => {
     setActiveMenu(prevActive => prevActive === id ? null : id);
   }, []);
 
-  // StaffDetailsModal
+  // StaffDetailsModal with shift time display (neutral gray)
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
     
     const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
+    const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
     
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
@@ -749,7 +755,7 @@ const Staffs = () => {
               <span className="text-xs text-gray-500">{staff.formattedId}</span>
             </div>
             {staff.hospitalName && (
-              <span className="text-xs text-blue-600">🏥 {staff.hospitalName}</span>
+              <span className="text-xs text-gray-600">🏥 {staff.hospitalName}</span>
             )}
           </div>
         </div>
@@ -798,7 +804,6 @@ const Staffs = () => {
             </Badge>
           </div>
           
-          
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500">Address</label>
             <p className="text-sm text-gray-800">{staff.address || 'N/A'}</p>
@@ -817,6 +822,27 @@ const Staffs = () => {
               <p className="text-sm text-gray-800">{staff.jobType}</p>
             </div>
           )}
+
+          {/* ✅ Shift Timing display — neutral gray */}
+          {hasShiftTiming && (
+            <div className="col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-4 w-4 text-gray-500" />
+                <label className="block text-xs font-semibold text-gray-700">
+                  Shift Timing
+                </label>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-800">
+                <span>
+                  <strong>Start:</strong> {formatShiftTime(staff.shiftStartTime)}
+                </span>
+                <span className="text-gray-400">→</span>
+                <span>
+                  <strong>End:</strong> {formatShiftTime(staff.shiftEndTime)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="flex gap-2 mt-6 pt-4 border-t">
@@ -831,15 +857,50 @@ const Staffs = () => {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // Check if we should show the "No results" message
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
   const hasResults = displayStaffsData.length > 0;
   const isSearchActive = debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
   const hasActiveFilters = designationFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all' || !!dateFilter;
 
-  // Skeleton Loading State
+  // ✅ Loading state — full page layout + skeleton cards (matches Doctor page)
   if (loading) {
-    return <StaffSkeletonLoader viewMode={viewMode} itemsPerPage={itemsPerPage} />;
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+
+        {/* Header / Breadcrumb skeleton */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+        </div>
+
+        {/* Search + filters + actions skeleton */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+
+          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+            <div className="relative flex-1 max-w-sm">
+              <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
+            </div>
+            <div className="h-10 w-40 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+            <div className="w-24 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+          </div>
+        </div>
+
+        <StaffSkeletonLoader
+          viewMode={viewMode}
+          itemsPerPage={itemsPerPage}
+        />
+      </div>
+    );
   }
 
   return (
@@ -860,7 +921,6 @@ const Staffs = () => {
           </div>
           <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
           
-          {/* Show warning if multiple hospitals */}
           {uniqueHospitals.length > 1 && (
             <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -887,7 +947,6 @@ const Staffs = () => {
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            {/* View Mode Toggle */}
             <div className="flex border border-gray-200 rounded-md bg-white mr-2">
               <button 
                 onClick={() => setViewMode('grid')} 
@@ -912,7 +971,6 @@ const Staffs = () => {
               <Download size={16} />
             </Button>
 
-            {/* ✅ FilterBar — icon always stays gray */}
             <FilterBar
               onClick={() => setShowFilters(prev => !prev)}
               isOpen={showFilters}
@@ -920,7 +978,6 @@ const Staffs = () => {
               title="Toggle Filters"
             />
             
-            {/* New Staff Button with Permission Check */}
             <Button 
               onClick={handleAddStaff} 
               className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
@@ -1019,12 +1076,13 @@ const Staffs = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          /* ✅ GRID VIEW - Using staffNumber for display */
+          /* ✅ GRID VIEW */
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {displayStaffsData.map((staff) => {
                 const isBlacklisted = staff.isDelete;
                 const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
+                const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
                 
                 return (
                   <div 
@@ -1081,7 +1139,6 @@ const Staffs = () => {
                     
                     <h3 
                       onClick={() => {
-                        // Check VIEW permission before opening details
                         if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
                           return;
                         }
@@ -1096,6 +1153,14 @@ const Staffs = () => {
                     <p className="text-[11px] text-gray-500">
                       {staff.designation || 'N/A'}
                     </p>
+
+                    {/* ✅ Shift timing badge — neutral gray */}
+                    {hasShiftTiming && (
+                      <div className="mt-2 flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                        <Clock className="w-3 h-3" />
+                        <span>{formatShiftTime(staff.shiftStartTime)} - {formatShiftTime(staff.shiftEndTime)}</span>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mt-4">
                       <div className="text-center">
@@ -1121,11 +1186,9 @@ const Staffs = () => {
                       </div>
                     </div>
 
-                    {/* Recover button for blacklisted staff */}
                     {isBlacklisted && (
                       <button 
                         onClick={() => {
-                          // Check DELETE permission for recover
                           if (!checkPermission(PERMISSIONS.DELETE, 'recover staff')) {
                             return;
                           }
@@ -1142,7 +1205,6 @@ const Staffs = () => {
               })}
             </div>
 
-            {/* Pagination for Grid View */}
             {totalPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -1158,7 +1220,7 @@ const Staffs = () => {
             )}
           </>
         ) : (
-          /* ✅ LIST VIEW - Using staffNumber for display */
+          /* ✅ LIST VIEW */
           <Card className="flex flex-col bg-white rounded-xl shadow-sm">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-700">
@@ -1184,6 +1246,7 @@ const Staffs = () => {
                       <th className="px-6 py-3">Gender</th>
                       <th className="px-6 py-3">Designation</th>
                       <th className="px-6 py-3">Phone Number</th>
+                      <th className="px-6 py-3">Shift Timing</th>
                       <th className="px-6 py-3">Appointment Date</th>
                       <th className="px-6 py-3">Status</th>
                       <th className="px-6 py-3 text-right">Actions</th>
@@ -1193,6 +1256,7 @@ const Staffs = () => {
                     {displayStaffsData.map((staff) => {
                       const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                       const isBlacklisted = staff.isDelete;
+                      const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
                       
                       return (
                         <tr 
@@ -1221,7 +1285,6 @@ const Staffs = () => {
                               </Avatar>
                               <span 
                                 onClick={() => {
-                                  // Check VIEW permission before opening details
                                   if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
                                     return;
                                   }
@@ -1240,6 +1303,19 @@ const Staffs = () => {
                           <td className="px-6 py-4 text-gray-600">{staff.gender || 'N/A'}</td>
                           <td className="px-6 py-4 text-gray-600">{staff.designation || 'N/A'}</td>
                           <td className="px-6 py-4 text-gray-600">{staff.phone || 'N/A'}</td>
+                          {/* ✅ Shift timing column — neutral gray */}
+                          <td className="px-6 py-4 text-gray-600">
+                            {hasShiftTiming ? (
+                              <div className="flex items-center gap-1 text-xs">
+                                <Clock className="w-3 h-3 text-gray-500" />
+                                <span>{formatShiftTime(staff.shiftStartTime)}</span>
+                                <span className="text-gray-400">→</span>
+                                <span>{formatShiftTime(staff.shiftEndTime)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 text-gray-600">{staff.appointmentDateDisplay || 'N/A'}</td>
                           <td className="px-6 py-4">
                             <Badge
@@ -1285,7 +1361,6 @@ const Staffs = () => {
                 </table>
               </div>
               
-              {/* Pagination - Always visible */}
               <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}

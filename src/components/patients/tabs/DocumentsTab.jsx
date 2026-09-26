@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image, AlertTriangle } from "lucide-react";
 import { Button, Pagination } from "../../ui";
+import DatePicker from "../../ui/DatePicker";
 import { 
   showSuccessToast,
   showErrorToast,
@@ -667,16 +668,18 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
+              {/* Date — using custom DatePicker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={documentDate}
-                  onChange={(e) => setDocumentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  onChange={(isoDate) => setDocumentDate(isoDate)}
+                  mode="past"
+                  placeholder="DD/MM/YYYY"
                   disabled={uploading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -810,16 +813,18 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
+              {/* Date — using custom DatePicker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={editDocumentDate}
-                  onChange={(e) => setEditDocumentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  onChange={(isoDate) => setEditDocumentDate(isoDate)}
+                  mode="past"
+                  placeholder="DD/MM/YYYY"
                   disabled={uploading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 

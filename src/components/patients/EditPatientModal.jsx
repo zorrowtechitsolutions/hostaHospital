@@ -9,6 +9,7 @@ import {
 import { 
   Button, Input, Select, Card, Loader 
 } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import { 
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast 
 } from '../ui/Toast';
@@ -327,17 +328,6 @@ const EditPatient = () => {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
     }
-    if (name === 'dob' && value) {
-      const today = new Date();
-      const birthDate = new Date(value);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age > 0 && age <= 120) {
-        setFormData(prev => ({ ...prev, age: age.toString() }));
-        showInfoToast(`Patient age calculated: ${age} years`, 2000);
-      }
-    }
   };
 
   const handleBlur = (e) => {
@@ -345,6 +335,35 @@ const EditPatient = () => {
     setTouched(prev => ({ ...prev, [name]: true }));
     const error = validateField(name, value);
     setErrors(prev => ({ ...prev, [name]: error }));
+  };
+
+  /* =====================================================
+     DatePicker handler — receives ISO string (YYYY-MM-DD)
+     and auto-calculates age from DOB.
+     ===================================================== */
+  const handleDateChange = (isoDate) => {
+    setFormData(prev => ({ ...prev, dob: isoDate }));
+
+    // Mark as touched so error styling behaves consistently
+    setTouched(prev => ({ ...prev, dob: true }));
+
+    // Clear any existing dob error
+    setErrors(prev => ({ ...prev, dob: '' }));
+
+    // Auto-calculate age from DOB
+    if (isoDate) {
+      const today = new Date();
+      const birthDate = new Date(isoDate);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (age > 0 && age <= 120) {
+        setFormData(prev => ({ ...prev, age: age.toString() }));
+        showInfoToast(`Patient age calculated: ${age} years`, 2000);
+      }
+    }
   };
 
   const prepareUpdateData = () => {
@@ -425,7 +444,7 @@ const EditPatient = () => {
         }, 1500);
         
       } catch (error) {
-        // ✅ FIXED: Extract specific validation error first, then fallback
+        // ✅ Extract specific validation error first, then fallback
         console.error('Update Patient Error:', error);
 
         const message =
@@ -562,17 +581,31 @@ const EditPatient = () => {
                     error={errors.age} 
                     touched={touched.age} 
                   />
-                  <Input 
-                    label="Date of Birth" 
-                    name="dob" 
-                    type="date" 
-                    icon={Calendar} 
-                    value={formData.dob} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.dob} 
-                    touched={touched.dob} 
-                  />
+
+                  {/* DatePicker — replaces native Input type="date" */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Date of Birth
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                      <DatePicker
+                        value={formData.dob}
+                        onChange={handleDateChange}
+                        mode="dob"
+                        placeholder="DD/MM/YYYY"
+                        className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent ${
+                          errors.dob && touched.dob
+                            ? 'border-red-500 focus:ring-red-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                    {errors.dob && touched.dob && (
+                      <p className="mt-1 text-xs text-red-500 error-message">{errors.dob}</p>
+                    )}
+                  </div>
+
                   <Select 
                     label="Gender" 
                     name="gender" 

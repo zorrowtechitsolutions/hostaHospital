@@ -377,7 +377,11 @@ export const api = createApi({
     "Email",
     "Template",
     "SessionHistory",
-  ],
+    "Attendance",
+    "Device",
+    "AccessCard",
+    "Fingerprint",
+ ],
 
   endpoints: () => ({}),
 });

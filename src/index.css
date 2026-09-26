@@ -363,3 +363,170 @@ body {
         height: 48px;
     }
 }
+
+/* =========================================
+   FLATPICKR CALENDAR — NARROW & POLISHED
+   ========================================= */
+
+.flatpickr-calendar {
+  width: 270px !important;
+  min-width: 270px !important;
+  max-width: 270px !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid #e5e7eb !important;
+  font-size: 12px !important;
+  z-index: 9999 !important;
+  margin-top: 4px !important;
+}
+
+/* Header */
+.flatpickr-months {
+  height: 40px !important;
+  padding: 0 6px !important;
+}
+
+.flatpickr-month {
+  height: 40px !important;
+}
+
+.flatpickr-current-month {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding-top: 9px !important;
+}
+
+.flatpickr-prev-month,
+.flatpickr-next-month {
+  width: 30px !important;
+  height: 40px !important;
+  padding: 9px 6px !important;
+}
+
+.flatpickr-prev-month svg,
+.flatpickr-next-month svg {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+/* Weekdays */
+.flatpickr-weekdays {
+  width: 270px !important;
+  height: 28px !important;
+}
+
+.flatpickr-weekday {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #6b7280 !important;
+}
+
+/* Days grid */
+.flatpickr-days {
+  width: 270px !important;
+}
+
+.dayContainer {
+  width: 270px !important;
+  min-width: 270px !important;
+  max-width: 270px !important;
+  padding: 2px 4px 6px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+}
+
+/* Date cells */
+.flatpickr-day {
+  width: 34px !important;
+  max-width: 34px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+  margin: 1px !important;
+  border-radius: 6px !important;
+}
+
+/* =========================================
+   HIDE NEXT-MONTH CELLS
+   (Applied by JS to .nextMonthDay cells only)
+   ========================================= */
+
+.flatpickr-calendar .flatpickr-day.hidden-next-month-row {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* =========================================
+   HOVER ON AVAILABLE DATES
+   ========================================= */
+
+.flatpickr-day:hover:not(.flatpickr-disabled):not(.selected) {
+  background: #eff6ff !important;
+  border-color: #eff6ff !important;
+}
+
+/* =========================================
+   DISABLED / DOCTOR LEAVE DATES
+   ========================================= */
+
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.flatpickr-disabled:hover {
+  color: #d1d5db !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  font-weight: 400 !important;
+  cursor: not-allowed !important;
+}
+
+/* Leave day that is also today */
+.flatpickr-day.today.flatpickr-disabled {
+  color: #d1d5db !important;
+  background: transparent !important;
+  border: none !important;
+  font-weight: 400 !important;
+}
+
+/* Outside-month normal dates (prev-month, still shown) */
+.flatpickr-day.prevMonthDay {
+  color: #d1d5db !important;
+  font-weight: 400 !important;
+}
+
+/* Outside-month disabled */
+.flatpickr-day.prevMonthDay.flatpickr-disabled {
+  color: #e5e7eb !important;
+}
+
+/* =========================================
+   TODAY — ONLY WHEN AVAILABLE
+   ========================================= */
+
+.flatpickr-day.today:not(.flatpickr-disabled) {
+  border: 1px solid #2563eb !important;
+  font-weight: 700 !important;
+}
+
+/* =========================================
+   SELECTED DATE
+   ========================================= */
+
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover,
+.flatpickr-day.selected:focus {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* Container padding */
+.flatpickr-innerContainer {
+  padding: 0 !important;
+}
+
+.flatpickr-rContainer {
+  width: 270px !important;
+}

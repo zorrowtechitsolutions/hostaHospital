@@ -16,10 +16,30 @@ import {
   Droplet,
   HelpCircle,
   ShieldCheck,
-   Bell,
+  Bell,
   Mail,
   History,
-  FileText
+  FileText,
+  // 👇 HRM icons
+  CalendarCheck,
+  MonitorSmartphone,
+  CreditCard,
+  Wallet,
+  Clock,
+  UserCheck,
+  Table,
+  BarChart3,
+  Layers,
+  PlayCircle,
+  Receipt,
+  Timer,
+  Gift,
+  MinusCircle,
+  Banknote,
+  Award,
+  FileSpreadsheet,
+  HardDrive,
+  Fingerprint, // 👈 for Fingerprint
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -32,10 +52,10 @@ import { useGetStaffByIdQuery } from "../../app/service/staffApi";
 const menu = [
   {
     items: [
-      { 
-        label: "Dashboard", 
-        icon: LayoutDashboard, 
-        path: "/dashboard" 
+      {
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        path: "/dashboard",
       },
     ],
   },
@@ -55,6 +75,115 @@ const menu = [
     title: "MANAGE",
     items: [{ label: "Staffs", icon: UserCog, path: "/staffs", permissionId: 10 }],
   },
+
+  // 👇 HRM section with three dropdowns: Attendance, Device, Payroll
+  {
+    title: "HRM",
+    items: [
+      {
+        label: "Attendance",
+        icon: CalendarCheck,
+        hasDropdown: true,
+        permissionId: 125,
+        dropdownItems: [
+          {
+            label: "Today Attendance",
+            icon: Clock,
+            path: "/attendance",
+          },
+          {
+            label: "Attendance Sheet",
+            icon: Table,
+            path: "/attendance/sheet",
+          },
+        ],
+      },
+      {
+        label: "Device",
+        icon: HardDrive,
+        hasDropdown: true,
+        permissionId: 114,
+        dropdownItems: [
+          {
+            label: "Attendance Device",
+            icon: MonitorSmartphone,
+            path: "/attendance/device",
+          },
+          {
+            label: "Access Card",
+            icon: CreditCard,
+            path: "/attendance/access-card",
+            permissionId: 118,
+          },
+          // 👇 NEW: Fingerprint under Device
+          {
+            label: "Fingerprint",
+            icon: Fingerprint,
+            path: "/attendance/fingerprint",
+            permissionId: 122,
+          },
+        ],
+      },
+      {
+        label: "Payroll",
+        icon: Wallet,
+        hasDropdown: true,
+        dropdownItems: [
+          {
+            label: "Payroll Overview",
+            icon: BarChart3,
+            path: "/payroll",
+          },
+          {
+            label: "Salary Structure",
+            icon: Layers,
+            path: "/payroll/salary-structure",
+          },
+          {
+            label: "Payroll Processing",
+            icon: PlayCircle,
+            path: "/payroll/processing",
+          },
+          {
+            label: "Payslips",
+            icon: Receipt,
+            path: "/payroll/payslips",
+          },
+          {
+            label: "Overtime",
+            icon: Timer,
+            path: "/payroll/overtime",
+          },
+          {
+            label: "Allowances",
+            icon: Gift,
+            path: "/payroll/allowances",
+          },
+          {
+            label: "Deductions",
+            icon: MinusCircle,
+            path: "/payroll/deductions",
+          },
+          {
+            label: "Advances & Loans",
+            icon: Banknote,
+            path: "/payroll/advances-loans",
+          },
+          {
+            label: "Bonuses & Incentives",
+            icon: Award,
+            path: "/payroll/bonuses",
+          },
+          {
+            label: "Payroll Reports",
+            icon: FileSpreadsheet,
+            path: "/payroll/reports",
+          },
+        ],
+      },
+    ],
+  },
+
   {
     title: "SYSTEM",
     items: [
@@ -65,24 +194,24 @@ const menu = [
         permissionId: 58,
       },
       {
-  label: "Notifications",
-  icon: Bell,
-  hasDropdown: true,
-  dropdownItems: [
-    {
-      label: "Email Notification",
-      icon: Mail,
-      path: "/email-notifications",
-      permissionId: 104,
-    },
-    {
-      label: "Email Templates",
-      icon: FileText,
-      path: "/email-templates",
-      permissionId: 108,
-    },
-  ],
-},
+        label: "Notifications",
+        icon: Bell,
+        hasDropdown: true,
+        dropdownItems: [
+          {
+            label: "Email Notification",
+            icon: Mail,
+            path: "/email-notifications",
+            permissionId: 104,
+          },
+          {
+            label: "Email Templates",
+            icon: FileText,
+            path: "/email-templates",
+            permissionId: 108,
+          },
+        ],
+      },
       {
         label: "User Management",
         icon: UserCog,
@@ -106,19 +235,19 @@ const menu = [
     ],
   },
   {
-  title: "AUDIT & SECURITY",
-  items: [
-    {
-      label: "AUDIT & SECURITY",
-      icon: ShieldCheck,
-      path: "/audit-login",
-      permissionId: 111,
-    },
-  ],
-},
+    title: "AUDIT & SECURITY",
+    items: [
+      {
+        label: "AUDIT & SECURITY",
+        icon: ShieldCheck,
+        path: "/audit-login",
+        permissionId: 111,
+      },
+    ],
+  },
   {
     title: "HELP",
-    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }], // No permissionId - always visible
+    items: [{ label: "Help & Support", icon: HelpCircle, path: "/help" }],
   },
 ];
 
@@ -127,90 +256,76 @@ export default function Sidebar({ sidebarOpen }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [openDropdowns, setOpenDropdowns] = useState({});
-  
-  // Get user role and IDs
-  const userRole = user?.role || localStorage.getItem('userRole') || 'hospital';
-  const hospitalId = localStorage.getItem('hospitalId') || '';
-  
-  // ✅ FIXED: Get correct user ID based on role - using authId for API requests
+
+  const userRole = user?.role || localStorage.getItem("userRole") || "hospital";
+  const hospitalId = localStorage.getItem("hospitalId") || "";
+
   const getUserIdByRole = () => {
-    // Get from user object first (same as TopBar)
-    const userIdFromUser = 
-      userRole === 'doctor' 
-        ? (user?.authId || user?.id || localStorage.getItem("authId")) 
-        : userRole === 'staff'
-        ? (user?.authId || user?.id || localStorage.getItem("authId")) 
-        : (user?.id || hospitalId);
-    
-    // If we have a valid ID from user object, use it
-    if (userIdFromUser && userIdFromUser !== 'undefined' && userIdFromUser !== 'null') {
+    const userIdFromUser =
+      userRole === "doctor"
+        ? user?.authId || user?.id || localStorage.getItem("authId")
+        : userRole === "staff"
+        ? user?.authId || user?.id || localStorage.getItem("authId")
+        : user?.id || hospitalId;
+
+    if (userIdFromUser && userIdFromUser !== "undefined" && userIdFromUser !== "null") {
       return userIdFromUser;
     }
-    
-    // Fallback to localStorage
-    const authId = localStorage.getItem('authId');
-    const userId = localStorage.getItem('userId');
-    const doctorId = localStorage.getItem('doctorId');
-    const staffId = localStorage.getItem('staffId');
-    const staffNumericId = localStorage.getItem('staffNumericId');
-    
+
+    const authId = localStorage.getItem("authId");
+    const userId = localStorage.getItem("userId");
+    const doctorId = localStorage.getItem("doctorId");
+    const staffId = localStorage.getItem("staffId");
+    const staffNumericId = localStorage.getItem("staffNumericId");
+
     let userData = {};
     try {
-      userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      userData = JSON.parse(localStorage.getItem("userData") || "{}");
     } catch (e) {}
-    
+
     switch (userRole) {
-      case 'hospital':
+      case "hospital":
         return authId || userId || hospitalId || userData?.authId || userData?.hospitalId || userData?.id;
-      case 'doctor':
+      case "doctor":
         return authId || userId || doctorId || userData?.authId || userData?.doctorId || userData?.id;
-      case 'staff':
+      case "staff":
         return authId || userId || staffId || staffNumericId || userData?.authId || userData?.staffId || userData?.id;
-      case 'super_admin':
+      case "super_admin":
         return authId || userId || userData?.authId || userData?.id;
       default:
         return authId || userId || hospitalId;
     }
   };
-  
+
   const userId = getUserIdByRole();
-  
-  // Fetch data based on user role
-  const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
-    userId,
-    { skip: userRole !== 'hospital' || !userId || userId === 'undefined' || userId === 'null' }
-  );
-  
-  const { data: doctorData, isLoading: isDoctorLoading } = useGetDoctorByIdQuery(
-    userId,
-    { skip: userRole !== 'doctor' || !userId || userId === 'undefined' || userId === 'null' }
-  );
-  
-  const { data: staffData, isLoading: isStaffLoading } = useGetStaffByIdQuery(
-    userId,
-    { skip: userRole !== 'staff' || !userId || userId === 'undefined' || userId === 'null' }
-  );
-  
-  // Get user data from localStorage as fallback
+
+  const { data: hospitalData } = useGetHospitalByIdQuery(userId, {
+    skip: userRole !== "hospital" || !userId || userId === "undefined" || userId === "null",
+  });
+
+  const { data: doctorData } = useGetDoctorByIdQuery(userId, {
+    skip: userRole !== "doctor" || !userId || userId === "undefined" || userId === "null",
+  });
+
+  const { data: staffData } = useGetStaffByIdQuery(userId, {
+    skip: userRole !== "staff" || !userId || userId === "undefined" || userId === "null",
+  });
+
   let userDataFromStorage = {};
   try {
-    userDataFromStorage = JSON.parse(localStorage.getItem('userData') || '{}');
+    userDataFromStorage = JSON.parse(localStorage.getItem("userData") || "{}");
   } catch (e) {}
-  
+
   let storedUser = {};
   try {
-    storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    storedUser = JSON.parse(localStorage.getItem("user") || "{}");
   } catch (e) {}
-  
-  // ✅ Get the correct display name based on role (matching TopBar logic)
+
   const getDisplayName = () => {
-    // For DOCTOR role
-    if (userRole === 'doctor') {
+    if (userRole === "doctor") {
       const doctor = doctorData?.data || doctorData;
-      
-      // ✅ FIXED: Get doctor name with proper fallbacks including doctorName
-      const doctorName = 
-        doctor?.doctorName ||     // ✅ Your API returns this
+      return (
+        doctor?.doctorName ||
         doctor?.displayName ||
         doctor?.name ||
         (doctor?.firstName && doctor?.lastName ? `${doctor.firstName} ${doctor.lastName}`.trim() : null) ||
@@ -218,18 +333,14 @@ export default function Sidebar({ sidebarOpen }) {
         user?.name ||
         storedUser?.name ||
         userDataFromStorage?.name ||
-        'Doctor';
-      
-      return doctorName;
+        "Doctor"
+      );
     }
-    
-    // For STAFF role
-    if (userRole === 'staff') {
+
+    if (userRole === "staff") {
       const staff = staffData?.data || staffData;
-      
-      // ✅ FIXED: Get staff name with proper fallbacks including staffName
-      const staffName =
-        staff?.staffName ||       // ✅ Your API returns this
+      return (
+        staff?.staffName ||
         staff?.displayName ||
         staff?.name ||
         (staff?.firstName && staff?.lastName ? `${staff.firstName} ${staff.lastName}`.trim() : null) ||
@@ -237,23 +348,16 @@ export default function Sidebar({ sidebarOpen }) {
         user?.name ||
         storedUser?.name ||
         userDataFromStorage?.name ||
-        'Staff';
-      
-      return staffName;
+        "Staff"
+      );
     }
-    
-    // For SUPER_ADMIN role
-    if (userRole === 'super_admin') {
-      return user?.name || 
-             userDataFromStorage?.name || 
-             storedUser?.name || 
-             'Super Admin';
+
+    if (userRole === "super_admin") {
+      return user?.name || userDataFromStorage?.name || storedUser?.name || "Super Admin";
     }
-    
-    // Default: HOSPITAL role
+
     const hospital = hospitalData?.data || hospitalData;
-    
-    const hospitalName = 
+    return (
       hospital?.displayName ||
       hospital?.name ||
       hospital?.hospitalName ||
@@ -263,33 +367,12 @@ export default function Sidebar({ sidebarOpen }) {
       userDataFromStorage?.hospitalName ||
       storedUser?.name ||
       storedUser?.hospitalName ||
-      'Hospital';
-    
-    return hospitalName;
+      "Hospital"
+    );
   };
-  
-  // Get the raw display name
+
   const displayName = getDisplayName();
-  
-  // Create the final display title with role-based prefix
-  const getDisplayTitle = () => {
-    if (userRole === 'doctor') {
-      // Check if name already has "Dr." prefix to avoid duplication
-      if (displayName && displayName.startsWith('Dr.')) {
-        return displayName;
-      }
-      return `${displayName}`;
-    } else if (userRole === 'hospital') {
-      return displayName; // Hospital name without prefix
-    } else if (userRole === 'staff') {
-      return displayName; // Staff name without prefix
-    } else if (userRole === 'super_admin') {
-      return displayName; // Super Admin without prefix
-    }
-    return displayName;
-  };
-  
-  const displayTitle = getDisplayTitle();
+  const displayTitle = displayName;
 
   const toggleDropdown = (label) => {
     setOpenDropdowns((prev) => ({
@@ -308,38 +391,37 @@ export default function Sidebar({ sidebarOpen }) {
     return dropdownItems?.some((item) => location.pathname === item.path);
   };
 
-  // Memoize filtered menu to prevent unnecessary recalculations
   const filteredMenu = useMemo(() => {
     return menu
       .map((section) => {
         const visibleItems = section.items
           .map((item) => {
-            // Dashboard and Help are always visible (no permission check)
             if (item.path === "/dashboard" || item.path === "/help") {
               return item;
             }
-            
-            // For items with dropdown
+
             if (item.hasDropdown) {
-              const visibleDropdownItems = item.dropdownItems.filter(
-                (dropdownItem) => {
-                  if (!dropdownItem.permissionId) return true;
-                  return hasPermission(dropdownItem.permissionId);
-                }
-              );
-              
+              // Check parent permission first
+              if (item.permissionId && !hasPermission(item.permissionId)) {
+                return null;
+              }
+
+              const visibleDropdownItems = item.dropdownItems.filter((dropdownItem) => {
+                if (!dropdownItem.permissionId) return true;
+                return hasPermission(dropdownItem.permissionId);
+              });
+
               if (visibleDropdownItems.length === 0) return null;
-              
+
               return {
                 ...item,
                 dropdownItems: visibleDropdownItems,
               };
             }
-            
-            // For regular items with permission
+
             if (!item.permissionId) return item;
             if (!hasPermission(item.permissionId)) return null;
-            
+
             return item;
           })
           .filter(Boolean);
@@ -352,9 +434,8 @@ export default function Sidebar({ sidebarOpen }) {
         };
       })
       .filter(Boolean);
-  }, []);
+  }, [user]);
 
-  // Effect only depends on location.pathname
   useEffect(() => {
     const newOpenState = {};
     filteredMenu.forEach((section) => {
@@ -369,17 +450,16 @@ export default function Sidebar({ sidebarOpen }) {
 
   const shouldShowTitles = filteredMenu.length > 1;
 
-  // Helper function for menu item classes
   const getMenuItemClasses = (isActive, isDropdown = false) => {
     const baseClasses = "w-full h-12 flex items-center rounded-md text-sm transition";
-    const activeClasses = isActive 
-      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md" 
+    const activeClasses = isActive
+      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
       : "text-gray-300 hover:bg-slate-700";
-    
+
     if (isDropdown) {
       return `${baseClasses} ${sidebarOpen ? "px-3 gap-3 justify-start" : "justify-center"} ${activeClasses}`;
     }
-    
+
     return `${baseClasses} ${sidebarOpen ? "px-3 gap-3 justify-start" : "justify-center"} relative group ${activeClasses}`;
   };
 
@@ -389,12 +469,9 @@ export default function Sidebar({ sidebarOpen }) {
         sidebarOpen ? "w-64" : "w-20"
       } bg-[#0f172a] text-white h-screen fixed left-0 top-0 flex flex-col shadow-lg transition-all duration-300 z-20`}
     >
-      {/* Logo Section - Shows user identity based on role */}
       <div className="p-5 border-b border-slate-700">
         {sidebarOpen ? (
-          <h1 className="text-lg font-semibold truncate">
-            {displayTitle}
-          </h1>
+          <h1 className="text-lg font-semibold truncate">{displayTitle}</h1>
         ) : (
           <h1 className="text-lg font-semibold text-center">
             {displayTitle.charAt(0).toUpperCase()}
@@ -402,7 +479,6 @@ export default function Sidebar({ sidebarOpen }) {
         )}
       </div>
 
-      {/* Menu */}
       <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-slate-700">
         {filteredMenu.map((section) => (
           <div key={section.title}>
@@ -437,9 +513,7 @@ export default function Sidebar({ sidebarOpen }) {
                           <item.icon size={18} />
                           {sidebarOpen && item.label}
                         </div>
-                        {sidebarOpen && (
-                          isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                        )}
+                        {sidebarOpen && (isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
                       </button>
 
                       {sidebarOpen && isOpen && (
@@ -480,11 +554,7 @@ export default function Sidebar({ sidebarOpen }) {
                 const active = isActive(item.path);
 
                 return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={getMenuItemClasses(active)}
-                  >
+                  <Link key={item.path} to={item.path} className={getMenuItemClasses(active)}>
                     <item.icon size={18} />
                     {sidebarOpen && item.label}
 
