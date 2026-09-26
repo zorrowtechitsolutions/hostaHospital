@@ -77,6 +77,10 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     notifications = roleQuery.data?.data || [];
   }
 
+  // ✅ ONLY SHOW LATEST 10 NOTIFICATIONS IN THE PANEL
+  const MAX_VISIBLE_NOTIFICATIONS = 10;
+  const displayedNotifications = notifications.slice(0, MAX_VISIBLE_NOTIFICATIONS);
+
   const isLoading = () => {
     if (userRole === "hospital") {
       return hospitalQuery.isLoading;
@@ -457,7 +461,8 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
               <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
             </div>
           ) : (
-            notifications.map((notif) => {
+            // ✅ ONLY RENDER THE LATEST 10 NOTIFICATIONS
+            displayedNotifications.map((notif) => {
               const typeInfo = getNotificationType(notif.type);
               const isUnread = isNotificationUnread(notif);
               
@@ -515,7 +520,9 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
             className="w-full text-center text-sm text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Eye size={14} />
-            View All Notifications
+            {notifications.length > MAX_VISIBLE_NOTIFICATIONS 
+              ? `View All ${notifications.length} Notifications` 
+              : 'View All Notifications'}
           </button>
         </div>
       </div>
