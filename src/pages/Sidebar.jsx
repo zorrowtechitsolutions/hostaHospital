@@ -22,6 +22,8 @@ import {
   FileText,
   // 👇 HRM icons
   CalendarCheck,
+  MonitorSmartphone,
+  CreditCard,
   Wallet,
   Clock,
   UserCheck,
@@ -36,6 +38,8 @@ import {
   Banknote,
   Award,
   FileSpreadsheet,
+  HardDrive,
+  Fingerprint, // 👈 for Fingerprint
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -72,7 +76,7 @@ const menu = [
     items: [{ label: "Staffs", icon: UserCog, path: "/staffs", permissionId: 10 }],
   },
 
-  // 👇 NEW: HRM section with dropdowns
+  // 👇 HRM section with three dropdowns: Attendance, Device, Payroll
   {
     title: "HRM",
     items: [
@@ -80,6 +84,7 @@ const menu = [
         label: "Attendance",
         icon: CalendarCheck,
         hasDropdown: true,
+        permissionId: 125,
         dropdownItems: [
           {
             label: "Today Attendance",
@@ -90,6 +95,32 @@ const menu = [
             label: "Attendance Sheet",
             icon: Table,
             path: "/attendance/sheet",
+          },
+        ],
+      },
+      {
+        label: "Device",
+        icon: HardDrive,
+        hasDropdown: true,
+        permissionId: 114,
+        dropdownItems: [
+          {
+            label: "Attendance Device",
+            icon: MonitorSmartphone,
+            path: "/attendance/device",
+          },
+          {
+            label: "Access Card",
+            icon: CreditCard,
+            path: "/attendance/access-card",
+            permissionId: 118,
+          },
+          // 👇 NEW: Fingerprint under Device
+          {
+            label: "Fingerprint",
+            icon: Fingerprint,
+            path: "/attendance/fingerprint",
+            permissionId: 122,
           },
         ],
       },
@@ -370,6 +401,11 @@ export default function Sidebar({ sidebarOpen }) {
             }
 
             if (item.hasDropdown) {
+              // Check parent permission first
+              if (item.permissionId && !hasPermission(item.permissionId)) {
+                return null;
+              }
+
               const visibleDropdownItems = item.dropdownItems.filter((dropdownItem) => {
                 if (!dropdownItem.permissionId) return true;
                 return hasPermission(dropdownItem.permissionId);
@@ -398,7 +434,7 @@ export default function Sidebar({ sidebarOpen }) {
         };
       })
       .filter(Boolean);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const newOpenState = {};

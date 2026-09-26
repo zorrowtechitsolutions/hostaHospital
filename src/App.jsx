@@ -75,7 +75,18 @@ import BloodBank from "./components/BloodBank/BloodBank";
 import Attendance from "./components/Attendance/Attendance";
 import AttendanceSheet from "./components/Attendance/AttendanceSheet";
 import EmployeeAttendance from "./components/Attendance/EmployeeAttendance";
-import Payslips from "./components/Payroll/PaySlip";
+// import Payslips from "./components/Payroll/PaySlip";
+// import SalarySlipTemplate from "./components/Settings/SalarySlipTemplate";
+import Device from "./components/Attendance/devices/RFIDDevices";
+import AssignAccessCardList from "./components/Attendance/Access card/AssignAccessCardList";
+import AssignAccessCard from "./components/Attendance/Access card/AssignAccessCard";
+import ViewAccessCardDetails from "./components/Attendance/Access card/ViewAccessCardDetails";
+import AssignFingerprintList from "./components/Attendance/Fingerprint/AssignFingerPrintList";
+import RegisterDeviceModal from "./components/Attendance/devices/RegisterDeviceModal";
+import EditDeviceModal from "./components/Attendance/devices/EditDeviceModal";
+import FingerprintEnrollmentModal from "./components/Attendance/Fingerprint/FingerprintEnrollmentModal";
+import ViewFingerprintDetails from "./components/Attendance/Fingerprint/ViewFingerprintDetails";
+import FingerprintEditModal from "./components/Attendance/Fingerprint/FingerprintEditModal";
 
 // Loading fallback component
 const PageLoader = () => (
@@ -371,9 +382,20 @@ function App() {
               <Route path="/attendance" element={<Attendance/>} />
               <Route path="/attendance/sheet" element={<AttendanceSheet/>} />
               <Route path="/attendance/employee/:id" element={<EmployeeAttendance />} />
+              <Route path="/attendance/device" element={<Device/>} />
+              <Route path="/devices/register" element={<RegisterDeviceModal />} />
+              <Route path="/devices/edit/:id" element={<EditDeviceModal />} /> 
+              <Route path="/attendance/access-card" element={<AssignAccessCardList/>} />
+              <Route path="/attendance/access-card/assign/:memberKey" element={<AssignAccessCard/>} />
+              <Route path="/attendance/access-card/view/:memberKey" element={<ViewAccessCardDetails />}/>
+              <Route path="/attendance/fingerprint" element={<AssignFingerprintList />} />
+              <Route path="/attendance/fingerprint/enroll/:key" element={<FingerprintEnrollmentModal />}/>
+              <Route path="/attendance/fingerprint/view/:memberKey" element={<ViewFingerprintDetails />}/>
+              <Route path="/attendance/fingerprint/edit/:key" element={<FingerprintEditModal />}/>
 
               {/* PayRoll routes  */}
-              <Route path="/payroll/payslips" element={<Payslips/>} />
+              {/* <Route path="/payroll/payslips" element={<Payslips/>} />
+              <Route path="/salary-slip/template" element={<SalarySlipTemplate/>} /> */}
 
               {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
               <Route

@@ -1,6 +1,6 @@
-// src/components/attendance/AttendanceSheet.jsx
+// src/components/attendance/hospitalAttendanceList.jsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   Search,
   RefreshCw,
@@ -10,16 +10,16 @@ import {
   ChevronDown,
   X,
   Calendar,
-  Loader2,
   Filter,
   Users as UsersIcon,
   CircleMinus,
   CircleCheck,
   CircleX,
   Sparkles,
+  Building2,
 } from "lucide-react";
 
-import { useGetAttendancesQuery } from '../../../app/service/attendance';
+import { useGetAttendancesQuery } from '../../../../app/service/attendance';
 
 // ============================================================
 // 🎯 ATTENDANCE STATUS ICON — Premium status-chip style
@@ -36,43 +36,27 @@ const AttendanceStatusIcon = ({ status, size = "md" }) => {
     case "Weekend":
       return (
         <div className={`${common} bg-gray-100 ring-1 ring-gray-200`}>
-          <CircleMinus
-            className="w-full h-full text-gray-500"
-            strokeWidth={2.2}
-          />
+          <CircleMinus className="w-full h-full text-gray-500" strokeWidth={2.2} />
         </div>
       );
-
     case "Present":
       return (
         <div className={`${common} bg-emerald-50 ring-1 ring-emerald-100`}>
-          <CircleCheck
-            className="w-full h-full text-emerald-600"
-            strokeWidth={2.2}
-          />
+          <CircleCheck className="w-full h-full text-emerald-600" strokeWidth={2.2} />
         </div>
       );
-
     case "Leave":
       return (
         <div className={`${common} bg-orange-50 ring-1 ring-orange-100`}>
-          <CircleX
-            className="w-full h-full text-orange-500"
-            strokeWidth={2.2}
-          />
+          <CircleX className="w-full h-full text-orange-500" strokeWidth={2.2} />
         </div>
       );
-
     case "Holiday":
       return (
         <div className={`${common} bg-amber-50 ring-1 ring-amber-100`}>
-          <Sparkles
-            className="w-full h-full text-amber-500"
-            strokeWidth={2.2}
-          />
+          <Sparkles className="w-full h-full text-amber-500" strokeWidth={2.2} />
         </div>
       );
-
     default:
       return null;
   }
@@ -90,7 +74,6 @@ const LEGEND_ITEMS = [
 
 // ============================================================
 // 🎯 STATUS NORMALIZER
-// API is the source of truth — no assumptions about weekends.
 // ============================================================
 const normalizeStatus = (rawStatus) => {
   if (!rawStatus) return null;
@@ -103,31 +86,52 @@ const normalizeStatus = (rawStatus) => {
     case "checked-in":
     case "checked-out":
       return "Present";
-
     case "leave":
     case "on leave":
     case "approved leave":
       return "Leave";
-
     case "holiday":
     case "public holiday":
       return "Holiday";
-
     case "weekend":
     case "week off":
       return "Weekend";
-
     default:
       return null;
   }
 };
 
 // ============================================================
-// COMPONENT
+// 🎯 HOSPITAL ID RESOLVER (still used for hard filtering)
 // ============================================================
-const AttendanceSheet = () => {
+const resolveHospitalId = (att) => {
+  if (!att) return null;
+  return (
+    att.hospitalId ??
+    att.hospital_id ??
+    att.hospital?.id ??
+    att.hospital?.hospitalId ??
+    (typeof att.hospital === "string" || typeof att.hospital === "number"
+      ? att.hospital
+      : null) ??
+    att.facilityId ??
+    att.facility?.id ??
+    null
+  );
+};
+
+// ============================================================
+// COMPONENT — Hospital Attendance List (Super Admin)
+// ============================================================
+const HospitalAttendanceList = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { id: routeHospitalId } = useParams(); // ✅ survives refresh
   const now = new Date();
+
+  // ✅ Prefer URL param, fall back to navigation state
+  const hospitalId = routeHospitalId || location.state?.hospitalId;
+  const hospitalName = location.state?.hospitalName;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedYear, setSelectedYear] = useState(now.getFullYear().toString());
@@ -144,24 +148,41 @@ const AttendanceSheet = () => {
   const tableContainerRef = useRef(null);
 
   // ============================================================
-  // API CALL
+  // API CALL — scope by hospitalId when available
   // ============================================================
   const {
     data: attendanceResponse,
     isLoading,
     isFetching,
     refetch,
-  } = useGetAttendancesQuery({
-    page: 1,
-    limit: 1000,
-  });
+  } = useGetAttendancesQuery(
+    {
+      page: 1,
+      limit: 1000,
+      ...(hospitalId ? { hospitalId } : {}),
+    },
+    { skip: !hospitalId } // 🔒 don't fetch without a hospital context
+  );
 
+  // ============================================================
+  // NORMALIZE + 🔒 HARD filter by hospitalId
+  // ============================================================
   const attendanceData = useMemo(() => {
     if (!attendanceResponse) return [];
-    if (Array.isArray(attendanceResponse)) return attendanceResponse;
-    if (Array.isArray(attendanceResponse.data)) return attendanceResponse.data;
-    return [];
-  }, [attendanceResponse]);
+
+    const raw = Array.isArray(attendanceResponse)
+      ? attendanceResponse
+      : Array.isArray(attendanceResponse.data)
+        ? attendanceResponse.data
+        : [];
+
+    // 🔒 Hard stop: without a hospitalId, show nothing.
+    if (!hospitalId) return [];
+
+    return raw.filter(
+      (att) => String(resolveHospitalId(att)) === String(hospitalId)
+    );
+  }, [attendanceResponse, hospitalId]);
 
   useEffect(() => {
     if (!isFetching) {
@@ -171,7 +192,7 @@ const AttendanceSheet = () => {
   }, [isFetching]);
 
   // ============================================================
-  // EMPLOYEES — derived from attendance records
+  // EMPLOYEES — simplified (no hospital field, name only)
   // ============================================================
   const employees = useMemo(() => {
     const map = new Map();
@@ -218,7 +239,6 @@ const AttendanceSheet = () => {
         const normalized =
           normalizeStatus(att.status) || normalizeStatus(att.type);
 
-        // Prefer the check-in record; otherwise accept the first non-null one
         if (!map.has(key) || att.type === "check-in") {
           map.set(key, {
             status: normalized,
@@ -237,7 +257,6 @@ const AttendanceSheet = () => {
 
   // ============================================================
   // ✅ API IS THE SOURCE OF TRUTH
-  //    No automatic Sunday → Weekend. No assumptions.
   // ============================================================
   const getAttendanceStatus = (employeeId, day) => {
     const found = attendanceByUserAndDate.get(`${employeeId}_${day}`);
@@ -286,12 +305,13 @@ const AttendanceSheet = () => {
     monthOptions.find((o) => o.value === selectedMonth)?.label || "Select Month";
 
   // ============================================================
-  // FILTER + PAGINATION
+  // FILTER + PAGINATION — search only on employee name now
   // ============================================================
   const filteredEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
+    const term = searchTerm.toLowerCase();
     return employees.filter((emp) =>
-      String(emp.name).toLowerCase().includes(searchTerm.toLowerCase())
+      String(emp.name).toLowerCase().includes(term)
     );
   }, [employees, searchTerm]);
 
@@ -349,6 +369,19 @@ const AttendanceSheet = () => {
   }, []);
 
   // ============================================================
+  // ✅ Reliable back navigation that preserves hospital context
+  // ============================================================
+  const handleBack = () => {
+    if (hospitalId) {
+      navigate(`/super-admin/hospitals/${hospitalId}`, {
+        state: { hospitalId, hospitalName },
+      });
+    } else {
+      navigate("/super-admin/hospitals");
+    }
+  };
+
+  // ============================================================
   // REFRESH + EXPORT
   // ============================================================
   const handleRefresh = async () => {
@@ -366,7 +399,9 @@ const AttendanceSheet = () => {
     if (!filteredEmployees.length) return;
 
     const exportData = filteredEmployees.map((emp) => {
-      const row = { "Employee Name": emp.name };
+      const row = {
+        "Employee Name": emp.name,
+      };
       for (let day = 1; day <= daysInMonth; day++) {
         const status = getAttendanceStatus(emp.id, day);
         row[`Day ${day}`] = status || "";
@@ -386,7 +421,10 @@ const AttendanceSheet = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_sheet_${getSelectedMonthLabel()}_${selectedYear}.csv`;
+    const fileSuffix = hospitalName
+      ? `${hospitalName.replace(/\s+/g, "_")}_`
+      : "all_hospitals_";
+    a.download = `hospital_attendance_${fileSuffix}${getSelectedMonthLabel()}_${selectedYear}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -404,7 +442,7 @@ const AttendanceSheet = () => {
             <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
             <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
           </div>
-          <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
+          <div className="h-7 w-52 bg-gray-200 rounded animate-pulse mt-2"></div>
         </div>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
@@ -467,33 +505,77 @@ const AttendanceSheet = () => {
       {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          <button
+            onClick={handleBack}
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            title={hospitalId ? "Back to Hospital Details" : "Back to Hospitals"}
+          >
+            <svg
+              className="w-5 h-5 text-gray-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
           </button>
           <div className="text-xs text-gray-500">
-            <span className="text-gray-700">Attendance</span>
+            <span className="text-gray-700">Super Admin</span>
             <span className="mx-1 text-gray-400">»</span>
-            <span>Home</span>
-            <span className="mx-1 text-gray-400">»</span>
-            <span>Attendance Sheet</span>
+            {hospitalId ? (
+              <>
+                <button
+                  onClick={handleBack}
+                  className="hover:text-gray-700 transition-colors"
+                >
+                  {hospitalName || "Hospital"}
+                </button>
+                <span className="mx-1 text-gray-400">»</span>
+              </>
+            ) : (
+              <>
+                <span>Hospitals</span>
+                <span className="mx-1 text-gray-400">»</span>
+              </>
+            )}
+            <span>Attendance</span>
           </div>
         </div>
-        <h1 className="text-xl font-bold text-gray-800">Attendance Sheet</h1>
+
+        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Building2 className="w-6 h-6 text-[#1C62A0]" />
+          {hospitalName ? `${hospitalName} Attendance` : "Hospital Attendance"}
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
-          View and manage employee attendance
+          Monitor employee attendance
+          {hospitalName ? ` for ${hospitalName}` : " across hospitals"}
         </p>
       </div>
+
+      {/* Missing hospital context banner */}
+      {!hospitalId && (
+        <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          No hospital selected. Please open attendance from a hospital's detail
+          page.
+        </div>
+      )}
 
       {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <div className="flex-1 max-w-sm relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
+            />
             <input
               type="text"
-              placeholder="Search employee..."
+              placeholder="Search by employee name..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -517,8 +599,12 @@ const AttendanceSheet = () => {
             onClick={handleRefresh}
             disabled={isRefreshing || isFetching}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh"
           >
-            <RefreshCw size={16} className={isRefreshing || isFetching ? "animate-spin" : ""} />
+            <RefreshCw
+              size={16}
+              className={isRefreshing || isFetching ? "animate-spin" : ""}
+            />
           </button>
           <button
             onClick={exportToExcel}
@@ -550,7 +636,9 @@ const AttendanceSheet = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Year */}
             <div className="relative" ref={yearRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Year
+              </label>
               <button
                 onClick={() => setShowYearDropdown(!showYearDropdown)}
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white flex items-center justify-between"
@@ -561,7 +649,9 @@ const AttendanceSheet = () => {
                 </span>
                 <ChevronDown
                   size={14}
-                  className={`transition-transform ${showYearDropdown ? "rotate-180" : ""}`}
+                  className={`transition-transform ${
+                    showYearDropdown ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {showYearDropdown && (
@@ -589,7 +679,9 @@ const AttendanceSheet = () => {
 
             {/* Month */}
             <div className="relative" ref={monthRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Month
+              </label>
               <button
                 onClick={() => setShowMonthDropdown(!showMonthDropdown)}
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white flex items-center justify-between"
@@ -600,7 +692,9 @@ const AttendanceSheet = () => {
                 </span>
                 <ChevronDown
                   size={14}
-                  className={`transition-transform ${showMonthDropdown ? "rotate-180" : ""}`}
+                  className={`transition-transform ${
+                    showMonthDropdown ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {showMonthDropdown && (
@@ -629,7 +723,7 @@ const AttendanceSheet = () => {
         </div>
       )}
 
-      {/* ✅ Attendance Status Legend — uses same AttendanceStatusIcon component */}
+      {/* Attendance Status Legend */}
       <div className="flex flex-wrap items-center justify-end gap-6 mb-6">
         {LEGEND_ITEMS.map((item) => (
           <div key={item.status} className="flex items-center gap-2">
@@ -646,12 +740,14 @@ const AttendanceSheet = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No employees found' : 'No attendance data available'}
+            {searchTerm ? "No employees found" : "No attendance data available"}
           </h3>
           <p className="text-gray-500 mb-4">
             {searchTerm
               ? `No results found for "${searchTerm}". Try adjusting your search.`
-              : 'No attendance records for the selected period.'}
+              : hospitalId
+              ? `No attendance records for ${hospitalName || "this hospital"} in the selected period.`
+              : "No attendance records for the selected period."}
           </p>
         </div>
       ) : (
@@ -659,7 +755,9 @@ const AttendanceSheet = () => {
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Employees
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredEmployees.length}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {filteredEmployees.length}
+              </span>
               {searchTerm && (
                 <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
               )}
@@ -697,7 +795,6 @@ const AttendanceSheet = () => {
                             <div className="text-sm font-medium text-gray-700">
                               {day}
                             </div>
-                            {/* ✅ Fixed: index already includes the pad offset */}
                             <div className="text-[10px] text-gray-400 mt-0.5">
                               {weekdays[index % 7]}
                             </div>
@@ -714,7 +811,6 @@ const AttendanceSheet = () => {
                         idx % 2 === 0 ? "bg-white" : "bg-gray-50"
                       }`}
                     >
-                      {/* ✅ Employee name is now clickable → navigates to EmployeeAttendance */}
                       <td
                         className="px-4 py-3 font-medium sticky left-0 bg-white z-30 border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
                         style={{
@@ -725,18 +821,9 @@ const AttendanceSheet = () => {
                           overflowWrap: "break-word",
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(`/attendance/employee/${employee.id}`, {
-                              state: { employeeName: employee.name },
-                            })
-                          }
-                          className="break-words whitespace-normal text-left text-gray-800 hover:text-[#1C62A0] hover:underline transition-colors cursor-pointer w-full"
-                          title={`View attendance for ${employee.name}`}
-                        >
+                        <div className="break-words whitespace-normal text-gray-800">
                           {employee.name}
-                        </button>
+                        </div>
                       </td>
                       {calendarDays.map((day, index) => {
                         if (!day) return null;
@@ -763,7 +850,8 @@ const AttendanceSheet = () => {
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="text-sm text-gray-500">
-                    Showing {startRecord} to {endRecord} of {filteredEmployees.length} employees
+                    Showing {startRecord} to {endRecord} of{" "}
+                    {filteredEmployees.length} employees
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -779,7 +867,10 @@ const AttendanceSheet = () => {
                     <div className="flex gap-1">
                       {getPageNumbers().map((page, index) =>
                         page === "..." ? (
-                          <span key={index} className="px-3 py-1.5 text-gray-400">
+                          <span
+                            key={index}
+                            className="px-3 py-1.5 text-gray-400"
+                          >
                             ...
                           </span>
                         ) : (
@@ -817,4 +908,4 @@ const AttendanceSheet = () => {
   );
 };
 
-export default AttendanceSheet;
+export default HospitalAttendanceList;

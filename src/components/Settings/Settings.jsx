@@ -5,14 +5,17 @@ import {
   Button,
   Card,
   Input,
-  Tabs
 } from '../ui';
 import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
+import SalarySlipTemplate from './SalarySlipTemplate'; // ✅ NEW IMPORT
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus } from 'lucide-react';
+import {
+  MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus,
+  Building2, Shield, MapPinned, FileText, Star, Banknote // ✅ ADDED Banknote
+} from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
@@ -51,33 +54,30 @@ const DAYS = [
 // ✅ Convert "10:00" to "10:00 AM" with proper validation
 const convertTo12HourFormat = (time) => {
   if (!time) return '09:00 AM';
-  
-  // If already in 12-hour format, return as is
+
   if (time.includes('AM') || time.includes('PM')) {
     return time;
   }
-  
-  // Handle "24:00" or "00:00" edge cases
+
   if (time === '24:00' || time === '00:00') {
     return '12:00 AM';
   }
-  
+
   const parts = time.split(':');
   if (parts.length < 2) return '09:00 AM';
-  
+
   const hours = parseInt(parts[0], 10);
   const minutes = parts[1] || '00';
-  
+
   if (isNaN(hours) || hours > 24) return '09:00 AM';
-  
-  // Handle 24-hour format
+
   if (hours === 24) {
     return `12:${minutes.padStart(2, '0')} AM`;
   }
   if (hours === 0) {
     return `12:${minutes.padStart(2, '0')} AM`;
   }
-  
+
   const period = hours >= 12 ? 'PM' : 'AM';
   const hour12 = hours % 12 || 12;
   return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -86,40 +86,39 @@ const convertTo12HourFormat = (time) => {
 // ✅ Helper: Convert time string to minutes for comparison
 const convertTimeToMinutes = (timeStr) => {
   if (!timeStr) return 0;
-  
+
   const parts = timeStr.split(' ');
   if (parts.length < 2) return 0;
-  
+
   const timePart = parts[0];
   const period = parts[1];
   const timeParts = timePart.split(':');
-  
+
   if (timeParts.length < 2) return 0;
-  
+
   let hours = parseInt(timeParts[0], 10);
   const minutes = parseInt(timeParts[1], 10);
-  
+
   if (isNaN(hours) || isNaN(minutes)) return 0;
-  
+
   if (period === 'PM' && hours !== 12) {
     hours += 12;
   } else if (period === 'AM' && hours === 12) {
     hours = 0;
   }
-  
+
   return hours * 60 + minutes;
 };
 
 // ✅ Convert API array format to frontend object format with validation
 const convertApiToFrontendFormat = (apiHours) => {
   if (!apiHours || !Array.isArray(apiHours)) return null;
-  
+
   const result = { ...DEFAULT_WORKING_HOURS };
-  
+
   apiHours.forEach(dayData => {
     const dayKey = dayData.day?.toLowerCase();
     if (dayKey && DAYS.some(d => d.key === dayKey)) {
-      // If holiday, mark as closed
       if (dayData.is_holiday) {
         result[dayKey] = {
           open: DEFAULT_WORKING_HOURS[dayKey].open,
@@ -128,22 +127,19 @@ const convertApiToFrontendFormat = (apiHours) => {
         };
         return;
       }
-      
-      // Convert "10:00" to "10:00 AM"
+
       let openTime = convertTo12HourFormat(dayData.opening_time);
       let closeTime = convertTo12HourFormat(dayData.closing_time);
-      
-      // ✅ Validate that close time is after open time
+
       const openMinutes = convertTimeToMinutes(openTime);
       const closeMinutes = convertTimeToMinutes(closeTime);
-      
-      // If close is before or equal to open, use default
+
       if (closeMinutes <= openMinutes) {
         console.warn(`Invalid hours for ${dayKey}: ${openTime} - ${closeTime}, using defaults`);
         openTime = DEFAULT_WORKING_HOURS[dayKey].open;
         closeTime = DEFAULT_WORKING_HOURS[dayKey].close;
       }
-      
+
       result[dayKey] = {
         open: openTime,
         close: closeTime,
@@ -151,42 +147,39 @@ const convertApiToFrontendFormat = (apiHours) => {
       };
     }
   });
-  
+
   return result;
 };
 
 // ✅ Normalize working hours from any format
 const normalizeWorkingHours = (hours) => {
   if (!hours) return DEFAULT_WORKING_HOURS;
-  
-  // If hours is an array (API format), convert it
+
   if (Array.isArray(hours)) {
     const converted = convertApiToFrontendFormat(hours);
     if (converted) return converted;
     return DEFAULT_WORKING_HOURS;
   }
-  
-  // If hours is already an object (frontend format)
+
   const normalized = { ...DEFAULT_WORKING_HOURS };
-  
+
   DAYS.forEach(day => {
     const dayData = hours[day.key];
     if (dayData) {
       let openTime = dayData.open || DEFAULT_WORKING_HOURS[day.key].open;
       let closeTime = dayData.close || DEFAULT_WORKING_HOURS[day.key].close;
       const isClosed = dayData.closed !== undefined ? dayData.closed : DEFAULT_WORKING_HOURS[day.key].closed;
-      
-      // If not closed, validate that close time is after open time
+
       if (!isClosed) {
         const openMinutes = convertTimeToMinutes(openTime);
         const closeMinutes = convertTimeToMinutes(closeTime);
-        
+
         if (closeMinutes <= openMinutes) {
           openTime = DEFAULT_WORKING_HOURS[day.key].open;
           closeTime = DEFAULT_WORKING_HOURS[day.key].close;
         }
       }
-      
+
       normalized[day.key] = {
         open: openTime,
         close: closeTime,
@@ -194,7 +187,7 @@ const normalizeWorkingHours = (hours) => {
       };
     }
   });
-  
+
   return normalized;
 };
 
@@ -306,30 +299,17 @@ const SettingsSkeleton = () => {
           <div className="h-5 w-64 bg-gray-200 rounded animate-pulse"></div>
         </div>
 
-        <div className="border-b border-gray-200 mb-6">
-          <div className="flex gap-8">
-            {['General', 'Security', 'Map', 'Prescription Template'].map((_, i) => (
-              <div key={i} className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+        {/* Vertical layout skeleton */}
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+          <div className="w-full md:w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm p-2 space-y-1">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse" />
             ))}
           </div>
-        </div>
-
-        <div className="space-y-8">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-1"></div>
-              <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i}>
-                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2"></div>
-                    <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="flex-1 min-w-0 w-full bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+            <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mb-4" />
+            <div className="h-4 w-full bg-gray-100 rounded animate-pulse mb-2" />
+            <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
           </div>
         </div>
       </div>
@@ -493,7 +473,6 @@ const Settings = () => {
           navigate('/sign-in');
         }, 2000);
       } else {
-        // ✅ Extract error message from various response formats
         const message =
           updateError?.data?.error?.details?.[0]?.message ||
           updateError?.data?.details?.[0]?.message ||
@@ -515,9 +494,7 @@ const Settings = () => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
       
-      // Handle hospital type - extract the name string
       let hospitalType = hospital.type || hospital.hospitalType || '';
-      // If it's an object for some reason, extract the name
       if (typeof hospitalType === 'object' && hospitalType !== null) {
         hospitalType = hospitalType.name || hospitalType._id || '';
       }
@@ -531,7 +508,6 @@ const Settings = () => {
         lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
       });
       
-      // ✅ Check all possible API fields for working hours
       let workingHoursData = null;
       
       if (hospital.working_hours_general && Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length > 0) {
@@ -546,7 +522,6 @@ const Settings = () => {
         workingHoursData = hospital.working_hours;
       }
       
-      // Normalize the working hours
       const normalizedHours = normalizeWorkingHours(workingHoursData);
       setWorkingHours(normalizedHours);
       
@@ -584,7 +559,6 @@ const Settings = () => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
 
-    // Phone number validation
     const phone = String(editForm.mobileNumber || '').trim();
 
     if (!/^\d{10}$/.test(phone)) {
@@ -595,11 +569,10 @@ const Settings = () => {
     setIsSaving(true);
     
     try {
-      // ✅ Simply use the category name directly - NO ID LOOKUP
       const updateData = {
         name: editForm.name,
         email: editForm.email,
-        type: editForm.hospitalType, // This is the category name string
+        type: editForm.hospitalType,
         phone: editForm.mobileNumber,
         address: {
           country: editForm.countryName,
@@ -656,7 +629,6 @@ const Settings = () => {
     } catch (error) {
       console.error('Update error:', error);
       
-      // ✅ FIXED: Extract specific validation error first, then fallback
       const status = error?.status || error?.originalStatus;
       
       if (status === 401) {
@@ -688,7 +660,7 @@ const Settings = () => {
       ...prev,
       name: hospitalInfo.name,
       email: hospitalInfo.email,
-      hospitalType: hospitalInfo.hospitalType, // This is the name string
+      hospitalType: hospitalInfo.hospitalType,
       mobileNumber: hospitalInfo.mobileNumber,
       workingHours: workingHours,
     }));
@@ -724,7 +696,6 @@ const Settings = () => {
     setEditForm(prev => ({ ...prev, cityName: name }));
   };
 
-  // Properly update working hours with deep clone
   const handleWorkingHourChange = (day, field, value) => {
     setEditForm(prev => {
       const updatedWorkingHours = { ...prev.workingHours };
@@ -739,7 +710,6 @@ const Settings = () => {
     });
   };
 
-  // Properly toggle closed status with deep clone
   const handleToggleClosed = (day) => {
     setEditForm(prev => {
       const updatedWorkingHours = { ...prev.workingHours };
@@ -1130,6 +1100,8 @@ const Settings = () => {
         return <Map />;
       case 'Prescription Template':
         return <PrescriptionTemplate />;
+      case 'Salary Slip Template':                       // ✅ NEW CASE
+        return <SalarySlipTemplate />;                   // ✅ NEW CASE
       case 'Reviews':
         return <HospitalReviews />;
       default:
@@ -1137,7 +1109,15 @@ const Settings = () => {
     }
   };
 
-  const tabs = ['General', 'Security', 'Map', 'Prescription Template','Reviews'];
+  // ✅ Vertical sidebar tabs with icons
+  const tabs = [
+    { id: 'General',                 label: 'General',                 icon: Building2 },
+    { id: 'Security',                label: 'Security',                icon: Shield },
+    { id: 'Map',                     label: 'Map',                     icon: MapPinned },
+    { id: 'Prescription Template',   label: 'Prescription Template',   icon: FileText },
+    { id: 'Salary Slip Template',    label: 'Salary Slip Template',    icon: Banknote },  // ✅ NEW TAB
+    { id: 'Reviews',                 label: 'Reviews',                 icon: Star },
+  ];
 
   if (isLoadingHospital) {
     return <SettingsSkeleton />;
@@ -1146,23 +1126,70 @@ const Settings = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
           <p className="text-gray-500 mt-1">Manage your account settings</p>
         </div>
-        
-        <Tabs 
-          tabs={tabs.map(tab => ({ id: tab, label: tab }))}
-          activeTab={activeTab} 
-          onTabChange={setActiveTab} 
-          className="mb-6" 
-        />
-        
-        <div className="mt-6">{renderTabContent()}</div>
-        
-        <div className="mt-12 pt-6 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-400">© {hospitalInfo.name} - All Rights Reserved.</p>
+
+        {/* Vertical Settings Layout */}
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+
+          {/* Left Settings Menu */}
+          <aside className="w-full md:w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm p-2">
+            <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible">
+              {tabs.map((tab, index) => {
+                const isActive = activeTab === tab.id;
+                const Icon = tab.icon;
+
+                return (
+                  <div key={tab.id} className="contents md:block">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`
+                        relative flex items-center gap-3 whitespace-nowrap md:whitespace-normal
+                        w-full text-left px-4 py-3 rounded-lg
+                        transition-all duration-200
+                        ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }
+                      `}
+                    >
+                      {/* Active blue accent bar */}
+                      {isActive && (
+                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-blue-600" />
+                      )}
+                      <Icon size={18} className="flex-shrink-0" />
+                      <span className="flex-1 text-sm">{tab.label}</span>
+                    </button>
+
+                    {/* Separator between items (desktop only) */}
+                    {index < tabs.length - 1 && (
+                      <div className="hidden md:block h-px bg-gray-100 mx-3" />
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          </aside>
+
+          {/* Right Content */}
+          <main className="flex-1 min-w-0 w-full">
+            {renderTabContent()}
+          </main>
         </div>
+
+        {/* Footer */}
+        <div className="mt-12 pt-6 border-t border-gray-200 text-center">
+          <p className="text-sm text-gray-400">
+            © {hospitalInfo.name} - All Rights Reserved.
+          </p>
+        </div>
+
       </div>
     </div>
   );
