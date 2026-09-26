@@ -44,12 +44,13 @@ export interface DevicesResponse {
 
 // Register device payload
 export interface RegisterDevicePayload {
-  hospitalId: string | number;
+  hospitalId: number;
   deviceId: string;
   deviceName: string;
   location: string;
   locationImage?: string;
-  deviceType: string;
+  deviceType: "face" | "rfid" | "fingerprint";
+  description?: string;
 }
 
 // Credentials returned on register / restore / regenerate
@@ -187,7 +188,7 @@ export const deviceApi = api.injectEndpoints({
     }),
 
     // ==============================
-    // GET SINGLE DEVICE BY ID   👈 NEW
+    // GET SINGLE DEVICE BY ID
     // ==============================
 
     getDeviceById: builder.query<GenericDeviceResponse, string | number>({
@@ -291,7 +292,7 @@ export const deviceApi = api.injectEndpoints({
 
 export const {
   useGetDevicesQuery,
-  useGetDeviceByIdQuery,        // 👈 NEW
+  useGetDeviceByIdQuery,
   useRegisterDeviceMutation,
   useUpdateDeviceMutation,
   useUnregisterDeviceMutation,

@@ -208,6 +208,7 @@ const RegisterDevicePage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [credentials, setCredentials] = useState(null);
 
+  // Kept for local preview UX only — not sent to backend (JSON contract)
   const [readerImageFile, setReaderImageFile] = useState(null);
   const [readerImagePreview, setReaderImagePreview] = useState(null);
   const [locationImageFile, setLocationImageFile] = useState(null);
@@ -291,17 +292,19 @@ const RegisterDevicePage = () => {
     }
 
     try {
-      const payload = new FormData();
-      payload.append('hospitalId', formData.hospitalId);
-      payload.append('deviceId', formData.deviceId.trim());
-      payload.append('deviceName', formData.deviceName.trim());
-      payload.append('location', formData.location);
-      payload.append('deviceType', formData.deviceType);
+      // JSON payload (backend contract is JSON, not multipart)
+      const payload = {
+        hospitalId: Number(formData.hospitalId),
+        deviceId: formData.deviceId.trim(),
+        deviceName: formData.deviceName.trim(),
+        location: formData.location,
+        deviceType: formData.deviceType,
+      };
+
+      // Only include description if backend supports it
       if (formData.description?.trim()) {
-        payload.append('description', formData.description.trim());
+        payload.description = formData.description.trim();
       }
-      if (readerImageFile) payload.append('readerImage', readerImageFile);
-      if (locationImageFile) payload.append('locationImage', locationImageFile);
 
       const response = await registerDevice(payload).unwrap();
 
