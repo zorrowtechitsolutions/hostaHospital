@@ -85,6 +85,11 @@ import RecentActivity from './RecentActivity';
 import SuperAdminAuditLog from './auditlogs/SuperAdminAuditLog';
 import HospitalSessionHistory from './auditlogs/HospitalSessionHistory';
 
+// ✅ Attendance imports
+import HospitalAttendanceList from './attendance/HospitalAttendanceList';
+
+
+
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -207,6 +212,9 @@ const SuperAdminLayout = () => {
               {/* Hospital User Permissions Routes */}
               <Route path="hospital-users/:hospitalId/permissions" element={<HospitalUserPermissions />} />
               <Route path="hospital-users/:hospitalId/permissions/:roleId" element={<HospitalPermissionList />} />
+
+              {/* Attendance routes */}
+              <Route path="hospital-attendance" element={<HospitalAttendanceList />} />
 
               {/* ===== SUPER ADMIN USER MANAGEMENT (RTK QUERY) ===== */}
               <Route path="users" element={<UsersList />} />
