@@ -254,7 +254,10 @@ const Device = () => {
   };
 
   // ============================================================
-  // API
+  // API — fetch ALL devices for the hospital once.
+  // All filtering (search / status / type / location) happens
+  // on the client below so it's instant and doesn't depend on
+  // backend support for those query params.
   // ============================================================
   const {
     data: deviceResponse,
@@ -262,12 +265,7 @@ const Device = () => {
     isFetching,
     isError,
     refetch,
-  } = useGetDevicesQuery({
-    search: searchTerm || undefined,
-    status: statusFilter !== 'all' ? statusFilter : undefined,
-    type: typeFilter !== 'all' ? typeFilter : undefined,
-    location: locationFilter !== 'all' ? locationFilter : undefined,
-  });
+  } = useGetDevicesQuery();
 
   const [unregisterDevice, { isLoading: isUnregistering }] =
     useUnregisterDeviceMutation();
@@ -355,7 +353,34 @@ const Device = () => {
     [deviceData]
   );
 
-  const filteredData = useMemo(() => normalizedData, [normalizedData]);
+  // ============================================================
+  // CLIENT-SIDE FILTERING
+  // Search across name / deviceId / location / type.
+  // Combined with status, type, and location dropdowns.
+  // ============================================================
+  const filteredData = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    return normalizedData.filter((row) => {
+      const matchesSearch =
+        !term ||
+        row.name.toLowerCase().includes(term) ||
+        String(row.deviceId).toLowerCase().includes(term) ||
+        String(row.location).toLowerCase().includes(term) ||
+        String(row.type).toLowerCase().includes(term);
+
+      const matchesStatus =
+        statusFilter === 'all' || row.status === statusFilter;
+
+      const matchesType =
+        typeFilter === 'all' || row.type === typeFilter;
+
+      const matchesLocation =
+        locationFilter === 'all' || row.location === locationFilter;
+
+      return matchesSearch && matchesStatus && matchesType && matchesLocation;
+    });
+  }, [normalizedData, searchTerm, statusFilter, typeFilter, locationFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -616,6 +641,8 @@ const Device = () => {
 
   // ============================================================
   // DERIVED FILTER OPTIONS
+  // Computed from the FULL list (normalizedData), not the filtered
+  // list, so dropdown options remain stable while the user filters.
   // ============================================================
   const locations = [
     ...new Set(normalizedData.map((r) => r.location).filter((l) => l && l !== '-')),
