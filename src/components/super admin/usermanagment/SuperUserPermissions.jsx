@@ -346,9 +346,7 @@ const SuperUserPermissions = () => {
               >
                 <option value="">Select action</option>
                 <option value="create">Create</option>
-                <option value="read">Read</option>
                 <option value="view">View</option>
-                <option value="update">Update</option>
                 <option value="edit">Edit</option>
                 <option value="delete">Delete</option>
               </select>
