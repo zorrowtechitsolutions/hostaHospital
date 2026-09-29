@@ -80,50 +80,50 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // ✅ FIXED: Use patientNumber instead of patient.id
-  // patient.id = 81 (database ID) - DO NOT USE
-  // patient.patientNumber = 2 (business patient number) - USE THIS
   const patientNumber = patient?.patientNumber;
 
   const { data: prescriptionData, isLoading: isLoadingPrescriptions } = useGetPrescriptionsQuery(
     {
-      patientNumber: patientNumber,  // ✅ ONLY patientNumber
+      patientNumber: patientNumber,
       page: 1,
       limit: 100,
     },
     {
-      skip: !patientNumber,  // ✅ Skip if no patientNumber
+      skip: !patientNumber,
     }
   );
 
   const { data: doctorsData, isLoading: isLoadingDoctors } = useGetDoctorsQuery();
 
-
-
-  // Show skeleton while either query is loading
   const isLoading = isLoadingPrescriptions || isLoadingDoctors;
 
-  const medicalHistoryList = prescriptionData?.data?.map((item) => {
-    const doctor = doctorsData?.data?.find(
-      (doc) => Number(doc.id) === Number(item.doctorId)
-    );
+  // ✅ FIX: Hide soft-deleted prescriptions from Medical History
+  const medicalHistoryList = prescriptionData?.data
+    ?.filter((item) => {
+      // Deleted prescriptions should not appear in Medical History
+      return item.isDelete !== true && item.status !== "deleted";
+    })
+    .map((item) => {
+      const doctor = doctorsData?.data?.find(
+        (doc) => Number(doc.id) === Number(item.doctorId)
+      );
 
-    return {
-      id: item.id,
-      illnessName: item.complaint || "No complaint recorded",
-      illnessDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      }) : "N/A",
-      doctorName: doctor?.displayName || doctor?.name || item.doctorName || "Not Assigned",
-      department: doctor?.specialization || doctor?.department || item.doctorSpecialization || "Not Specified",
-      advice: item.advice,
-      investigations: item.investigations || [],
-      medications: item.medications || [],
-      rawData: item,
-    };
-  }) || [];
+      return {
+        id: item.id,
+        illnessName: item.complaint || "No complaint recorded",
+        illnessDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }) : "N/A",
+        doctorName: doctor?.displayName || doctor?.name || item.doctorName || "Not Assigned",
+        department: doctor?.specialization || doctor?.department || item.doctorSpecialization || "Not Specified",
+        advice: item.advice,
+        investigations: item.investigations || [],
+        medications: item.medications || [],
+        rawData: item,
+      };
+    }) || [];
 
   const totalItems = medicalHistoryList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -137,11 +137,9 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
     }
   };
 
-  // ============ SKELETON LOADING STATE ============
   if (isLoading) {
     return <MedicalHistorySkeleton />;
   }
-  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
@@ -218,7 +216,9 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                             {openMenu === `medical-${item.id}` && (
                               <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                                 <button
+                                  type="button"
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
                                     handleViewMedicalDetails(item);
                                     setOpenMenu(null);
@@ -228,9 +228,11 @@ const MedicalHistoryTab = ({ patient, handleViewMedicalDetails, handleDeleteClic
                                   <Eye size={15} /> View Details
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    handleDeleteClick('medical', item.id, null, item.illnessName);
+                                    handleDeleteClick('medical', item.id, null, item.illnessName, item);
                                     setOpenMenu(null);
                                   }}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-b-lg"

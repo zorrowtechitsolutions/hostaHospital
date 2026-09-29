@@ -909,7 +909,6 @@ const PatientDetails = () => {
   };
 
   const handleConfirmDelete = async () => {
-    // ✅ FIXED: now destructuring `item` too
     const { type, id, index, item } = deleteConfig;
     
     try {
@@ -984,14 +983,12 @@ const PatientDetails = () => {
 
         return;
       } else if (type === 'visit') {
-        // ✅ Uses `item` from destructuring now
         const visitToDelete =
           item ||
           patient.visitHistoryList.find(
             (visit, i) =>
               i === index || String(visit.id) === String(id)
           );
-
 
         if (!visitToDelete) {
           showErrorToast("Visit record not found.");
@@ -1000,7 +997,6 @@ const PatientDetails = () => {
         }
 
         const bookingNumber = visitToDelete.bookingNumber;
-
 
         if (!bookingNumber) {
           showErrorToast("Booking number is missing for this visit.");
@@ -1013,7 +1009,6 @@ const PatientDetails = () => {
 
           showSuccessToast("Visit record deleted successfully");
 
-          // Refresh bookings. patientVisits is rebuilt from bookingResponse.
           await refetchBookings();
 
           setShowDeleteModal(false);
@@ -1037,9 +1032,38 @@ const PatientDetails = () => {
 
         return;
       } else if (type === 'medical') {
-        const updatedMedicalHistory = patient.medicalHistoryList.filter((_, i) => i !== index);
-        setPatient({...patient, medicalHistoryList: updatedMedicalHistory});
-        showSuccessToast("Medical history deleted successfully");
+        // ✅ FIXED: Medical History records are prescriptions → call DELETE API
+        try {
+          await deletePrescription(id).unwrap();
+
+          showSuccessToast("Medical history deleted successfully");
+
+          // Refresh the prescription query used by MedicalHistoryTab
+          await refetchPrescriptions();
+
+          // Refresh patient data as well
+          await refetchPatient();
+
+          setShowDeleteModal(false);
+          setDeleteConfig({
+            type: '',
+            id: null,
+            index: null,
+            name: '',
+            item: null,
+          });
+
+        } catch (error) {
+          console.error("❌ DELETE MEDICAL HISTORY ERROR:", error);
+
+          showErrorToast(
+            error?.data?.message ||
+            error?.error ||
+            "Failed to delete medical history"
+          );
+        }
+
+        return;
       } else if (type === 'document') {
         const updatedDocuments = patient.documentsList.filter((_, i) => i !== index);
         setPatient({...patient, documentsList: updatedDocuments});
