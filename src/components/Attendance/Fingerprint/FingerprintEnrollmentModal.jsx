@@ -466,7 +466,6 @@ const FingerprintEnrollmentModal = () => {
         attempts: 1,
       };
 
-      console.log('Fingerprint enrollment payload:', payload);
 
       await createEnrollment(payload).unwrap();
 

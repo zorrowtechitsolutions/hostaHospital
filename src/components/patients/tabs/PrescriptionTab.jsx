@@ -140,7 +140,6 @@ const PrescriptionTab = ({
   // Stable callback so the effect doesn't re-run on every render
   const handleSocketEvent = useCallback(
     (type, data) => {
-      console.log(`[PrescriptionTab] socket event: ${type}`, data);
       onPrescriptionChange?.(type, data);
     },
     [onPrescriptionChange]

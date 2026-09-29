@@ -752,10 +752,6 @@ const LabResultsTab = ({ patient }) => {
         };
       }
 
-      console.log("Updating lab result:", {
-        id: labResultId,
-        updateData,
-      });
 
       await updateLabResult({
         id: String(labResultId),

@@ -218,7 +218,6 @@ const Attendance = () => {
   };
 
   const handleExport = () => {
-    console.log('Exporting:', filteredData.length, 'records');
   };
 
   // Badge helpers — unchanged
