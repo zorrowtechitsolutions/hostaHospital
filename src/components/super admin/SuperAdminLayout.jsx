@@ -1,9 +1,8 @@
 // src/components/super-admin/SuperAdminLayout.jsx
-
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import TopBar from './TopBar'; // ✅ Import TopBar
+import TopBar from './TopBar';
 import Hospitals from './hospitals/Hospitals';
 import Categories from './Categories';
 import Specialties from './Specialties';
@@ -19,47 +18,27 @@ import HospitalAmbulancesList from './hospitals/HospitalAmbulancesList';
 import HospitalBloodBanksList from './hospitals/HospitalBloodBanksList';
 import AddHospital from './hospitals/AddHospital';
 import EditHospital from './hospitals/EditHospital';
-
-// ✅ Doctor Details import
 import DoctorDetails from './hospitals/Doctors/DoctorDetails';
-
-// ✅ Staff imports
 import StaffDetails from './hospitals/staff/staffDetails';
 import AddStaff from './hospitals/staff/AddStaff';
 import EditStaff from './hospitals/staff/EditStaff';
-
-// Ambulance imports
 import AddAmbulance from '../Ambulance/AddAmbulanceModal';
 import EditAmbulance from '../Ambulance/EditAmbulanceModal';
 import Ambulance from './phone/ambulance/Ambulance';
 import AmbulanceDetails from './phone/ambulance/AmbulanceDetails';
-
-// ✅ Blood Bank imports
 import AddBloodBank from './hospitals/BloodBank/AddBloodBank';
 import EditBloodBank from './hospitals/BloodBank/EditBloodBank';
 import BloodBankDetails from './hospitals/BloodBank/BloodBankDetails';
-
-// ✅ Patient imports
 import AddPatient from './hospitals/patients/AddPatients';
 import EditPatient from './hospitals/patients/EditPatient';
 import PatientDetails from './hospitals/patients/PatientsDetails';
-
-// ✅ Blood Donor imports
 import BloodDonors from './phone/blooddonor/BloodDonors';
 import DonorDetails from './phone/blooddonor/DonorDetails';
-
-// Specialty imports
 import HospitalsBySpeciality from './speciality/HospitalsBySpeciality';
 import DoctorsByHospital from './speciality/DoctorsByHospital';
-
-// Super Permission imports
 import SuperPermissionList from './permission/SuperPermissionList';
 import SuperUserPermissions from './usermanagment/SuperUserPermissions';
-
-// Hospital Permission imports
 import HospitalPermissionList from './permission/HospitalPermissionList';
-
-// User Management imports
 import HospitalUsers from './usermanagment/HospitalUsers';
 import HospitalUserPermissions from './usermanagment/HospitalUserPermissions';
 import HospitalUserDetails from './usermanagment/HospitalUserDetails';
@@ -68,27 +47,31 @@ import HospitalEditUser from './usermanagment/HospitalEditUser';
 import SuperAddNewUser from './usermanagment/SuperAddNewUser';
 import SuperEditUser from './usermanagment/SuperEditUser';
 import SuperViewAssignedRoles from './usermanagment/SuperViewAssignedRoles';
-
-// Hospital Roles imports
 import HospitalRoles from './permission/HospitalRoles';
 import HospitalNotificationList from './hospitals/notification/HospitalNotificationList';
-
-// User Management (RTK Query)
 import UsersList from './users/userslist';
 import EditDoctor from './hospitals/Doctors/EditDoctor';
 import AddDoctor from './hospitals/Doctors/AddDoctor';
-
-// ✅ Notification imports
 import NotificationsPage from './notification/NotificationsPage';
 import RecentAppointments from './RecentAppointments';
 import RecentActivity from './RecentActivity';
 import SuperAdminAuditLog from './auditlogs/SuperAdminAuditLog';
 import HospitalSessionHistory from './auditlogs/HospitalSessionHistory';
-
-// ✅ Attendance imports
 import HospitalAttendanceList from './attendance/HospitalAttendanceList';
+import DeviceSuperAdmin from './devices/DeviceSuperAdmin';
+import EditDeviceSuperAdmin from './devices/EditDeviceSuperAdmin';
 
+// ── Attendance (tabbed: Access Cards + Fingerprints) ──
+import AttendanceTabsPage from './devices/AttendanceTabsPage';
 
+// ── Access Card sub-pages (under ./devices/) ──
+import ViewAccessCardDetails from './devices/Accesscard/ViewAccessCardDetails';
+import AssignAccessCard from './devices/Accesscard/AssignAccessCard';
+
+// ── Fingerprint sub-pages (under ./devices/) ──
+import ViewFingerprintDetails from './devices/fingerprint/ViewFingerprintDetails';
+import FingerprintEnrollmentModal from './devices/fingerprint/FingerprintEnrollmentModal';
+import FingerprintEditModal from './devices/fingerprint/FingerprintEditModal';
 
 const SuperAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -99,14 +82,13 @@ const SuperAdminLayout = () => {
   return (
     <div className="flex h-screen bg-[#F8F9FA]">
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-       
-      <div 
+
+      <div
         className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
         style={{
           marginLeft: sidebarOpen ? `${SIDEBAR_OPEN_WIDTH}px` : `${SIDEBAR_CLOSED_WIDTH}px`
         }}
       >
-        {/* ✅ TopBar Component - Now visible */}
         <TopBar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
@@ -116,24 +98,24 @@ const SuperAdminLayout = () => {
           <div className="p-6">
             <Routes>
               <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
-              
+
               {/* Dashboard */}
               <Route path="dashboard" element={<AdminDashboard />} />
-              
-              {/* ✅ Notification Route */}
+
+              {/* Notifications */}
               <Route path="notifications" element={<NotificationsPage />} />
 
-              {/* recent activity and recent appointments Routes */}
+              {/* Recent activity */}
               <Route path="appointments" element={<RecentAppointments />} />
               <Route path="activity" element={<RecentActivity />} />
-              
+
               {/* Hospital Routes */}
               <Route path="hospitals" element={<Hospitals />} />
               <Route path="hospitals/:id" element={<HospitalDetails />} />
               <Route path="hospitals/add" element={<AddHospital />} />
               <Route path="hospitals/edit/:id" element={<EditHospital />} />
-              
-              {/* Hospital List Routes - Nested under hospital */}
+
+              {/* Hospital List Routes */}
               <Route path="hospitals/:id/patients" element={<HospitalPatientsList />} />
               <Route path="hospitals/:id/doctors" element={<HospitalDoctorsList />} />
               <Route path="hospitals/:id/staff" element={<HospitalStaffList />} />
@@ -142,88 +124,123 @@ const SuperAdminLayout = () => {
               <Route path="hospitals/:id/ambulances" element={<HospitalAmbulancesList />} />
               <Route path="hospitals/:id/blood-banks" element={<HospitalBloodBanksList />} />
               <Route path="hospitals/:id/notifications" element={<HospitalNotificationList />} />
-              
-              {/* ✅ Patient CRUD Routes - Nested under hospital */}
+
+              {/* Patient CRUD */}
               <Route path="hospitals/:id/patients/add" element={<AddPatient />} />
               <Route path="hospitals/:id/patients/edit/:patientId" element={<EditPatient />} />
               <Route path="hospitals/:id/patients/:patientId" element={<PatientDetails />} />
-              
-              {/* ✅ Blood Bank Routes */}
+
+              {/* Blood Bank */}
               <Route path="blood-bank" element={<HospitalBloodBanksList />} />
               <Route path="blood-bank/add" element={<AddBloodBank />} />
               <Route path="blood-bank/edit/:id" element={<EditBloodBank />} />
               <Route path="blood-bank/:id" element={<BloodBankDetails />} />
-              
-              {/* ✅ Blood Donor Routes */}
+
+              {/* Blood Donor */}
               <Route path="blood-donors" element={<BloodDonors />} />
               <Route path="blood-donors/:id" element={<DonorDetails />} />
 
-              {/* ✅ Audit Logs Routes */}
+              {/* Audit Logs */}
               <Route path="audit-logs" element={<SuperAdminAuditLog />} />
               <Route path="hospitals/:id/sessions" element={<HospitalSessionHistory />} />
-              
-              
-              {/* ✅ Ambulance Routes */}
+
+              {/* Ambulance */}
               <Route path="ambulance" element={<Ambulance />} />
               <Route path="ambulance/:id" element={<AmbulanceDetails />} />
-              
-              {/* ✅ Doctor Routes */}
+
+              {/* Doctors */}
               <Route path="hospitals/:id/doctors/edit/:doctorId" element={<EditDoctor />} />
               <Route path="hospitals/:id/doctors/add" element={<AddDoctor />} />
               <Route path="/doctors/:id" element={<DoctorDetails />} />
-              
-              {/* ✅ Staff Routes */}
+
+              {/* Staff */}
               <Route path="staff/:id" element={<StaffDetails />} />
               <Route path="staff/add" element={<AddStaff />} />
               <Route path="staff/edit/:id" element={<EditStaff />} />
-              
-              {/* Ambulance Routes - Add/Edit */}
+
+              {/* Ambulance Add/Edit */}
               <Route path="ambulance/add" element={<AddAmbulance />} />
               <Route path="ambulance/edit/:id" element={<EditAmbulance />} />
-              
-              {/* Category & Specialty Routes */}
+
+              {/* Categories & Specialties */}
               <Route path="categories" element={<Categories />} />
               <Route path="specialties" element={<Specialties />} />
               <Route path="specialities/:id/hospitals" element={<HospitalsBySpeciality />} />
               <Route path="hospital/:hospitalId/doctors" element={<DoctorsByHospital />} />
-              
-              {/* Ads Route */}
+
+              {/* Ads */}
               <Route path="ads" element={<Ads />} />
-              
-              {/* Super Admin Permission Routes */}
+
+              {/* Super Admin Permissions */}
               <Route path="super-permissions" element={<SuperUserPermissions />} />
               <Route path="super-permissions/:roleId" element={<SuperPermissionList />} />
-              
-              {/* Hospital Roles Routes */}
+
+              {/* Hospital Roles */}
               <Route path="hospital-roles/:hospitalId" element={<HospitalRoles />} />
-              
-              {/* Hospital Permission Routes */}
-              <Route 
-                path="hospital-permissions/:hospitalId/:roleId" 
-                element={<HospitalPermissionList />} 
+
+              {/* Hospital Permissions */}
+              <Route
+                path="hospital-permissions/:hospitalId/:roleId"
+                element={<HospitalPermissionList />}
               />
-              
-              {/* Hospital User Management Routes */}
+
+              {/* Hospital Users */}
               <Route path="hospital-users" element={<HospitalUsers />} />
               <Route path="hospital-users/:hospitalId/add" element={<HospitalAddUser />} />
               <Route path="hospital-users/:hospitalId/edit/:userId" element={<HospitalEditUser />} />
               <Route path="hospital-users/:hospitalId/user/:userId" element={<HospitalUserDetails />} />
-              
-              {/* Hospital User Permissions Routes */}
               <Route path="hospital-users/:hospitalId/permissions" element={<HospitalUserPermissions />} />
               <Route path="hospital-users/:hospitalId/permissions/:roleId" element={<HospitalPermissionList />} />
 
-              {/* Attendance routes */}
+              {/* Attendance (legacy) */}
               <Route path="hospital-attendance" element={<HospitalAttendanceList />} />
 
-              {/* ===== SUPER ADMIN USER MANAGEMENT (RTK QUERY) ===== */}
+              {/* ═════════════════════════════════════════════════════
+                  Attendance Devices — Tabbed page (Access Cards + Fingerprints)
+                  ═════════════════════════════════════════════════════ */}
+              <Route
+                path="hospitals/:hospitalId/attendance-devices"
+                element={<AttendanceTabsPage />}
+              />
+
+              {/* ═════════════════════════════════════════════════════
+                  Super Admin — Device: Access Cards (dedicated pages)
+                  ═════════════════════════════════════════════════════ */}
+              <Route
+                path="device/access-card/view/:memberKey"
+                element={<ViewAccessCardDetails />}
+              />
+              <Route
+                path="device/access-card/assign/:memberKey"
+                element={<AssignAccessCard />}
+              />
+
+              {/* ═════════════════════════════════════════════════════
+                  Super Admin — Device: Fingerprints (dedicated pages)
+                  ═════════════════════════════════════════════════════ */}
+              <Route
+                path="device/fingerprint/view/:memberKey"
+                element={<ViewFingerprintDetails />}
+              />
+              <Route
+                path="device/fingerprint/enroll/:memberKey"
+                element={<FingerprintEnrollmentModal />}
+              />
+              <Route
+                path="device/fingerprint/edit/:memberKey"
+                element={<FingerprintEditModal />}
+              />
+
+              {/* Attendance devices (physical) — per hospital */}
+              <Route path="hospitals/:id/devices" element={<DeviceSuperAdmin />} />
+              <Route path="devices/edit/:id" element={<EditDeviceSuperAdmin />} />
+
+              {/* Users (RTK Query) */}
               <Route path="users" element={<UsersList />} />
-              
-              {/* Legacy User Management Routes */}
               <Route path="users/add" element={<SuperAddNewUser />} />
               <Route path="users/edit/:userType" element={<SuperEditUser />} />
               <Route path="users/view-roles" element={<SuperViewAssignedRoles />} />
-              
+
               {/* Revenue & Settings */}
               <Route path="revenue" element={
                 <div className="p-6">
@@ -237,7 +254,7 @@ const SuperAdminLayout = () => {
                   <p className="text-gray-500 mt-2">Coming soon...</p>
                 </div>
               } />
-              
+
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/super-admin/dashboard" replace />} />
             </Routes>
