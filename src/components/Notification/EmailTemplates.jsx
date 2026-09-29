@@ -20,6 +20,15 @@ import { Button } from "../ui/button";
 import { Pagination } from "../ui/Pagination";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
+// ✅ Shared Delete confirmation modal (same as Device / PatientDetails)
+import DeleteModal from "../patients/DeleteModel";
+
+// ✅ Real-time email template events
+import {
+  registerEmailTemplateEvents,
+  unregisterEmailTemplateEvents,
+} from "../../socket/emailTemplateEvents";
+
 // Remove TypeScript type annotations
 const categoryStyles = {
   General: "bg-indigo-50 text-indigo-600",
@@ -77,7 +86,6 @@ const TemplateSkeleton = () => {
 
       {/* Table Skeleton */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-        {/* Table Header with Count */}
         <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
           <div className="flex items-center gap-2">
             <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -85,7 +93,6 @@ const TemplateSkeleton = () => {
           </div>
         </div>
 
-        {/* Table Container */}
         <div className="flex flex-col min-h-[500px]">
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-sm text-left">
@@ -101,7 +108,6 @@ const TemplateSkeleton = () => {
               <tbody className="divide-y divide-gray-100">
                 {[...Array(5)].map((_, rowIndex) => (
                   <tr key={rowIndex} className="hover:bg-gray-50 transition">
-                    {/* Template Name with Icon */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-gray-200 rounded-lg animate-pulse"></div>
@@ -111,28 +117,18 @@ const TemplateSkeleton = () => {
                         </div>
                       </div>
                     </td>
-
-                    {/* Category Badge */}
                     <td className="px-6 py-4">
                       <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse"></div>
                     </td>
-
-                    {/* Subject */}
                     <td className="px-6 py-4">
                       <div className="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
                     </td>
-
-                    {/* Last Updated */}
                     <td className="px-6 py-4">
                       <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
                     </td>
-
-                    {/* Status Badge */}
                     <td className="px-6 py-4">
                       <div className="h-6 w-16 bg-gray-200 rounded-full animate-pulse"></div>
                     </td>
-
-                    {/* Actions */}
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -146,7 +142,6 @@ const TemplateSkeleton = () => {
             </table>
           </div>
 
-          {/* Pagination Skeleton */}
           <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
             <div className="flex justify-between items-center">
               <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
@@ -167,15 +162,19 @@ const TemplateSkeleton = () => {
 
 const EmailTemplates = () => {
   const navigate = useNavigate();
-  
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All Categories");
   const [status, setStatus] = useState("All Statuses");
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  // ── Delete modal state ──
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   // ============================
-  // API QUERIES - CORRECTED PARAMETERS
+  // API QUERIES
   // ============================
 
   const {
@@ -186,7 +185,7 @@ const EmailTemplates = () => {
     refetch,
     isFetching,
   } = useGetTemplatesQuery({
-    search: search || undefined,        // Changed from search_query to search
+    search: search || undefined,
     category: category === "All Categories" ? undefined : category,
     status: status === "All Statuses" ? undefined : status,
     page: page,
@@ -197,6 +196,53 @@ const EmailTemplates = () => {
     deleteTemplateApi,
     { isLoading: isDeleting },
   ] = useDeleteTemplateMutation();
+
+  /* ============================================================
+     ✅ REAL-TIME EMAIL TEMPLATE EVENTS
+     Backend emits on `hospital_<id>` and `staff_<createdBy>`
+     with event name `template_event`.
+     Deduped because the backend both emits directly AND through
+     the RabbitMQ handler.
+     ============================================================ */
+  useEffect(() => {
+    let lastEventKey = "";
+    let lastEventTime = 0;
+
+    const handleEvent = (handler, { message, data }) => {
+      const key = `${data?.id ?? data?.templateId ?? ""}_${message ?? ""}`;
+      const now = Date.now();
+
+      if (key === lastEventKey && now - lastEventTime < 600) {
+        return;
+      }
+      lastEventKey = key;
+      lastEventTime = now;
+
+      if (handler) handler({ message, data });
+    };
+
+    registerEmailTemplateEvents({
+      onCreated: (payload) =>
+        handleEvent(({ message }) => {
+          if (message) showSuccessToast(message, 3000);
+          refetch();
+        }, payload),
+
+      onUpdated: (payload) =>
+        handleEvent(({ message }) => {
+          if (message) showSuccessToast(message, 3000);
+          refetch();
+        }, payload),
+
+      onDeleted: (payload) =>
+        handleEvent(({ message }) => {
+          if (message) showSuccessToast(message, 3000);   // ✅ success toast, not warning
+          refetch();
+        }, payload),
+    });
+
+    return () => unregisterEmailTemplateEvents();
+  }, [refetch]);
 
   // ============================
   // DATA PROCESSING
@@ -219,16 +265,21 @@ const EmailTemplates = () => {
     navigate(`/email-templates/edit/${template.id}`);
   };
 
-  const handleDelete = async (id, templateName) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the template "${templateName}"?`
-    );
+  // ✅ Open the shared DeleteModal instead of window.confirm
+  const handleDeleteClick = (template) => {
+    setTemplateToDelete(template);
+    setShowDeleteModal(true);
+  };
 
-    if (!confirmed) return;
+  // ✅ Called by DeleteModal after user confirms
+  const handleDeleteConfirm = async () => {
+    if (!templateToDelete) return;
 
     try {
-      await deleteTemplateApi(id).unwrap();
+      await deleteTemplateApi(templateToDelete.id).unwrap();
       showSuccessToast("Email template deleted successfully.", 3000);
+      setShowDeleteModal(false);
+      setTemplateToDelete(null);
       refetch();
     } catch (error) {
       console.error("Delete template error:", error);
@@ -236,6 +287,7 @@ const EmailTemplates = () => {
         error?.data?.message || "Failed to delete email template.",
         3000
       );
+      throw error;
     }
   };
 
@@ -422,7 +474,6 @@ const EmailTemplates = () => {
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
 
-        {/* Table Header with Total Count */}
         <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">
             Total Templates
@@ -432,7 +483,6 @@ const EmailTemplates = () => {
           </h2>
         </div>
 
-        {/* Table Container with min-height for consistent layout */}
         <div className="flex flex-col min-h-[500px]">
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-sm text-left">
@@ -563,7 +613,7 @@ const EmailTemplates = () => {
                             <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(template.id, template.templateName || template.name || "")}
+                            onClick={() => handleDeleteClick(template)}
                             disabled={isDeleting}
                             title="Delete"
                             className="p-1.5 rounded hover:bg-gray-100 text-slate-400 hover:text-red-600 transition disabled:opacity-40"
@@ -607,6 +657,25 @@ const EmailTemplates = () => {
         </div>
 
       </div>
+
+      {/* ================= DELETE CONFIRMATION MODAL ================= */}
+      <DeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setTemplateToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Email Template"
+        message={
+          templateToDelete
+            ? `Are you sure you want to delete "${templateToDelete.templateName || templateToDelete.name}"? This action cannot be undone.`
+            : "Are you sure you want to delete this template?"
+        }
+        itemName={templateToDelete?.templateName || templateToDelete?.name}
+        confirmLabel="Delete"
+        loading={isDeleting}
+      />
 
     </div>
   );

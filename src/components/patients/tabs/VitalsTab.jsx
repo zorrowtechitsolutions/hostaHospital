@@ -652,11 +652,7 @@ const VitalsTab = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-xs font-medium text-blue-600">
-                            {getInitials(item.doctorName)}
-                          </span>
-                        </div>
+                        
                         <span className="font-medium text-gray-800">
                           {item.doctorName}
                         </span>

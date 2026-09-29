@@ -2,10 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { MoreVertical, Eye, Trash2, FileText, RotateCcw } from "lucide-react";
 import { Button, Pagination, Badge } from "../../ui";
-import {
-  registerPrescriptionEvents,
-  unregisterPrescriptionEvents,
-} from "../../../socket/prescriptionEvents";
+import { registerPrescriptionEvents } from "../../../socket/prescriptionEvents";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -139,32 +136,38 @@ const PrescriptionTab = ({
   // ============ SOCKET LISTENERS ============
   // Stable callback so the effect doesn't re-run on every render
   const handleSocketEvent = useCallback(
-    (type, data) => {
-      console.log(`[PrescriptionTab] socket event: ${type}`, data);
-      onPrescriptionChange?.(type, data);
+    (type, eventData) => {
+     
+      onPrescriptionChange?.(type, eventData);
     },
     [onPrescriptionChange]
   );
 
   useEffect(() => {
-    registerPrescriptionEvents({
-      onCreated: ({ message, data }) =>
-        handleSocketEvent("created", { message, data }),
-      onUpdated: ({ message, data }) =>
-        handleSocketEvent("updated", { message, data }),
-      onDeleted: ({ message, data }) =>
-        handleSocketEvent("deleted", { message, data }),
-      onHospitalRegistered: ({ message, data }) =>
-        handleSocketEvent("hospitalRegistered", { message, data }),
-      onHospitalUpdated: ({ message, data }) =>
-        handleSocketEvent("hospitalUpdated", { message, data }),
-      onHospitalDeleted: ({ message, data }) =>
-        handleSocketEvent("hospitalDeleted", { message, data }),
+    const cleanup = registerPrescriptionEvents({
+      onCreated: (result) =>
+        handleSocketEvent("created", result),
+
+      onUpdated: (result) =>
+        handleSocketEvent("updated", result),
+
+      onDeleted: (result) =>
+        handleSocketEvent("deleted", result),
+
+      onRecovered: (result) =>
+        handleSocketEvent("recovered", result),
+
+      onHospitalRegistered: (result) =>
+        handleSocketEvent("hospitalRegistered", result),
+
+      onHospitalUpdated: (result) =>
+        handleSocketEvent("hospitalUpdated", result),
+
+      onHospitalDeleted: (result) =>
+        handleSocketEvent("hospitalDeleted", result),
     });
 
-    return () => {
-      unregisterPrescriptionEvents();
-    };
+    return cleanup;
   }, [handleSocketEvent]);
   // ============ END SOCKET LISTENERS ============
 

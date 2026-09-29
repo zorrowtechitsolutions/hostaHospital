@@ -1,12 +1,31 @@
 // src/components/patients/tabs/AppointmentsTab.jsx - Fixed to show Booking Number
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 import { Calendar, MoreVertical, Eye, Edit, Trash2, Hash } from "lucide-react";
-import { Button, Input, Select, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, Badge, Pagination, SearchBar } from "../../ui";
+import {
+  Button,
+  Input,
+  Select,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableHeader,
+  TableCell,
+  Badge,
+  Pagination,
+  SearchBar,
+} from "../../ui";
+import {
+  registerBookingEvents,
+  unregisterBookingEvents,
+} from "../../../socket/bookingEvents";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
-  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+  <div
+    className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}
+  ></div>
 );
 
 const SkeletonRow = () => (
@@ -93,58 +112,107 @@ const AppointmentsSkeleton = () => (
 
 // ============ END SKELETON LOADING COMPONENTS ============
 
-const AppointmentsTab = ({ 
-  patient, 
-  searchTerm, 
-  setSearchTerm, 
-  statusFilter, 
-  setStatusFilter, 
-  currentPage, 
-  totalPages, 
-  paginatedAppointments, 
-  filteredAppointments, 
-  handlePageChange, 
-  handleViewAppointmentDetails, 
-  handleEditAppointmentClick, 
-  handleDeleteClick, 
-  getStatusBadge, 
-  startIndex, 
-  openMenu, 
+const AppointmentsTab = ({
+  patient,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+  currentPage,
+  totalPages,
+  paginatedAppointments,
+  filteredAppointments,
+  handlePageChange,
+  handleViewAppointmentDetails,
+  handleEditAppointmentClick,
+  handleDeleteClick,
+  getStatusBadge,
+  startIndex,
+  openMenu,
   setOpenMenu,
-  isLoading = false // New prop for loading state
+  isLoading = false, // New prop for loading state
+  onBookingChange, // 👈 NEW: callback for socket events
 }) => {
   const totalItems = filteredAppointments.length;
 
-  // ✅ NEW: Format booking number for display
+  // ============ SOCKET LISTENERS ============
+  const handleSocketEvent = useCallback(
+    (type, data) => {
+
+      // Filter events by patient if data contains a patientId
+      const affectedPatientId =
+        data?.patientId ||
+        data?.patient_id ||
+        data?.patient?.id ||
+        data?.fullData?.patientId;
+
+      if (
+        affectedPatientId &&
+        patient?.id &&
+        String(affectedPatientId) !== String(patient.id)
+      ) {
+        // Event belongs to a different patient — ignore
+        return;
+      }
+
+      onBookingChange?.(type, data);
+    },
+    [onBookingChange, patient?.id]
+  );
+
+  useEffect(() => {
+    // registerBookingEvents returns a cleanup function
+    const cleanup = registerBookingEvents({
+      onBookingRegistered: (data) => handleSocketEvent("registered", data),
+      onBookingUpdated: (data) => handleSocketEvent("updated", data),
+      onBookingCancelled: (data) => handleSocketEvent("cancelled", data),
+      onBookingAccepted: (data) => handleSocketEvent("accepted", data),
+      onBookingCompleted: (data) => handleSocketEvent("completed", data),
+      onTokenUpdated: (data) => handleSocketEvent("tokenUpdated", data),
+      onBookingDeleted: (data) => handleSocketEvent("deleted", data),
+    });
+
+    return () => {
+      // Prefer the cleanup returned by registerBookingEvents (scoped handler)
+      if (typeof cleanup === "function") {
+        cleanup();
+      } else {
+        unregisterBookingEvents();
+      }
+    };
+  }, [handleSocketEvent]);
+  // ============ END SOCKET LISTENERS ============
+
+  // ✅ Format booking number for display
   const formatBookingNumber = (bookingNumber) => {
     if (!bookingNumber) return null;
-    return `#BK${String(bookingNumber).padStart(5, '0')}`;
+    return `#BK${String(bookingNumber).padStart(5, "0")}`;
   };
 
   // Get badge variant based on status
   const getBadgeVariant = (status) => {
     const statusMap = {
-      'accepted': 'success',
-      'pending': 'warning',
-      'completed': 'info',
-      'cancelled': 'danger',
-      'declined': 'danger',
-      'rejected': 'danger'
+      accepted: "success",
+      pending: "warning",
+      completed: "info",
+      cancelled: "danger",
+      declined: "danger",
+      rejected: "danger",
     };
-    return statusMap[status?.toLowerCase()] || 'default';
+    return statusMap[status?.toLowerCase()] || "default";
   };
 
   // Get display text for status
   const getStatusText = (status) => {
     const statusMap = {
-      'accepted': 'Accepted',
-      'pending': 'Pending',
-      'completed': 'Completed',
-      'cancelled': 'Cancelled',
-      'declined': 'Declined',
-      'rejected': 'Rejected'
+      accepted: "Accepted",
+      pending: "Pending",
+      completed: "Completed",
+      cancelled: "Cancelled",
+      declined: "Declined",
+      rejected: "Rejected",
     };
-    return statusMap[status?.toLowerCase()] || status || 'Pending';
+    return statusMap[status?.toLowerCase()] || status || "Pending";
   };
 
   // ============ SKELETON LOADING STATE ============
@@ -158,7 +226,9 @@ const AppointmentsTab = ({
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Appointments
-          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{totalItems}</span>
+          <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+            {totalItems}
+          </span>
         </h2>
       </div>
 
@@ -168,7 +238,9 @@ const AppointmentsTab = ({
             <Calendar size={32} className="text-gray-400" />
           </div>
           <p className="text-gray-500">No appointments found</p>
-          <p className="text-sm text-gray-400 mt-1">Appointments will appear here when scheduled</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Appointments will appear here when scheduled
+          </p>
         </div>
       ) : (
         <div className="flex flex-col min-h-[420px]">
@@ -188,40 +260,74 @@ const AppointmentsTab = ({
                 {paginatedAppointments.length > 0 ? (
                   paginatedAppointments.map((apt, index) => (
                     <TableRow key={apt.id} hover>
-                      <TableCell 
+                      <TableCell
                         className="text-[#1C62A0] font-medium cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
+                        onClick={() =>
+                          handleViewAppointmentDetails({
+                            ...apt,
+                            patientName: patient.name,
+                            avatar: patient.image,
+                          })
+                        }
                       >
-                        {apt.bookingNumber ? formatBookingNumber(apt.bookingNumber) : 'N/A'}
+                        {apt.bookingNumber
+                          ? formatBookingNumber(apt.bookingNumber)
+                          : "N/A"}
                       </TableCell>
-                      <TableCell 
+                      <TableCell
                         className="cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
+                        onClick={() =>
+                          handleViewAppointmentDetails({
+                            ...apt,
+                            patientName: patient.name,
+                            avatar: patient.image,
+                          })
+                        }
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
                             <span className="text-xs font-medium text-blue-600">
-                              {apt.doctorName?.charAt(0) || 'D'}
+                              {apt.doctorName?.charAt(0) || "D"}
                             </span>
                           </div>
-                          <span className="font-medium text-gray-800">{apt.doctorName}</span>
+                          <span className="font-medium text-gray-800">
+                            {apt.doctorName}
+                          </span>
                         </div>
                       </TableCell>
-                      <TableCell 
+                      <TableCell
                         className="text-gray-600 cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
+                        onClick={() =>
+                          handleViewAppointmentDetails({
+                            ...apt,
+                            patientName: patient.name,
+                            avatar: patient.image,
+                          })
+                        }
                       >
                         {apt.department}
                       </TableCell>
-                      <TableCell 
+                      <TableCell
                         className="text-gray-600 cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
+                        onClick={() =>
+                          handleViewAppointmentDetails({
+                            ...apt,
+                            patientName: patient.name,
+                            avatar: patient.image,
+                          })
+                        }
                       >
                         {apt.date || apt.appointmentDate}
                       </TableCell>
-                      <TableCell 
+                      <TableCell
                         className="cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image})}
+                        onClick={() =>
+                          handleViewAppointmentDetails({
+                            ...apt,
+                            patientName: patient.name,
+                            avatar: patient.image,
+                          })
+                        }
                       >
                         <Badge variant={getBadgeVariant(apt.status)}>
                           {getStatusText(apt.status)}
@@ -231,9 +337,13 @@ const AppointmentsTab = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setOpenMenu(openMenu === `apt-${apt.id}` ? null : `apt-${apt.id}`);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenu(
+                              openMenu === `apt-${apt.id}`
+                                ? null
+                                : `apt-${apt.id}`
+                            );
                           }}
                           className="p-2"
                         >
@@ -242,9 +352,13 @@ const AppointmentsTab = ({
                         {openMenu === `apt-${apt.id}` && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleViewAppointmentDetails({...apt, patientName: patient.name, avatar: patient.image});
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAppointmentDetails({
+                                  ...apt,
+                                  patientName: patient.name,
+                                  avatar: patient.image,
+                                });
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -252,9 +366,16 @@ const AppointmentsTab = ({
                               <Eye size={15} /> View Details
                             </button>
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleDeleteClick('appointment', apt.id, startIndex + index, `Appointment with ${apt.doctorName} on ${apt.date || apt.appointmentDate}`);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(
+                                  "appointment",
+                                  apt.id,
+                                  startIndex + index,
+                                  `Appointment with ${apt.doctorName} on ${
+                                    apt.date || apt.appointmentDate
+                                  }`
+                                );
                                 setOpenMenu(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
@@ -268,7 +389,10 @@ const AppointmentsTab = ({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500 py-12">
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-gray-500 py-12"
+                    >
                       No appointments found
                     </TableCell>
                   </TableRow>

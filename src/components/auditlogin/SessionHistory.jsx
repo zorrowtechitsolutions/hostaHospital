@@ -17,6 +17,12 @@ import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import { exportToExcel } from "../../utils/excelExport";
 import { getAuthUser } from "../../utils/auth";
 
+// ✅ Real-time auth / audit events
+import {
+  registerAuditEvents,
+  unregisterAuditEvents,
+} from "../../socket/auditEvents";
+
 // ============================================================
 // Constants
 // ============================================================
@@ -25,7 +31,7 @@ const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "FAILED"];
 const RISK_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 
 // ============================================================
-// Helpers (keep all existing helpers)
+// Helpers
 // ============================================================
 
 const safeToString = (value) => {
@@ -276,7 +282,7 @@ const RowActionMenu = ({ session, onView }) => {
 const SessionHistory = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // Get hospital ID from navigation state (when coming from hospital card)
   const navigationHospitalId = location.state?.hospitalId;
   const navigationHospitalName = location.state?.hospitalName;
@@ -286,9 +292,9 @@ const SessionHistory = () => {
 
   // State for hospital selection (for users with multiple hospital access)
   const [selectedHospitalId, setSelectedHospitalId] = useState(
-    navigationHospitalId || "" // Pre-select if coming from hospital card
+    navigationHospitalId || ""
   );
-  
+
   // State to track which hospital is being viewed (from card or dropdown)
   const [viewingHospitalName, setViewingHospitalName] = useState(
     navigationHospitalName || ""
@@ -304,11 +310,11 @@ const SessionHistory = () => {
   const [roleFilter, setRoleFilter] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
-  
+
   // Date filters
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -316,19 +322,18 @@ const SessionHistory = () => {
   const itemsPerPage = 10;
 
   // ============================================================
-  // UPDATED: Determine which hospital ID to use
+  // Determine which hospital ID to use
   // Priority: selectedHospitalId → navigationHospitalId → auth.hospitalId
   // ============================================================
-  const effectiveHospitalId = 
-    selectedHospitalId || 
-    navigationHospitalId || 
-    auth?.hospitalId || 
+  const effectiveHospitalId =
+    selectedHospitalId ||
+    navigationHospitalId ||
+    auth?.hospitalId ||
     undefined;
 
   // Clear navigation state after reading it (optional)
   useEffect(() => {
     if (navigationHospitalId) {
-      // Clear the state from location to prevent re-selection on refresh
       window.history.replaceState({}, document.title);
     }
   }, [navigationHospitalId]);
@@ -389,6 +394,37 @@ const SessionHistory = () => {
     (searchTerm ? 1 : 0) +
     (startDate ? 1 : 0) +
     (endDate ? 1 : 0);
+
+  /* ============================================================
+     ✅ REAL-TIME AUTH EVENTS
+     Backend emits on `auth_event` with event = "AUTH_LOGIN"
+     whenever a new session starts. We refresh the table + toast.
+     ============================================================ */
+  useEffect(() => {
+    registerAuditEvents({
+      onAuthLogin: ({ message, data }) => {
+        // Optional guard: skip if the login came from a different
+        // hospital than the one currently being viewed.
+        if (
+          effectiveHospitalId &&
+          data?.hospitalId &&
+          String(data.hospitalId) !== String(effectiveHospitalId)
+        ) {
+          return;
+        }
+
+        if (message) {
+          showSuccessToast(message, 4000);
+        }
+
+        // Refresh the list so the newest login shows up.
+        // (Only page 1 with no filters will visibly shift — that's fine.)
+        refetch();
+      },
+    });
+
+    return () => unregisterAuditEvents();
+  }, [refetch, effectiveHospitalId]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -457,16 +493,14 @@ const SessionHistory = () => {
     }
   };
 
-  // Handle hospital selection change
   const handleHospitalChange = (hospitalId, hospitalName) => {
     setSelectedHospitalId(hospitalId);
     setViewingHospitalName(hospitalName || "");
     setCurrentPage(1);
   };
 
-  // Go back to hospitals list
   const handleBackToHospitals = () => {
-    navigate('/hospitals');
+    navigate("/hospitals");
   };
 
   if (isLoading) {
@@ -517,17 +551,17 @@ const SessionHistory = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">
-              {viewingHospitalName 
-                ? `Session History - ${viewingHospitalName}` 
+              {viewingHospitalName
+                ? `Session History - ${viewingHospitalName}`
                 : "Session History"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              {viewingHospitalName 
+              {viewingHospitalName
                 ? `Viewing all sessions for ${viewingHospitalName}`
                 : "View and manage user login sessions and activity history"}
             </p>
           </div>
-          
+
           {viewingHospitalName && (
             <button
               onClick={handleBackToHospitals}

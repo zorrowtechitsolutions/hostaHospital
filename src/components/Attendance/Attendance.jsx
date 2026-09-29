@@ -16,6 +16,13 @@ import {
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
+import { showSuccessToast, showWarningToast } from '../ui/Toast';
+
+// ✅ Real-time attendance events
+import {
+  registerAttendanceEvents,
+  unregisterAttendanceEvents,
+} from '../../socket/attendanceEvents';
 
 const Attendance = () => {
   const navigate = useNavigate();
@@ -54,6 +61,30 @@ const Attendance = () => {
           ? 'check-out'
           : undefined,
   });
+
+  /* ============================================================
+     ✅ REAL-TIME ATTENDANCE EVENTS
+     Backend emits on `hospital_<id>` and `role_1` with event
+     name `attendance_event`.
+     ============================================================ */
+  useEffect(() => {
+    registerAttendanceEvents({
+      onRegistered: ({ message }) => {
+        if (message) showSuccessToast(message, 3000);
+        refetch();
+      },
+      onUpdated: ({ message }) => {
+        if (message) showSuccessToast(message, 3000);
+        refetch();
+      },
+      onDeleted: ({ message }) => {
+        if (message) showWarningToast(message, 3000);
+        refetch();
+      },
+    });
+
+    return () => unregisterAttendanceEvents();
+  }, [refetch]);
 
   const attendanceData = attendanceResponse?.data ?? [];
 
@@ -183,7 +214,7 @@ const Attendance = () => {
   };
 
   // ============================================================
-  // HANDLERS (unchanged)
+  // HANDLERS
   // ============================================================
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
@@ -218,7 +249,6 @@ const Attendance = () => {
   };
 
   const handleExport = () => {
-    console.log('Exporting:', filteredData.length, 'records');
   };
 
   // Badge helpers — unchanged
@@ -287,7 +317,7 @@ const Attendance = () => {
   const showLoading = isLoading || (isFetching && !attendanceResponse);
 
   // ============================================================
-  // RENDER (only Name cell changed — rest identical)
+  // RENDER
   // ============================================================
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
@@ -303,7 +333,7 @@ const Attendance = () => {
         hospital.
       </p>
 
-      {/* Filters toolbar — unchanged */}
+      {/* Filters toolbar */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-center">
           <SearchBar
@@ -382,154 +412,157 @@ const Attendance = () => {
       </div>
 
       {/* Table */}
-      <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1100px]">
-            <thead>
-              <tr className="border-b border-gray-200 text-xs text-gray-500 bg-gray-50/50">
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Department</th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Attendance Type</th>
-                <th className="px-4 py-3 font-medium">Method</th>
-                <th className="px-4 py-3 font-medium">Check In</th>
-                <th className="px-4 py-3 font-medium">Check Out</th>
-                <th className="px-4 py-3 font-medium">Duration</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
-              {showLoading ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-gray-400">
-                      <Loader2 size={36} className="mb-3 animate-spin opacity-60" />
-                      <p className="text-sm font-medium text-gray-500">
-                        Loading attendance records...
-                      </p>
-                    </div>
-                  </td>
+      <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+        <div className="flex flex-col min-h-[500px]">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-left border-collapse min-w-[1200px]">
+              <thead>
+                <tr className="border-b border-gray-200 text-xs text-gray-500 bg-gray-50/50">
+                  <th className="px-4 py-3 font-medium w-12 whitespace-nowrap">#</th>
+                  <th className="px-4 py-3 font-medium min-w-[200px] whitespace-nowrap">Name</th>
+                  <th className="px-4 py-3 font-medium min-w-[120px] whitespace-nowrap">Role</th>
+                  <th className="px-4 py-3 font-medium min-w-[140px] whitespace-nowrap">Department</th>
+                  <th className="px-4 py-3 font-medium min-w-[120px] whitespace-nowrap">Date</th>
+                  <th className="px-4 py-3 font-medium min-w-[140px] whitespace-nowrap">Attendance Type</th>
+                  <th className="px-4 py-3 font-medium min-w-[130px] whitespace-nowrap">Method</th>
+                  <th className="px-4 py-3 font-medium min-w-[110px] whitespace-nowrap">Check In</th>
+                  <th className="px-4 py-3 font-medium min-w-[110px] whitespace-nowrap">Check Out</th>
+                  <th className="px-4 py-3 font-medium min-w-[100px] whitespace-nowrap">Duration</th>
+                  <th className="px-4 py-3 font-medium min-w-[150px] whitespace-nowrap">Status</th>
                 </tr>
-              ) : isError ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-rose-400">
-                      <XCircle size={40} className="mb-3 opacity-70" />
-                      <p className="text-sm font-medium text-rose-500">
-                        Failed to load attendance records
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Please check your connection and try again
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : paginatedData.length > 0 ? (
-                paginatedData.map((row, index) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-gray-500">
-                      {startIndex + index + 1}
-                    </td>
-
-                    {/* ✅ Clickable Name cell */}
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => handleEmployeeClick(row)}
-                        className="flex items-center gap-3 text-left group cursor-pointer"
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs ${getAvatarColor(row.status)}`}
-                        >
-                          {row.name.split(' ')[1]?.charAt(0) || row.name.charAt(0)}
-                        </div>
-                        <span className="font-medium text-gray-800 group-hover:text-[#1C62A0] group-hover:underline transition-colors">
-                          {row.name}
-                        </span>
-                      </button>
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-600">{row.role}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.dept}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {row.date}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium tracking-wide ${getTypeBadge(row.attType)}`}
-                      >
-                        {row.attType === 'Check In' && <LogIn size={12} className="mr-1" />}
-                        {row.attType === 'Check Out' && <LogOut size={12} className="mr-1" />}
-                        {row.attType}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {row.method !== '-' ? (
-                        <span
-                          className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium tracking-wide ${getMethodBadge(row.method)}`}
-                        >
-                          {row.method === 'Face' && <ScanFace size={12} className="mr-1" />}
-                          {row.method === 'Access Card' && <CreditCard size={12} className="mr-1" />}
-                          {row.method === 'Punch In' && <Clock size={12} className="mr-1" />}
-                          {row.method}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-center block w-full">-</span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-600">{row.checkIn}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.checkOut}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.duration}</td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadge(row.status)}`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(row.status)}`}
-                        ></span>
-                        {row.status}
-                      </span>
+              </thead>
+              <tbody className="text-sm">
+                {showLoading ? (
+                  <tr>
+                    <td colSpan={11} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-gray-400">
+                        <Loader2 size={36} className="mb-3 animate-spin opacity-60" />
+                        <p className="text-sm font-medium text-gray-500">
+                          Loading attendance records...
+                        </p>
+                      </div>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-gray-400">
-                      <Search size={40} className="mb-3 opacity-50" />
-                      <p className="text-sm font-medium text-gray-500">
-                        No attendance records found
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Try adjusting your search or filter criteria
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : isError ? (
+                  <tr>
+                    <td colSpan={11} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-rose-400">
+                        <XCircle size={40} className="mb-3 opacity-70" />
+                        <p className="text-sm font-medium text-rose-500">
+                          Failed to load attendance records
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Please check your connection and try again
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((row, index) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-gray-100 hover:bg-gray-50/80 transition-colors"
+                    >
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {startIndex + index + 1}
+                      </td>
 
-        {!showLoading && !isError && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            itemLabel="attendance records"
-          />
-        )}
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => handleEmployeeClick(row)}
+                          className="flex items-center gap-3 text-left group cursor-pointer min-w-0"
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs flex-shrink-0 ${getAvatarColor(row.status)}`}
+                          >
+                            {row.name.split(' ')[1]?.charAt(0) || row.name.charAt(0)}
+                          </div>
+                          <span className="font-medium text-gray-800 group-hover:text-[#1C62A0] group-hover:underline transition-colors whitespace-nowrap">
+                            {row.name}
+                          </span>
+                        </button>
+                      </td>
+
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.role}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.dept}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {row.date}
+                      </td>
+
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium tracking-wide whitespace-nowrap ${getTypeBadge(row.attType)}`}
+                        >
+                          {row.attType === 'Check In' && <LogIn size={12} className="mr-1" />}
+                          {row.attType === 'Check Out' && <LogOut size={12} className="mr-1" />}
+                          {row.attType}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.method !== '-' ? (
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium tracking-wide whitespace-nowrap ${getMethodBadge(row.method)}`}
+                          >
+                            {row.method === 'Face' && <ScanFace size={12} className="mr-1" />}
+                            {row.method === 'Access Card' && <CreditCard size={12} className="mr-1" />}
+                            {row.method === 'Punch In' && <Clock size={12} className="mr-1" />}
+                            {row.method}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.checkIn}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.checkOut}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.duration}</td>
+
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusBadge(row.status)}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full mr-1.5 flex-shrink-0 ${getStatusDot(row.status)}`}
+                          ></span>
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={11} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-gray-400">
+                        <Search size={40} className="mb-3 opacity-50" />
+                        <p className="text-sm font-medium text-gray-500">
+                          No attendance records found
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Try adjusting your search or filter criteria
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!showLoading && !isError && (
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="attendance records"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
