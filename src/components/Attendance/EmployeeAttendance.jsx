@@ -10,6 +10,7 @@ import {
   List,
   Filter,
 } from "lucide-react";
+import { Pagination } from "../ui";
 import { useGetAttendancesQuery } from "../../../app/service/attendance";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { useGetStaffByIdQuery } from "../../../app/service/staffApi";
@@ -151,8 +152,6 @@ const formatFullTime = (value) => {
 
 // ============================================================
 // ✅ STATUS MAP — identical to Attendance.jsx
-//    These are the CANONICAL statuses stored in the DB.
-//    Both files MUST use the same strings to stay consistent.
 // ============================================================
 const CANONICAL_STATUSES = {
   Present: "Present",
@@ -174,7 +173,6 @@ const normalizeStatus = (raw) => {
 
 // ============================================================
 // ✅ STATUS BADGE — copied exactly from Attendance.jsx
-//    getStatusBadge + getStatusDot
 // ============================================================
 const getStatusBadge = (status) => {
   switch (status) {
@@ -242,13 +240,20 @@ const EmployeeAttendance = () => {
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem("employeeAttendanceViewMode") || "grid";
   });
-  const itemsPerPage = 9;
+
+  // ✅ Different page sizes for grid vs list
+  const itemsPerPage = viewMode === "grid" ? 9 : 10;
 
   const monthRef = useRef(null);
   const yearRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem("employeeAttendanceViewMode", viewMode);
+  }, [viewMode]);
+
+  // ✅ Reset to page 1 when the view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
   }, [viewMode]);
 
   // ============================================================
@@ -464,7 +469,6 @@ const EmployeeAttendance = () => {
     const dateLong = formatDateLong(dateSource);
     const dateKey = toLocalDateKey(dateSource);
 
-    // ✅ Use the same canonical status mapping as Attendance.jsx
     const status = normalizeStatus(row.status);
 
     return {
@@ -502,7 +506,10 @@ const EmployeeAttendance = () => {
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = filteredData.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   // ============================================================
   // HANDLERS
@@ -843,6 +850,7 @@ const EmployeeAttendance = () => {
                         onClick={() => {
                           setSelectedMonth(i + 1);
                           setMonthOpen(false);
+                          setCurrentPage(1);
                         }}
                         className={`px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 ${
                           selectedMonth === i + 1
@@ -876,6 +884,7 @@ const EmployeeAttendance = () => {
                         onClick={() => {
                           setSelectedYear(y);
                           setYearOpen(false);
+                          setCurrentPage(1);
                         }}
                         className={`px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 ${
                           selectedYear === y
@@ -928,7 +937,6 @@ const EmployeeAttendance = () => {
                     }}
                     className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                   >
-                    {/* ✅ Same option labels as Attendance.jsx */}
                     <option value="all">All Status</option>
                     <option value="Present">Present</option>
                     <option value="Late">Late</option>
@@ -983,116 +991,118 @@ const EmployeeAttendance = () => {
               </p>
             </div>
           ) : paginatedData.length > 0 ? (
-            <>
-              {viewMode === "grid" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {paginatedData.map((row) => (
-                    <div
-                      key={row.id}
-                      className="bg-gray-50 border border-gray-200 rounded-xl p-4 hover:border-gray-300 hover:bg-white transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Calendar size={12} />
-                          <span className="text-gray-800 font-medium">
-                            {row.dateLong}
+            <div className="flex flex-col min-h-[500px]">
+              <div className="flex-1">
+                {viewMode === "grid" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {paginatedData.map((row) => (
+                      <div
+                        key={row.id}
+                        className="bg-gray-50 border border-gray-200 rounded-xl p-4 hover:border-gray-300 hover:bg-white transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Calendar size={12} />
+                            <span className="text-gray-800 font-medium">
+                              {row.dateLong}
+                            </span>
+                          </div>
+
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
+                              row.status
+                            )}`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
+                                row.status
+                              )}`}
+                            ></span>
+                            {row.status}
                           </span>
                         </div>
 
-                        {/* ✅ Status badge — same as Attendance.jsx */}
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
-                            row.status
-                          )}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
-                              row.status
-                            )}`}
-                          ></span>
-                          {row.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-                            Check In Time
-                          </p>
-                          <p className="text-sm font-medium text-gray-900">
-                            {row.checkInShort}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-                            Check Out Time
-                          </p>
-                          <p className="text-sm font-medium text-gray-900">
-                            {row.checkOutShort}
-                          </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                              Check In Time
+                            </p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {row.checkInShort}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                              Check Out Time
+                            </p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {row.checkOutShort}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-xl border border-gray-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Date</th>
-                        <th className="px-4 py-3 font-medium">Check In</th>
-                        <th className="px-4 py-3 font-medium">Check Out</th>
-                        <th className="px-4 py-3 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedData.map((row) => (
-                        <tr
-                          key={row.id}
-                          className="border-t border-gray-100 hover:bg-gray-50"
-                        >
-                          <td className="px-4 py-3 text-gray-800">
-                            {row.dateLong}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {row.checkInShort}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {row.checkOutShort}
-                          </td>
-                          <td className="px-4 py-3">
-                            {/* ✅ Status badge — same as Attendance.jsx */}
-                            <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
-                                row.status
-                              )}`}
-                            >
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-gray-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Date</th>
+                          <th className="px-4 py-3 font-medium">Check In</th>
+                          <th className="px-4 py-3 font-medium">Check Out</th>
+                          <th className="px-4 py-3 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedData.map((row) => (
+                          <tr
+                            key={row.id}
+                            className="border-t border-gray-100 hover:bg-gray-50"
+                          >
+                            <td className="px-4 py-3 text-gray-800">
+                              {row.dateLong}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {row.checkInShort}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {row.checkOutShort}
+                            </td>
+                            <td className="px-4 py-3">
                               <span
-                                className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
                                   row.status
                                 )}`}
-                              ></span>
-                              {row.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
+                                    row.status
+                                  )}`}
+                                ></span>
+                                {row.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
-              {totalPages > 1 && (
-                <div className="mt-6 flex justify-center">
-                  <LightPagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
-                  />
-                </div>
-              )}
-            </>
+              {/* ✅ Pagination — shared component from ../ui (same as Attendance.jsx) */}
+              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-2xl">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="attendance records"
+                />
+              </div>
+            </div>
           ) : (
             <div className="text-center py-12">
               <Calendar
@@ -1117,55 +1127,6 @@ const EmployeeAttendance = () => {
           )}
         </div>
       </div>
-    </div>
-  );
-};
-
-// ============================================================
-// PAGINATION
-// ============================================================
-const LightPagination = ({ currentPage, totalPages, onPageChange }) => {
-  const pages = [];
-  const maxVisible = 5;
-  if (totalPages <= maxVisible) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i);
-  } else if (currentPage <= 3) {
-    for (let i = 1; i <= 4; i++) pages.push(i);
-    pages.push("...");
-    pages.push(totalPages);
-  } else if (currentPage >= totalPages - 2) {
-    pages.push(1);
-    pages.push("...");
-    for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-  } else {
-    pages.push(1);
-    pages.push("...");
-    for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-    pages.push("...");
-    pages.push(totalPages);
-  }
-
-  return (
-    <div className="flex items-center gap-1.5">
-      {pages.map((p, i) =>
-        p === "..." ? (
-          <span key={i} className="px-2 text-xs text-gray-400">
-            …
-          </span>
-        ) : (
-          <button
-            key={p}
-            onClick={() => onPageChange(p)}
-            className={`min-w-[28px] h-7 rounded-md text-xs font-medium transition-colors ${
-              currentPage === p
-                ? "bg-white text-gray-900 border border-gray-300 shadow-sm"
-                : "text-gray-500 hover:text-gray-900 hover:bg-white border border-transparent"
-            }`}
-          >
-            {p}
-          </button>
-        )
-      )}
     </div>
   );
 };

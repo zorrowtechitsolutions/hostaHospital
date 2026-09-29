@@ -5,9 +5,6 @@ import {
   Search,
   RefreshCw,
   Download,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
   X,
   Calendar,
   Loader2,
@@ -17,12 +14,21 @@ import {
   CircleCheck,
   CircleX,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 
+import { Pagination } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
+import { showSuccessToast, showWarningToast } from '../ui/Toast';
+
+// ✅ Real-time attendance events
+import {
+  registerAttendanceEvents,
+  unregisterAttendanceEvents,
+} from '../../socket/attendanceEvents';
 
 // ============================================================
-// 🎯 ATTENDANCE STATUS ICON — Premium status-chip style
+// 🎯 ATTENDANCE STATUS ICON
 // ============================================================
 const AttendanceStatusIcon = ({ status, size = "md" }) => {
   const sizeMap = {
@@ -36,40 +42,28 @@ const AttendanceStatusIcon = ({ status, size = "md" }) => {
     case "Weekend":
       return (
         <div className={`${common} bg-gray-100 ring-1 ring-gray-200`}>
-          <CircleMinus
-            className="w-full h-full text-gray-500"
-            strokeWidth={2.2}
-          />
+          <CircleMinus className="w-full h-full text-gray-500" strokeWidth={2.2} />
         </div>
       );
 
     case "Present":
       return (
         <div className={`${common} bg-emerald-50 ring-1 ring-emerald-100`}>
-          <CircleCheck
-            className="w-full h-full text-emerald-600"
-            strokeWidth={2.2}
-          />
+          <CircleCheck className="w-full h-full text-emerald-600" strokeWidth={2.2} />
         </div>
       );
 
     case "Leave":
       return (
         <div className={`${common} bg-orange-50 ring-1 ring-orange-100`}>
-          <CircleX
-            className="w-full h-full text-orange-500"
-            strokeWidth={2.2}
-          />
+          <CircleX className="w-full h-full text-orange-500" strokeWidth={2.2} />
         </div>
       );
 
     case "Holiday":
       return (
         <div className={`${common} bg-amber-50 ring-1 ring-amber-100`}>
-          <Sparkles
-            className="w-full h-full text-amber-500"
-            strokeWidth={2.2}
-          />
+          <Sparkles className="w-full h-full text-amber-500" strokeWidth={2.2} />
         </div>
       );
 
@@ -90,7 +84,6 @@ const LEGEND_ITEMS = [
 
 // ============================================================
 // 🎯 STATUS NORMALIZER
-// API is the source of truth — no assumptions about weekends.
 // ============================================================
 const normalizeStatus = (rawStatus) => {
   if (!rawStatus) return null;
@@ -156,6 +149,28 @@ const AttendanceSheet = () => {
     limit: 1000,
   });
 
+  /* ============================================================
+     ✅ REAL-TIME ATTENDANCE EVENTS
+     ============================================================ */
+  useEffect(() => {
+    registerAttendanceEvents({
+      onRegistered: ({ message }) => {
+        if (message) showSuccessToast(message, 3000);
+        refetch();
+      },
+      onUpdated: ({ message }) => {
+        if (message) showSuccessToast(message, 3000);
+        refetch();
+      },
+      onDeleted: ({ message }) => {
+        if (message) showWarningToast(message, 3000);
+        refetch();
+      },
+    });
+
+    return () => unregisterAttendanceEvents();
+  }, [refetch]);
+
   const attendanceData = useMemo(() => {
     if (!attendanceResponse) return [];
     if (Array.isArray(attendanceResponse)) return attendanceResponse;
@@ -171,7 +186,7 @@ const AttendanceSheet = () => {
   }, [isFetching]);
 
   // ============================================================
-  // EMPLOYEES — derived from attendance records
+  // EMPLOYEES
   // ============================================================
   const employees = useMemo(() => {
     const map = new Map();
@@ -193,7 +208,7 @@ const AttendanceSheet = () => {
   }, [attendanceData]);
 
   // ============================================================
-  // GROUP BY USER + DAY (for the selected month)
+  // GROUP BY USER + DAY
   // ============================================================
   const attendanceByUserAndDate = useMemo(() => {
     const map = new Map();
@@ -218,7 +233,6 @@ const AttendanceSheet = () => {
         const normalized =
           normalizeStatus(att.status) || normalizeStatus(att.type);
 
-        // Prefer the check-in record; otherwise accept the first non-null one
         if (!map.has(key) || att.type === "check-in") {
           map.set(key, {
             status: normalized,
@@ -235,10 +249,6 @@ const AttendanceSheet = () => {
     return map;
   }, [attendanceData, selectedYear, selectedMonth]);
 
-  // ============================================================
-  // ✅ API IS THE SOURCE OF TRUTH
-  //    No automatic Sunday → Weekend. No assumptions.
-  // ============================================================
   const getAttendanceStatus = (employeeId, day) => {
     const found = attendanceByUserAndDate.get(`${employeeId}_${day}`);
     return found?.status || null;
@@ -295,41 +305,16 @@ const AttendanceSheet = () => {
     );
   }, [employees, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / itemsPerPage));
+  const totalItems = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentEmployees = filteredEmployees.slice(startIndex, startIndex + itemsPerPage);
-  const startRecord = filteredEmployees.length > 0 ? startIndex + 1 : 0;
-  const endRecord = Math.min(startIndex + itemsPerPage, filteredEmployees.length);
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  };
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else if (currentPage <= 3) {
-      for (let i = 1; i <= 4; i++) pages.push(i);
-      pages.push("...");
-      pages.push(totalPages);
-    } else if (currentPage >= totalPages - 2) {
-      pages.push(1);
-      pages.push("...");
-      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      pages.push("...");
-      for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-      pages.push("...");
-      pages.push(totalPages);
-    }
-    return pages;
   };
 
   // ============================================================
@@ -629,7 +614,7 @@ const AttendanceSheet = () => {
         </div>
       )}
 
-      {/* ✅ Attendance Status Legend — uses same AttendanceStatusIcon component */}
+      {/* Legend */}
       <div className="flex flex-wrap items-center justify-end gap-6 mb-6">
         {LEGEND_ITEMS.map((item) => (
           <div key={item.status} className="flex items-center gap-2">
@@ -697,7 +682,6 @@ const AttendanceSheet = () => {
                             <div className="text-sm font-medium text-gray-700">
                               {day}
                             </div>
-                            {/* ✅ Fixed: index already includes the pad offset */}
                             <div className="text-[10px] text-gray-400 mt-0.5">
                               {weekdays[index % 7]}
                             </div>
@@ -714,7 +698,6 @@ const AttendanceSheet = () => {
                         idx % 2 === 0 ? "bg-white" : "bg-gray-50"
                       }`}
                     >
-                      {/* ✅ Employee name is now clickable → navigates to EmployeeAttendance */}
                       <td
                         className="px-4 py-3 font-medium sticky left-0 bg-white z-30 border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
                         style={{
@@ -759,57 +742,17 @@ const AttendanceSheet = () => {
               </table>
             </div>
 
-            {totalPages > 1 && (
-              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <div className="text-sm text-gray-500">
-                    Showing {startRecord} to {endRecord} of {filteredEmployees.length} employees
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
-                    >
-                      <ChevronLeft size={16} />
-                      Previous
-                    </button>
-
-                    <div className="flex gap-1">
-                      {getPageNumbers().map((page, index) =>
-                        page === "..." ? (
-                          <span key={index} className="px-3 py-1.5 text-gray-400">
-                            ...
-                          </span>
-                        ) : (
-                          <button
-                            key={page}
-                            onClick={() => handlePageChange(page)}
-                            className={`px-3 py-1.5 border rounded-lg text-sm transition-colors ${
-                              currentPage === page
-                                ? "bg-[#1C62A0] text-white border-[#1C62A0]"
-                                : "border-gray-300 hover:bg-white text-gray-700"
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        )
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
-                    >
-                      Next
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* ✅ Pagination — always visible, sticks to bottom */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="employees"
+              />
+            </div>
           </div>
         </div>
       )}
