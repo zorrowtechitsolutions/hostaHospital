@@ -1172,6 +1172,7 @@ const PatientDetails = () => {
             setOpenMenu={setOpenMenu} 
             getStatusBadge={getStatusBadge}
             isLoading={isLoadingPrescriptions}
+            onPrescriptionChange={handlePrescriptionSocketChange}
           />
         );
       case "medical": 
