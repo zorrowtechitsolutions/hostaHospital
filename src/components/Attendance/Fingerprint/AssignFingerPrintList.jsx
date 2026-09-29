@@ -19,6 +19,10 @@ import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
 import { getAuthUser } from '../../../utils/auth';
+import {
+  registerFingerprintEvents,
+  unregisterFingerprintEvents,
+} from '../../../socket/fingerprintEvents';
 
 // ------------------------------------------------------------
 // Helpers
@@ -263,6 +267,51 @@ const AssignFingerprintList = () => {
 
   const loading = doctorsLoading || staffLoading || enrollmentsLoading;
   const isFetching = doctorsFetching || staffFetching || enrollmentsFetching;
+
+  // ----------------------------------------------------------
+  // Real-time fingerprint events (socket)
+  // ----------------------------------------------------------
+  useEffect(() => {
+    const refreshAll = async () => {
+      try {
+        await Promise.all([
+          refetchDoctors(),
+          refetchStaff(),
+          refetchEnrollments(),
+        ]);
+      } catch (err) {
+        console.error('Refresh after fingerprint event failed:', err);
+      }
+    };
+
+    registerFingerprintEvents({
+      onRegistered: async ({ message, data }) => {
+        // Skip events for other hospitals (superadmin receives all)
+        if (data?.hospitalId && String(data.hospitalId) !== String(hospitalId)) return;
+        showSuccessToast(message || 'Fingerprint registered', 3000);
+        await refreshAll();
+      },
+      onUpdated: async ({ message, data }) => {
+        if (data?.hospitalId && String(data.hospitalId) !== String(hospitalId)) return;
+        showSuccessToast(message || 'Fingerprint updated', 3000);
+        await refreshAll();
+      },
+      onDeactivated: async ({ message, data }) => {
+        if (data?.hospitalId && String(data.hospitalId) !== String(hospitalId)) return;
+        showSuccessToast(message || 'Fingerprint deactivated', 3000);
+        await refreshAll();
+      },
+      onActivated: async ({ message, data }) => {
+        if (data?.hospitalId && String(data.hospitalId) !== String(hospitalId)) return;
+        showSuccessToast(message || 'Fingerprint activated', 3000);
+        await refreshAll();
+      },
+    });
+
+    return () => {
+      unregisterFingerprintEvents();
+    };
+  }, [refetchDoctors, refetchStaff, refetchEnrollments, hospitalId]);
 
   // ----------------------------------------------------------
   // Enrollment lookup
