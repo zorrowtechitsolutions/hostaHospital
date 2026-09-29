@@ -1,32 +1,27 @@
 // src/socket/patientEvents.js
 import { socket } from "./socket";
 
-let onAnyListener = null;
-
 export const registerPatientEvents = (handlers = {}) => {
-  if (!onAnyListener) {
-    onAnyListener = () => {};
-    socket.onAny(onAnyListener);
-  }
-
-  socket.off("system_event");
-
-  socket.on("system_event", (payload) => {
-    const event = payload.message?.match(/\[(.*?)\]/)?.[1];
+  socket.on("patient_event", (payload) => {
+    const { event, message, data } = payload;
 
     switch (event) {
       case "PATIENT_REGISTERED":
-        handlers.onPatientRegistered?.(payload.data);
+        handlers.onRegistered?.({ message, data });
         break;
+
       case "PATIENT_UPDATED":
-        handlers.onPatientUpdated?.(payload.data);
+        handlers.onUpdated?.({ message, data });
         break;
+
       case "PATIENT_DELETED":
-        handlers.onPatientDeleted?.(payload.data);
+        handlers.onDeleted?.({ message, data });
         break;
+
       case "PATIENT_RECOVERED":
-        handlers.onPatientRecovered?.(payload.data);
+        handlers.onRecovered?.({ message, data });
         break;
+
       default:
         break;
     }
@@ -34,10 +29,5 @@ export const registerPatientEvents = (handlers = {}) => {
 };
 
 export const unregisterPatientEvents = () => {
-  socket.off("system_event");
-
-  if (onAnyListener) {
-    socket.offAny(onAnyListener);
-    onAnyListener = null;
-  }
+  socket.off("patient_event");
 };
