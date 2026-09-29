@@ -20,6 +20,9 @@ import { getAuthUser } from "../../../utils/auth";
 import { getS3ImageUrl, uploadToS3 } from "../../../../app/service/S3";
 import LaboratoryReportModal from "../modals/LaboratoryReportModal";
 
+// ✅ NEW: socket event helpers
+import { registerLabEvents, unregisterLabEvents } from "../../../socket/labEvents";
+
 // ============ SKELETON LOADING COMPONENTS ============
 
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
@@ -328,22 +331,33 @@ const LabResultsTab = ({ patient }) => {
   
   const itemsPerPage = 5;
 
+  // ✅ CHANGE 1: hospitalId must come from authUser.hospitalId — NOT authUser.id
   const authUser = getAuthUser();
-  const hospitalId = authUser?.id || authUser?.hospitalId;
-  const hospitalName = authUser?.hospitalName || authUser?.name || authUser?.hospital || '';
-  
-  // ✅ FIX: Get patient's userId from patient object
+
+  // IMPORTANT: hospitalId must come from authUser.hospitalId
+  // Do not use authUser.id as hospitalId.
+  const hospitalId = authUser?.hospitalId || null;
+
+  const hospitalName =
+    authUser?.hospitalName ||
+    authUser?.name ||
+    authUser?.hospital ||
+    '';
+
   const patientUserId = patient?.userId;
 
-  // RTK Query hooks
-  const { 
-    data: labResultsData, 
+  // ✅ CHANGE 2: Send hospitalId to the API query
+  const {
+    data: labResultsData,
     isLoading: isLoadingLabResults,
     refetch: refetchLabResults,
     isFetching: isFetchingLabResults,
   } = useGetLabResultsQuery(
-    { patientId: patient?.id },
-    { 
+    {
+      patientId: patient?.id,
+      hospitalId: hospitalId || undefined,
+    },
+    {
       skip: !patient?.id,
       refetchOnMountOrArgChange: true,
       refetchOnFocus: true,
@@ -479,11 +493,10 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // ✅ FIX: Use patientUserId instead of userId
       const labResultData = {
         patientId: patient.id,
         patientName: patient.name || patient.displayName || '',
-        userId: patientUserId, // <-- FIX: Use patient's userId
+        userId: patientUserId,
         hospitalId: hospitalId || null,
         hospitalName: hospitalName,
         department: department.trim(),
@@ -534,7 +547,7 @@ const LabResultsTab = ({ patient }) => {
         fileSize: formatFileSize(selectedFile.size),
         type: getFileExtension(selectedFile.name),
         contentType: selectedFile.type,
-        uploadedById: patientUserId, // Use patientUserId here as well
+        uploadedById: patientUserId,
         role: "labresults",
       };
 
@@ -607,6 +620,8 @@ const LabResultsTab = ({ patient }) => {
     }
   };
 
+  // ✅ CHANGE 4: Safer edit — preserves existing hospital/user/date
+  // and only replaces file fields when a new file is selected
   const handleUpdateLabResult = async () => {
     if (!editTestName.trim()) {
       showWarningToast("Please enter a test name");
@@ -633,7 +648,13 @@ const LabResultsTab = ({ patient }) => {
       return;
     }
 
+    if (!editingLabResult) {
+      showErrorToast("❌ Lab result not found.");
+      return;
+    }
+
     const labResultId = editingLabResult.id || editingLabResult._id;
+
     if (!labResultId) {
       showErrorToast("❌ Lab result ID not found.");
       return;
@@ -643,27 +664,66 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // ✅ FIX: Use patientUserId instead of userId
+      // Keep the existing hospital/patient information.
+      // Only update the fields changed in the edit form.
       let updateData = {
         patientId: patient.id,
-        patientName: patient.name || patient.displayName || '',
-        userId: patientUserId, // <-- FIX: Use patient's userId
-        hospitalId: hospitalId || null,
-        hospitalName: hospitalName,
+        patientName:
+          patient.name ||
+          patient.displayName ||
+          editingLabResult.patientName ||
+          "",
+
+        userId:
+          editingLabResult.userId ||
+          patientUserId,
+
+        // IMPORTANT:
+        // Preserve the existing hospitalId.
+        hospitalId:
+          editingLabResult.hospitalId ||
+          hospitalId ||
+          null,
+
+        hospitalName:
+          editingLabResult.hospitalName ||
+          hospitalName,
+
         department: editDepartment.trim(),
+
         testName: editTestName.trim(),
-        status: editStatus,
-        doctorId: editDoctorId || null,
-        doctorName: editDoctorName.trim(),
-        labName: editLabName.trim() || null,
+
         name: editTestName.trim(),
-        date: new Date().toLocaleDateString(),
+
+        status: editStatus,
+
+        doctorId: editDoctorId || null,
+
+        doctorName: editDoctorName.trim(),
+
+        labName:
+          editLabName.trim() ||
+          editingLabResult.labName ||
+          null,
+
+        // Don't change the original date during edit.
+        date:
+          editingLabResult.date ||
+          editingLabResult.createdAt ||
+          undefined,
       };
 
+      // Only replace the existing file if the user selected a new file.
       if (editFile) {
         const timestamp = Date.now();
-        const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
+
+        const safeFileName = editFile.name.replace(
+          /[^a-zA-Z0-9.-]/g,
+          "_"
+        );
+
+        const fileKey =
+          `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
 
         setUploadProgress(20);
 
@@ -678,6 +738,7 @@ const LabResultsTab = ({ patient }) => {
 
         updateData = {
           ...updateData,
+
           fileKey: s3Result.key,
           fileUrl: s3Result.imageUrl,
           fileName: editFile.name,
@@ -685,34 +746,49 @@ const LabResultsTab = ({ patient }) => {
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
           contentType: editFile.type,
-          uploadedById: patientUserId, // Use patientUserId here as well
+
+          uploadedById: patientUserId,
           role: "labresults",
         };
       }
 
-      await updateLabResult({
+      console.log("Updating lab result:", {
         id: labResultId,
-        updateData: updateData
+        updateData,
+      });
+
+      await updateLabResult({
+        id: String(labResultId),
+        updateData,
       }).unwrap();
 
       setUploadProgress(100);
 
-      showSuccessToast(`✅ Lab Result "${editTestName}" updated successfully!`);
-      
+      showSuccessToast(
+        `✅ Lab Result "${editTestName}" updated successfully!`
+      );
+
       resetEditForm();
-      await forceRefresh();
-      
+
+      // Refresh API data after update.
+      await refetchLabResults();
+
+      setRefreshCounter((prev) => prev + 1);
+
     } catch (error) {
       console.error("❌ Update failed:", error);
-      
+
       let errorMessage = "Unknown error";
-      if (error.data?.message) {
+
+      if (error?.data?.message) {
         errorMessage = error.data.message;
-      } else if (error.message) {
+      } else if (error?.message) {
         errorMessage = error.message;
       }
-      
-      showErrorToast(`❌ Failed to update lab result: ${errorMessage}`);
+
+      showErrorToast(
+        `❌ Failed to update lab result: ${errorMessage}`
+      );
     } finally {
       setUploading(false);
     }
@@ -857,6 +933,70 @@ const LabResultsTab = ({ patient }) => {
     }
   }, [patient?.id, loadDeletedIds, forceRefresh]);
 
+  // ✅ CHANGE 3: Reset pagination when the patient changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [patient?.id]);
+
+  // ========================
+  // SOCKET EVENT LISTENERS
+  // ========================
+
+  // Stable ref so the socket handler always calls the freshest refetch
+  // without needing to re-register the listener on every render.
+  const refetchRef = useRef(refetchLabResults);
+  useEffect(() => {
+    refetchRef.current = refetchLabResults;
+  }, [refetchLabResults]);
+
+  useEffect(() => {
+    if (!patient?.id) return;
+
+    const currentPatientId = String(patient.id);
+
+    // Handler shared by every lab event type
+    const handleLabEvent = ({ message, data }) => {
+      // Only respond to events for THIS patient.
+      // If the backend omits patientId we fall back to refreshing anyway.
+      if (data?.patientId && String(data.patientId) !== currentPatientId) {
+        return;
+      }
+
+      // Keep the localStorage blacklist in sync for delete events
+      const isDeleteEvent =
+        typeof message === "string" &&
+        message.toLowerCase().includes("delet");
+
+      if (isDeleteEvent && data?.id) {
+        const id = String(data.id);
+        setDeletedIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          saveDeletedIds(next);
+          return next;
+        });
+      }
+
+      // Trigger a refresh — this re-fetches from the API and
+      // bumps the counter so memoized lists re-render.
+      refetchRef.current?.();
+      setRefreshCounter((prev) => prev + 1);
+    };
+
+    registerLabEvents({
+      onRegistered:        handleLabEvent,
+      onUpdated:           handleLabEvent,
+      onDeleted:           handleLabEvent,
+      onTestRegistered:    handleLabEvent,
+      onReportRegistered:  handleLabEvent,
+      onReportUpdated:     handleLabEvent,
+    });
+
+    return () => {
+      unregisterLabEvents();
+    };
+  }, [patient?.id, saveDeletedIds]);
+
   // ========================
   // RESET FUNCTIONS
   // ========================
@@ -891,25 +1031,31 @@ const LabResultsTab = ({ patient }) => {
   // PAGINATION - SHOW ALL ITEMS INCLUDING BLACKLISTED
   // ========================
 
+  // ✅ CHANGE 5: List logic unchanged — API already filters by patientId
   const labResultsList = useMemo(() => {
     const list = labResultsData?.data || [];
-    
-    // ✅ DON'T FILTER - Show all items including blacklisted
-    // Just mark them as blacklisted in the UI
-    return list.map(item => {
+
+    return list.map((item) => {
       const id = String(item.id || item._id);
       const isDeleted = deletedIds.has(id);
+
       return {
         ...item,
-        isBlacklisted: isDeleted
+        isBlacklisted: isDeleted,
       };
     });
   }, [labResultsData, deletedIds, refreshCounter]);
 
   const totalItems = labResultsList.length;
+
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedLabResults = labResultsList.slice(startIndex, startIndex + itemsPerPage);
+
+  const paginatedLabResults = labResultsList.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
