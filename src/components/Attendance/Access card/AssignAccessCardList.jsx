@@ -15,10 +15,16 @@ import {
   useActivateRfidCardAssignmentMutation,
 } from '../../../../app/service/accesscard';
 import { Button, Pagination, SearchBar, FilterBar, Modal } from '../../ui';
-import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+import { showSuccessToast, showWarningToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
 import { getAuthUser } from '../../../utils/auth';
+
+// ✅ Real-time access card events
+import {
+  registerAccessCardEvents,
+  unregisterAccessCardEvents,
+} from '../../../socket/accessCardEvents';
 
 // ------------------------------------------------------------
 // Helpers
@@ -188,6 +194,48 @@ const AssignAccessCardList = () => {
     useDeactivateRfidCardAssignmentMutation();
   const [activateCard, { isLoading: isActivating }] =
     useActivateRfidCardAssignmentMutation();
+
+  /* ============================================================
+     ✅ REAL-TIME ACCESS CARD EVENTS
+     Backend emits on:
+       - `role_1`                 (SuperAdmin — includes hospitalName in msg)
+       - `hospital_${hospitalId}` (Hospital admin — no hospital name in msg)
+     Event name: "accesscard_event"
+     Payload:    { event, message, data }
+     ============================================================ */
+  useEffect(() => {
+    const matchesThisHospital = (data) => {
+      // If we can't identify the hospital from the event, still refresh.
+      if (!data?.hospitalId) return true;
+      if (!hospitalId) return true;
+      return String(data.hospitalId) === String(hospitalId);
+    };
+
+    registerAccessCardEvents({
+      onAssigned: ({ message, data }) => {
+        if (!matchesThisHospital(data)) return;
+        if (message) showSuccessToast(message, 3000);
+        refetchAssignments();
+      },
+      onUpdated: ({ message, data }) => {
+        if (!matchesThisHospital(data)) return;
+        if (message) showSuccessToast(message, 3000);
+        refetchAssignments();
+      },
+      onDeactivated: ({ message, data }) => {
+        if (!matchesThisHospital(data)) return;
+        if (message) showWarningToast(message, 3000);
+        refetchAssignments();
+      },
+      onActivated: ({ message, data }) => {
+        if (!matchesThisHospital(data)) return;
+        if (message) showSuccessToast(message, 3000);
+        refetchAssignments();
+      },
+    });
+
+    return () => unregisterAccessCardEvents();
+  }, [refetchAssignments, hospitalId]);
 
   const loading = doctorsLoading || staffLoading || assignmentsLoading;
   const isFetching = doctorsFetching || staffFetching || assignmentsFetching;
@@ -965,7 +1013,6 @@ const AssignAccessCardList = () => {
               Cancel
             </Button>
 
-            {/* Use a plain <button> so variant="primary" cannot override the red bg */}
             <button
               type="button"
               onClick={handleConfirmAction}
