@@ -31,7 +31,10 @@ import PrescriptionReportModal from "./modals/PrecriptionReportModal";
 
 // Import API hooks
 import { useGetPatientByIdQuery } from "../../../app/service/patients";
-import { useGetBookingsQuery } from "../../../app/service/request";
+import {
+  useGetBookingsQuery,
+  useDeleteBookingMutation,
+} from "../../../app/service/request";
 import { 
   useGetPrescriptionsQuery, 
   useDeletePrescriptionMutation,
@@ -219,6 +222,7 @@ const PatientDetails = () => {
   const [deleteVital] = useDeleteVitalMutation();
   const [recoverPrescription] = useRecoverPrescriptionMutation();
   const [updatePrescription] = useUpdatePrescriptionMutation();
+  const [deleteBooking] = useDeleteBookingMutation();   // 👈 ADDED
 
   // =====================================================
   // SOCKET EVENT HANDLERS
@@ -969,13 +973,95 @@ const PatientDetails = () => {
         showSuccessToast("Vital record deleted successfully");
         await refetchVitals();
       } else if (type === 'appointment') {
-        const updatedAppointments = patient.appointmentsList.filter((_, i) => i !== index);
-        setPatient({...patient, appointmentsList: updatedAppointments});
-        showSuccessToast("Appointment deleted successfully");
+        // 🔎 Find the appointment so we can get its bookingNumber
+        const appointmentToDelete = patient.appointmentsList.find(
+          (a, i) => i === index || a.id === id
+        );
+
+        const bookingNumber = appointmentToDelete?.bookingNumber;
+
+        if (!bookingNumber) {
+          showErrorToast(
+            "Cannot delete: booking number is missing for this appointment."
+          );
+          setShowDeleteModal(false);
+          setDeleteConfig({ type: '', id: null, index: null, name: '' });
+          return;
+        }
+
+        // ✅ Optimistic update – remove from local list immediately
+        const updatedAppointments = patient.appointmentsList.filter(
+          (a, i) => i !== index && a.id !== id
+        );
+        setPatient((prev) => ({ ...prev, appointmentsList: updatedAppointments }));
+
+        // Close modal early so UI feels responsive
+        setShowDeleteModal(false);
+        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+
+        try {
+          // ✅ Call API using bookingNumber
+          await deleteBooking(bookingNumber).unwrap();
+
+          // ✅ Refresh from server so state stays in sync
+          await refetchBookings();
+
+          showSuccessToast("Appointment deleted successfully");
+        } catch (error) {
+          console.error("❌ Failed to delete appointment:", error);
+
+          // Revert optimistic update by refetching
+          await refetchBookings();
+
+          showErrorToast(
+            error?.data?.message ||
+              error?.error ||
+              "Failed to delete appointment"
+          );
+        }
+
+        return; // ⬅️ Skip the shared footer code below
       } else if (type === 'visit') {
-        const updatedVisits = patient.visitHistoryList.filter((_, i) => i !== index);
-        setPatient({...patient, visitHistoryList: updatedVisits});
-        showSuccessToast("Visit record deleted successfully");
+        // 🔎 Same pattern for visits (they share bookingNumber)
+        const visitToDelete = patient.visitHistoryList.find(
+          (v, i) => i === index || v.id === id
+        );
+
+        const bookingNumber = visitToDelete?.bookingNumber;
+
+        if (!bookingNumber) {
+          showErrorToast(
+            "Cannot delete: booking number is missing for this visit."
+          );
+          setShowDeleteModal(false);
+          setDeleteConfig({ type: '', id: null, index: null, name: '' });
+          return;
+        }
+
+        // ✅ Optimistic update
+        const updatedVisits = patient.visitHistoryList.filter(
+          (v, i) => i !== index && v.id !== id
+        );
+        setPatient((prev) => ({ ...prev, visitHistoryList: updatedVisits }));
+
+        setShowDeleteModal(false);
+        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+
+        try {
+          await deleteBooking(bookingNumber).unwrap();
+          await refetchBookings();
+          showSuccessToast("Visit record deleted successfully");
+        } catch (error) {
+          console.error("❌ Failed to delete visit:", error);
+          await refetchBookings();
+          showErrorToast(
+            error?.data?.message ||
+              error?.error ||
+              "Failed to delete visit"
+          );
+        }
+
+        return; // ⬅️ Skip the shared footer code below
       } else if (type === 'medical') {
         const updatedMedicalHistory = patient.medicalHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, medicalHistoryList: updatedMedicalHistory});
