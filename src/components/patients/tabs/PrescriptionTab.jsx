@@ -1,6 +1,11 @@
-import React, { useState } from "react";
+// src/components/.../PrescriptionTab.jsx
+import React, { useState, useEffect, useCallback } from "react";
 import { MoreVertical, Eye, Trash2, FileText, RotateCcw } from "lucide-react";
 import { Button, Pagination, Badge } from "../../ui";
+import {
+  registerPrescriptionEvents,
+  unregisterPrescriptionEvents,
+} from "../../../socket/prescriptionEvents";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -91,21 +96,22 @@ const PrescriptionSkeleton = () => (
 
 // ============ END SKELETON LOADING COMPONENTS ============
 
-const PrescriptionTab = ({ 
-  patient, 
-  handleDeleteClick, 
+const PrescriptionTab = ({
+  patient,
+  handleDeleteClick,
   handleViewDetails,
   handleRecoverClick,
-  openMenu, 
-  setOpenMenu, 
+  openMenu,
+  setOpenMenu,
   getStatusBadge,
-  isLoading = false
+  isLoading = false,
+  onPrescriptionChange, // 👈 callback prop for socket events (optional)
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
   // ✅ DEFENSIVE: Check multiple possible locations for prescriptions
-  const prescriptionsList = 
+  const prescriptionsList =
     patient?.prescriptionsList ||
     patient?.prescriptions ||
     patient?.data ||
@@ -118,18 +124,53 @@ const PrescriptionTab = ({
   const totalItems = prescriptionsList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedPrescriptions = prescriptionsList.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedPrescriptions = prescriptionsList.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
+  // ============ SOCKET LISTENERS ============
+  // Stable callback so the effect doesn't re-run on every render
+  const handleSocketEvent = useCallback(
+    (type, data) => {
+      console.log(`[PrescriptionTab] socket event: ${type}`, data);
+      onPrescriptionChange?.(type, data);
+    },
+    [onPrescriptionChange]
+  );
+
+  useEffect(() => {
+    registerPrescriptionEvents({
+      onCreated: ({ message, data }) =>
+        handleSocketEvent("created", { message, data }),
+      onUpdated: ({ message, data }) =>
+        handleSocketEvent("updated", { message, data }),
+      onDeleted: ({ message, data }) =>
+        handleSocketEvent("deleted", { message, data }),
+      onHospitalRegistered: ({ message, data }) =>
+        handleSocketEvent("hospitalRegistered", { message, data }),
+      onHospitalUpdated: ({ message, data }) =>
+        handleSocketEvent("hospitalUpdated", { message, data }),
+      onHospitalDeleted: ({ message, data }) =>
+        handleSocketEvent("hospitalDeleted", { message, data }),
+    });
+
+    return () => {
+      unregisterPrescriptionEvents();
+    };
+  }, [handleSocketEvent]);
+  // ============ END SOCKET LISTENERS ============
+
   // Helper function to get patient number for display
   const getPatientNumberDisplay = (item) => {
-    const patientNumber = 
+    const patientNumber =
       item.patientNumber ||
       item.patient?.patientNumber ||
       item.fullData?.patientNumber ||
@@ -177,7 +218,7 @@ const PrescriptionTab = ({
 
   // Helper function to get medicine count
   const getMedicineCount = (item) => {
-    const medications = 
+    const medications =
       item.medications ||
       item.medicines ||
       item.prescribedMedications ||
@@ -188,15 +229,15 @@ const PrescriptionTab = ({
     if (Array.isArray(medications)) {
       return medications.length;
     }
-    
-    if (typeof medications === 'string') {
+
+    if (typeof medications === "string") {
       try {
         const parsed = JSON.parse(medications);
         if (Array.isArray(parsed)) {
           return parsed.length;
         }
       } catch (e) {
-        const count = medications.split(',').filter(m => m.trim()).length;
+        const count = medications.split(",").filter((m) => m.trim()).length;
         return count || 1;
       }
     }
@@ -204,12 +245,21 @@ const PrescriptionTab = ({
     return item.quantity || 1;
   };
 
-  // Helper function to get formatted date
+  // ✅ Helper function to get formatted date (prioritizes appointmentDateDisplay)
   const getFormattedDate = (item) => {
-    const date = 
+    const appointmentDateDisplay =
+      item.appointmentDateDisplay || item.fullData?.appointmentDateDisplay;
+
+    if (appointmentDateDisplay) {
+      return appointmentDateDisplay;
+    }
+
+    const date =
+      item.appointmentDate ||
       item.date ||
       item.createdAt ||
       item.prescriptionDate ||
+      item.fullData?.appointmentDate ||
       item.fullData?.date ||
       item.fullData?.createdAt ||
       null;
@@ -217,24 +267,32 @@ const PrescriptionTab = ({
     if (date) {
       try {
         const d = new Date(date);
-        return d.toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        });
+
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          });
+        }
+
+        return date;
       } catch (e) {
         return date;
       }
     }
+
     return "N/A";
   };
 
   // Check if prescription is blacklisted (deleted)
   const isBlacklisted = (item) => {
-    return item.isDelete === true || 
-           item.status === 'deleted' || 
-           item.status === 'Blacklisted' ||
-           item.isDelete === 'true';
+    return (
+      item.isDelete === true ||
+      item.status === "deleted" ||
+      item.status === "Blacklisted" ||
+      item.isDelete === "true"
+    );
   };
 
   // Get status badge variant
@@ -281,7 +339,9 @@ const PrescriptionTab = ({
             <FileText size={32} className="text-gray-400" />
           </div>
           <p className="text-gray-500">No prescriptions found</p>
-          <p className="text-sm text-gray-400 mt-1">Prescriptions will appear here after consultation</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Prescriptions will appear here after consultation
+          </p>
         </div>
       ) : (
         <div className="flex flex-col min-h-[420px]">
@@ -289,7 +349,6 @@ const PrescriptionTab = ({
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
-                  {/* ✅ First column: Date */}
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3">Prescribed By</th>
                   <th className="px-6 py-3">Specialization</th>
@@ -302,27 +361,34 @@ const PrescriptionTab = ({
                 {paginatedPrescriptions.map((item, index) => {
                   const isBlacklistedItem = isBlacklisted(item);
                   const patientNumberDisplay = getPatientNumberDisplay(item);
-                  
+
                   return (
-                    <tr 
-                      key={item.id || index} 
+                    <tr
+                      key={item.id || index}
                       className={`hover:bg-gray-50 transition-colors border-b border-gray-100 ${
-                        isBlacklistedItem ? 'opacity-60' : 'cursor-pointer'
+                        isBlacklistedItem ? "opacity-60" : "cursor-pointer"
                       }`}
                     >
                       {/* ✅ First column: Date */}
                       <td className="px-6 py-4">
                         <div>
-                          <span className={`font-medium ${
-                            isBlacklistedItem ? 'text-gray-400' : 'text-gray-800'
-                          }`}>
+                          <span
+                            className={`font-medium ${
+                              isBlacklistedItem
+                                ? "text-gray-400"
+                                : "text-gray-800"
+                            }`}
+                          >
                             {getFormattedDate(item)}
                           </span>
-                          {/* ✅ Patient number as subtitle under date */}
                           {patientNumberDisplay && (
-                            <span className={`block text-[10px] ${
-                              isBlacklistedItem ? 'text-gray-300' : 'text-gray-400'
-                            }`}>
+                            <span
+                              className={`block text-[10px] ${
+                                isBlacklistedItem
+                                  ? "text-gray-300"
+                                  : "text-gray-400"
+                              }`}
+                            >
                               Patient {patientNumberDisplay}
                             </span>
                           )}
@@ -330,33 +396,50 @@ const PrescriptionTab = ({
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                            isBlacklistedItem ? 'bg-gray-200' : 'bg-green-100'
-                          }`}>
-                            <span className={`text-xs font-medium ${
-                              isBlacklistedItem ? 'text-gray-400' : 'text-green-600'
-                            }`}>
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                              isBlacklistedItem ? "bg-gray-200" : "bg-green-100"
+                            }`}
+                          >
+                            <span
+                              className={`text-xs font-medium ${
+                                isBlacklistedItem
+                                  ? "text-gray-400"
+                                  : "text-green-600"
+                              }`}
+                            >
                               {getDoctorDisplayName(item).charAt(0)}
                             </span>
                           </div>
-                          <span className={`font-medium ${
-                            isBlacklistedItem ? 'text-gray-400' : 'text-gray-800'
-                          }`}>
+                          <span
+                            className={`font-medium ${
+                              isBlacklistedItem
+                                ? "text-gray-400"
+                                : "text-gray-800"
+                            }`}
+                          >
                             {getDoctorDisplayName(item)}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`text-xs ${
-                          isBlacklistedItem ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
+                        <span
+                          className={`text-xs ${
+                            isBlacklistedItem
+                              ? "text-gray-400"
+                              : "text-gray-500"
+                          }`}
+                        >
                           {getDoctorSpecialization(item)}
                         </span>
                       </td>
-                      <td className={`px-6 py-4 ${
-                        isBlacklistedItem ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
-                        {getMedicineCount(item)} medicine{getMedicineCount(item) !== 1 ? 's' : ''}
+                      <td
+                        className={`px-6 py-4 ${
+                          isBlacklistedItem ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {getMedicineCount(item)} medicine
+                        {getMedicineCount(item) !== 1 ? "s" : ""}
                       </td>
                       <td className="px-6 py-4">
                         <Badge
@@ -371,21 +454,28 @@ const PrescriptionTab = ({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setOpenMenu(openMenu === `prescription-${item.id}` ? null : `prescription-${item.id}`);
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenu(
+                                openMenu === `prescription-${item.id}`
+                                  ? null
+                                  : `prescription-${item.id}`
+                              );
                             }}
                             className="p-2"
                           >
-                            <MoreVertical size={16} className="text-gray-500" />
+                            <MoreVertical
+                              size={16}
+                              className="text-gray-500"
+                            />
                           </Button>
                           {openMenu === `prescription-${item.id}` && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                               {/* View Details - Only for non-blacklisted */}
                               {!isBlacklistedItem && (
                                 <button
-                                  onClick={(e) => { 
-                                    e.stopPropagation(); 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     handleViewDetails(item);
                                     setOpenMenu(null);
                                   }}
@@ -394,15 +484,20 @@ const PrescriptionTab = ({
                                   <Eye size={15} /> View Details
                                 </button>
                               )}
-                              
+
                               {/* Delete - Only for non-blacklisted */}
                               {!isBlacklistedItem && (
                                 <>
                                   <div className="border-t border-gray-100 my-1"></div>
                                   <button
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      handleDeleteClick('prescription', item.id, startIndex + index, `prescription from ${item.date}`);
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(
+                                        "prescription",
+                                        item.id,
+                                        startIndex + index,
+                                        `prescription from ${item.date}`
+                                      );
                                       setOpenMenu(null);
                                     }}
                                     className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
@@ -411,12 +506,12 @@ const PrescriptionTab = ({
                                   </button>
                                 </>
                               )}
-                              
+
                               {/* Recover - Only for blacklisted */}
                               {isBlacklistedItem && (
                                 <button
-                                  onClick={(e) => { 
-                                    e.stopPropagation(); 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     handleRecoverClick(item);
                                     setOpenMenu(null);
                                   }}
