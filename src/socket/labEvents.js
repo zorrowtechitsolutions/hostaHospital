@@ -10,6 +10,7 @@ import { socket } from "./socket";
  *     onRegistered: ({ message, data }) => { ... },
  *     onUpdated:    ({ message, data }) => { ... },
  *     onDeleted:    ({ message, data }) => { ... },
+ *     onRecovered:  ({ message, data }) => { ... },  // ✅ NEW
  *     onTestRegistered:   ({ message, data }) => { ... },
  *     onReportRegistered: ({ message, data }) => { ... },
  *     onReportUpdated:    ({ message, data }) => { ... },
@@ -32,6 +33,11 @@ export const registerLabEvents = (handlers = {}) => {
 
       case "LABRESULT_DELETED":
         handlers.onDeleted?.({ message, data });
+        break;
+
+      // ✅ NEW: recover event
+      case "LABRESULT_RECOVERED":
+        handlers.onRecovered?.({ message, data });
         break;
 
       case "TEST_REGISTERED":

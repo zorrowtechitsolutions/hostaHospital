@@ -950,20 +950,24 @@ const LabResultsTab = ({ patient }) => {
 
     const currentPatientId = String(patient.id);
 
-    // Handler shared by every lab event type
-    const handleLabEvent = ({ message, data }) => {
-      // Only respond to events for THIS patient.
-      // If the backend omits patientId we fall back to refreshing anyway.
+    // Handler shared by every lab event type EXCEPT delete/recover,
+    // because those need special treatment for the local blacklist.
+    const handleGenericLabEvent = ({ data }) => {
+      if (data?.patientId && String(data.patientId) !== currentPatientId) {
+        return;
+      }
+      refetchRef.current?.();
+      setRefreshCounter((prev) => prev + 1);
+    };
+
+    // DELETE handler — also blacklists the item locally so the row
+    // instantly greys out even before the refetch lands.
+    const handleDeleteEvent = ({ data }) => {
       if (data?.patientId && String(data.patientId) !== currentPatientId) {
         return;
       }
 
-      // Keep the localStorage blacklist in sync for delete events
-      const isDeleteEvent =
-        typeof message === "string" &&
-        message.toLowerCase().includes("delet");
-
-      if (isDeleteEvent && data?.id) {
+      if (data?.id) {
         const id = String(data.id);
         setDeletedIds((prev) => {
           const next = new Set(prev);
@@ -973,19 +977,40 @@ const LabResultsTab = ({ patient }) => {
         });
       }
 
-      // Trigger a refresh — this re-fetches from the API and
-      // bumps the counter so memoized lists re-render.
+      refetchRef.current?.();
+      setRefreshCounter((prev) => prev + 1);
+    };
+
+    // ✅ NEW: RECOVER handler — removes the id from the local blacklist
+    // so the row instantly reverts to its normal (non-greyed) state.
+    const handleRecoverEvent = ({ data }) => {
+      if (data?.patientId && String(data.patientId) !== currentPatientId) {
+        return;
+      }
+
+      if (data?.id) {
+        const id = String(data.id);
+        setDeletedIds((prev) => {
+          if (!prev.has(id)) return prev; // nothing to do
+          const next = new Set(prev);
+          next.delete(id);
+          saveDeletedIds(next);
+          return next;
+        });
+      }
+
       refetchRef.current?.();
       setRefreshCounter((prev) => prev + 1);
     };
 
     registerLabEvents({
-      onRegistered:        handleLabEvent,
-      onUpdated:           handleLabEvent,
-      onDeleted:           handleLabEvent,
-      onTestRegistered:    handleLabEvent,
-      onReportRegistered:  handleLabEvent,
-      onReportUpdated:     handleLabEvent,
+      onRegistered:       handleGenericLabEvent,
+      onUpdated:          handleGenericLabEvent,
+      onDeleted:          handleDeleteEvent,
+      onRecovered:        handleRecoverEvent,   // ✅ NEW
+      onTestRegistered:   handleGenericLabEvent,
+      onReportRegistered: handleGenericLabEvent,
+      onReportUpdated:    handleGenericLabEvent,
     });
 
     return () => {
