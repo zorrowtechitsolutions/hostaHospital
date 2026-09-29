@@ -197,15 +197,9 @@ const AssignAccessCardList = () => {
 
   /* ============================================================
      ✅ REAL-TIME ACCESS CARD EVENTS
-     Backend emits on:
-       - `role_1`                 (SuperAdmin — includes hospitalName in msg)
-       - `hospital_${hospitalId}` (Hospital admin — no hospital name in msg)
-     Event name: "accesscard_event"
-     Payload:    { event, message, data }
      ============================================================ */
   useEffect(() => {
     const matchesThisHospital = (data) => {
-      // If we can't identify the hospital from the event, still refresh.
       if (!data?.hospitalId) return true;
       if (!hospitalId) return true;
       return String(data.hospitalId) === String(hospitalId);
@@ -391,7 +385,7 @@ const AssignAccessCardList = () => {
   // Pagination
   // ----------------------------------------------------------
   const totalFilteredItems = filteredMembers.length;
-  const totalPages = Math.ceil(totalFilteredItems / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
 
   const paginatedMembers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -539,8 +533,10 @@ const AssignAccessCardList = () => {
     hasSearchTerm;
 
   const handlePageChange = (page) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   // ----------------------------------------------------------
@@ -804,18 +800,28 @@ const AssignAccessCardList = () => {
 
           <div className="flex flex-col min-h-[500px]">
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-sm text-left min-w-[1200px]">
                 <thead className="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-3.5 font-medium"># Employee ID</th>
-                    <th className="px-6 py-3.5 font-medium">Name</th>
-                    <th className="px-6 py-3.5 font-medium">Type</th>
-                    <th className="px-6 py-3.5 font-medium">
+                    <th className="px-6 py-3.5 font-medium min-w-[140px] whitespace-nowrap">
+                      # Employee ID
+                    </th>
+                    <th className="px-6 py-3.5 font-medium min-w-[240px] whitespace-nowrap">
+                      Name
+                    </th>
+                    <th className="px-6 py-3.5 font-medium min-w-[120px] whitespace-nowrap">
+                      Type
+                    </th>
+                    <th className="px-6 py-3.5 font-medium min-w-[180px] whitespace-nowrap">
                       Department / Designation
                     </th>
-                    <th className="px-6 py-3.5 font-medium">Access Card</th>
-                    <th className="px-6 py-3.5 font-medium">Status</th>
-                    <th className="px-6 py-3.5 font-medium text-center w-16">
+                    <th className="px-6 py-3.5 font-medium min-w-[160px] whitespace-nowrap">
+                      Access Card
+                    </th>
+                    <th className="px-6 py-3.5 font-medium min-w-[120px] whitespace-nowrap">
+                      Status
+                    </th>
+                    <th className="px-6 py-3.5 font-medium text-center w-20 whitespace-nowrap">
                       Action
                     </th>
                   </tr>
@@ -826,12 +832,12 @@ const AssignAccessCardList = () => {
                       key={member.key}
                       className="hover:bg-gray-50/80 transition-colors"
                     >
-                      <td className="px-6 py-4 font-medium text-gray-800">
+                      <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">
                         {member.number}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <ShadcnAvatar className="w-8 h-8 rounded-full">
+                          <ShadcnAvatar className="w-8 h-8 rounded-full flex-shrink-0">
                             <AvatarImage
                               src={getS3ImageUrl(member.image)}
                               alt={member.name}
@@ -841,62 +847,62 @@ const AssignAccessCardList = () => {
                               {member.name?.charAt(0)?.toUpperCase() || 'U'}
                             </AvatarFallback>
                           </ShadcnAvatar>
-                          <div>
+                          <div className="min-w-0">
                             <span
                               onClick={() => handleViewDetails(member)}
-                              className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors"
+                              className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0] transition-colors whitespace-nowrap block"
                             >
                               {member.name}
                             </span>
                             {member.email && (
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-gray-400 truncate max-w-[200px]">
                                 {member.email}
                               </p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {member.type === 'Doctor' ? (
-                          <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap">
                             <Stethoscope size={12} /> Doctor
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap">
                             <Briefcase size={12} /> Staff
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
                         {member.department}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {member.accessCardUid ? (
                           <div className="flex flex-col gap-1">
-                            <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full font-mono">
+                            <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full font-mono whitespace-nowrap w-fit">
                               <IdCard size={12} />
                               {member.accessCardUid}
                             </span>
                             {member.assignedAt && (
-                              <span className="text-xs text-gray-400">
+                              <span className="text-xs text-gray-400 whitespace-nowrap">
                                 {formatDate(member.assignedAt)}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap">
                             Not Assigned
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {member.accessCardUid ? (
                           member.cardStatus === 'Active' ? (
-                            <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap">
                               <CheckCircle2 size={12} /> Active
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap">
                               <Ban size={12} /> Inactive
                             </span>
                           )
@@ -904,7 +910,7 @@ const AssignAccessCardList = () => {
                           <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center relative menu-container">
+                      <td className="px-6 py-4 text-center relative menu-container whitespace-nowrap">
                         <div className="flex justify-center">
                           <button
                             onClick={(e) => toggleMenu(member.key, e)}
@@ -931,18 +937,17 @@ const AssignAccessCardList = () => {
               </table>
             </div>
 
-            {totalPages > 1 && (
-              <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                  totalItems={totalFilteredItems}
-                  itemsPerPage={itemsPerPage}
-                  itemLabel="members"
-                />
-              </div>
-            )}
+            {/* ✅ Pagination — always visible, sticky to bottom */}
+            <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalItems={totalFilteredItems}
+                itemsPerPage={itemsPerPage}
+                itemLabel="members"
+              />
+            </div>
           </div>
         </div>
       )}
