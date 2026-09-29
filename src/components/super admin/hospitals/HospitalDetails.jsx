@@ -29,7 +29,9 @@ import {
   School,
   Heart,
   Monitor,
-  ClipboardCheck, // ✅ Added for Attendance card
+  ClipboardCheck,
+  Cpu,
+  IdCard, // ✅ Added for Attendance Devices card
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
@@ -40,9 +42,10 @@ import { useGetStaffQuery } from '../../../../app/service/staffApi';
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
-import { 
+import { useGetDevicesQuery } from '../../../../app/service/device';
+import {
   useGetUnreadNotificationsQuery,
-  useGetReadNotificationsQuery 
+  useGetReadNotificationsQuery
 } from '../../../../app/service/notification';
 import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../../app/service/S3';
 
@@ -82,8 +85,8 @@ const HospitalAvatar = ({ imageUrl, hospitalName, size = 'w-16 h-16' }) => {
           loading="eager"
         />
       )}
-      
-      <div 
+
+      <div
         className={`w-full h-full flex items-center justify-center text-white text-2xl transition-opacity duration-300 ${
           imageLoaded ? "opacity-0 pointer-events-none" : "opacity-100"
         } bg-gray-200`}
@@ -158,7 +161,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
     imageUrl: null,
     imageKey: null,
   });
-  
+
   const [editForm, setEditForm] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -171,7 +174,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
     if (hospital && isOpen) {
       const existingImageUrl = hospital.imageUrl || hospital.profilePicture || hospital.profileImage;
       const previewUrl = existingImageUrl ? getImageUrlWithCache(existingImageUrl) : null;
-      
+
       const locationParts = [
         hospital.address?.place,
         hospital.address?.district,
@@ -179,7 +182,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
         hospital.address?.country
       ].filter(Boolean);
       const locationString = locationParts.join(', ');
-      
+
       const newFormData = {
         name: hospital.name || '',
         email: hospital.email || '',
@@ -192,7 +195,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
         imageUrl: existingImageUrl || null,
         imageKey: existingImageUrl || null,
       };
-      
+
       setFormData(newFormData);
       setEditForm(newFormData);
       setPreviewImage(previewUrl);
@@ -216,17 +219,17 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showErrorToast('File size must be less than 5MB', 3000);
       return;
     }
-    
+
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
       showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP', 3000);
       return;
     }
-    
+
     setUploadProgress(10);
     setImageFile(file);
     setPreviewImage(URL.createObjectURL(file));
@@ -259,7 +262,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!editForm.name) {
       showErrorToast('Hospital name is required', 3000);
       return;
@@ -267,7 +270,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
 
     try {
       setUploadProgress(10);
-      
+
       let finalImageUrl = formData.profileImage;
       const hospitalId = hospital?.id;
 
@@ -284,7 +287,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
         if (formData.profileImage && !removeExistingImage) {
           await deleteFromS3(formData.profileImage, hospitalId, "hospital");
         }
-        
+
         setUploadProgress(50);
         const uploadResult = await uploadToS3(
           imageFile,
@@ -310,14 +313,14 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
       };
 
       await onSave(updateData);
-      
+
       setUploadProgress(100);
       setTimeout(() => setUploadProgress(0), 1000);
-      
+
       setImageFile(null);
       setPreviewImage(null);
       setRemoveExistingImage(false);
-      
+
     } catch (error) {
       setUploadProgress(0);
       showErrorToast(error?.message || 'Failed to update hospital', 3000);
@@ -397,11 +400,11 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                     </button>
                   )}
                 </div>
-                
+
                 {isUploading && (
                   <div className="mt-4 w-full max-w-xs">
                     <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
                         style={{ width: `${uploadProgress}%` }}
                       />
@@ -409,7 +412,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                     <p className="text-xs text-gray-500 mt-1 text-center">Uploading... {uploadProgress}%</p>
                   </div>
                 )}
-                
+
                 <p className="text-xs text-gray-400 mt-3">PNG, JPG, WEBP (Max 5MB)</p>
               </div>
             </div>
@@ -417,7 +420,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
             {/* About Hospital Section */}
             <div className="bg-gray-50 rounded-xl p-6">
               <SectionTitle icon={Heart} title="About Hospital" />
-              
+
               <ProfileTextarea
                 label="Bio"
                 value={editForm.about || ''}
@@ -451,7 +454,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                   onChange={(e) => updateEditForm('name', e.target.value)}
                   required
                 />
-                
+
                 <ProfileField
                   label="Email"
                   value={editForm.email || ''}
@@ -460,7 +463,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                   type="email"
                   icon={Mail}
                 />
-                
+
                 <ProfileField
                   label="Phone Number"
                   value={editForm.phone || ''}
@@ -468,7 +471,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                   onChange={(e) => updateEditForm('phone', e.target.value)}
                   icon={Phone}
                 />
-                
+
                 <ProfileField
                   label="Hospital Type"
                   value={editForm.type || ''}
@@ -525,48 +528,54 @@ const HospitalDetails = () => {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [updateHospital, { isLoading: isUpdating }] = useUpdateHospitalMutation();
-  
+
   const { data: hospitalData, isLoading: isHospitalLoading, error, refetch } = useGetHospitalByIdQuery(id);
   const hospital = hospitalData?.data || hospitalData;
 
   // Fetch patients with hospitalId filter
-  const { data: patientsData, isLoading: patientsLoading, refetch: refetchPatients } = useGetPatientsQuery({ 
+  const { data: patientsData, isLoading: patientsLoading, refetch: refetchPatients } = useGetPatientsQuery({
     hospitalId: id,
     page: 1,
     limit: 100
   });
-  
-  const { data: doctorsData, isLoading: doctorsLoading } = useGetDoctorsQuery({ 
+
+  const { data: doctorsData, isLoading: doctorsLoading } = useGetDoctorsQuery({
     hospitalId: id,
     page: 1,
     limit: 100
   });
-  
-  const { data: staffData, isLoading: staffLoading } = useGetStaffQuery({ 
+
+  const { data: staffData, isLoading: staffLoading } = useGetStaffQuery({
     hospitalId: id,
     page: 1,
     limit: 100
   });
-  
-  const { data: bookingsData, isLoading: bookingsLoading } = useGetBookingsQuery({ 
+
+  const { data: bookingsData, isLoading: bookingsLoading } = useGetBookingsQuery({
     hospitalId: id,
     page: 1,
     limit: 100
   });
-  
-  const { data: ambulanceData, isLoading: ambulanceLoading } = useGetAmbulanceQuery({ 
-    hospitalId: id
-  });
-  
-  const { data: bloodBankData, isLoading: bloodBankLoading } = useGetBloodBankQuery({ 
+
+  const { data: ambulanceData, isLoading: ambulanceLoading } = useGetAmbulanceQuery({
     hospitalId: id
   });
 
-  const { 
-    data: unreadData, 
-    isLoading: unreadLoading 
+  const { data: bloodBankData, isLoading: bloodBankLoading } = useGetBloodBankQuery({
+    hospitalId: id
+  });
+
+  // ✅ Fetch devices for this hospital
+  const { data: devicesData, isLoading: devicesLoading } = useGetDevicesQuery(
+    { hospitalId: id },
+    { skip: !id }
+  );
+
+  const {
+    data: unreadData,
+    isLoading: unreadLoading
   } = useGetUnreadNotificationsQuery({
     role: 'hospital',
     id: Number(id),
@@ -574,9 +583,9 @@ const HospitalDetails = () => {
     skip: !id,
   });
 
-  const { 
-    data: readData, 
-    isLoading: readLoading 
+  const {
+    data: readData,
+    isLoading: readLoading
   } = useGetReadNotificationsQuery({
     role: 'hospital',
     id: Number(id),
@@ -595,25 +604,27 @@ const HospitalDetails = () => {
   const bookingsList = bookingsData?.data || [];
   const ambulancesList = ambulanceData?.data || [];
   const bloodBanksList = bloodBankData?.data || [];
+  const devicesList = devicesData?.data || [];
 
   const patientsCount = patientsList.length;
   const doctorsCount = doctorsList.length;
   const staffCount = staffList.length;
-  
+  const devicesCount = devicesList.length;
+
   const appointmentsCount = bookingsList.filter(
     booking => booking.status !== 'completed' && booking.status !== 'cancelled'
   ).length;
-  
+
   const visitsCount = bookingsList.filter(
-    booking => 
-      booking.status === 'pending' || 
+    booking =>
+      booking.status === 'pending' ||
       booking.status === 'accepted'
   ).length;
-  
+
   const ambulancesCount = ambulancesList.length;
   const bloodBanksCount = bloodBanksList.length;
 
-  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || unreadLoading || readLoading;
+  const isLoading = isHospitalLoading || patientsLoading || doctorsLoading || staffLoading || bookingsLoading || ambulanceLoading || bloodBankLoading || unreadLoading || readLoading || devicesLoading;
 
   const getFullAddress = (address) => {
     if (!address) return 'N/A';
@@ -634,12 +645,12 @@ const HospitalDetails = () => {
         id: id,
         updateHospital: updateData
       }).unwrap();
-      
+
       showSuccessToast('Hospital updated successfully!', 3000);
       setShowEditModal(false);
-      
+
       refetch();
-      
+
     } catch (error) {
       console.error("Update error:", error);
       showErrorToast(error?.data?.message || 'Failed to update hospital', 3000);
@@ -651,94 +662,114 @@ const HospitalDetails = () => {
 
   // Navigation handlers
   const navigateToPatients = () => {
-    navigate(`/super-admin/hospitals/${id}/patients`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/patients`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToDoctors = () => {
-    navigate(`/super-admin/hospitals/${id}/doctors`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/doctors`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToStaff = () => {
-    navigate(`/super-admin/hospitals/${id}/staff`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/staff`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToAppointments = () => {
-    navigate(`/super-admin/hospitals/${id}/appointments`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/appointments`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToVisits = () => {
-    navigate(`/super-admin/hospitals/${id}/visits`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/visits`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToAmbulances = () => {
-    navigate(`/super-admin/hospitals/${id}/ambulances`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/ambulances`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToBloodBanks = () => {
-    navigate(`/super-admin/hospitals/${id}/blood-banks`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/blood-banks`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   const navigateToNotifications = () => {
-    navigate(`/super-admin/hospitals/${id}/notifications`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/notifications`, {
+      state: {
         hospitalId: id,
-        hospitalName: hospital?.name 
-      } 
+        hospitalName: hospital?.name
+      }
     });
   };
 
   // Navigation to Session History
   const navigateToSessions = () => {
-    navigate(`/super-admin/hospitals/${id}/sessions`, { 
-      state: { 
+    navigate(`/super-admin/hospitals/${id}/sessions`, {
+      state: {
         hospitalId: hospital.id,
-        hospitalName: hospital.name 
-      } 
+        hospitalName: hospital.name
+      }
     });
   };
 
-  // ✅ NEW: Navigation to Attendance
-  const navigateToAttendance = () => {
-    navigate(`/super-admin/hospital-attendance`, { 
-      state: { 
+  // ✅ Navigation to Attendance Records (legacy)
+  const navigateToAttendanceRecords = () => {
+    navigate(`/super-admin/hospital-attendance`, {
+      state: {
         hospitalId: hospital.id,
-        hospitalName: hospital.name 
-      } 
+        hospitalName: hospital.name
+      }
+    });
+  };
+
+  // ✅ NEW: Navigation to Attendance Devices (tabbed: Access Cards + Fingerprints)
+  const navigateToAttendance = () => {
+    navigate(`/super-admin/hospitals/${id}/attendance-devices`, {
+      state: {
+        hospitalId: id,
+        hospitalName: hospital?.name,
+      },
+    });
+  };
+
+  // ✅ Navigation to Devices (physical attendance hardware)
+  const navigateToDevices = () => {
+    navigate(`/super-admin/hospitals/${id}/devices`, {
+      state: {
+        hospitalId: id,
+        hospitalName: hospital?.name,
+      },
     });
   };
 
@@ -768,10 +799,10 @@ const HospitalDetails = () => {
   const profileImageUrl = getProfileImage();
 
   const statCards = [
-    { 
-      title: 'Total Patients', 
-      value: patientsCount, 
-      icon: Users, 
+    {
+      title: 'Total Patients',
+      value: patientsCount,
+      icon: Users,
       bgColor: 'bg-blue-50',
       iconBgColor: 'bg-blue-100',
       textColor: 'text-blue-600',
@@ -781,10 +812,10 @@ const HospitalDetails = () => {
       description: `${patientsCount} patients registered`,
       actionLabel: 'View All Patients'
     },
-    { 
-      title: 'Total Doctors', 
-      value: doctorsCount, 
-      icon: Stethoscope, 
+    {
+      title: 'Total Doctors',
+      value: doctorsCount,
+      icon: Stethoscope,
       bgColor: 'bg-green-50',
       iconBgColor: 'bg-green-100',
       textColor: 'text-green-600',
@@ -794,10 +825,10 @@ const HospitalDetails = () => {
       description: `${doctorsCount} doctors available`,
       actionLabel: 'View All Doctors'
     },
-    { 
-      title: 'Total Staff', 
-      value: staffCount, 
-      icon: Briefcase, 
+    {
+      title: 'Total Staff',
+      value: staffCount,
+      icon: Briefcase,
       bgColor: 'bg-purple-50',
       iconBgColor: 'bg-purple-100',
       textColor: 'text-purple-600',
@@ -807,10 +838,10 @@ const HospitalDetails = () => {
       description: `${staffCount} staff members`,
       actionLabel: 'View All Staff'
     },
-    { 
-      title: 'Appointments', 
-      value: appointmentsCount, 
-      icon: Calendar, 
+    {
+      title: 'Appointments',
+      value: appointmentsCount,
+      icon: Calendar,
       bgColor: 'bg-orange-50',
       iconBgColor: 'bg-orange-100',
       textColor: 'text-orange-600',
@@ -820,10 +851,10 @@ const HospitalDetails = () => {
       description: `${appointmentsCount} upcoming appointments`,
       actionLabel: 'View Appointments'
     },
-    { 
-      title: 'Pending Visits', 
-      value: visitsCount, 
-      icon: Activity, 
+    {
+      title: 'Pending Visits',
+      value: visitsCount,
+      icon: Activity,
       bgColor: 'bg-indigo-50',
       iconBgColor: 'bg-indigo-100',
       textColor: 'text-indigo-600',
@@ -833,10 +864,10 @@ const HospitalDetails = () => {
       description: `${visitsCount} pending visits`,
       actionLabel: 'View Visits'
     },
-    { 
-      title: 'Ambulances', 
-      value: ambulancesCount, 
-      icon: Ambulance, 
+    {
+      title: 'Ambulances',
+      value: ambulancesCount,
+      icon: Ambulance,
       bgColor: 'bg-red-50',
       iconBgColor: 'bg-red-100',
       textColor: 'text-red-600',
@@ -846,10 +877,10 @@ const HospitalDetails = () => {
       description: `${ambulancesCount} ambulance${ambulancesCount !== 1 ? 's' : ''}`,
       actionLabel: 'View Ambulances'
     },
-    { 
-      title: 'Blood Banks', 
-      value: bloodBanksCount, 
-      icon: Droplet, 
+    {
+      title: 'Blood Banks',
+      value: bloodBanksCount,
+      icon: Droplet,
       bgColor: 'bg-pink-50',
       iconBgColor: 'bg-pink-100',
       textColor: 'text-pink-600',
@@ -859,10 +890,38 @@ const HospitalDetails = () => {
       description: `${bloodBanksCount} blood bank${bloodBanksCount !== 1 ? 's' : ''}`,
       actionLabel: 'View Blood Banks'
     },
-    { 
-      title: 'Notifications', 
-      value: notificationCount, 
-      icon: Bell, 
+    // ✅ Devices card (physical attendance hardware)
+    {
+      title: 'Devices',
+      value: devicesCount,
+      icon: Cpu,
+      bgColor: 'bg-sky-50',
+      iconBgColor: 'bg-sky-100',
+      textColor: 'text-sky-600',
+      borderColor: 'border-sky-200',
+      hoverBg: 'hover:bg-sky-50/50',
+      onClick: navigateToDevices,
+      description: `${devicesCount} attendance device${devicesCount !== 1 ? 's' : ''}`,
+      actionLabel: 'View Devices'
+    },
+    // ✅ NEW: Attendance Devices card (Access Cards + Fingerprints)
+    {
+      title: 'Attendance Devices',
+      value: 'View',
+      icon: IdCard,
+      bgColor: 'bg-teal-50',
+      iconBgColor: 'bg-teal-100',
+      textColor: 'text-teal-600',
+      borderColor: 'border-teal-200',
+      hoverBg: 'hover:bg-teal-50/50',
+      onClick: navigateToAttendance,
+      description: 'Manage access cards & fingerprints',
+      actionLabel: 'Manage Devices'
+    },
+    {
+      title: 'Notifications',
+      value: notificationCount,
+      icon: Bell,
       bgColor: 'bg-yellow-50',
       iconBgColor: 'bg-yellow-100',
       textColor: 'text-yellow-600',
@@ -873,10 +932,10 @@ const HospitalDetails = () => {
       actionLabel: 'View Notifications'
     },
     // Session History Card
-    { 
-      title: 'Session History', 
-      value: 'View', 
-      icon: Monitor, 
+    {
+      title: 'Session History',
+      value: 'View',
+      icon: Monitor,
       bgColor: 'bg-cyan-50',
       iconBgColor: 'bg-cyan-100',
       textColor: 'text-cyan-600',
@@ -886,19 +945,19 @@ const HospitalDetails = () => {
       description: 'View user login sessions',
       actionLabel: 'View Sessions'
     },
-    // ✅ NEW: Attendance Card 
-    { 
-      title: 'Attendance', 
-      value: 'View', 
-      icon: ClipboardCheck, 
+    // ✅ Attendance Records Card (legacy, renamed for clarity)
+    {
+      title: 'Attendance Records',
+      value: 'View',
+      icon: ClipboardCheck,
       bgColor: 'bg-emerald-50',
       iconBgColor: 'bg-emerald-100',
       textColor: 'text-emerald-600',
       borderColor: 'border-emerald-200',
       hoverBg: 'hover:bg-emerald-50/50',
-      onClick: navigateToAttendance,
+      onClick: navigateToAttendanceRecords,
       description: 'View attendance records',
-      actionLabel: 'View Attendance'
+      actionLabel: 'View Records'
     }
   ];
 
@@ -906,19 +965,19 @@ const HospitalDetails = () => {
     <div>
       <div className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            onClick={() => navigate('/super-admin/hospitals')} 
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/super-admin/hospitals')}
             className="mb-4"
           >
             <ArrowLeft size={18} className="mr-1" /> Back to Hospitals
           </Button>
-          
+
           <div className="flex gap-2">
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => setShowEditModal(true)}
               className="mb-4"
             >
@@ -926,10 +985,10 @@ const HospitalDetails = () => {
             </Button>
           </div>
         </div>
-        
+
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <HospitalAvatar 
+            <HospitalAvatar
               imageUrl={profileImageUrl}
               hospitalName={hospital.name}
               size="w-16 h-16"
@@ -979,9 +1038,9 @@ const HospitalDetails = () => {
               <Globe size={18} className="text-gray-400" />
               <div>
                 <p className="text-xs text-gray-500">Website</p>
-                <a 
-                  href={hospital.website} 
-                  target="_blank" 
+                <a
+                  href={hospital.website}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:underline"
                 >
@@ -1009,7 +1068,7 @@ const HospitalDetails = () => {
             </div>
           )}
         </div>
-        
+
         {hospital.about && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 mb-1">About</p>
@@ -1027,8 +1086,8 @@ const HospitalDetails = () => {
           {statCards.map((stat, index) => {
             const Icon = stat.icon;
             return (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 onClick={stat.onClick}
                 className={`group cursor-pointer transition-all duration-300 hover:scale-[1.02]`}
               >
@@ -1038,7 +1097,11 @@ const HospitalDetails = () => {
                       <p className="text-sm font-medium text-gray-500">
                         {stat.title}
                       </p>
-                      <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value.toLocaleString()}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-1">
+                        {typeof stat.value === 'number'
+                          ? stat.value.toLocaleString()
+                          : stat.value}
+                      </p>
                       <p className="text-xs text-gray-400 mt-1 group-hover:text-gray-600 transition-colors truncate">
                         {stat.description}
                       </p>
