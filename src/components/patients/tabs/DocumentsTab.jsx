@@ -1,6 +1,6 @@
-// src/components/patients/tabs/DocumentsTab.jsx - Complete with Table Numbers & Skeleton Loading
+// src/components/patients/tabs/DocumentsTab.jsx - Complete with Table Numbers, Skeleton Loading & Real-time Events
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { File, Download, Trash2, Upload, X, ExternalLink, Edit2, Eye, FileText, Image, AlertTriangle } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import DatePicker from "../../ui/DatePicker";
@@ -17,6 +17,10 @@ import {
 } from "../../../../app/service/documentApi";
 import { getS3ImageUrl, uploadToS3 } from "../../../../app/service/S3";
 import { getAuthUser } from "../../../utils/auth";
+import {
+  registerDocumentEvents,
+  unregisterDocumentEvents,
+} from "../../../socket/documentEvents";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -155,6 +159,60 @@ const DocumentsTab = ({ patient }) => {
   const paginatedDocuments = documentsList.slice(startIndex, startIndex + itemsPerPage);
 
   // ========================
+  // REAL-TIME DOCUMENT EVENTS
+  // ========================
+  const refreshDocs = useCallback(async () => {
+    if (patient?.id) {
+      await refetchDocuments();
+    }
+  }, [refetchDocuments, patient?.id]);
+
+  useEffect(() => {
+    if (!patient?.id) return;
+
+    registerDocumentEvents({
+      onRegistered: async ({ message, data }) => {
+        // Only handle events for THIS patient
+        if (data?.patientId && String(data.patientId) !== String(patient.id)) return;
+        // Optional: filter by hospital
+        if (
+          data?.hospitalId &&
+          hospitalId &&
+          String(data.hospitalId) !== String(hospitalId)
+        ) return;
+        showSuccessToast(message || "Document uploaded", 3000);
+        await refreshDocs();
+      },
+
+      onUpdated: async ({ message, data }) => {
+        if (data?.patientId && String(data.patientId) !== String(patient.id)) return;
+        if (
+          data?.hospitalId &&
+          hospitalId &&
+          String(data.hospitalId) !== String(hospitalId)
+        ) return;
+        showSuccessToast(message || "Document updated", 3000);
+        await refreshDocs();
+      },
+
+      onDeleted: async ({ message, data }) => {
+        if (data?.patientId && String(data.patientId) !== String(patient.id)) return;
+        if (
+          data?.hospitalId &&
+          hospitalId &&
+          String(data.hospitalId) !== String(hospitalId)
+        ) return;
+        showSuccessToast(message || "Document deleted", 3000);
+        await refreshDocs();
+      },
+    });
+
+    return () => {
+      unregisterDocumentEvents();
+    };
+  }, [patient?.id, hospitalId, refreshDocs]);
+
+  // ========================
   // HELPER FUNCTIONS
   // ========================
 
@@ -278,14 +336,13 @@ const DocumentsTab = ({ patient }) => {
         documentName: documentName.trim(),
         date: documentDate,
         userId: patient.userId,  
-        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
-        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
+        uploadedById: patientUserId,
+        hospitalId: hospitalId || null,
         role: userRole,
       };
 
       const createResult = await createDocument(documentData).unwrap();
 
-      // ✅ Extract ID from response.data
       const documentId = 
         createResult?.data?.id ||      
         createResult?.id ||            
@@ -294,7 +351,6 @@ const DocumentsTab = ({ patient }) => {
         createResult?.data?.documentId ||
         createResult?.documentId;
       
-
       if (!documentId) {
         console.error("❌ Could not extract document ID. Response:", createResult);
         throw new Error(`Document ID not found in response: ${JSON.stringify(createResult)}`);
@@ -303,7 +359,6 @@ const DocumentsTab = ({ patient }) => {
       setUploadProgress(30);
 
       // ✅ STEP 2: Upload file to S3
-
       const timestamp = Date.now();
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
@@ -326,8 +381,8 @@ const DocumentsTab = ({ patient }) => {
         fileSize: formatFileSize(selectedFile.size),
         type: getFileExtension(selectedFile.name),
         contentType: selectedFile.type,
-        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
-        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
+        uploadedById: patientUserId,
+        hospitalId: hospitalId || null,
       };
 
       await updateDocument({
@@ -390,7 +445,6 @@ const DocumentsTab = ({ patient }) => {
   };
 
   const handleUpdateDocument = async () => {
-    // Validate form
     if (!editDocumentName.trim()) {
       showWarningToast("Please enter a document name");
       return;
@@ -416,24 +470,20 @@ const DocumentsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // Build update data
       let updateData = {
         patientId: patient.id,
         name: editDocumentName.trim(),
         documentName: editDocumentName.trim(),
         date: editDocumentDate,
-        uploadedById: patientUserId, // ✅ FIX: Use patient's userId
-        hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
+        uploadedById: patientUserId,
+        hospitalId: hospitalId || null,
         role: userRole,
       };
 
-      // ✅ If a new file is selected, upload to S3
       if (editFile) {
-        
         const timestamp = Date.now();
         const safeFileName = editFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
-
 
         setUploadProgress(20);
 
@@ -443,7 +493,6 @@ const DocumentsTab = ({ patient }) => {
           documentId,
           "documents"
         );
-
 
         setUploadProgress(70);
 
@@ -456,11 +505,10 @@ const DocumentsTab = ({ patient }) => {
           fileSize: formatFileSize(editFile.size),
           type: getFileExtension(editFile.name),
           contentType: editFile.type,
-          uploadedById: patientUserId, // ✅ FIX: Use patient's userId
-          hospitalId: hospitalId || null, // ✅ ADDED: hospitalId
+          uploadedById: patientUserId,
+          hospitalId: hospitalId || null,
         };
       }
-
 
       await updateDocument({
         id: documentId,
@@ -610,11 +658,9 @@ const DocumentsTab = ({ patient }) => {
   // RENDER
   // ========================
 
-  // ============ SKELETON LOADING STATE ============
   if (isLoadingDocuments) {
     return <DocumentsSkeleton />;
   }
-  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
@@ -636,9 +682,7 @@ const DocumentsTab = ({ patient }) => {
         </button>
       </div>
 
-      {/* ======================== */}
-      {/* UPLOAD MODAL WITH FILE */}
-      {/* ======================== */}
+      {/* UPLOAD MODAL */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -668,7 +712,6 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
-              {/* Date — using custom DatePicker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date <span className="text-red-500">*</span>
@@ -781,9 +824,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* ======================== */}
-      {/* EDIT MODAL WITH FILE */}
-      {/* ======================== */}
+      {/* EDIT MODAL */}
       {showEditModal && editingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -813,7 +854,6 @@ const DocumentsTab = ({ patient }) => {
                 />
               </div>
 
-              {/* Date — using custom DatePicker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date <span className="text-red-500">*</span>
@@ -952,9 +992,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* ======================== */}
       {/* VIEW MODAL */}
-      {/* ======================== */}
       {showViewModal && viewingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden">
@@ -1028,21 +1066,6 @@ const DocumentsTab = ({ patient }) => {
                           src={fileUrl}
                           alt={viewingDocument.documentName || viewingDocument.name}
                           className="max-h-[600px] mx-auto object-contain rounded-lg shadow-lg"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            const parent = e.target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `
-                                <div class="flex flex-col items-center justify-center p-12 bg-gray-100 rounded-lg w-full">
-                                  <FileText size="64" class="text-gray-400 mb-4" />
-                                  <p class="text-gray-600">Unable to preview image</p>
-                                  <button onclick="window.open('${fileUrl}', '_blank')" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                    Open in New Tab
-                                  </button>
-                                </div>
-                              `;
-                            }
-                          }}
                         />
                         <div className="mt-4 flex justify-center gap-4">
                           <a
@@ -1129,9 +1152,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* ======================== */}
-      {/* DELETE CONFIRMATION MODAL */}
-      {/* ======================== */}
+      {/* DELETE MODAL */}
       {showDeleteModal && deletingDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -1198,9 +1219,7 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* ======================== */}
-      {/* TABLE WITH NUMBERS */}
-      {/* ======================== */}
+      {/* TABLE */}
       {totalItems === 0 ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -1215,7 +1234,7 @@ const DocumentsTab = ({ patient }) => {
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
                 <tr>
-                  <th className="px-4 py-3 font-medium">#</th>  {/* ✅ Added # column */}
+                  <th className="px-4 py-3 font-medium">#</th>
                   <th className="px-4 py-3 font-medium">Document Name</th>
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium text-right w-44">Actions</th>
@@ -1225,7 +1244,6 @@ const DocumentsTab = ({ patient }) => {
                 {paginatedDocuments.length > 0 ? (
                   paginatedDocuments.map((item, index) => {
                     const hasFile = !!(item.fileKey || item.imageUrl || item.fileUrl);
-                    // ✅ Calculate sequential number
                     const displayNumber = startIndex + index + 1;
 
                     return (
@@ -1233,7 +1251,6 @@ const DocumentsTab = ({ patient }) => {
                         key={item.id || item._id || index}
                         className="border-t border-gray-100 hover:bg-gray-50 transition-colors"
                       >
-                        {/* ✅ Number column */}
                         <td className="px-4 py-3">
                           <span className="font-medium text-[#1C62A0]">
                             {displayNumber}
@@ -1329,7 +1346,6 @@ const DocumentsTab = ({ patient }) => {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalItems > 0 && totalPages > 1 && (
             <div className="mt-auto px-6 py-3 border-t bg-gray-50">
               <Pagination
