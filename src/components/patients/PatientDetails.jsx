@@ -87,7 +87,6 @@ const PatientDetailsSkeleton = () => (
 
     <SkeletonTabs />
 
-    {/* Skeleton for tab content - ProfileTab skeleton */}
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
       <div className="p-6">
         <div className="flex items-center gap-6 mb-6">
@@ -148,7 +147,8 @@ const PatientDetails = () => {
     type: '',
     id: null,
     index: null,
-    name: ''
+    name: '',
+    item: null,
   });
   
   const [showEditVisitHistoryModal, setShowEditVisitHistoryModal] = useState(false);
@@ -157,7 +157,6 @@ const PatientDetails = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // ✅ KEEP THIS: Use database ID for API calls
   const patientId = id || passedPatient?.id || passedPatient?._id;
 
   const { 
@@ -174,28 +173,21 @@ const PatientDetails = () => {
     isLoading: isLoadingBookings
   } = useGetBookingsQuery({});
 
-  // ✅ CRITICAL FIX: Use patientNumber for prescriptions, NOT database ID
-  // The patient data may not be available yet, so we use the patientData variable
-  // that gets set after the API call completes
   const patientData = patientResponse?.data || patientResponse || passedPatient;
-  
-  // ✅ Get patientNumber from the patient data - this is the business patient number (e.g., 2)
   const patientNumber = patientData?.patientNumber;
 
-  // ✅ Use patientNumber in the prescriptions query
   const {
     data: prescriptionsResponse,
     isLoading: isLoadingPrescriptions,
     refetch: refetchPrescriptions
   } = useGetPrescriptionsQuery(
     { 
-      patientNumber: patientNumber  // ✅ ONLY use patientNumber, NOT database ID
+      patientNumber: patientNumber
     },
     { 
-      skip: !patientId || !patientNumber  // Skip if no patientNumber
+      skip: !patientId || !patientNumber
     }
   );
-
 
   const prescriptionId = prescriptionsResponse?.data?.[0]?.id;
 
@@ -222,7 +214,7 @@ const PatientDetails = () => {
   const [deleteVital] = useDeleteVitalMutation();
   const [recoverPrescription] = useRecoverPrescriptionMutation();
   const [updatePrescription] = useUpdatePrescriptionMutation();
-  const [deleteBooking] = useDeleteBookingMutation();   // 👈 ADDED
+  const [deleteBooking] = useDeleteBookingMutation();
 
   // =====================================================
   // SOCKET EVENT HANDLERS
@@ -244,7 +236,6 @@ const PatientDetails = () => {
 
   const handlePrescriptionSocketChange = useCallback(
     async (type, data) => {
-
       try {
         await refetchPrescriptions();
       } catch (error) {
@@ -274,7 +265,6 @@ const PatientDetails = () => {
     return map;
   }, [doctorsData]);
 
-  // ✅ UPDATED: patientAppointments mapping with bookingNumber
   const patientAppointments = useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
@@ -288,7 +278,6 @@ const PatientDetails = () => {
       })
       .map((booking, index) => ({
         id: booking.id || booking._id || index,
-        // ✅ IMPORTANT: preserve booking number for appointments
         bookingNumber: booking.bookingNumber,
         doctorName: booking.displayName || booking.doctor_name || "N/A",
         doctor: booking.displayName || booking.doctor_name || "N/A",
@@ -307,7 +296,6 @@ const PatientDetails = () => {
       }));
   }, [bookingResponse, patientData]);
 
-  // ✅ UPDATED: patientVisits mapping with bookingNumber
   const patientVisits = useMemo(() => {
     const bookingList = Array.isArray(bookingResponse) 
       ? bookingResponse 
@@ -323,14 +311,12 @@ const PatientDetails = () => {
       .map((booking, index) => {
         const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
         
-        // ✅ FIXED: Use patientNumber for patient ID display
         const patientDisplayId = patientData?.patientNumber 
           ? `#PT${String(patientData.patientNumber).padStart(4, "0")}`
           : patientData?.patientId || "#PT0000";
         
         return {
           id: booking.id || booking._id || index,
-          // ✅ IMPORTANT: preserve booking number for visits
           bookingNumber: booking.bookingNumber,
           visitId: `#VIS${String(index + 1).padStart(4, "0")}`,
           patientName: booking.patient_name || booking.patientName || patientData?.name || "N/A",
@@ -418,7 +404,6 @@ const PatientDetails = () => {
         doctorSpecialization = "General Medicine";
       }
       
-      // Check if prescription is deleted (soft delete)
       const isDeleted = prescription.isDelete === true || prescription.status === 'deleted';
       
       return {
@@ -515,7 +500,7 @@ const PatientDetails = () => {
           patientId: prescription.patientId,
           doctorId: prescription.doctorId,
           bookingId: prescription.bookingId,
-          bookingNumber: booking?.bookingNumber, // ✅ Include booking number
+          bookingNumber: booking?.bookingNumber,
           temperature: prescription.vitals?.temperature,
           pulse: prescription.vitals?.pulse,
           heartRate: prescription.vitals?.heartRate || prescription.vitals?.pulse,
@@ -565,7 +550,7 @@ const PatientDetails = () => {
         patientId: vital.patientId,
         doctorId: vital.doctorId,
         bookingId: vital.bookingId,
-        bookingNumber: booking?.bookingNumber, // ✅ Include booking number
+        bookingNumber: booking?.bookingNumber,
         temperature: vital.temperature,
         heartRate: vital.heartRate || vital.pulse,
         pulse: vital.pulse,
@@ -612,11 +597,10 @@ const PatientDetails = () => {
     
   }, [vitalsResponse, prescriptionsResponse, bookingResponse, doctorMap]);
 
-  // ✅ UPDATED: Patient state with patientNumber and displayId
   const [patient, setPatient] = useState({
-    id: '',              // Database ID - used for API calls
-    patientNumber: '',   // Hospital-specific display number
-    displayId: '',       // Formatted display ID (#PT0001)
+    id: '',
+    patientNumber: '',
+    displayId: '',
     hospitalId: '',
     userId: '',
     name: '',
@@ -651,7 +635,6 @@ const PatientDetails = () => {
     visits: []
   });
 
-  // ✅ UPDATED: Set patient state with patientNumber
   useEffect(() => {
     if (patientData) {
       const patientNumber = patientData.patientNumber;
@@ -808,13 +791,10 @@ const PatientDetails = () => {
     setOpenMenu(null);
   };
 
-  // Handle recover prescription with fallback
   const handleRecoverPrescription = async (prescription) => {
     try {
-      // First try the recover endpoint
       const result = await recoverPrescription(prescription.id).unwrap();
       
-      // Update local state immediately
       const updatedPrescriptions = patient.prescriptionsList.map(p => {
         if (p.id === prescription.id) {
           return {
@@ -837,7 +817,6 @@ const PatientDetails = () => {
     } catch (error) {
       console.error('Recover endpoint error:', error);
       
-      // If recover endpoint fails (404), try using update endpoint as fallback
       if (error?.status === 404 || error?.originalStatus === 404) {
         try {
           await updatePrescription({
@@ -848,7 +827,6 @@ const PatientDetails = () => {
             }
           }).unwrap();
           
-          // Update local state immediately
           const updatedPrescriptions = patient.prescriptionsList.map(p => {
             if (p.id === prescription.id) {
               return {
@@ -871,7 +849,6 @@ const PatientDetails = () => {
         } catch (updateError) {
           console.error('Update fallback error:', updateError);
           
-          // If update also fails, update local state as last resort
           const updatedPrescriptions = patient.prescriptionsList.map(p => {
             if (p.id === prescription.id) {
               return {
@@ -918,25 +895,25 @@ const PatientDetails = () => {
     setVisitToEdit(null);
   };
 
-  // 👇 Updated handleDeleteClick with optimistic update for prescriptions
-  const handleDeleteClick = (type, id, index, name) => {
+  const handleDeleteClick = (type, id, index, name, item = null) => {
     setDeleteConfig({
       type,
       id,
       index,
-      name: name || `${type} item`
+      name: name || `${type} item`,
+      item,
     });
+
     setShowDeleteModal(true);
     setOpenMenu(null);
   };
 
-  // 👇 Updated handleConfirmDelete with optimistic updates
   const handleConfirmDelete = async () => {
-    const { type, id, index } = deleteConfig;
+    // ✅ FIXED: now destructuring `item` too
+    const { type, id, index, item } = deleteConfig;
     
     try {
       if (type === 'prescription') {
-        // ✅ OPTIMISTIC UPDATE: Update local state immediately
         const updatedPrescriptions = patient.prescriptionsList.map((p, i) => {
           if (i === index || p.id === id) {
             return {
@@ -948,23 +925,18 @@ const PatientDetails = () => {
           return p;
         });
         
-        // Update local state immediately (optimistic)
         setPatient({
           ...patient,
           prescriptionsList: updatedPrescriptions
         });
         
-        // Close modal
         setShowDeleteModal(false);
-        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+        setDeleteConfig({ type: '', id: null, index: null, name: '', item: null });
         
-        // Show success toast
         showSuccessToast("Prescription deleted successfully");
         
-        // Then make the API call
         await deletePrescription(id).unwrap();
         
-        // Refetch to sync with backend
         await refetchPrescriptions();
         await refetchPatient();
         
@@ -973,7 +945,6 @@ const PatientDetails = () => {
         showSuccessToast("Vital record deleted successfully");
         await refetchVitals();
       } else if (type === 'appointment') {
-        // 🔎 Find the appointment so we can get its bookingNumber
         const appointmentToDelete = patient.appointmentsList.find(
           (a, i) => i === index || a.id === id
         );
@@ -985,34 +956,25 @@ const PatientDetails = () => {
             "Cannot delete: booking number is missing for this appointment."
           );
           setShowDeleteModal(false);
-          setDeleteConfig({ type: '', id: null, index: null, name: '' });
+          setDeleteConfig({ type: '', id: null, index: null, name: '', item: null });
           return;
         }
 
-        // ✅ Optimistic update – remove from local list immediately
         const updatedAppointments = patient.appointmentsList.filter(
           (a, i) => i !== index && a.id !== id
         );
         setPatient((prev) => ({ ...prev, appointmentsList: updatedAppointments }));
 
-        // Close modal early so UI feels responsive
         setShowDeleteModal(false);
-        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+        setDeleteConfig({ type: '', id: null, index: null, name: '', item: null });
 
         try {
-          // ✅ Call API using bookingNumber
           await deleteBooking(bookingNumber).unwrap();
-
-          // ✅ Refresh from server so state stays in sync
           await refetchBookings();
-
           showSuccessToast("Appointment deleted successfully");
         } catch (error) {
           console.error("❌ Failed to delete appointment:", error);
-
-          // Revert optimistic update by refetching
           await refetchBookings();
-
           showErrorToast(
             error?.data?.message ||
               error?.error ||
@@ -1020,48 +982,60 @@ const PatientDetails = () => {
           );
         }
 
-        return; // ⬅️ Skip the shared footer code below
+        return;
       } else if (type === 'visit') {
-        // 🔎 Same pattern for visits (they share bookingNumber)
-        const visitToDelete = patient.visitHistoryList.find(
-          (v, i) => i === index || v.id === id
-        );
-
-        const bookingNumber = visitToDelete?.bookingNumber;
-
-        if (!bookingNumber) {
-          showErrorToast(
-            "Cannot delete: booking number is missing for this visit."
+        // ✅ Uses `item` from destructuring now
+        const visitToDelete =
+          item ||
+          patient.visitHistoryList.find(
+            (visit, i) =>
+              i === index || String(visit.id) === String(id)
           );
+
+
+        if (!visitToDelete) {
+          showErrorToast("Visit record not found.");
           setShowDeleteModal(false);
-          setDeleteConfig({ type: '', id: null, index: null, name: '' });
           return;
         }
 
-        // ✅ Optimistic update
-        const updatedVisits = patient.visitHistoryList.filter(
-          (v, i) => i !== index && v.id !== id
-        );
-        setPatient((prev) => ({ ...prev, visitHistoryList: updatedVisits }));
+        const bookingNumber = visitToDelete.bookingNumber;
 
-        setShowDeleteModal(false);
-        setDeleteConfig({ type: '', id: null, index: null, name: '' });
+
+        if (!bookingNumber) {
+          showErrorToast("Booking number is missing for this visit.");
+          setShowDeleteModal(false);
+          return;
+        }
 
         try {
-          await deleteBooking(bookingNumber).unwrap();
-          await refetchBookings();
+          await deleteBooking(Number(bookingNumber)).unwrap();
+
           showSuccessToast("Visit record deleted successfully");
-        } catch (error) {
-          console.error("❌ Failed to delete visit:", error);
+
+          // Refresh bookings. patientVisits is rebuilt from bookingResponse.
           await refetchBookings();
+
+          setShowDeleteModal(false);
+          setDeleteConfig({
+            type: '',
+            id: null,
+            index: null,
+            name: '',
+            item: null,
+          });
+
+        } catch (error) {
+          console.error("❌ DELETE VISIT ERROR:", error);
+
           showErrorToast(
             error?.data?.message ||
-              error?.error ||
-              "Failed to delete visit"
+            error?.error ||
+            "Failed to delete visit"
           );
         }
 
-        return; // ⬅️ Skip the shared footer code below
+        return;
       } else if (type === 'medical') {
         const updatedMedicalHistory = patient.medicalHistoryList.filter((_, i) => i !== index);
         setPatient({...patient, medicalHistoryList: updatedMedicalHistory});
@@ -1080,9 +1054,7 @@ const PatientDetails = () => {
         showSuccessToast("Insurance record deleted successfully");
       }
     } catch (error) {
-      // If API fails, revert the optimistic update
       if (type === 'prescription') {
-        // Revert by refetching
         await refetchPrescriptions();
         await refetchPatient();
         showErrorToast(`Failed to delete prescription: ${error?.data?.message || error.message}`);
@@ -1092,7 +1064,7 @@ const PatientDetails = () => {
     }
     
     setShowDeleteModal(false);
-    setDeleteConfig({ type: '', id: null, index: null, name: '' });
+    setDeleteConfig({ type: '', id: null, index: null, name: '', item: null });
   };
 
   const handleDownloadDocument = (item) => {
@@ -1130,7 +1102,6 @@ const PatientDetails = () => {
       totalPages,
       startIndex,
 
-      // ✅ Use the actual filtered/paginated values
       paginatedAppointments,
       filteredAppointments,
 
@@ -1153,9 +1124,6 @@ const PatientDetails = () => {
       openMenu,
       setOpenMenu,
 
-      // ==========================================
-      // SOCKET CALLBACKS
-      // ==========================================
       onBookingChange: handleBookingSocketChange,
       onPrescriptionChange: handlePrescriptionSocketChange,
     };
@@ -1195,11 +1163,9 @@ const PatientDetails = () => {
     }
   };
 
-  // ============ SKELETON LOADING STATE ============
   if (isLoadingPatient && !patientData) {
     return <PatientDetailsSkeleton />;
   }
-  // ============ END SKELETON LOADING STATE ============
 
   if (!patientData && !isLoadingPatient) {
     return (
@@ -1221,7 +1187,6 @@ const PatientDetails = () => {
     );
   }
 
-  // ✅ Get display ID for header
   const displayPatientId = patient.displayId || getPatientDisplayId(patientData);
 
   return (

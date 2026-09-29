@@ -35,7 +35,6 @@ const SkeletonRow = () => (
 
 const VisitHistorySkeleton = () => (
   <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-[500px]">
-    {/* Header - Fixed */}
     <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
       <div className="flex items-center gap-2">
         <SkeletonText width="w-36" height="h-5" />
@@ -44,23 +43,14 @@ const VisitHistorySkeleton = () => (
     </div>
 
     <div className="flex flex-col h-full">
-      {/* Scrollable table container */}
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 text-xs uppercase sticky top-0 z-10">
             <tr>
-              <TableHeader>
-                <SkeletonText width="w-20" height="h-3" />
-              </TableHeader>
-              <TableHeader>
-                <SkeletonText width="w-20" height="h-3" />
-              </TableHeader>
-              <TableHeader>
-                <SkeletonText width="w-16" height="h-3" />
-              </TableHeader>
-              <TableHeader>
-                <SkeletonText width="w-12" height="h-3" />
-              </TableHeader>
+              <TableHeader><SkeletonText width="w-20" height="h-3" /></TableHeader>
+              <TableHeader><SkeletonText width="w-20" height="h-3" /></TableHeader>
+              <TableHeader><SkeletonText width="w-16" height="h-3" /></TableHeader>
+              <TableHeader><SkeletonText width="w-12" height="h-3" /></TableHeader>
               <TableHeader className="text-right w-16">
                 <SkeletonText width="w-8" height="h-3" className="ml-auto" />
               </TableHeader>
@@ -74,7 +64,6 @@ const VisitHistorySkeleton = () => (
         </table>
       </div>
 
-      {/* Pagination - Sticky at bottom */}
       <div className="flex-shrink-0 px-6 py-3 border-t bg-gray-50">
         <div className="flex justify-between items-center">
           <SkeletonText width="w-32" height="h-3" />
@@ -100,7 +89,7 @@ const VisitHistoryTab = ({
   openMenu, 
   setOpenMenu, 
   getStatusBadge,
-  isLoading = false // New prop for loading state
+  isLoading = false
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -118,15 +107,12 @@ const VisitHistoryTab = ({
     }
   };
 
-  // ============ SKELETON LOADING STATE ============
   if (isLoading) {
     return <VisitHistorySkeleton />;
   }
-  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col h-[500px]">
-      {/* Header - Fixed */}
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">
           Total Visit History
@@ -142,7 +128,6 @@ const VisitHistoryTab = ({
         </div>
       ) : (
         <div className="flex flex-col h-full">
-          {/* Scrollable table container */}
           <div className="flex-1 overflow-y-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600 text-xs uppercase sticky top-0 z-10">
@@ -155,7 +140,7 @@ const VisitHistoryTab = ({
                 </tr>
               </thead>
               <tbody>
-                {paginatedVisitHistory.map((item) => (
+                {paginatedVisitHistory.map((item, index) => (
                   <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
                     <td
                       className="px-4 py-3 cursor-pointer"
@@ -190,7 +175,8 @@ const VisitHistoryTab = ({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end">
-                        <div className="relative">
+                        {/* ✅ action-menu-container added so outside-click doesn't close the dropdown on mousedown */}
+                        <div className="relative action-menu-container">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -204,19 +190,27 @@ const VisitHistoryTab = ({
                           </Button>
                           {openMenu === `visit-${item.id}` && (
                             <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                              {/* ✅ type="button" + preventDefault + full item passed */}
                               <button
+                                type="button"
                                 onClick={(e) => {
+                                  e.preventDefault();
                                   e.stopPropagation();
+
                                   handleDeleteClick(
                                     'visit',
                                     item.id,
-                                    `Visit on ${item.visitDate}`
+                                    startIndex + index,
+                                    `Visit on ${item.visitDate}`,
+                                    item
                                   );
+
                                   setOpenMenu(null);
                                 }}
                                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"
                               >
-                                <Trash2 size={15} /> Delete
+                                <Trash2 size={15} />
+                                Delete
                               </button>
                             </div>
                           )}
@@ -229,7 +223,6 @@ const VisitHistoryTab = ({
             </table>
           </div>
 
-          {/* Pagination - Sticky at bottom */}
           {totalPages > 1 && (
             <div className="flex-shrink-0 px-6 py-3 border-t bg-gray-50">
               <Pagination

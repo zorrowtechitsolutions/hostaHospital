@@ -344,7 +344,7 @@ export const prescriptionApi = api.injectEndpoints({
         const hospitalId = getHospitalId();
 
         return {
-          url: `/prescription/recover/${id}?hospitalId=${hospitalId}`,
+          url: `/prescription/recover/${id}`,
           method: "PUT",
         };
       },
