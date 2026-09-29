@@ -1,5 +1,10 @@
 // src/components/patients/PatientDetails.jsx - With bookingNumber in both appointments and visits
-import React, { useState, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, User, Calendar, Heart, Clock, Pill, ClipboardList, FileText, Beaker } from "lucide-react";
 import EditVisitHistory from "./EditVisitHistoryModal";
@@ -214,6 +219,39 @@ const PatientDetails = () => {
   const [deleteVital] = useDeleteVitalMutation();
   const [recoverPrescription] = useRecoverPrescriptionMutation();
   const [updatePrescription] = useUpdatePrescriptionMutation();
+
+  // =====================================================
+  // SOCKET EVENT HANDLERS
+  // =====================================================
+
+  const handleBookingSocketChange = useCallback(
+    async (type, data) => {
+      try {
+        await refetchBookings();
+      } catch (error) {
+        console.error(
+          "❌ Failed to refresh bookings after socket event:",
+          error
+        );
+      }
+    },
+    [refetchBookings]
+  );
+
+  const handlePrescriptionSocketChange = useCallback(
+    async (type, data) => {
+
+      try {
+        await refetchPrescriptions();
+      } catch (error) {
+        console.error(
+          "❌ Failed to refresh prescriptions after socket event:",
+          error
+        );
+      }
+    },
+    [refetchPrescriptions]
+  );
 
   const doctorMap = useMemo(() => {
     const map = {};
@@ -995,6 +1033,7 @@ const PatientDetails = () => {
     const tabProps = {
       patient,
       setPatient,
+
       searchTerm,
       setSearchTerm,
       statusFilter,
@@ -1004,23 +1043,35 @@ const PatientDetails = () => {
       itemsPerPage,
       totalPages,
       startIndex,
+
       // ✅ Use the actual filtered/paginated values
       paginatedAppointments,
       filteredAppointments,
+
       paginatedVisits: patientVisits,
       filteredVisits: patientVisits,
+
       handlePageChange,
       getStatusBadge,
+
       handleViewAppointmentDetails,
       handleViewVisitDetails,
       handleViewMedicalDetails,
       handleViewVitalDetails,
+
       handleEditVisitClick,
       handleDeleteClick,
       handleDownloadDocument,
       handleAddAppointment,
+
       openMenu,
-      setOpenMenu
+      setOpenMenu,
+
+      // ==========================================
+      // SOCKET CALLBACKS
+      // ==========================================
+      onBookingChange: handleBookingSocketChange,
+      onPrescriptionChange: handlePrescriptionSocketChange,
     };
 
     switch(tab) {
