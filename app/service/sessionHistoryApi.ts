@@ -21,6 +21,7 @@ export interface SessionData {
   ipAddress: string;
   registeredAddress: string;
   loginTime: string;
+  logoutTime: string | null; // ✅ ADD
   lastActivity: string;
   status: string;
   riskLevel: string;

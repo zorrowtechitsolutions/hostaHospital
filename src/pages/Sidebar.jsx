@@ -39,7 +39,7 @@ import {
   Award,
   FileSpreadsheet,
   HardDrive,
-  Fingerprint, // 👈 for Fingerprint
+  Fingerprint,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -76,7 +76,7 @@ const menu = [
     items: [{ label: "Staffs", icon: UserCog, path: "/staffs", permissionId: 10 }],
   },
 
-  // 👇 HRM section with three dropdowns: Attendance, Device, Payroll
+  // 👇 HRM section with dropdowns: Attendance, Leave Management, Device, Payroll
   {
     title: "HRM",
     items: [
@@ -84,7 +84,7 @@ const menu = [
         label: "Attendance",
         icon: CalendarCheck,
         hasDropdown: true,
-        permissionId: 125,
+        permissionId: 119,
         dropdownItems: [
           {
             label: "Today Attendance",
@@ -96,13 +96,48 @@ const menu = [
             icon: Table,
             path: "/attendance/sheet",
           },
+          {
+            label: "Manual Attendance",
+            icon: UserCheck,
+            path: "/attendance/manual",
+          },
+          {
+            label: "Holiday Management",
+            icon: CalendarDays,
+            path: "/attendance/holidays",
+          },
         ],
       },
+
+      // ✅ Leave Management dropdown
+      {
+        label: "Leave Management",
+        icon: ClipboardList,
+        hasDropdown: true,
+        dropdownItems: [
+          {
+            label: "Leave Request",
+            icon: FileText,
+            path: "/leave-requests",
+          },
+          {
+            label: "My Leave Request",
+            icon: UserCheck,
+            path: "/my-leave-requests",
+          },
+          {
+            label: "Leave Templates",
+            icon: FileText, 
+            path: "/leave-templates",
+          }
+        ],
+      },
+
       {
         label: "Device",
         icon: HardDrive,
         hasDropdown: true,
-        permissionId: 114,
+        permissionId: 108,
         dropdownItems: [
           {
             label: "Attendance Device",
@@ -113,14 +148,13 @@ const menu = [
             label: "Access Card",
             icon: CreditCard,
             path: "/attendance/access-card",
-            permissionId: 118,
+            permissionId: 112,
           },
-          // 👇 NEW: Fingerprint under Device
           {
             label: "Fingerprint",
             icon: Fingerprint,
             path: "/attendance/fingerprint",
-            permissionId: 122,
+            permissionId: 116,
           },
         ],
       },
@@ -202,13 +236,13 @@ const menu = [
             label: "Email Notification",
             icon: Mail,
             path: "/email-notifications",
-            permissionId: 104,
+            permissionId: 99,
           },
           {
             label: "Email Templates",
             icon: FileText,
             path: "/email-templates",
-            permissionId: 108,
+            permissionId: 103,
           },
         ],
       },
@@ -222,7 +256,7 @@ const menu = [
             label: "Users",
             icon: Users,
             path: "/users",
-            permissionId: 63,
+            permissionId: 62,
           },
           {
             label: "Group Permission",
@@ -241,7 +275,7 @@ const menu = [
         label: "AUDIT & SECURITY",
         icon: ShieldCheck,
         path: "/audit-login",
-        permissionId: 111,
+        permissionId: 106,
       },
     ],
   },
@@ -260,42 +294,62 @@ export default function Sidebar({ sidebarOpen }) {
   const userRole = user?.role || localStorage.getItem("userRole") || "hospital";
   const hospitalId = localStorage.getItem("hospitalId") || "";
 
+  // ✅ FIXED: role-based ID resolution matching TopBar
   const getUserIdByRole = () => {
-    const userIdFromUser =
-      userRole === "doctor"
-        ? user?.authId || user?.id || localStorage.getItem("authId")
-        : userRole === "staff"
-        ? user?.authId || user?.id || localStorage.getItem("authId")
-        : user?.id || hospitalId;
-
-    if (userIdFromUser && userIdFromUser !== "undefined" && userIdFromUser !== "null") {
-      return userIdFromUser;
+    if (userRole === "hospital") {
+      return (
+        user?.hospitalId ||
+        localStorage.getItem("hospitalId") ||
+        userDataFromStorage?.hospitalId ||
+        storedUser?.hospitalId ||
+        null
+      );
     }
 
-    const authId = localStorage.getItem("authId");
-    const userId = localStorage.getItem("userId");
-    const doctorId = localStorage.getItem("doctorId");
-    const staffId = localStorage.getItem("staffId");
-    const staffNumericId = localStorage.getItem("staffNumericId");
-
-    let userData = {};
-    try {
-      userData = JSON.parse(localStorage.getItem("userData") || "{}");
-    } catch (e) {}
-
-    switch (userRole) {
-      case "hospital":
-        return authId || userId || hospitalId || userData?.authId || userData?.hospitalId || userData?.id;
-      case "doctor":
-        return authId || userId || doctorId || userData?.authId || userData?.doctorId || userData?.id;
-      case "staff":
-        return authId || userId || staffId || staffNumericId || userData?.authId || userData?.staffId || userData?.id;
-      case "super_admin":
-        return authId || userId || userData?.authId || userData?.id;
-      default:
-        return authId || userId || hospitalId;
+    if (userRole === "doctor") {
+      return (
+        user?.doctorId ||
+        localStorage.getItem("doctorId") ||
+        user?.authId ||
+        localStorage.getItem("authId") ||
+        user?.id ||
+        null
+      );
     }
+
+    if (userRole === "staff") {
+      return (
+        user?.staffId ||
+        localStorage.getItem("staffId") ||
+        localStorage.getItem("staffNumericId") ||
+        user?.authId ||
+        localStorage.getItem("authId") ||
+        user?.id ||
+        null
+      );
+    }
+
+    if (userRole === "super_admin") {
+      return (
+        user?.authId ||
+        localStorage.getItem("authId") ||
+        user?.id ||
+        null
+      );
+    }
+
+    return null;
   };
+
+  let userDataFromStorage = {};
+  try {
+    userDataFromStorage = JSON.parse(localStorage.getItem("userData") || "{}");
+  } catch (e) {}
+
+  let storedUser = {};
+  try {
+    storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  } catch (e) {}
 
   const userId = getUserIdByRole();
 
@@ -310,16 +364,6 @@ export default function Sidebar({ sidebarOpen }) {
   const { data: staffData } = useGetStaffByIdQuery(userId, {
     skip: userRole !== "staff" || !userId || userId === "undefined" || userId === "null",
   });
-
-  let userDataFromStorage = {};
-  try {
-    userDataFromStorage = JSON.parse(localStorage.getItem("userData") || "{}");
-  } catch (e) {}
-
-  let storedUser = {};
-  try {
-    storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  } catch (e) {}
 
   const getDisplayName = () => {
     if (userRole === "doctor") {
@@ -356,17 +400,18 @@ export default function Sidebar({ sidebarOpen }) {
       return user?.name || userDataFromStorage?.name || storedUser?.name || "Super Admin";
     }
 
+    // ✅ FIXED: hospital section prioritizes logged-in user's hospital info first
     const hospital = hospitalData?.data || hospitalData;
     return (
+      user?.hospitalName ||
+      user?.name ||
+      userDataFromStorage?.hospitalName ||
+      userDataFromStorage?.name ||
+      storedUser?.hospitalName ||
+      storedUser?.name ||
       hospital?.displayName ||
       hospital?.name ||
       hospital?.hospitalName ||
-      user?.name ||
-      user?.hospitalName ||
-      userDataFromStorage?.name ||
-      userDataFromStorage?.hospitalName ||
-      storedUser?.name ||
-      storedUser?.hospitalName ||
       "Hospital"
     );
   };

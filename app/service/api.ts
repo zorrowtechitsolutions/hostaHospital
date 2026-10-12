@@ -22,7 +22,7 @@ import {
 const baseQuery = fetchBaseQuery({
   baseUrl:
     import.meta.env.VITE_API_URL ||
-    "http://localhost:5173/api",
+    "http://192.168.1.43:3000/api",
 
   /*
    * IMPORTANT:
@@ -381,6 +381,9 @@ export const api = createApi({
     "Device",
     "AccessCard",
     "Fingerprint",
+    "Holiday",
+    "LeaveRequest",
+    "LeaveTemplate",
  ],
 
   endpoints: () => ({}),

@@ -87,6 +87,15 @@ import EditDeviceModal from "./components/Attendance/devices/EditDeviceModal";
 import FingerprintEnrollmentModal from "./components/Attendance/Fingerprint/FingerprintEnrollmentModal";
 import ViewFingerprintDetails from "./components/Attendance/Fingerprint/ViewFingerprintDetails";
 import FingerprintEditModal from "./components/Attendance/Fingerprint/FingerprintEditModal";
+import HolidayManagement from "./components/Attendance/HolidayManagement";
+import ManualAttendance from "./components/Attendance/ManualAttendance";
+import LeaveRequests from "./components/LeaveRequests/LeaveRequest";
+import MyLeaveRequests from "./components/LeaveRequests/MyLeaveRequests";
+import AddLeaveRequest from "./components/LeaveRequests/AddLeaveRequest";
+import LeaveTemplates from "./components/LeaveRequests/LeaveTemplates";
+import CreateLeaveTemplate from "./components/LeaveRequests/CreateLeaveTemplate";
+import EditLeaveTemplate from "./components/LeaveRequests/EditLeaveTemplate";
+import ViewLeaveTemplate from "./components/LeaveRequests/ViewLeaveTemplate";
 
 // Loading fallback component
 const PageLoader = () => (
@@ -344,34 +353,34 @@ function App() {
               <Route
               path="/audit-login"
               element={
-                <ProtectedRoute permissionId={111}>
+                <ProtectedRoute permissionId={106}>
                   <SessionHistory />
                 </ProtectedRoute>
               } />
               <Route
               path="/email-notifications"
               element={
-              <ProtectedRoute permissionId={104}>
+              <ProtectedRoute permissionId={99}>
               <EmailComposer />
               </ProtectedRoute>} />
               <Route path="/email-history" element={<EmailHistory/>} />
               <Route path="/email-templates/edit/:id" element={
-                <ProtectedRoute permissionId={109}>
+                <ProtectedRoute permissionId={104}>
                   <EditEmailTemplate/>
                 </ProtectedRoute>
               } />
               <Route path="/email-templates/create" element={
-                <ProtectedRoute permissionId={107}>
+                <ProtectedRoute permissionId={102}>
                   <CreateEmailTemplate />
                 </ProtectedRoute>
               } />
               <Route path="/email-templates/view/:id"element={
-                <ProtectedRoute permissionId={108}>
+                <ProtectedRoute permissionId={103}>
                   <ViewEmailTemplate />
                 </ProtectedRoute>
               }/>
               <Route path="/email-templates" element={
-                <ProtectedRoute permissionId={108}>
+                <ProtectedRoute permissionId={103}>
                   <EmailTemplates/>
                 </ProtectedRoute>
               } />
@@ -392,6 +401,7 @@ function App() {
               <Route path="/attendance/fingerprint/enroll/:key" element={<FingerprintEnrollmentModal />}/>
               <Route path="/attendance/fingerprint/view/:memberKey" element={<ViewFingerprintDetails />}/>
               <Route path="/attendance/fingerprint/edit/:key" element={<FingerprintEditModal />}/>
+              <Route path="/attendance/manual" element={<ManualAttendance />} />
 
               {/* PayRoll routes  */}
               {/* <Route path="/payroll/payslips" element={<Payslips/>} />
@@ -653,6 +663,22 @@ function App() {
 
               {/* Requests - No specific permission needed */}
               <Route path="/requests" element={<RequestsTable />} />
+
+              {/* Leave Requests - No specific permission needed */}
+              <Route path="/leave-requests" element={<LeaveRequests/>} />
+
+              {/* myleave requests */}
+              <Route path="/my-leave-requests" element={<MyLeaveRequests/>} />
+
+              <Route path="/leave/add" element={<AddLeaveRequest />} />
+
+              <Route path="/leave-templates" element={<LeaveTemplates />} />
+              <Route path="/leave-templates/create" element={<CreateLeaveTemplate />} />
+              <Route path="/leave-templates/edit/:id" element={<EditLeaveTemplate />} />
+              <Route path="/leave-templates/view/:id" element={<ViewLeaveTemplate />} />
+
+              {/* holiday managment routes */}
+              <Route path="/attendance/holidays" element={<HolidayManagement />} />
 
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

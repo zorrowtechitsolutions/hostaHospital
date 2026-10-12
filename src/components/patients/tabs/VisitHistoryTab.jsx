@@ -142,10 +142,7 @@ const VisitHistoryTab = ({
               <tbody>
                 {paginatedVisitHistory.map((item, index) => (
                   <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td
-                      className="px-4 py-3 cursor-pointer"
-                      onClick={() => handleViewVisitDetails(item)}
-                    >
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
                           <span className="text-xs font-medium text-blue-600">
@@ -155,22 +152,13 @@ const VisitHistoryTab = ({
                         <span className="font-medium text-gray-800">{item.doctorName}</span>
                       </div>
                     </td>
-                    <td
-                      className="px-4 py-3 text-gray-600 cursor-pointer"
-                      onClick={() => handleViewVisitDetails(item)}
-                    >
+                    <td className="px-4 py-3 text-gray-600">
                       {item.department}
                     </td>
-                    <td
-                      className="px-4 py-3 text-gray-600 cursor-pointer"
-                      onClick={() => handleViewVisitDetails(item)}
-                    >
+                    <td className="px-4 py-3 text-gray-600">
                       {item.visitDate}
                     </td>
-                    <td
-                      className="px-4 py-3 cursor-pointer"
-                      onClick={() => handleViewVisitDetails(item)}
-                    >
+                    <td className="px-4 py-3">
                       <span className={getStatusBadge(item.status)}>{item.status}</span>
                     </td>
                     <td className="px-4 py-3 text-right">

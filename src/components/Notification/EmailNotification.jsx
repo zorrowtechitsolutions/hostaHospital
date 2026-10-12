@@ -1,5 +1,6 @@
 // EmailComposer.js
 // Complete email composer with enhanced draft workflow UI/UX and rich text editor
+// + Real-time email events
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -30,7 +31,13 @@ import {
   useUnarchiveEmailMutation,
 } from '../../../app/service/emailnotification';
 import { showErrorToast, showSuccessToast, showInfoToast } from '../ui/Toast';
-import { Button } from '../ui/button'; // Import Button component
+import { Button } from '../ui/button';
+
+// ✅ Real-time email notification events
+import {
+  registerEmailNotificationEvents,
+  unregisterEmailNotificationEvents,
+} from '../../socket/emailNotificationEvents';
 
 // ============================================
 // SKELETON LOADING COMPONENTS
@@ -289,6 +296,51 @@ const EmailComposer = () => {
   const [archiveEmailApi] = useArchiveEmailMutation();
   const [unarchiveEmailApi] = useUnarchiveEmailMutation();
 
+  /* ============================================================
+     ✅ REAL-TIME EMAIL NOTIFICATION EVENTS
+     Backend emits on `hospital_<id>` with event name `email_event`.
+     Lifecycle:
+       EMAIL_QUEUED → EMAIL_SENDING → EMAIL_SUCCESS | PARTIAL | FAILED
+     Also: EMAIL_DRAFT_SAVED, EMAIL_DRAFT_SENT
+
+     These events fire across ALL tabs / users in the same hospital,
+     so the composer stays in sync no matter who triggered the send.
+     ============================================================ */
+  useEffect(() => {
+    registerEmailNotificationEvents({
+      onDraftSaved: ({ message: msg }) => {
+        // Don't toast our own save — handleSaveDraft already does that.
+        // This fires when ANOTHER tab saves a draft.
+      },
+
+      onDraftSent: ({ message: msg }) => {
+        if (msg) showSuccessToast(msg, 3000);
+      },
+
+      onQueued: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 3000);
+      },
+
+      onSending: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 3000);
+      },
+
+      onSuccess: ({ message: msg }) => {
+        if (msg) showSuccessToast(msg, 3000);
+      },
+
+      onPartial: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 4000);
+      },
+
+      onFailed: ({ message: msg }) => {
+        if (msg) showErrorToast(msg, 4000);
+      },
+    });
+
+    return () => unregisterEmailNotificationEvents();
+  }, []);
+
   const isLoading = doctorsLoading || staffLoading || rolesLoading || templatesLoading;
 
   // Define doctors and staff after the queries
@@ -374,7 +426,6 @@ const EmailComposer = () => {
     setMessage(email.message || '');
     setSelectedTemplateId(email.templateId || '');
 
-    // Update editor content
     requestAnimationFrame(() => {
       if (editorRef.current) {
         editorRef.current.innerHTML = email.message || '';
@@ -423,7 +474,6 @@ const EmailComposer = () => {
 
     loadEmailForEditing(emailToEdit);
 
-    // Remove the navigation state so refresh/back doesn't reopen the draft
     navigate(location.pathname, {
       replace: true,
       state: null,
@@ -562,7 +612,6 @@ const EmailComposer = () => {
       }
       if (selectedTemplate.message) {
         setMessage(selectedTemplate.message);
-        // Update editor content
         requestAnimationFrame(() => {
           if (editorRef.current) {
             editorRef.current.innerHTML = selectedTemplate.message;
@@ -874,7 +923,6 @@ const EmailComposer = () => {
         </div>
       </div>
 
-      {/* Navigation Bar - Compose Only with View History Button */}
       <div className="flex items-center justify-between mb-6 border-b border-slate-200">
         <button
           onClick={() => navigate('/email-history')}
@@ -884,10 +932,8 @@ const EmailComposer = () => {
         </button>
       </div>
 
-      {/* Compose Content */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-8 space-y-6">
-          {/* Recipients Selection */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-200 bg-slate-50/50">
               <div className="flex items-center gap-2">
@@ -1109,7 +1155,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Compose Email */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-200 bg-slate-50/50">
               <div className="flex items-center gap-2">
@@ -1123,9 +1168,7 @@ const EmailComposer = () => {
               </div>
             </div>
 
-            {/* Email content area with proper p-5 wrapper */}
             <div className="p-5 space-y-4">
-              {/* Email Template */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Email Template
@@ -1188,7 +1231,6 @@ const EmailComposer = () => {
                 </div>
               </div>
 
-              {/* Subject */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Subject <span className="text-red-500">*</span>
@@ -1214,15 +1256,12 @@ const EmailComposer = () => {
                 />
               </div>
 
-              {/* Message */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Message <span className="text-red-500">*</span>
                 </label>
 
-                {/* Rich Text Editor */}
                 <div className="border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-400">
-                  {/* Rich Text Toolbar */}
                   <div className="h-11 px-3 flex items-center gap-4 border-b border-slate-200 bg-slate-50">
                     <span className="text-xs font-medium text-slate-600">Paragraph</span>
                     <ChevronDown size={14} className="text-slate-400" />
@@ -1330,7 +1369,6 @@ const EmailComposer = () => {
                     />
                   </div>
 
-                  {/* Rich Text Editor */}
                   <div
                     ref={editorRef}
                     contentEditable
@@ -1382,7 +1420,6 @@ const EmailComposer = () => {
         </div>
 
         <div className="col-span-12 lg:col-span-4 space-y-5">
-          {/* Email Summary */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Email Summary</h3>
@@ -1429,7 +1466,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Selected Recipients */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
               <h3 className="text-sm font-semibold text-slate-700">Selected Recipients</h3>
@@ -1475,7 +1511,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Email Preview */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Email Preview</h3>
@@ -1530,13 +1565,11 @@ const EmailComposer = () => {
             </div>
           )}
 
-          {/* Actions */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Actions</h3>
             </div>
             <div className="p-4 space-y-3">
-              {/* Send Email Button - Using Button component with green gradient */}
               <Button
                 onClick={sendEmail}
                 variant="primary"
@@ -1555,7 +1588,6 @@ const EmailComposer = () => {
                 {isEditingDraft ? 'Send Draft' : 'Send Email'}
               </Button>
 
-              {/* Save Draft Button */}
               <button
                 onClick={saveDraft}
                 disabled={isSavingDraft || totalRecipients === 0 || !subject.trim() || !message.trim()}

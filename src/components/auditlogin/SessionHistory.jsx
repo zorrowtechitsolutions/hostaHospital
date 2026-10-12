@@ -120,7 +120,7 @@ const SkeletonLoader = () => (
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100">
             <tr>
-              {Array.from({ length: 9 }).map((_, index) => (
+              {Array.from({ length: 10 }).map((_, index) => (
                 <th key={index} className="px-6 py-3">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
                 </th>
@@ -130,7 +130,7 @@ const SkeletonLoader = () => (
           <tbody>
             {Array.from({ length: 7 }).map((_, rowIndex) => (
               <tr key={rowIndex} className="border-b border-gray-100">
-                {Array.from({ length: 9 }).map((_, cellIndex) => (
+                {Array.from({ length: 10 }).map((_, cellIndex) => (
                   <td key={cellIndex} className="px-6 py-4">
                     <div className="h-5 w-24 bg-gray-200 rounded animate-pulse" />
                   </td>
@@ -166,6 +166,10 @@ const SessionDetailsModal = ({ session, onClose }) => {
     ["Registered Address", session.registeredAddress || "N/A"],
     ["Login Method", session.loginMethod || "N/A"],
     ["Login Time", formatDateTime(session.loginTime)],
+    // ✅ Only show Logout Time when it actually exists (no "N/A" line)
+    ...(session.logoutTime
+      ? [["Logout Time", formatDateTime(session.logoutTime)]]
+      : []),
     ["Last Activity", formatDateTime(session.lastActivity)],
     ["Session Duration", session.sessionDuration || "N/A"],
     ["Created At", formatDateTime(session.createdAt)],
@@ -469,6 +473,9 @@ const SessionHistory = () => {
         "IP Address": session.ipAddress,
         "Registered Address": session.registeredAddress,
         "Login Time": formatDateTime(session.loginTime),
+        "Logout Time": session.logoutTime
+          ? formatDateTime(session.logoutTime)
+          : "", // ✅ blank when missing
         "Last Activity": formatDateTime(session.lastActivity),
         "Status": session.status,
         "Risk Level": session.riskLevel,
@@ -798,6 +805,7 @@ const SessionHistory = () => {
                     <th className="px-6 py-3">Device</th>
                     <th className="px-6 py-3">IP Address</th>
                     <th className="px-6 py-3">Login Time</th>
+                    <th className="px-6 py-3">Logout Time</th>
                     <th className="px-6 py-3">Last Activity</th>
                     <th className="px-6 py-3">Risk</th>
                     <th className="px-6 py-3">Status</th>
@@ -837,6 +845,9 @@ const SessionHistory = () => {
                       </td>
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{session.ipAddress || "N/A"}</td>
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(session.loginTime)}</td>
+                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                        {session.logoutTime ? formatDateTime(session.logoutTime) : ""}
+                      </td>
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(session.lastActivity)}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={getRiskBadgeClass(session.riskLevel)}>
