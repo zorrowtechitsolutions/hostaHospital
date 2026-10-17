@@ -3,19 +3,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Stethoscope,
   Plus,
-  Edit,
-  Trash2,
   Search,
-  Eye,
   MoreVertical,
   RefreshCcw,
   Download,
   Image as ImageIcon,
   Upload,
   X,
-  FolderOpen,
+  Edit2,
+  Trash2,
+  Eye,
 } from 'lucide-react';
 import { Card, Button, Modal, Badge, Pagination, Input } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
@@ -32,7 +30,6 @@ import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../app/service/S3
 
 // ================= HELPER FUNCTIONS =================
 
-// Helper function to format date
 const formatDate = (date) => {
   if (!date) return 'N/A';
   return new Date(date).toLocaleDateString('en-US', {
@@ -42,7 +39,6 @@ const formatDate = (date) => {
   });
 };
 
-// Convert string to Title Case (capitalize every word)
 const toTitleCase = (text = "") => {
   if (!text) return "";
   return text.replace(/\w\S*/g, (word) =>
@@ -50,18 +46,34 @@ const toTitleCase = (text = "") => {
   );
 };
 
-// Get S3 image URL without cache busting to allow browser caching
 const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) return null;
-  return getS3ImageUrl(imageUrl);
+  const url = getS3ImageUrl(imageUrl);
+  if (!url) return null;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_t=${Date.now()}`;
+};
+
+// ✅ Added helper for the colored initial circle
+const getInitialColor = (name = "") => {
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+    '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 };
 
 // ================= IMAGE UPLOAD COMPONENT =================
 
-const ImageUpload = ({ 
-  imageUrl, 
-  onImageChange, 
-  onImageRemove, 
+const ImageUpload = ({
+  imageUrl,
+  onImageChange,
+  onImageRemove,
   isUploading,
   label = "Speciality Image",
   disabled = false,
@@ -73,14 +85,12 @@ const ImageUpload = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       showErrorToast('Please select an image file', 3000);
       e.target.value = '';
       return;
     }
 
-    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast('Image size should be less than 5MB', 3000);
       e.target.value = '';
@@ -96,7 +106,7 @@ const ImageUpload = ({
         {label} {required && <span className="text-red-500">*</span>}
         {!required && <span className="text-gray-400 text-xs">(Optional)</span>}
       </label>
-      
+
       <div className="flex items-start gap-4">
         <div className="relative w-24 h-24 flex-shrink-0">
           {imageUrl ? (
@@ -166,7 +176,6 @@ const ImageUpload = ({
 
 // ================= MODAL COMPONENTS =================
 
-// View Speciality Modal
 const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
   if (!speciality) return null;
 
@@ -181,8 +190,11 @@ const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
               <img src={imageUrl} alt={speciality.name} className="w-full h-full object-cover" />
             </div>
           ) : (
-            <div className="w-32 h-32 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border-2 border-green-200">
-              <FolderOpen className="w-16 h-16 text-green-500" />
+            <div 
+              className="w-32 h-32 rounded-full flex items-center justify-center text-5xl font-bold text-white border-2 border-gray-200"
+              style={{ backgroundColor: getInitialColor(speciality.name) }}
+            >
+              <span>{speciality.name.charAt(0).toUpperCase()}</span>
             </div>
           )}
         </div>
@@ -226,12 +238,8 @@ const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
   );
 };
 
-// Add Speciality Modal
 const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    isActive: true
-  });
+  const [formData, setFormData] = useState({ name: '', isActive: true });
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -239,10 +247,7 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        name: '',
-        isActive: true
-      });
+      setFormData({ name: '', isActive: true });
       setImageFile(null);
       setImagePreview(null);
       setUploadProgress(0);
@@ -271,18 +276,10 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
 
     try {
       let imageKey = null;
-
       if (imageFile) {
         setUploadProgress(30);
-        
-        const uploadResult = await uploadToS3(
-          imageFile,
-          null,
-          null,
-          "speciality"
-        );
+        const uploadResult = await uploadToS3(imageFile, null, null, "speciality");
         imageKey = uploadResult.key;
-        
         setUploadProgress(80);
       }
 
@@ -293,12 +290,9 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       };
 
       await onSave(specialityData);
-      
       setUploadProgress(100);
-      
       setImageFile(null);
       setImagePreview(null);
-      
     } catch (error) {
       showErrorToast(error?.message || 'Failed to upload image', 3000);
     } finally {
@@ -312,7 +306,7 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
-            <FolderOpen className="w-5 h-5 text-green-600" />
+            <ImageIcon className="w-5 h-5 text-green-600" />
           </div>
           <div>
             <h3 className="text-md font-semibold text-gray-800">Add New Speciality</h3>
@@ -356,19 +350,14 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
         )}
 
         <div className="flex gap-3 pt-4 border-t">
-          <Button 
-            variant="outline" 
-            onClick={onClose} 
-            fullWidth
-            disabled={isUploading || isSaving}
-          >
+          <Button variant="outline" onClick={onClose} fullWidth disabled={isUploading || isSaving}>
             Cancel
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={handleSubmit} 
-            disabled={isSaving || isUploading || !formData.name.trim()} 
-            loading={isSaving || isUploading} 
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={isSaving || isUploading || !formData.name.trim()}
+            loading={isSaving || isUploading}
             fullWidth
           >
             {isUploading ? 'Uploading Image...' : isSaving ? 'Adding...' : 'Add Speciality'}
@@ -379,13 +368,8 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
   );
 };
 
-// Edit Speciality Modal
 const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    isActive: true,
-    imageUrl: null
-  });
+  const [formData, setFormData] = useState({ name: '', isActive: true, imageUrl: null });
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -395,7 +379,6 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   useEffect(() => {
     if (speciality && isOpen) {
       const existingImageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
-      
       setFormData({
         name: speciality.name || '',
         isActive: speciality.isActive !== undefined ? speciality.isActive : true,
@@ -447,18 +430,11 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
 
       if (imageFile) {
         setUploadProgress(50);
-        
         if (formData.imageUrl && !removeExistingImage) {
           await deleteFromS3(formData.imageUrl, specialityId, "speciality");
           setUploadProgress(60);
         }
-        
-        const uploadResult = await uploadToS3(
-          imageFile,
-          null,
-          specialityId,
-          "speciality"
-        );
+        const uploadResult = await uploadToS3(imageFile, null, specialityId, "speciality");
         finalImageUrl = uploadResult.key;
         setUploadProgress(80);
       }
@@ -470,13 +446,10 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       };
 
       await onSave({ ...speciality, ...updatedData });
-      
       setUploadProgress(100);
-      
       setImageFile(null);
       setImagePreview(null);
       setRemoveExistingImage(false);
-      
     } catch (error) {
       showErrorToast(error?.message || 'Failed to update image', 3000);
     } finally {
@@ -490,7 +463,7 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
-            <FolderOpen className="w-5 h-5 text-green-600" />
+            <ImageIcon className="w-5 h-5 text-green-600" />
           </div>
           <div>
             <h3 className="text-md font-semibold text-gray-800">Edit Speciality</h3>
@@ -534,19 +507,14 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
         )}
 
         <div className="flex gap-3 pt-4 border-t">
-          <Button 
-            variant="outline" 
-            onClick={onClose} 
-            fullWidth
-            disabled={isUploading || isSaving}
-          >
+          <Button variant="outline" onClick={onClose} fullWidth disabled={isUploading || isSaving}>
             Cancel
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={handleSubmit} 
-            disabled={isSaving || isUploading || !formData.name.trim()} 
-            loading={isSaving || isUploading} 
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={isSaving || isUploading || !formData.name.trim()}
+            loading={isSaving || isUploading}
             fullWidth
           >
             {isUploading ? 'Uploading Image...' : isSaving ? 'Updating...' : 'Update Speciality'}
@@ -557,67 +525,8 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   );
 };
 
-// Action Menu Component
-const ActionMenu = ({ speciality, onView, onEdit, onToggleStatus, onDelete }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = useRef(null);
+// ================= SKELETON =================
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div className="absolute top-3 right-3 menu-container" ref={menuRef}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setShowMenu(!showMenu);
-        }}
-        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-      >
-        <MoreVertical size={18} className="text-gray-500" />
-      </button>
-
-      {showMenu && (
-        <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-          <button
-            onClick={() => { onView(speciality); setShowMenu(false); }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-          >
-            <Eye size={14} /> View Details
-          </button>
-          <button
-            onClick={() => { onEdit(speciality); setShowMenu(false); }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            <Edit size={14} /> Edit
-          </button>
-          <button
-            onClick={() => { onToggleStatus(speciality); setShowMenu(false); }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            {speciality.isActive ? 'Deactivate' : 'Activate'}
-          </button>
-          <div className="border-t border-gray-100"></div>
-          <button
-            onClick={() => { onDelete(speciality); setShowMenu(false); }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-          >
-            <Trash2 size={14} /> Delete
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Skeleton Loading Component
 const SpecialitiesSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -636,16 +545,14 @@ const SpecialitiesSkeleton = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse relative">
-            <div className="w-8 h-8 bg-gray-200 rounded-full absolute top-3 right-3"></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="bg-white rounded-3xl border border-gray-100 p-6 animate-pulse relative">
+            <div className="w-8 h-8 bg-gray-200 rounded-lg absolute top-3 right-3"></div>
             <div className="flex flex-col items-center gap-3 mt-4">
-              <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
-              <div className="text-center">
-                <div className="h-5 w-32 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 w-24 bg-gray-200 rounded"></div>
-              </div>
+              <div className="w-32 h-32 bg-gray-200 rounded-full"></div>
+              <div className="h-5 w-32 bg-gray-200 rounded"></div>
+              <div className="h-6 w-20 bg-gray-200 rounded-full"></div>
             </div>
           </div>
         ))}
@@ -657,12 +564,13 @@ const SpecialitiesSkeleton = () => {
 // ================= MAIN COMPONENT =================
 
 const Specialties = () => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  
-  const itemsPerPage = 10;
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  const itemsPerPage = 12;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -677,7 +585,6 @@ const Specialties = () => {
       setDebouncedSearchTerm(searchTerm);
       setCurrentPage(1);
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
@@ -715,9 +622,7 @@ const Specialties = () => {
         refetch();
       }
     });
-
     setEventsRegistered(true);
-
     return () => {
       unregisterSpecialityEvents();
       setEventsRegistered(false);
@@ -744,13 +649,21 @@ const Specialties = () => {
         setEventsRegistered(true);
       }
     };
-
     socket.on("connect", handleConnect);
-
     return () => {
       socket.off("connect", handleConnect);
     };
   }, [refetch, eventsRegistered]);
+
+  // Click outside to close 3-dot menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const menuContainer = event.target.closest('.speciality-menu-container');
+      if (!menuContainer) setOpenMenuId(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSpecialtyClick = (speciality) => {
     navigate(`/super-admin/specialities/${speciality.id}/hospitals`, {
@@ -764,7 +677,6 @@ const Specialties = () => {
   const handleAddSpeciality = async (newSpeciality) => {
     try {
       const response = await registerSpeciality(newSpeciality).unwrap();
-      
       socket.emit("speciality_event", {
         event: "SPECIALITY_REGISTERED",
         data: {
@@ -775,7 +687,6 @@ const Specialties = () => {
           timestamp: new Date().toISOString()
         }
       });
-      
       showSuccessToast('Speciality created successfully!', 3000);
       refetch();
       setShowAddModal(false);
@@ -812,6 +723,7 @@ const Specialties = () => {
   };
 
   const handleToggleStatus = async (speciality) => {
+    setOpenMenuId(null);
     try {
       const newStatus = !speciality.isActive;
       await updateSpeciality({
@@ -843,9 +755,8 @@ const Specialties = () => {
         if (selectedSpeciality.imageUrl) {
           await deleteFromS3(selectedSpeciality.imageUrl, selectedSpeciality.id, "speciality");
         }
-        
         await deleteSpeciality(selectedSpeciality.id).unwrap();
-        
+
         socket.emit("speciality_event", {
           event: "SPECIALITY_DELETED",
           data: {
@@ -854,7 +765,7 @@ const Specialties = () => {
             timestamp: new Date().toISOString()
           }
         });
-        
+
         showSuccessToast('Speciality deleted successfully!', 3000);
         refetch();
         setShowDeleteModal(false);
@@ -882,11 +793,9 @@ const Specialties = () => {
       'Created At': speciality.createdAt,
       'Updated At': speciality.updatedAt
     }));
-
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
     const exportFileDefaultName = `specialities_export_${new Date().toISOString().split('T')[0]}.json`;
-
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
@@ -894,9 +803,7 @@ const Specialties = () => {
     showSuccessToast(`Exported ${exportData.length} speciality records`, 2000);
   };
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
+  const handleSearchChange = (e) => setSearchTerm(e.target.value);
 
   const handleSearchClick = () => {
     setDebouncedSearchTerm(searchTerm);
@@ -913,6 +820,10 @@ const Specialties = () => {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleMenu = (id) => {
+    setOpenMenuId(openMenuId === id ? null : id);
   };
 
   if (loading) {
@@ -956,7 +867,7 @@ const Specialties = () => {
               ✕
             </button>
           )}
-          <button 
+          <button
             onClick={handleSearchClick}
             className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gradient-to-r from-green-600 to-emerald-600 p-1.5 rounded hover:from-green-700 hover:to-emerald-700 transition-colors"
           >
@@ -965,53 +876,117 @@ const Specialties = () => {
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <button 
-            onClick={handleRefresh} 
+          <button
+            onClick={handleRefresh}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
             disabled={isFetching}
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-
           <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
             <Download size={16} />
           </button>
-
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+          >
             <Plus size={16} /> Add Speciality
           </button>
         </div>
       </div>
 
-      {/* Specialities Grid */}
+      {/* Specialities Grid — Category-style cards */}
       {specialities.length > 0 ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {specialities.map((speciality) => {
               const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
-              
+
               return (
-                <Card
+                <div
                   key={speciality.id}
                   onClick={() => handleSpecialtyClick(speciality)}
-                  className="p-6 hover:shadow-lg transition-shadow relative cursor-pointer"
+                  className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative cursor-pointer"
                 >
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <ActionMenu
-                      speciality={speciality}
-                      onView={(s) => { setSelectedSpeciality(s); setShowViewModal(true); }}
-                      onEdit={(s) => { setSelectedSpeciality(s); setShowEditModal(true); }}
-                      onToggleStatus={handleToggleStatus}
-                      onDelete={(s) => { setSelectedSpeciality(s); setShowDeleteModal(true); }}
-                    />
+                  {/* 3-Dot Menu - Top Right */}
+                  <div className="absolute top-3 right-3 speciality-menu-container">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMenu(speciality.id);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                      title="More options"
+                    >
+                      <MoreVertical size={18} className="text-gray-600" />
+                    </button>
+
+                    {openMenuId === speciality.id && (
+                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSpeciality(speciality);
+                            setShowViewModal(true);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150"
+                        >
+                          <Eye size={16} className="text-gray-600" />
+                          <span>View Details</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSpeciality(speciality);
+                            setShowEditModal(true);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150"
+                        >
+                          <Edit2 size={16} className="text-blue-600" />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleStatus(speciality);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150"
+                        >
+                          <span className="w-4 h-4 flex items-center justify-center text-xs font-bold text-gray-600">
+                            {speciality.isActive ? '×' : '✓'}
+                          </span>
+                          <span>{speciality.isActive ? 'Deactivate' : 'Activate'}</span>
+                        </button>
+
+                        <div className="border-t border-gray-100 my-1"></div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSpeciality(speciality);
+                            setShowDeleteModal(true);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-150 text-red-600"
+                        >
+                          <Trash2 size={16} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="flex flex-col items-center text-center">
+
+                  <div className="flex flex-col items-center mt-4">
+                    {/* Image or Initial Fallback (Exactly like Categories) */}
                     {imageUrl ? (
-                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-green-200 mb-4">
-                        <img 
-                          src={imageUrl} 
-                          alt={speciality.name} 
+                      <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
+                        <img
+                          src={imageUrl}
+                          alt={speciality.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             const fallbackUrl = getS3ImageUrl(speciality.imageUrl);
@@ -1022,31 +997,31 @@ const Specialties = () => {
                         />
                       </div>
                     ) : (
-                      <div className="w-20 h-20 bg-gradient-to-br from-green-50 to-green-100 rounded-full flex items-center justify-center border-2 border-green-200 mb-4">
-                        <FolderOpen className="w-10 h-10 text-green-500" />
+                      <div
+                        className="w-32 h-32 rounded-full flex items-center justify-center mb-4 text-5xl font-bold text-white"
+                        style={{ backgroundColor: getInitialColor(speciality.name) }}
+                      >
+                        <span>{speciality.name.charAt(0).toUpperCase()}</span>
                       </div>
                     )}
-                    
-                    <div className="mb-2">
-                      <h3 className="font-semibold text-lg text-gray-900">
-                        {toTitleCase(speciality.name)}
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-1">ID: #{speciality.id}</p>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <Badge variant={speciality.isActive ? 'success' : 'danger'}>
+
+                    {/* Name (Title Case) */}
+                    <h3 className="text-xl font-semibold text-gray-800 text-center mb-1">
+                      {toTitleCase(speciality.name)}
+                    </h3>
+
+                    {/* Status Badge (No ID or Date) */}
+                    <div className="mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        speciality.isActive
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
                         {speciality.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
+                      </span>
                     </div>
-                    
-                    {speciality.createdAt && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Created: {formatDate(speciality.createdAt)}
-                      </p>
-                    )}
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
@@ -1064,7 +1039,7 @@ const Specialties = () => {
         </>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No specialities found</h3>
           <p className="text-gray-500">
             {searchTerm ? `No results found for "${searchTerm}"` : 'Click "Add Speciality" to create your first speciality'}

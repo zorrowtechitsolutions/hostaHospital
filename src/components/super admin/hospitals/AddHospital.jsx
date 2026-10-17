@@ -721,7 +721,7 @@ const AddHospital = () => {
           type: hospital.type || hospitalType,
         });
         
-        showSuccessToast(`✅ Welcome ${hospitalName}! Your account has been created and you're logged in.`, 5000);
+        showSuccessToast(` Welcome ${hospitalName}! Your account has been created and you're logged in.`, 5000);
         
         setIsSubmitting(false);
         

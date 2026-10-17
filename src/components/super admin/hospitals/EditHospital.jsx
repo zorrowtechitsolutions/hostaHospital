@@ -642,7 +642,7 @@ const EditHospital = () => {
         updateHospital: updateData
       }).unwrap();
       
-      showSuccessToast(`✅ ${formData.name} has been successfully updated!`, 5000);
+      showSuccessToast(` ${formData.name} has been successfully updated!`, 5000);
       
       setIsSubmitting(false);
       

@@ -5,17 +5,14 @@ import {
   Button,
   Card,
   Input,
+  Tabs
 } from '../ui';
 import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
-// import SalarySlipTemplate from './SalarySlipTemplate'; // ✅ NEW IMPORT
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import {
-  MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus,
-  Building2, Shield, MapPinned, FileText, Star, Banknote // ✅ ADDED Banknote
-} from 'lucide-react';
+import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
@@ -23,13 +20,6 @@ import { useGetCategoryQuery } from '../../../app/service/category';
 
 import { socket } from '../../socket/socket';
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
-
-const TIME_OPTIONS = [
-  '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
-  '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-  '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
-  '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
-];
 
 const DEFAULT_WORKING_HOURS = {
   monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
@@ -81,6 +71,53 @@ const convertTo12HourFormat = (time) => {
   const period = hours >= 12 ? 'PM' : 'AM';
   const hour12 = hours % 12 || 12;
   return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+// ✅ Convert "11:01 AM" -> "11:01" (24-hour, for <input type="time">)
+const to24HourInput = (time12) => {
+  if (!time12) return '';
+  const trimmed = time12.trim();
+
+  // Already 24-hour "HH:MM" or "HH:MM:SS"
+  if (!trimmed.includes('AM') && !trimmed.includes('PM')) {
+    const p = trimmed.split(':');
+    if (p.length >= 2) {
+      const h = parseInt(p[0], 10);
+      const m = parseInt(p[1], 10);
+      if (!isNaN(h) && !isNaN(m)) {
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+    }
+    return '';
+  }
+
+  const parts = trimmed.split(' ');
+  if (parts.length < 2) return '';
+  const [timePart, period] = parts;
+  const [hStr, mStr] = timePart.split(':');
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+
+  if (isNaN(h) || isNaN(m)) return '';
+
+  if (period === 'PM' && h !== 12) h += 12;
+  if (period === 'AM' && h === 12) h = 0;
+
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+// ✅ Convert "11:01" (24-hour) -> "11:01 AM"
+const from24HourInput = (time24) => {
+  if (!time24) return '';
+  const parts = time24.split(':');
+  if (parts.length < 2) return '';
+  let h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return '';
+
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
 };
 
 // ✅ Helper: Convert time string to minutes for comparison
@@ -191,12 +228,12 @@ const normalizeWorkingHours = (hours) => {
   return normalized;
 };
 
-const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -258,14 +295,14 @@ const SearchableDropdown = ({
             disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => setIsOpen(prev => !prev)}
         />
       </div>
-      
+
       {isOpen && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -280,7 +317,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No results found
@@ -299,17 +336,30 @@ const SettingsSkeleton = () => {
           <div className="h-5 w-64 bg-gray-200 rounded animate-pulse"></div>
         </div>
 
-        {/* Vertical layout skeleton */}
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          <div className="w-full md:w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm p-2 space-y-1">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse" />
+        <div className="border-b border-gray-200 mb-6">
+          <div className="flex gap-8">
+            {['General', 'Security', 'Map', 'Prescription Template'].map((_, i) => (
+              <div key={i} className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
             ))}
           </div>
-          <div className="flex-1 min-w-0 w-full bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mb-4" />
-            <div className="h-4 w-full bg-gray-100 rounded animate-pulse mb-2" />
-            <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+        </div>
+
+        <div className="space-y-8">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-1"></div>
+              <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i}>
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-5 w-full bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -329,11 +379,10 @@ const Settings = () => {
   });
   const [updateHospital, { isLoading: isUpdating, error: updateError, reset: resetUpdate }] = useUpdateHospitalMutation();
 
-  // ✅ Fetch categories for hospital types
-  const { 
-    data: categoriesData, 
-    isLoading: isLoadingCategories, 
-    error: categoriesError 
+  const {
+    data: categoriesData,
+    isLoading: isLoadingCategories,
+    error: categoriesError
   } = useGetCategoryQuery({
     isActive: true,
     parentCategoryId: null,
@@ -355,7 +404,7 @@ const Settings = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [is24HourMode, setIs24HourMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
@@ -376,14 +425,12 @@ const Settings = () => {
   const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
   const isFormSaving = isSaving || isUpdating;
 
-  // ✅ Extract categories for hospital types - KEEP AS OBJECTS
-  const hospitalTypes = categoriesData?.data 
-    ? (Array.isArray(categoriesData.data) 
-        ? categoriesData.data 
+  const hospitalTypes = categoriesData?.data
+    ? (Array.isArray(categoriesData.data)
+        ? categoriesData.data
         : [categoriesData.data])
     : [];
 
-  // Register socket event listeners for hospital events
   useEffect(() => {
     registerHospitalEvents({
       onHospitalRegistered: () => {
@@ -412,7 +459,6 @@ const Settings = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       if (!eventsRegistered) {
@@ -461,11 +507,10 @@ const Settings = () => {
     }
   }, [fetchError, logout, navigate]);
 
-  // ✅ IMPROVED: Error handling for updateError
   useEffect(() => {
     if (updateError) {
       const status = updateError?.status || updateError?.originalStatus;
-      
+
       if (status === 401) {
         showErrorToast('Authentication failed. Please log in again.', 3000);
         setTimeout(() => {
@@ -482,23 +527,22 @@ const Settings = () => {
           updateError?.error ||
           updateError?.message ||
           'Failed to update hospital information';
-        
+
         showErrorToast(message, 4000);
       }
       resetUpdate();
     }
   }, [updateError, logout, navigate, resetUpdate]);
 
-  // ✅ Properly handle working hours from API
   useEffect(() => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
-      
+
       let hospitalType = hospital.type || hospital.hospitalType || '';
       if (typeof hospitalType === 'object' && hospitalType !== null) {
         hospitalType = hospitalType.name || hospitalType._id || '';
       }
-      
+
       setHospitalInfo({
         name: hospital.name || '',
         email: hospital.email || '',
@@ -507,9 +551,9 @@ const Settings = () => {
         createdDate: hospital.createdAt ? new Date(hospital.createdAt).toLocaleDateString() : 'N/A',
         lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
       });
-      
+
       let workingHoursData = null;
-      
+
       if (hospital.working_hours_general && Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length > 0) {
         workingHoursData = hospital.working_hours_general;
       } else if (hospital.working_hours_clinic && Array.isArray(hospital.working_hours_clinic) && hospital.working_hours_clinic.length > 0) {
@@ -521,14 +565,14 @@ const Settings = () => {
       } else if (hospital.working_hours && Array.isArray(hospital.working_hours)) {
         workingHoursData = hospital.working_hours;
       }
-      
+
       const normalizedHours = normalizeWorkingHours(workingHoursData);
       setWorkingHours(normalizedHours);
-      
+
       if (hospital.address) {
         const country = countries.find(c => c.name === hospital.address.country);
         const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === hospital.address.state) : null;
-        
+
         setEditForm(prev => ({
           ...prev,
           streetAddress: hospital.address.place || '',
@@ -555,7 +599,6 @@ const Settings = () => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
 
-  // ✅ FIXED: Added phone validation at the beginning of handleEditSubmit
   const handleEditSubmit = async (e) => {
     e.preventDefault();
 
@@ -566,8 +609,30 @@ const Settings = () => {
       return;
     }
 
+    // ✅ NEW: Validate working hours before submit
+    for (const day of DAYS) {
+      const h = editForm.workingHours?.[day.key];
+      if (!h || h.closed) continue;
+
+      if (!h.open || !h.close) {
+        showErrorToast(`${day.label}: Open and Close times are required`, 4000);
+        return;
+      }
+
+      const openMin = convertTimeToMinutes(h.open);
+      const closeMin = convertTimeToMinutes(h.close);
+
+      if (closeMin <= openMin) {
+        showErrorToast(
+          `${day.label}: Close time (${h.close}) must be after open time (${h.open})`,
+          4000
+        );
+        return;
+      }
+    }
+
     setIsSaving(true);
-    
+
     try {
       const updateData = {
         name: editForm.name,
@@ -583,12 +648,12 @@ const Settings = () => {
         },
         workingHours: editForm.workingHours
       };
-      
-      const result = await updateHospital({ 
-        id: hospitalId, 
-        updateHospital: updateData 
+
+      const result = await updateHospital({
+        id: hospitalId,
+        updateHospital: updateData
       }).unwrap();
-      
+
       socket.emit("hospital_event", {
         event: "HOSPITAL_UPDATED",
         data: {
@@ -604,33 +669,33 @@ const Settings = () => {
           doctorIds: result?.data?.doctorIds || []
         }
       });
-      
+
       const now = new Date();
       const formattedDate = now.toLocaleString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
       });
-      
-      setHospitalInfo(prev => ({ 
-        ...prev, 
+
+      setHospitalInfo(prev => ({
+        ...prev,
         name: editForm.name,
         email: editForm.email,
         hospitalType: editForm.hospitalType,
         mobileNumber: editForm.mobileNumber,
-        lastUpdated: formattedDate 
+        lastUpdated: formattedDate
       }));
-      
+
       setWorkingHours(editForm.workingHours);
-      
+
       showSuccessToast('Hospital information updated successfully!', 4000);
       setIsEditing(false);
-      
+
       await refetch();
-      
+
     } catch (error) {
       console.error('Update error:', error);
-      
+
       const status = error?.status || error?.originalStatus;
-      
+
       if (status === 401) {
         showErrorToast('Session expired. Redirecting to login...', 3000);
         setTimeout(() => {
@@ -647,7 +712,7 @@ const Settings = () => {
           error?.error ||
           error?.message ||
           'Failed to update hospital information';
-        
+
         showErrorToast(message, 4000);
       }
     } finally {
@@ -801,7 +866,7 @@ const Settings = () => {
                   <p className="mt-1 text-gray-900">{hospitalInfo.mobileNumber}</p>
                 </div>
               </div>
-              
+
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
                 <div className="grid grid-cols-1 gap-3">
@@ -830,7 +895,6 @@ const Settings = () => {
                 </div>
               </div>
 
-              {/* Working Hours - WITHOUT TODAY Highlight */}
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
@@ -841,8 +905,8 @@ const Settings = () => {
                     type="button"
                     onClick={handleSet24HourMode}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      is24HourMode 
-                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200' 
+                      is24HourMode
+                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
                         : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
                     }`}
                   >
@@ -852,10 +916,10 @@ const Settings = () => {
                 <div className="space-y-2">
                   {DAYS.map((day) => {
                     const hours = workingHours[day.key];
-                    
+
                     return (
-                      <div 
-                        key={day.key} 
+                      <div
+                        key={day.key}
                         className="flex items-center justify-between py-2.5 px-3 border-b border-gray-100 last:border-0 rounded-lg"
                       >
                         <span className="text-sm font-medium text-gray-700 w-24">
@@ -879,8 +943,7 @@ const Settings = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input label="Hospital Name" name="name" value={editForm.name} onChange={handleInputChange} required />
                 <Input label="Email Address" name="email" type="email" value={editForm.email} onChange={handleInputChange} required />
-                
-                {/* ✅ Dynamic Hospital Type dropdown using categories from API - USING NAME AS VALUE */}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Hospital Type *
@@ -908,12 +971,11 @@ const Settings = () => {
                     </p>
                   )}
                 </div>
-                
-                {/* ✅ FIXED: Mobile Number input with 10-digit restriction */}
-                <Input 
-                  label="Mobile Number" 
-                  name="mobileNumber" 
-                  value={editForm.mobileNumber} 
+
+                <Input
+                  label="Mobile Number"
+                  name="mobileNumber"
+                  value={editForm.mobileNumber}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                     setEditForm(prev => ({
@@ -922,13 +984,13 @@ const Settings = () => {
                     }));
                   }}
                   type="tel"
-                  required 
+                  required
                 />
               </div>
 
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
-                
+
                 <div className="space-y-4">
                   <SearchableDropdown
                     label="Country"
@@ -961,20 +1023,20 @@ const Settings = () => {
                     getOptionValue={(option) => option.name}
                     optionKey={(option, index) => index}
                   />
-                  
-                  <Input 
-                    label="Street Address" 
-                    name="streetAddress" 
-                    value={editForm.streetAddress} 
-                    onChange={handleInputChange} 
+
+                  <Input
+                    label="Street Address"
+                    name="streetAddress"
+                    value={editForm.streetAddress}
+                    onChange={handleInputChange}
                     placeholder="Enter street address"
                   />
 
-                  <Input 
-                    label="Pincode" 
-                    name="pincode" 
-                    value={editForm.pincode} 
-                    onChange={handleInputChange} 
+                  <Input
+                    label="Pincode"
+                    name="pincode"
+                    value={editForm.pincode}
+                    onChange={handleInputChange}
                     placeholder="Enter pincode (5-6 digits)"
                     maxLength={6}
                   />
@@ -988,8 +1050,8 @@ const Settings = () => {
                     type="button"
                     onClick={handleSet24HourMode}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      is24HourMode 
-                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200' 
+                      is24HourMode
+                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
                         : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
                     }`}
                   >
@@ -1013,38 +1075,41 @@ const Settings = () => {
                           </span>
                         </label>
                       </div>
-                      
+
                       {!editForm.workingHours[day.key]?.closed && (
                         <div className="grid grid-cols-2 gap-4 ml-6">
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">Open Time</label>
-                            <select
-                              value={editForm.workingHours[day.key]?.open || '09:00 AM'}
+                            {/* ✅ Native time input supports ANY minute (11:01, 11:37, etc.) */}
+                            <input
+                              type="time"
+                              value={to24HourInput(editForm.workingHours[day.key]?.open)}
                               onChange={(e) => {
-                                const value = e.target.value;
-                                handleWorkingHourChange(day.key, 'open', value);
+                                const v = e.target.value;
+                                if (!v) return; // ignore clearing mid-edit
+                                handleWorkingHourChange(day.key, 'open', from24HourInput(v));
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
+                            />
+                            <p className="text-xs text-gray-400 mt-1">
+                              {editForm.workingHours[day.key]?.open || '—'}
+                            </p>
                           </div>
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">Close Time</label>
-                            <select
-                              value={editForm.workingHours[day.key]?.close || '06:00 PM'}
+                            <input
+                              type="time"
+                              value={to24HourInput(editForm.workingHours[day.key]?.close)}
                               onChange={(e) => {
-                                const value = e.target.value;
-                                handleWorkingHourChange(day.key, 'close', value);
+                                const v = e.target.value;
+                                if (!v) return;
+                                handleWorkingHourChange(day.key, 'close', from24HourInput(v));
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                            >
-                              {TIME_OPTIONS.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
-                            </select>
+                            />
+                            <p className="text-xs text-gray-400 mt-1">
+                              {editForm.workingHours[day.key]?.close || '—'}
+                            </p>
                           </div>
                         </div>
                       )}
@@ -1057,7 +1122,7 @@ const Settings = () => {
                   ))}
                 </div>
               </div>
-              
+
               <div className="flex space-x-3 pt-4">
                 <Button type="submit" variant="primary" disabled={isFormSaving} loading={isFormSaving}>
                   {isFormSaving ? 'Saving...' : 'Save Changes'}
@@ -1100,8 +1165,6 @@ const Settings = () => {
         return <Map />;
       case 'Prescription Template':
         return <PrescriptionTemplate />;
-      case 'Salary Slip Template':                       // ✅ NEW CASE
-        return <SalarySlipTemplate />;                   // ✅ NEW CASE
       case 'Reviews':
         return <HospitalReviews />;
       default:
@@ -1109,15 +1172,7 @@ const Settings = () => {
     }
   };
 
-  // ✅ Vertical sidebar tabs with icons
-  const tabs = [
-    { id: 'General',                 label: 'General',                 icon: Building2 },
-    { id: 'Security',                label: 'Security',                icon: Shield },
-    { id: 'Map',                     label: 'Map',                     icon: MapPinned },
-    { id: 'Prescription Template',   label: 'Prescription Template',   icon: FileText },
-    { id: 'Salary Slip Template',    label: 'Salary Slip Template',    icon: Banknote },  // ✅ NEW TAB
-    { id: 'Reviews',                 label: 'Reviews',                 icon: Star },
-  ];
+  const tabs = ['General', 'Security', 'Map', 'Prescription Template', 'Reviews'];
 
   if (isLoadingHospital) {
     return <SettingsSkeleton />;
@@ -1126,70 +1181,23 @@ const Settings = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
           <p className="text-gray-500 mt-1">Manage your account settings</p>
         </div>
 
-        {/* Vertical Settings Layout */}
-        <div className="flex flex-col md:flex-row gap-6 items-start">
+        <Tabs
+          tabs={tabs.map(tab => ({ id: tab, label: tab }))}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          className="mb-6"
+        />
 
-          {/* Left Settings Menu */}
-          <aside className="w-full md:w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm p-2">
-            <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible">
-              {tabs.map((tab, index) => {
-                const isActive = activeTab === tab.id;
-                const Icon = tab.icon;
+        <div className="mt-6">{renderTabContent()}</div>
 
-                return (
-                  <div key={tab.id} className="contents md:block">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`
-                        relative flex items-center gap-3 whitespace-nowrap md:whitespace-normal
-                        w-full text-left px-4 py-3 rounded-lg
-                        transition-all duration-200
-                        ${
-                          isActive
-                            ? 'bg-blue-50 text-blue-600 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }
-                      `}
-                    >
-                      {/* Active blue accent bar */}
-                      {isActive && (
-                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-blue-600" />
-                      )}
-                      <Icon size={18} className="flex-shrink-0" />
-                      <span className="flex-1 text-sm">{tab.label}</span>
-                    </button>
-
-                    {/* Separator between items (desktop only) */}
-                    {index < tabs.length - 1 && (
-                      <div className="hidden md:block h-px bg-gray-100 mx-3" />
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
-          </aside>
-
-          {/* Right Content */}
-          <main className="flex-1 min-w-0 w-full">
-            {renderTabContent()}
-          </main>
-        </div>
-
-        {/* Footer */}
         <div className="mt-12 pt-6 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-400">
-            © {hospitalInfo.name} - All Rights Reserved.
-          </p>
+          <p className="text-sm text-gray-400">© {hospitalInfo.name} - All Rights Reserved.</p>
         </div>
-
       </div>
     </div>
   );

@@ -558,7 +558,7 @@ const LabResultsTab = ({ patient }) => {
 
       setUploadProgress(100);
 
-      showSuccessToast(`✅ Lab Result "${testName}" created successfully!`);
+      showSuccessToast(` Lab Result "${testName}" created successfully!`);
       
       resetAddForm();
       await forceRefresh();
@@ -819,7 +819,7 @@ const LabResultsTab = ({ patient }) => {
       
       try {
         await deleteLabResult(id).unwrap();
-        showSuccessToast(`✅ Lab Result "${deletingLabResult.name}" deleted successfully!`);
+        showSuccessToast(` Lab Result "${deletingLabResult.name}" deleted successfully!`);
       } catch (error) {
         if (error.status === 404 || error.data?.message === 'Lab result not found') {
           showWarningToast("Lab result was already deleted.");
@@ -859,7 +859,7 @@ const LabResultsTab = ({ patient }) => {
         return newSet;
       });
       
-      showSuccessToast(`✅ Lab Result "${labResult.testName || labResult.name}" recovered successfully!`);
+      showSuccessToast(` Lab Result "${labResult.testName || labResult.name}" recovered successfully!`);
       
       // Try to call API if endpoint exists
       try {

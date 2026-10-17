@@ -392,7 +392,7 @@ const DocumentsTab = ({ patient }) => {
 
       setUploadProgress(100);
 
-      showSuccessToast(`✅ Document "${documentName}" uploaded successfully!`);
+      showSuccessToast(` Document "${documentName}" uploaded successfully!`);
       
       // Reset form
       setDocumentName("");
@@ -517,7 +517,7 @@ const DocumentsTab = ({ patient }) => {
 
       setUploadProgress(100);
 
-      showSuccessToast(`✅ Document "${editDocumentName}" updated successfully!`);
+      showSuccessToast(` Document "${editDocumentName}" updated successfully!`);
       
       setShowEditModal(false);
       setEditingDocument(null);
@@ -567,7 +567,7 @@ const DocumentsTab = ({ patient }) => {
 
     try {
       await deleteDocument(docId).unwrap();
-      showSuccessToast(`✅ Document "${docName}" deleted successfully!`);
+      showSuccessToast(` Document "${docName}" deleted successfully!`);
       setShowDeleteModal(false);
       setDeletingDocument(null);
       refetchDocuments();

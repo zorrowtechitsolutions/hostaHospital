@@ -126,13 +126,13 @@ const ForgotPassword = () => {
     try {
       await verifyOtp({ email, otp }).unwrap();
       
-      showSuccessToast('✅ OTP verified successfully!', 3000);
+      showSuccessToast('OTP verified successfully!', 3000);
       setStep(3);
       
     } catch (error) {
       const errorMessage = error.data?.message || "Invalid OTP. Please try again.";
       setError(errorMessage);
-      showErrorToast(`❌ ${errorMessage}`, 4000);
+      showErrorToast(` ${errorMessage}`, 4000);
     }
   };
 

@@ -48,6 +48,9 @@ import { useGetHospitalByIdQuery } from "../../app/service/hospitalApi";
 import { useGetDoctorByIdQuery } from "../../app/service/doctorApi";
 import { useGetStaffByIdQuery } from "../../app/service/staffApi";
 
+// Optional helper if you want "any of" checks.
+// import { hasAnyPermission } from "../utils/permission";
+
 // Menu with permission IDs - Dashboard and Help have no permission (always visible)
 const menu = [
   {
@@ -84,27 +87,37 @@ const menu = [
         label: "Attendance",
         icon: CalendarCheck,
         hasDropdown: true,
-        permissionId: 119,
+        // Parent must be visible to anyone who can VIEW attendance (120),
+        // otherwise users with only view perms lose the whole menu.
+        permissionId: 120,
+        // If you'd rather gate on any attendance perm:
+        // permissionIds: [119, 120, 121, 122],
         dropdownItems: [
           {
             label: "Today Attendance",
             icon: Clock,
             path: "/attendance",
+            permissionId: 120, // Attendance view
           },
           {
             label: "Attendance Sheet",
             icon: Table,
             path: "/attendance/sheet",
+            permissionId: 120, // Attendance view
           },
           {
             label: "Manual Attendance",
             icon: UserCheck,
             path: "/attendance/manual",
+            // Manual entry implies create/edit capability
+            // permissionId: 119, // (create)
+            permissionId: 120, // view-only fallback; tighten to 119/121 if desired
           },
           {
             label: "Holiday Management",
             icon: CalendarDays,
             path: "/attendance/holidays",
+            permissionId: 124, // Holiday view
           },
         ],
       },
@@ -114,22 +127,31 @@ const menu = [
         label: "Leave Management",
         icon: ClipboardList,
         hasDropdown: true,
+        // Parent visible if user can view leaves OR templates
+        permissionId: 128, // Leave view
+        // permissionIds: [127, 128, 129, 130, 132], // if using hasAnyPermission
         dropdownItems: [
           {
             label: "Leave Request",
             icon: FileText,
             path: "/leave-requests",
+            permissionId: 128, // Leave view (admin/approver)
           },
           {
             label: "My Leave Request",
             icon: UserCheck,
             path: "/my-leave-requests",
+            // Create is the base action for submitting own leave.
+            permissionId: 127, // Leave create
+            // If you add hasAnyPermission, use:
+            // permissionIds: [127, 129, 130], // create/edit/delete own
           },
           {
             label: "Leave Templates",
-            icon: FileText, 
+            icon: FileText,
             path: "/leave-templates",
-          }
+            permissionId: 132, // LeaveTemplate view
+          },
         ],
       },
 
@@ -158,6 +180,9 @@ const menu = [
           },
         ],
       },
+
+      // 👇 PAYROLL SECTION - COMMENTED OUT
+      /*
       {
         label: "Payroll",
         icon: Wallet,
@@ -215,6 +240,7 @@ const menu = [
           },
         ],
       },
+      */
     ],
   },
 

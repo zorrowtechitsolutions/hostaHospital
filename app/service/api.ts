@@ -22,7 +22,7 @@ import {
 const baseQuery = fetchBaseQuery({
   baseUrl:
     import.meta.env.VITE_API_URL ||
-    "http://192.168.1.43:3000/api",
+    "http://18.141.233.52:3000/api",
 
   /*
    * IMPORTANT:
