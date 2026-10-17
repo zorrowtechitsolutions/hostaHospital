@@ -13,7 +13,7 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       return imageUrl;
     }
-    const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
+    const S3_BASE_URL = 'https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com/';
     return `${S3_BASE_URL}/${encodeURIComponent(imageUrl)}`;
   };
 

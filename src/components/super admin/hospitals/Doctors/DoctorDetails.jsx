@@ -28,7 +28,7 @@ import RequestTable from '../../../Requests/RequestTable';
 const getS3ImageUrl = (imageKey) => {
   if (!imageKey) return "";
   if (imageKey.startsWith("http")) return imageKey;
-  const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+  const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com/";
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
 };
 

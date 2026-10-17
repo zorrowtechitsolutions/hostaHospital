@@ -1,10 +1,10 @@
 // app/service/s3.ts
 import { getToken } from "../../src/utils/auth";
 
-const API_URL = "https://zorrowtek.in/api/presignurl";
+const API_URL = "http://18.141.233.52:3000/api/presignurl";
 
 export const S3_BASE_URL =
-  "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+  "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com/";
 
 interface UploadResponse {
   imageUrl: string;
