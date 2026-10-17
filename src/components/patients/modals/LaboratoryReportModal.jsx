@@ -3,7 +3,7 @@ import React from "react";
 import { X, Download, FileText, ExternalLink } from "lucide-react";
 import { Button, Badge } from "../../ui";
 
-const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com/";
+const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
 
 const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
   if (!isOpen) return null;

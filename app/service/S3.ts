@@ -4,7 +4,7 @@ import { getToken } from "../../src/utils/auth";
 const API_URL = "http://18.141.233.52:3000/api/presignurl";
 
 export const S3_BASE_URL =
-  "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com/";
+  "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
 
 interface UploadResponse {
   imageUrl: string;
@@ -173,12 +173,12 @@ export const uploadToS3 = async (
     const data = await res.json();
 
     const upload = await fetch(data.presignedUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": compressed.type,
-      },
-      body: compressed,
-    });
+  method: "PUT",
+  headers: {
+    "Content-Type": compressed.type,
+  },
+  body: compressed,
+});
 
     if (!upload.ok) {
       console.error("Upload to S3 failed:", {
