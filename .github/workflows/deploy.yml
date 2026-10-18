@@ -34,11 +34,8 @@ jobs:
         run: |
           rm -rf .vercel
 
-          vercel link \
-            --yes \
-            --project "$VERCEL_PROJECT_ID" \
-            --scope "$VERCEL_ORG_ID" \
-            --token "$VERCEL_TOKEN"
+          echo "Checking Vercel authentication..."
+          vercel whoami --token "$VERCEL_TOKEN"
 
       - name: Select environment file
         shell: bash
@@ -90,25 +87,19 @@ jobs:
 
             if [ "$GITHUB_REF_NAME" = "main" ]; then
 
-              vercel env rm "$KEY" production \
-                --yes \
-                --token "$VERCEL_TOKEN" 2>/dev/null || true
-
               vercel env add "$KEY" production \
                 --value "$VALUE" \
                 --type "$TYPE" \
+                --force \
                 --yes \
                 --token "$VERCEL_TOKEN"
 
             else
 
-              vercel env rm "$KEY" preview test \
-                --yes \
-                --token "$VERCEL_TOKEN" 2>/dev/null || true
-
               vercel env add "$KEY" preview test \
                 --value "$VALUE" \
                 --type "$TYPE" \
+                --force \
                 --yes \
                 --token "$VERCEL_TOKEN"
 
