@@ -1,0 +1,131 @@
+name: Deploy Hosta Hospital
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      HOSTA_MAIN: ${{ secrets.HOSTA_MAIN }}
+      HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Select environment file
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            printf '%s' "$HOSTA_MAIN" > .env.deploy
+          else
+            printf '%s' "$HOSTA_TEST" > .env.deploy
+          fi
+
+      - name: Sync environment variables to Vercel
+        shell: bash
+        run: |
+          set -e
+
+          while IFS= read -r line || [ -n "$line" ]; do
+
+            # Skip empty lines
+            [ -z "$line" ] && continue
+
+            # Skip comments
+            case "$line" in
+              \#*) continue ;;
+            esac
+
+            # Remove optional "export "
+            line="${line#export }"
+
+            # Must contain =
+            case "$line" in
+              *=*) ;;
+              *) continue ;;
+            esac
+
+            KEY="${line%%=*}"
+            VALUE="${line#*=}"
+
+            # Remove surrounding double quotes
+            if [[ "$VALUE" == \"*\" ]]; then
+              VALUE="${VALUE:1:${#VALUE}-2}"
+            fi
+
+            # Remove surrounding single quotes
+            if [[ "$VALUE" == \'*\' ]]; then
+              VALUE="${VALUE:1:${#VALUE}-2}"
+            fi
+
+            echo "Syncing $KEY"
+
+            # VITE_* variables are exposed to the browser.
+            # Other variables are stored as Vercel Secrets.
+            if [[ "$KEY" == VITE_* ]]; then
+              VISIBILITY="config"
+            else
+              VISIBILITY="secret"
+            fi
+
+            if [ "$GITHUB_REF_NAME" = "main" ]; then
+
+              vercel env rm "$KEY" production \
+                --yes \
+                --token "$VERCEL_TOKEN" 2>/dev/null || true
+
+              vercel env add "$KEY" production \
+                --value "$VALUE" \
+                --visibility "$VISIBILITY" \
+                --yes \
+                --token "$VERCEL_TOKEN"
+
+            else
+
+              vercel env rm "$KEY" preview test \
+                --yes \
+                --token "$VERCEL_TOKEN" 2>/dev/null || true
+
+              vercel env add "$KEY" preview test \
+                --value "$VALUE" \
+                --visibility "$VISIBILITY" \
+                --yes \
+                --token "$VERCEL_TOKEN"
+
+            fi
+
+          done < .env.deploy
+
+          rm -f .env.deploy
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Deploy to Vercel
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+          else
+            vercel deploy --yes --token "$VERCEL_TOKEN"
+          fi
