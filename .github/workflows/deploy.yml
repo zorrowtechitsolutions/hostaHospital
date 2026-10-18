@@ -1,4 +1,5 @@
 name: Deploy Hosta Hospital
+# Team-scoped Vercel deployment
 
 on:
   push:
