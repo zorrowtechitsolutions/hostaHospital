@@ -34,6 +34,12 @@ jobs:
         run: |
           rm -rf .vercel
 
+          vercel link \
+            --yes \
+            --project "$VERCEL_PROJECT_ID" \
+            --scope "$VERCEL_ORG_ID" \
+            --token "$VERCEL_TOKEN"
+
       - name: Select environment file
         shell: bash
         run: |
@@ -49,6 +55,7 @@ jobs:
           set -e
 
           while IFS= read -r line || [ -n "$line" ]; do
+
             [ -z "$line" ] && continue
 
             case "$line" in
