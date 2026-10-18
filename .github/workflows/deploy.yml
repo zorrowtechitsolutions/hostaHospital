@@ -29,6 +29,11 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Prepare Vercel project
+        shell: bash
+        run: |
+          rm -rf .vercel
+
       - name: Select environment file
         shell: bash
         run: |
@@ -44,19 +49,14 @@ jobs:
           set -e
 
           while IFS= read -r line || [ -n "$line" ]; do
-
-            # Skip empty lines
             [ -z "$line" ] && continue
 
-            # Skip comments
             case "$line" in
               \#*) continue ;;
             esac
 
-            # Remove optional "export "
             line="${line#export }"
 
-            # Must contain =
             case "$line" in
               *=*) ;;
               *) continue ;;
@@ -65,24 +65,20 @@ jobs:
             KEY="${line%%=*}"
             VALUE="${line#*=}"
 
-            # Remove surrounding double quotes
             if [[ "$VALUE" == \"*\" ]]; then
               VALUE="${VALUE:1:${#VALUE}-2}"
             fi
 
-            # Remove surrounding single quotes
             if [[ "$VALUE" == \'*\' ]]; then
               VALUE="${VALUE:1:${#VALUE}-2}"
             fi
 
             echo "Syncing $KEY"
 
-            # VITE_* variables are exposed to the browser.
-            # Other variables are stored as Vercel Secrets.
             if [[ "$KEY" == VITE_* ]]; then
-              VISIBILITY="config"
+              TYPE="config"
             else
-              VISIBILITY="secret"
+              TYPE="secret"
             fi
 
             if [ "$GITHUB_REF_NAME" = "main" ]; then
@@ -93,7 +89,7 @@ jobs:
 
               vercel env add "$KEY" production \
                 --value "$VALUE" \
-                --visibility "$VISIBILITY" \
+                --type "$TYPE" \
                 --yes \
                 --token "$VERCEL_TOKEN"
 
@@ -105,7 +101,7 @@ jobs:
 
               vercel env add "$KEY" preview test \
                 --value "$VALUE" \
-                --visibility "$VISIBILITY" \
+                --type "$TYPE" \
                 --yes \
                 --token "$VERCEL_TOKEN"
 
