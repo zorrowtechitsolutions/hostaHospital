@@ -30,6 +30,9 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Update npm
+        run: npm install --global npm@11.19.1
+
       - name: Prepare Vercel project
         shell: bash
         run: |
