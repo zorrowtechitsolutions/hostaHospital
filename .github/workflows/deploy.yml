@@ -34,9 +34,6 @@ jobs:
         run: |
           rm -rf .vercel
 
-          echo "Checking Vercel authentication..."
-          vercel whoami --token "$VERCEL_TOKEN"
-
       - name: Select environment file
         shell: bash
         run: |
