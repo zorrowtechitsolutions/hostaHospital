@@ -156,7 +156,7 @@ const ManualAttendanceModal = ({
   const isEdit = Boolean(initialData?.id);
 
   const [form, setForm] = useState({
-    employeeId: '',
+    employeeValue: '', // composite "Doctor:<id>" | "Staff:<id>"
     date: getTodayISO(),
     checkInTime: '09:00',
     checkOutTime: '18:00',
@@ -170,8 +170,11 @@ const ManualAttendanceModal = ({
   useEffect(() => {
     if (!isOpen) return;
     if (isEdit && initialData) {
+      const employeeType = initialData.employeeType || 'Staff';
       setForm({
-        employeeId: initialData.employeeId || '',
+        employeeValue: initialData.employeeId
+          ? `${employeeType}:${initialData.employeeId}`
+          : '',
         date: initialData.dateISO || getTodayISO(),
         checkInTime: initialData.checkIn24 || '09:00',
         checkOutTime: initialData.checkOut24 || '18:00',
@@ -181,7 +184,7 @@ const ManualAttendanceModal = ({
       });
     } else {
       setForm({
-        employeeId: '',
+        employeeValue: '',
         date: getTodayISO(),
         checkInTime: '09:00',
         checkOutTime: '18:00',
@@ -195,7 +198,7 @@ const ManualAttendanceModal = ({
 
   const validate = () => {
     const e = {};
-    if (!form.employeeId) e.employeeId = 'Please select an employee';
+    if (!form.employeeValue) e.employeeValue = 'Please select an employee';
     if (!form.date) e.date = 'Date is required';
     if (!form.status) e.status = 'Status is required';
     if (
@@ -234,22 +237,25 @@ const ManualAttendanceModal = ({
             Employee <span className="text-red-500">*</span>
           </label>
           <select
-            value={form.employeeId}
-            onChange={(e) => handleChange('employeeId', e.target.value)}
+            value={form.employeeValue}
+            onChange={(e) => handleChange('employeeValue', e.target.value)}
             disabled={isEdit}
             className={`w-full h-11 px-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-              errors.employeeId ? 'border-red-300' : 'border-gray-200'
+              errors.employeeValue ? 'border-red-300' : 'border-gray-200'
             } ${isEdit ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             <option value="">Select employee…</option>
             {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
+              <option
+                key={`${emp.type}:${emp.id}`}
+                value={`${emp.type}:${emp.id}`}
+              >
                 {emp.label}
               </option>
             ))}
           </select>
-          {errors.employeeId && (
-            <p className="text-xs text-red-500 mt-1">{errors.employeeId}</p>
+          {errors.employeeValue && (
+            <p className="text-xs text-red-500 mt-1">{errors.employeeValue}</p>
           )}
         </div>
 
@@ -563,9 +569,18 @@ const ManualAttendance = () => {
       row.roleId ??
       null;
 
+    // Infer employee type — prefer explicit field, otherwise fall back
+    // based on which id field is present / role name.
+    const employeeType =
+      row.employeeType ||
+      (row.doctorId ? 'Doctor' : null) ||
+      (row.staffId ? 'Staff' : null) ||
+      (String(role).toLowerCase().includes('doctor') ? 'Doctor' : 'Staff');
+
     return {
       id: row.id || row._id || index,
       employeeId,
+      employeeType,
       name,
       role,
       dept,
@@ -641,9 +656,20 @@ const ManualAttendance = () => {
 
   const handleSave = async (form) => {
     try {
+      // form.employeeValue is "Doctor:<id>" or "Staff:<id>"
+      const [employeeType, employeeIdRaw] = (form.employeeValue || '').split(':');
+      const employeeId = employeeIdRaw || '';
+
       const employee = employeeOptions.find(
-        (e) => String(e.id) === String(form.employeeId)
+        (e) =>
+          e.type === employeeType &&
+          String(e.id) === String(employeeId)
       );
+
+      if (!employee) {
+        showErrorToast('Please select a valid employee.', 3000);
+        return;
+      }
 
       if (editRecord?.id) {
         const checkInISO = form.checkInTime
@@ -663,14 +689,16 @@ const ManualAttendance = () => {
             checkInTime: checkInISO,
             checkOutTime: checkOutISO,
             notes: form.notes,
+            // Include type too, in case the backend needs it to resolve the owner.
+            employeeType: employee.type,
           },
         }).unwrap();
 
         showSuccessToast('Attendance updated successfully', 2500);
       } else {
         await createManualAttendance({
-          employeeId: form.employeeId,
-          employeeType: employee?.type || 'Staff',
+          employeeId: employee.id,
+          employeeType: employee.type,
           date: form.date,
           checkInTime: form.checkInTime,
           checkOutTime: form.checkOutTime,

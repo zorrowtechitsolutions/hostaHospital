@@ -326,17 +326,15 @@ const EmailTemplates = () => {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-white p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p className="text-sm text-red-500">
-            {error?.data?.message ||
-              "Failed to load email templates."}
+      <div className="min-h-screen bg-white p-6 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
+          <p className="text-sm text-red-500 mb-4 text-center">
+            {error?.data?.message || "Failed to load email templates."}
           </p>
           <Button
             variant="primary"
             size="sm"
             onClick={() => refetch()}
-            className="mt-3"
           >
             Retry
           </Button>

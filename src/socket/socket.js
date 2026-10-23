@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
 
-export const socket = io("https://zorrowtek.in", {
+export const socket = io("http://18.141.233.52:3000/api", {
   transports: ["websocket", "polling"],
   autoConnect: true,
 });
