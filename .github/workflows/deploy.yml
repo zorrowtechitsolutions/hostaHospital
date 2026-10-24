@@ -191,13 +191,23 @@ jobs:
       # =========================================================
       # 10. Sync VITE_API_URL to Vercel
       # =========================================================
+      
       - name: Sync VITE_API_URL to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           HOSTA_MAIN: ${{ secrets.HOSTA_MAIN }}
           HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
         run: |
+
+          echo "Linking Vercel project..."
+
+          vercel link \
+            --project "$VERCEL_PROJECT_ID" \
+            --scope "$VERCEL_ORG_ID" \
+            --token "$VERCEL_TOKEN" \
+            --yes
 
           if [ "$GITHUB_REF_NAME" = "main" ]; then
 
@@ -223,9 +233,15 @@ jobs:
               --scope "$VERCEL_ORG_ID" \
               --force
 
+          else
+
+            echo "ERROR: Unsupported branch $GITHUB_REF_NAME"
+            exit 1
+
           fi
 
           echo "VITE_API_URL synced successfully."
+
 
 
       # =========================================================
