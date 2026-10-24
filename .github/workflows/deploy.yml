@@ -19,6 +19,7 @@ jobs:
       HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
 
     steps:
+
       # ------------------------------------------------------------
       # 1. Checkout
       # ------------------------------------------------------------
@@ -26,13 +27,12 @@ jobs:
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # 2. Node
+      # 2. Setup Node.js
       # ------------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       # ------------------------------------------------------------
       # 3. Install Vercel CLI
@@ -59,9 +59,11 @@ jobs:
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             echo "Using HOSTA_MAIN"
             printf '%s' "$HOSTA_MAIN" > .env.deploy
+
           elif [ "$GITHUB_REF_NAME" = "test" ]; then
             echo "Using HOSTA_TEST"
             printf '%s' "$HOSTA_TEST" > .env.deploy
+
           else
             echo "Unsupported branch: $GITHUB_REF_NAME"
             exit 1
@@ -83,36 +85,43 @@ jobs:
           API_LINE=$(grep '^VITE_API_URL=' .env.deploy || true)
 
           if [ -z "$API_LINE" ]; then
-            echo "ERROR: VITE_API_URL is missing from environment configuration"
+            echo "ERROR: VITE_API_URL is missing"
             exit 1
           fi
 
           API_URL="${API_LINE#*=}"
 
-          # Remove optional quotes
+          # Remove surrounding double quotes
           API_URL="${API_URL%\"}"
           API_URL="${API_URL#\"}"
+
+          # Remove surrounding single quotes
           API_URL="${API_URL%\'}"
           API_URL="${API_URL#\'}"
 
           echo "VITE_API_URL is configured."
 
+          # Must be HTTPS
           if [[ "$API_URL" != https://* ]]; then
             echo "ERROR: VITE_API_URL must use HTTPS."
             exit 1
           fi
 
+          # Prevent old IP from coming back
           if [[ "$API_URL" == *"18.141.233.52"* ]]; then
-            echo "ERROR: Old API IP detected in VITE_API_URL."
+            echo "ERROR: Old API IP detected:"
+            echo "18.141.233.52"
             exit 1
           fi
 
+          # Test branch must use the ngrok HTTPS API
           if [ "$GITHUB_REF_NAME" = "test" ]; then
             EXPECTED="https://supplier-preaching-breezy.ngrok-free.dev/api"
 
             if [ "$API_URL" != "$EXPECTED" ]; then
-              echo "ERROR: Test API URL is not the expected HTTPS URL."
-              echo "Expected: $EXPECTED"
+              echo "ERROR: Test API URL is incorrect."
+              echo "Expected HTTPS API URL:"
+              echo "$EXPECTED"
               exit 1
             fi
           fi
@@ -159,8 +168,8 @@ jobs:
 
             echo "Syncing $KEY"
 
-            # VITE_* variables are frontend configuration.
-            # Other variables remain secrets.
+            # Frontend Vite variables are configuration.
+            # Backend variables are secrets.
             if [[ "$KEY" == VITE_* ]]; then
               TYPE="config"
             else
@@ -195,10 +204,10 @@ jobs:
       # 8. Install dependencies
       # ------------------------------------------------------------
       - name: Install project dependencies
-        run: npm ci
+        run: npm install
 
       # ------------------------------------------------------------
-      # 9. Verify application build
+      # 9. Build application
       # ------------------------------------------------------------
       - name: Build application
         run: npm run build
@@ -234,7 +243,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 11. Deployment complete
+      # 11. Complete
       # ------------------------------------------------------------
       - name: Deployment complete
         run: |
