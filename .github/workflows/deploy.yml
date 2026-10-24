@@ -1,5 +1,5 @@
+
 name: Deploy Hosta Hospital
-# Team-scoped Vercel deployment
 
 on:
   push:
@@ -19,34 +19,107 @@ jobs:
       HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
 
     steps:
+      # ------------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ------------------------------------------------------------
+      # 2. Node
+      # ------------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
+      # ------------------------------------------------------------
+      # 3. Install Vercel CLI
+      # ------------------------------------------------------------
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Update npm
-        run: npm install --global npm@11.19.1
-
+      # ------------------------------------------------------------
+      # 4. Clean old Vercel configuration
+      # ------------------------------------------------------------
       - name: Prepare Vercel project
         shell: bash
         run: |
           rm -rf .vercel
 
+      # ------------------------------------------------------------
+      # 5. Select environment configuration
+      # ------------------------------------------------------------
       - name: Select environment file
         shell: bash
         run: |
+          set -e
+
           if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "Using HOSTA_MAIN"
             printf '%s' "$HOSTA_MAIN" > .env.deploy
-          else
+          elif [ "$GITHUB_REF_NAME" = "test" ]; then
+            echo "Using HOSTA_TEST"
             printf '%s' "$HOSTA_TEST" > .env.deploy
+          else
+            echo "Unsupported branch: $GITHUB_REF_NAME"
+            exit 1
           fi
 
+          if [ ! -s .env.deploy ]; then
+            echo "ERROR: .env.deploy is empty"
+            exit 1
+          fi
+
+      # ------------------------------------------------------------
+      # 6. Validate VITE_API_URL
+      # ------------------------------------------------------------
+      - name: Validate API URL
+        shell: bash
+        run: |
+          set -e
+
+          API_LINE=$(grep '^VITE_API_URL=' .env.deploy || true)
+
+          if [ -z "$API_LINE" ]; then
+            echo "ERROR: VITE_API_URL is missing from environment configuration"
+            exit 1
+          fi
+
+          API_URL="${API_LINE#*=}"
+
+          # Remove optional quotes
+          API_URL="${API_URL%\"}"
+          API_URL="${API_URL#\"}"
+          API_URL="${API_URL%\'}"
+          API_URL="${API_URL#\'}"
+
+          echo "VITE_API_URL is configured."
+
+          if [[ "$API_URL" != https://* ]]; then
+            echo "ERROR: VITE_API_URL must use HTTPS."
+            exit 1
+          fi
+
+          if [[ "$API_URL" == *"18.141.233.52"* ]]; then
+            echo "ERROR: Old API IP detected in VITE_API_URL."
+            exit 1
+          fi
+
+          if [ "$GITHUB_REF_NAME" = "test" ]; then
+            EXPECTED="https://supplier-preaching-breezy.ngrok-free.dev/api"
+
+            if [ "$API_URL" != "$EXPECTED" ]; then
+              echo "ERROR: Test API URL is not the expected HTTPS URL."
+              echo "Expected: $EXPECTED"
+              exit 1
+            fi
+          fi
+
+      # ------------------------------------------------------------
+      # 7. Sync environment variables to Vercel
+      # ------------------------------------------------------------
       - name: Sync environment variables to Vercel
         shell: bash
         run: |
@@ -54,14 +127,18 @@ jobs:
 
           while IFS= read -r line || [ -n "$line" ]; do
 
+            # Skip empty lines
             [ -z "$line" ] && continue
 
+            # Skip comments
             case "$line" in
               \#*) continue ;;
             esac
 
+            # Remove optional "export "
             line="${line#export }"
 
+            # Ignore malformed lines
             case "$line" in
               *=*) ;;
               *) continue ;;
@@ -70,16 +147,20 @@ jobs:
             KEY="${line%%=*}"
             VALUE="${line#*=}"
 
+            # Remove surrounding double quotes
             if [[ "$VALUE" == \"*\" ]]; then
               VALUE="${VALUE:1:${#VALUE}-2}"
             fi
 
+            # Remove surrounding single quotes
             if [[ "$VALUE" == \'*\' ]]; then
               VALUE="${VALUE:1:${#VALUE}-2}"
             fi
 
             echo "Syncing $KEY"
 
+            # VITE_* variables are frontend configuration.
+            # Other variables remain secrets.
             if [[ "$KEY" == VITE_* ]]; then
               TYPE="config"
             else
@@ -95,9 +176,9 @@ jobs:
                 --yes \
                 --token "$VERCEL_TOKEN"
 
-            else
+            elif [ "$GITHUB_REF_NAME" = "test" ]; then
 
-              vercel env add "$KEY" preview test \
+              vercel env add "$KEY" preview \
                 --value "$VALUE" \
                 --type "$TYPE" \
                 --force \
@@ -110,17 +191,54 @@ jobs:
 
           rm -f .env.deploy
 
+      # ------------------------------------------------------------
+      # 8. Install dependencies
+      # ------------------------------------------------------------
       - name: Install project dependencies
-        run: npm install
+        run: npm ci
 
+      # ------------------------------------------------------------
+      # 9. Verify application build
+      # ------------------------------------------------------------
       - name: Build application
         run: npm run build
 
+      # ------------------------------------------------------------
+      # 10. Deploy to Vercel
+      # ------------------------------------------------------------
       - name: Deploy to Vercel
         shell: bash
         run: |
+          set -e
+
           if [ "$GITHUB_REF_NAME" = "main" ]; then
-            vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+
+            echo "Deploying MAIN to Vercel Production"
+
+            vercel deploy \
+              --prod \
+              --yes \
+              --token "$VERCEL_TOKEN"
+
+          elif [ "$GITHUB_REF_NAME" = "test" ]; then
+
+            echo "Deploying TEST to Vercel Preview"
+
+            vercel deploy \
+              --yes \
+              --token "$VERCEL_TOKEN"
+
           else
-            vercel deploy --yes --token "$VERCEL_TOKEN"
+            echo "Unsupported branch: $GITHUB_REF_NAME"
+            exit 1
           fi
+
+      # ------------------------------------------------------------
+      # 11. Deployment complete
+      # ------------------------------------------------------------
+      - name: Deployment complete
+        run: |
+          echo "========================================="
+          echo "Hosta Hospital deployment completed."
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "========================================="

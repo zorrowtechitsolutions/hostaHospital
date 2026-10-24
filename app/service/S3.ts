@@ -1,7 +1,7 @@
 // app/service/s3.ts
 import { getToken } from "../../src/utils/auth";
 
-const API_URL = "http://18.141.233.52:3000/api/presignurl";
+const API_URL = "https://supplier-preaching-breezy.ngrok-free.dev/api/presignurl";
 
 export const S3_BASE_URL =
   "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
