@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
 
-export const socket = io("http://18.141.233.52:3000/api", {
+export const socket = io("https://supplier-preaching-breezy.ngrok-free.dev/api", {
   transports: ["websocket", "polling"],
   autoConnect: true,
 });
@@ -16,7 +16,7 @@ export const initSocket = () => {
 
 
     if (!authUser) {
-      console.warn("⚠️ No authenticated user found");
+      console.warn(":warning: No authenticated user found");
       return;
     }
 
@@ -72,3 +72,14 @@ export const logoutSocket = () => {
   socket.emit("leave-all-rooms");
   socket.disconnect();
 };
+
+
+
+
+
+
+
+
+
+
+
