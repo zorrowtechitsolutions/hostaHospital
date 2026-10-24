@@ -20,37 +20,39 @@ jobs:
 
     steps:
 
-      # ------------------------------------------------------------
+      # ============================================================
       # 1. Checkout
-      # ------------------------------------------------------------
+      # ============================================================
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
+      # ============================================================
       # 2. Setup Node.js
-      # ------------------------------------------------------------
+      # ============================================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # ------------------------------------------------------------
+      # ============================================================
       # 3. Install Vercel CLI
-      # ------------------------------------------------------------
+      # ============================================================
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # ------------------------------------------------------------
-      # 4. Clean old Vercel configuration
-      # ------------------------------------------------------------
+      # ============================================================
+      # 4. Clean Vercel configuration
+      # ============================================================
       - name: Prepare Vercel project
         shell: bash
         run: |
+          set -e
+
           rm -rf .vercel
 
-      # ------------------------------------------------------------
-      # 5. Select environment configuration
-      # ------------------------------------------------------------
+      # ============================================================
+      # 5. Select correct environment
+      # ============================================================
       - name: Select environment file
         shell: bash
         run: |
@@ -74,9 +76,9 @@ jobs:
             exit 1
           fi
 
-      # ------------------------------------------------------------
-      # 6. Validate VITE_API_URL
-      # ------------------------------------------------------------
+      # ============================================================
+      # 6. Validate API URL
+      # ============================================================
       - name: Validate API URL
         shell: bash
         run: |
@@ -91,11 +93,11 @@ jobs:
 
           API_URL="${API_LINE#*=}"
 
-          # Remove surrounding double quotes
+          # Remove double quotes
           API_URL="${API_URL%\"}"
           API_URL="${API_URL#\"}"
 
-          # Remove surrounding single quotes
+          # Remove single quotes
           API_URL="${API_URL%\'}"
           API_URL="${API_URL#\'}"
 
@@ -107,28 +109,29 @@ jobs:
             exit 1
           fi
 
-          # Prevent old IP from coming back
+          # Prevent the old HTTP IP from returning
           if [[ "$API_URL" == *"18.141.233.52"* ]]; then
-            echo "ERROR: Old API IP detected:"
-            echo "18.141.233.52"
+            echo "ERROR: Old API IP detected."
             exit 1
           fi
 
-          # Test branch must use the ngrok HTTPS API
+          # Test branch must use the HTTPS ngrok API
           if [ "$GITHUB_REF_NAME" = "test" ]; then
+
             EXPECTED="https://supplier-preaching-breezy.ngrok-free.dev/api"
 
             if [ "$API_URL" != "$EXPECTED" ]; then
               echo "ERROR: Test API URL is incorrect."
-              echo "Expected HTTPS API URL:"
+              echo "Expected:"
               echo "$EXPECTED"
               exit 1
             fi
+
           fi
 
-      # ------------------------------------------------------------
+      # ============================================================
       # 7. Sync environment variables to Vercel
-      # ------------------------------------------------------------
+      # ============================================================
       - name: Sync environment variables to Vercel
         shell: bash
         run: |
@@ -144,7 +147,7 @@ jobs:
               \#*) continue ;;
             esac
 
-            # Remove optional "export "
+            # Remove optional export prefix
             line="${line#export }"
 
             # Ignore malformed lines
@@ -168,8 +171,8 @@ jobs:
 
             echo "Syncing $KEY"
 
-            # Frontend Vite variables are configuration.
-            # Backend variables are secrets.
+            # VITE variables are frontend configuration.
+            # Everything else is stored as a secret.
             if [[ "$KEY" == VITE_* ]]; then
               TYPE="config"
             else
@@ -200,21 +203,15 @@ jobs:
 
           rm -f .env.deploy
 
-      # ------------------------------------------------------------
-      # 8. Install dependencies
-      # ------------------------------------------------------------
-      - name: Install project dependencies
-        run: npm install
-
-      # ------------------------------------------------------------
-      # 9. Build application
-      # ------------------------------------------------------------
-      - name: Build application
-        run: npm run build
-
-      # ------------------------------------------------------------
-      # 10. Deploy to Vercel
-      # ------------------------------------------------------------
+      # ============================================================
+      # 8. Deploy directly to Vercel
+      #
+      # Vercel will:
+      #   - install npm dependencies
+      #   - load Vercel environment variables
+      #   - run the Vite build
+      #   - deploy the application
+      # ============================================================
       - name: Deploy to Vercel
         shell: bash
         run: |
@@ -238,16 +235,9 @@ jobs:
               --token "$VERCEL_TOKEN"
 
           else
+
             echo "Unsupported branch: $GITHUB_REF_NAME"
             exit 1
+
           fi
 
-      # ------------------------------------------------------------
-      # 11. Complete
-      # ------------------------------------------------------------
-      - name: Deployment complete
-        run: |
-          echo "========================================="
-          echo "Hosta Hospital deployment completed."
-          echo "Branch: $GITHUB_REF_NAME"
-          echo "========================================="
