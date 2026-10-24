@@ -200,43 +200,48 @@ jobs:
       # IMPORTANT:
       # Do this BEFORE checking .vercel.
       # =========================================================
-      - name: Link Vercel project
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        shell: bash
-        run: |
-          set -e
+      - name: Deploy TEST to Vercel
+  if: github.ref_name == 'test'
+  env:
+    VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    VITE_API_URL: https://supplier-preaching-breezy.ngrok-free.dev/api
+  shell: bash
+  run: |
+    set -e
 
-          echo "======================================"
-          echo "LINKING VERCEL PROJECT"
-          echo "======================================"
+    echo "======================================"
+    echo "DEPLOYING TEST TO VERCEL"
+    echo "======================================"
 
-          rm -rf .vercel
+    vercel deploy \
+      --token "$VERCEL_TOKEN" \
+      --scope "$VERCEL_ORG_ID" \
+      --build-env "VITE_API_URL=$VITE_API_URL" \
+      --force \
+      --yes
 
-          vercel link \
-            --yes \
-            --project "$VERCEL_PROJECT_ID" \
-            --scope "$VERCEL_ORG_ID" \
-            --token "$VERCEL_TOKEN"
+      - name: Deploy MAIN to Vercel
+  if: github.ref_name == 'main'
+  env:
+    VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    VITE_API_URL: ${{ secrets.VITE_API_URL_MAIN }}
+  shell: bash
+  run: |
+    set -e
 
-          echo ""
-          echo "Vercel project linked."
+    echo "======================================"
+    echo "DEPLOYING MAIN TO VERCEL"
+    echo "======================================"
 
-          if [ ! -d ".vercel" ]; then
-            echo "ERROR: .vercel directory was not created."
-            exit 1
-          fi
-
-          echo ""
-          echo ".vercel directory exists."
-
-          if [ -f ".vercel/project.json" ]; then
-            echo ""
-            echo "Vercel project configuration:"
-            cat .vercel/project.json
-          fi
+    vercel deploy \
+      --prod \
+      --token "$VERCEL_TOKEN" \
+      --scope "$VERCEL_ORG_ID" \
+      --build-env "VITE_API_URL=$VITE_API_URL" \
+      --force \
+      --yes
 
 
       # =========================================================
