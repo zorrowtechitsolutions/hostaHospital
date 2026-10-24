@@ -6,6 +6,8 @@ on:
       - main
       - test
 
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -13,17 +15,14 @@ jobs:
     steps:
 
       # =========================================================
-      # 1. Checkout source code
+      # 1. Checkout
       # =========================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
       # =========================================================
-      # 2. Setup Node.js
-      # =========================================================
-      # Do NOT use cache: npm because the repository does not
-      # currently contain package-lock.json.
+      # 2. Node.js
       # =========================================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,14 +33,13 @@ jobs:
       # =========================================================
       # 3. Setup npm
       # =========================================================
-      # Pin npm to avoid the Arborist "edgesOut" error that
-      # occurred during npm install on the GitHub runner.
-      # =========================================================
       - name: Setup npm
         run: |
           npm install -g npm@10.8.2
-          npm --version
+          echo "Node:"
           node --version
+          echo "npm:"
+          npm --version
 
 
       # =========================================================
@@ -66,261 +64,194 @@ jobs:
             --prefer-online \
             --legacy-peer-deps
 
+          echo "Dependencies installed."
+
 
       # =========================================================
       # 6. Install Vercel CLI
       # =========================================================
       - name: Install Vercel CLI
         run: |
-          npm install --global vercel@latest
+          npm install --global vercel@65.2.0
           vercel --version
 
 
       # =========================================================
-      # 7. Clean previous Vercel metadata
+      # 7. Create deployment environment
+      #
+      # HOSTA_TEST / HOSTA_MAIN contain the COMPLETE env file.
       # =========================================================
-      - name: Clean Vercel configuration
-        run: |
-          rm -rf .vercel
-
-
-      # =========================================================
-      # 8. Configure API URL
-      # =========================================================
-      - name: Configure deployment environment
+      - name: Create deployment environment
         env:
           HOSTA_MAIN: ${{ secrets.HOSTA_MAIN }}
           HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
+        shell: bash
         run: |
+          set -e
+
+          echo "======================================"
+          echo "CREATING DEPLOYMENT ENVIRONMENT"
+          echo "======================================"
+
+          rm -f .env.deploy
+          rm -f .env.production
 
           if [ "$GITHUB_REF_NAME" = "main" ]; then
 
-            echo "VITE_API_URL=$HOSTA_MAIN" > .env.deploy
+            echo "Deployment branch: MAIN"
 
-            echo "======================================"
-            echo "DEPLOYMENT: MAIN"
-            echo "======================================"
+            if [ -z "$HOSTA_MAIN" ]; then
+              echo "ERROR: HOSTA_MAIN secret is empty."
+              exit 1
+            fi
+
+            printf '%s\n' "$HOSTA_MAIN" > .env.deploy
 
           elif [ "$GITHUB_REF_NAME" = "test" ]; then
 
-            echo "VITE_API_URL=$HOSTA_TEST" > .env.deploy
+            echo "Deployment branch: TEST"
 
-            echo "======================================"
-            echo "DEPLOYMENT: TEST"
-            echo "======================================"
+            if [ -z "$HOSTA_TEST" ]; then
+              echo "ERROR: HOSTA_TEST secret is empty."
+              exit 1
+            fi
+
+            printf '%s\n' "$HOSTA_TEST" > .env.deploy
 
           else
 
             echo "ERROR: Unsupported branch:"
             echo "$GITHUB_REF_NAME"
-
             exit 1
 
           fi
 
+          # Vite production builds read .env.production
+          cp .env.deploy .env.production
+
           echo ""
-          echo "Selected API configuration:"
-          cat .env.deploy
+          echo "Environment file created."
+
+          if [ ! -s .env.deploy ]; then
+            echo "ERROR: .env.deploy is empty."
+            exit 1
+          fi
+
+          echo ""
+          echo "Environment variable names:"
+          sed 's/=.*$/=***/' .env.deploy
 
 
       # =========================================================
-      # 9. Validate API URL
+      # 8. Validate API URL
       # =========================================================
       - name: Validate API URL
+        shell: bash
         run: |
+          set -e
 
           API_LINE=$(grep '^VITE_API_URL=' .env.deploy || true)
 
           if [ -z "$API_LINE" ]; then
-            echo "ERROR: VITE_API_URL is missing."
+            echo "ERROR: VITE_API_URL is missing from HOSTA_TEST/HOSTA_MAIN."
             exit 1
           fi
 
           API_URL="${API_LINE#VITE_API_URL=}"
 
-          echo ""
-          echo "Checking API URL..."
-          echo "API URL: $API_URL"
-          echo ""
+          echo "======================================"
+          echo "API URL VALIDATION"
+          echo "======================================"
 
-          # Must be HTTPS
+          # Never print the complete URL unnecessarily
+          echo "VITE_API_URL is configured."
+
+          # Must use HTTPS
           if [[ "$API_URL" != https://* ]]; then
-
             echo "ERROR: API URL must use HTTPS."
-
             exit 1
-
           fi
 
-          # Old IP must never be allowed
+          # Old IP must never appear
           if [[ "$API_URL" == *"18.141.233.52"* ]]; then
-
             echo "ERROR: OLD API IP DETECTED!"
-            echo "$API_URL"
-
             exit 1
-
           fi
 
-          # Test branch must use the ngrok API
+          # Test must use exact ngrok URL
           if [ "$GITHUB_REF_NAME" = "test" ]; then
 
             EXPECTED="https://supplier-preaching-breezy.ngrok-free.dev/api"
 
             if [ "$API_URL" != "$EXPECTED" ]; then
-
               echo "ERROR: TEST API URL IS WRONG."
-
-              echo "Expected:"
-              echo "$EXPECTED"
-
-              echo "Actual:"
-              echo "$API_URL"
-
+              echo "Expected HTTPS ngrok API URL."
               exit 1
-
             fi
 
           fi
 
-          echo "======================================"
-          echo "API URL VALIDATION PASSED"
-          echo "======================================"
+          echo "API URL validation PASSED."
 
 
       # =========================================================
-      # 10. Sync VITE_API_URL to Vercel
+      # 9. Link Vercel project
+      #
+      # IMPORTANT:
+      # Do this BEFORE checking .vercel.
       # =========================================================
-      
-      - name: Sync VITE_API_URL to Vercel
+      - name: Link Vercel project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          HOSTA_MAIN: ${{ secrets.HOSTA_MAIN }}
-          HOSTA_TEST: ${{ secrets.HOSTA_TEST }}
+        shell: bash
         run: |
+          set -e
 
-          echo "Linking Vercel project..."
+          echo "======================================"
+          echo "LINKING VERCEL PROJECT"
+          echo "======================================"
+
+          rm -rf .vercel
 
           vercel link \
+            --yes \
             --project "$VERCEL_PROJECT_ID" \
             --scope "$VERCEL_ORG_ID" \
-            --token "$VERCEL_TOKEN" \
-            --yes
+            --token "$VERCEL_TOKEN"
 
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
+          echo ""
+          echo "Vercel project linked."
 
-            API_URL="$HOSTA_MAIN"
-
-            echo "Syncing MAIN API URL to Vercel..."
-
-            printf "%s" "$API_URL" | \
-              vercel env add VITE_API_URL production \
-              --token "$VERCEL_TOKEN" \
-              --scope "$VERCEL_ORG_ID" \
-              --force
-
-          elif [ "$GITHUB_REF_NAME" = "test" ]; then
-
-            API_URL="$HOSTA_TEST"
-
-            echo "Syncing TEST API URL to Vercel..."
-
-            printf "%s" "$API_URL" | \
-              vercel env add VITE_API_URL preview test \
-              --token "$VERCEL_TOKEN" \
-              --scope "$VERCEL_ORG_ID" \
-              --force
-
-          else
-
-            echo "ERROR: Unsupported branch $GITHUB_REF_NAME"
-            exit 1
-
-          fi
-
-          echo "VITE_API_URL synced successfully."
-
-
-
-      # =========================================================
-      # 11. Pull Vercel Preview environment
-      # =========================================================
-      - name: Pull Vercel Production environment
-        if: github.ref_name == 'main'
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-
-          echo "Pulling Vercel Production configuration..."
-
-          vercel pull \
-            --yes \
-            --environment=production \
-            --project="$VERCEL_PROJECT_ID" \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_ORG_ID"
-
-          echo "Vercel Production configuration pulled."
-
-
-      # =========================================================
-      # 12. Pull Vercel Production environment
-      # =========================================================
-      - name: Pull Vercel Production environment
-        if: github.ref_name == 'main'
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        run: |
-
-          echo "Pulling Vercel Production configuration..."
-
-          vercel pull \
-            --yes \
-            --environment=production \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_ORG_ID"
-
-          echo "Vercel Production configuration pulled."
-
-
-      # =========================================================
-      # 13. Show Vercel environment configuration
-      # =========================================================
-      - name: Show Vercel configuration
-        run: |
-
-          echo "======================================"
-          echo "VERCEL DIRECTORY"
-          echo "======================================"
-
-          if [ -d ".vercel" ]; then
-            find .vercel -maxdepth 3 -type f -print
-          else
+          if [ ! -d ".vercel" ]; then
             echo "ERROR: .vercel directory was not created."
             exit 1
           fi
 
+          echo ""
+          echo ".vercel directory exists."
+
+          if [ -f ".vercel/project.json" ]; then
+            echo ""
+            echo "Vercel project configuration:"
+            cat .vercel/project.json
+          fi
+
 
       # =========================================================
-      # 14. Build Vercel artifact
-      # =========================================================
-      # IMPORTANT:
+      # 10. Build Vercel artifact
       #
-      # This is the build that will actually be deployed.
-      #
-      # We do NOT use npm run build here.
-      # Vercel creates .vercel/output through vercel build.
+      # .env.production contains HOSTA_TEST/HOSTA_MAIN.
+      # Vite will use VITE_* values during this build.
       # =========================================================
       - name: Build Vercel artifacts
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        shell: bash
         run: |
+          set -e
 
           echo "======================================"
           echo "BUILDING VERCEL ARTIFACT"
@@ -346,23 +277,23 @@ jobs:
 
 
       # =========================================================
-      # 15. Verify Vercel artifact exists
+      # 11. Verify artifact exists
       # =========================================================
       - name: Verify Vercel output
+        shell: bash
         run: |
+          set -e
 
-          echo "Checking .vercel/output..."
+          echo "======================================"
+          echo "VERIFYING VERCEL OUTPUT"
+          echo "======================================"
 
           if [ ! -d ".vercel/output" ]; then
-
             echo "ERROR: .vercel/output does not exist."
-
             exit 1
-
           fi
 
-          echo ""
-          echo "Vercel output exists."
+          echo "SUCCESS: .vercel/output exists."
 
           echo ""
           echo "Generated files:"
@@ -370,15 +301,13 @@ jobs:
 
 
       # =========================================================
-      # 16. CRITICAL CHECK
-      #
-      # Search the ACTUAL artifact that will be uploaded to
-      # Vercel for the old API IP.
+      # 12. CRITICAL: Check old IP
       # =========================================================
-      - name: Check Vercel artifact for old IP
+      - name: Check artifact for old IP
+        shell: bash
         run: |
+          set -e
 
-          echo ""
           echo "======================================"
           echo "CHECKING FOR OLD API IP"
           echo "======================================"
@@ -386,44 +315,41 @@ jobs:
           if grep -R \
             "18.141.233.52" \
             .vercel/output \
-            --exclude="*.map"; then
+            --exclude="*.map" \
+            2>/dev/null; then
 
             echo ""
-            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            echo "ERROR: OLD API IP FOUND"
-            echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            echo "ERROR: OLD API IP FOUND IN VERCEL ARTIFACT."
+            echo "DEPLOYMENT STOPPED."
 
             exit 1
-
           fi
 
-          echo ""
-          echo "======================================"
-          echo "SUCCESS"
-          echo "Old API IP was NOT found."
-          echo "======================================"
+          echo "SUCCESS: Old API IP was NOT found."
 
 
       # =========================================================
-      # 17. Check expected TEST API URL
+      # 13. Check correct TEST API URL
       # =========================================================
       - name: Check expected TEST API URL
         if: github.ref_name == 'test'
+        shell: bash
         run: |
+          set -e
 
-          echo ""
           echo "======================================"
-          echo "CHECKING FOR CORRECT API URL"
+          echo "CHECKING TEST API URL"
           echo "======================================"
 
           if grep -R \
             "supplier-preaching-breezy.ngrok-free.dev/api" \
             .vercel/output \
-            --exclude="*.map"; then
+            --exclude="*.map" \
+            2>/dev/null; then
 
             echo ""
             echo "SUCCESS:"
-            echo "Correct ngrok API URL found."
+            echo "Correct ngrok API URL found in Vercel artifact."
 
           else
 
@@ -437,16 +363,15 @@ jobs:
 
 
       # =========================================================
-      # 18. Deploy EXACT prebuilt artifact
-      # =========================================================
-      # --prebuilt tells Vercel to upload .vercel/output
-      # instead of rebuilding the source again.
+      # 14. Deploy EXACT prebuilt artifact
       # =========================================================
       - name: Deploy prebuilt artifact
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        shell: bash
         run: |
+          set -e
 
           echo "======================================"
           echo "DEPLOYING PREBUILT ARTIFACT"
