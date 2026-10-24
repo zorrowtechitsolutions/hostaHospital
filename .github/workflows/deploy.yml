@@ -247,23 +247,24 @@ jobs:
       # =========================================================
       # 11. Pull Vercel Preview environment
       # =========================================================
-      - name: Pull Vercel Preview environment
-        if: github.ref_name == 'test'
+      - name: Pull Vercel Production environment
+        if: github.ref_name == 'main'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
 
-          echo "Pulling Vercel Preview configuration..."
+          echo "Pulling Vercel Production configuration..."
 
           vercel pull \
             --yes \
-            --environment=preview \
-            --git-branch=test \
+            --environment=production \
+            --project="$VERCEL_PROJECT_ID" \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_ORG_ID"
 
-          echo "Vercel Preview configuration pulled."
+          echo "Vercel Production configuration pulled."
 
 
       # =========================================================
