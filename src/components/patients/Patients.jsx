@@ -43,7 +43,7 @@ import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // ✅ Import shared S3 helper (env-driven base URL)
-import { getS3ImageUrl as getS3ImageUrlRaw } from '../../../../app/service/S3';
+import { getS3ImageUrl as getS3ImageUrlRaw } from '../../../app/service/S3';
 
 // Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
