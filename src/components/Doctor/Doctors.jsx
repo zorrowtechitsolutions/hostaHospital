@@ -19,7 +19,7 @@ import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/docto
 import { hasPermission } from "../../utils/permission";
 
 // ✅ Import shared S3 helper (env-driven base URL)
-import { getS3ImageUrl as getS3ImageUrlRaw } from "../../../../app/service/S3";
+import { getS3ImageUrl as getS3ImageUrlRaw } from "../../../app/service/S3";
 
 // Permission IDs for Doctor module (1-4)
 const PERMISSIONS = {
