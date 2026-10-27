@@ -30,7 +30,7 @@ import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // ✅ Import shared S3 helper (env-driven base URL)
-import { getS3ImageUrl } from "../../../../app/service/S3";
+import { getS3ImageUrl } from "../../../app/service/S3";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
