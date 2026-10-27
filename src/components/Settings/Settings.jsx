@@ -7,6 +7,7 @@ import {
   Input,
   Tabs
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
@@ -20,6 +21,10 @@ import { useGetCategoryQuery } from '../../../app/service/category';
 
 import { socket } from '../../socket/socket';
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/hospitalEvents';
+
+// Styling override so CustomSelect matches the form's border-gray-300 / rounded-md inputs
+const HOSPITAL_TYPE_SELECT_CLASS =
+  "w-full [&>button]:border-gray-300 [&>button]:rounded-md [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
 const DEFAULT_WORKING_HOURS = {
   monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
@@ -78,7 +83,6 @@ const to24HourInput = (time12) => {
   if (!time12) return '';
   const trimmed = time12.trim();
 
-  // Already 24-hour "HH:MM" or "HH:MM:SS"
   if (!trimmed.includes('AM') && !trimmed.includes('PM')) {
     const p = trimmed.split(':');
     if (p.length >= 2) {
@@ -431,6 +435,12 @@ const Settings = () => {
         : [categoriesData.data])
     : [];
 
+  // ✅ Options for the Hospital Type CustomSelect
+  const hospitalTypeOptions = hospitalTypes.map(category => ({
+    value: category.name,
+    label: category.name,
+  }));
+
   useEffect(() => {
     registerHospitalEvents({
       onHospitalRegistered: () => {
@@ -609,7 +619,6 @@ const Settings = () => {
       return;
     }
 
-    // ✅ NEW: Validate working hours before submit
     for (const day of DAYS) {
       const h = editForm.workingHours?.[day.key];
       if (!h || h.closed) continue;
@@ -840,7 +849,7 @@ const Settings = () => {
             </div>
             {!isEditing && (
               <Button variant="primary" onClick={handleEditClick} size="sm">
-                <Edit2 size={16} className="mr-2" /> Edit Settings
+                <Edit2 size={16} className="mr-2" /> Edit 
               </Button>
             )}
           </div>
@@ -948,23 +957,19 @@ const Settings = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Hospital Type *
                   </label>
-                  <select
-                    name="hospitalType"
+                  {/* ✅ Replaced native  with CustomSelect */}
+                  <CustomSelect
+                    hideLabel
                     value={editForm.hospitalType}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                    required
+                    options={hospitalTypeOptions}
+                    placeholder={
+                      isLoadingCategories ? 'Loading categories...' : 'Select hospital type'
+                    }
+                    onChange={(value) => handleInputChange({ target: { name: 'hospitalType', value } })}
                     disabled={isLoadingCategories}
-                  >
-                    <option value="">
-                      {isLoadingCategories ? 'Loading categories...' : 'Select hospital type'}
-                    </option>
-                    {hospitalTypes.map(category => (
-                      <option key={category.id || category._id} value={category.name}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
+                    required
+                    className={HOSPITAL_TYPE_SELECT_CLASS}
+                  />
                   {categoriesError && (
                     <p className="text-xs text-red-500 mt-1">
                       Failed to load categories. Using defaults.
@@ -1080,13 +1085,12 @@ const Settings = () => {
                         <div className="grid grid-cols-2 gap-4 ml-6">
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">Open Time</label>
-                            {/* ✅ Native time input supports ANY minute (11:01, 11:37, etc.) */}
                             <input
                               type="time"
                               value={to24HourInput(editForm.workingHours[day.key]?.open)}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                if (!v) return; // ignore clearing mid-edit
+                                if (!v) return;
                                 handleWorkingHourChange(day.key, 'open', from24HourInput(v));
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"

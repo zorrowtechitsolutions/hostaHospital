@@ -13,7 +13,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button } from '../ui';
+import { Pagination, SearchBar, Modal, Button, CustomSelect } from '../ui';
 import {
   useGetAttendancesQuery,
   useCreateAttendanceMutation,
@@ -232,31 +232,22 @@ const ManualAttendanceModal = ({
       size="md"
     >
       <div className="space-y-4">
+        {/* ✅ Employee — CustomSelect */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Employee <span className="text-red-500">*</span>
-          </label>
-          <select
+          <CustomSelect
+            label="Employee"
             value={form.employeeValue}
-            onChange={(e) => handleChange('employeeValue', e.target.value)}
+            options={employees.map((emp) => ({
+              value: `${emp.type}:${emp.id}`,
+              label: emp.label
+            }))}
+            onChange={(value) => handleChange('employeeValue', value)}
+            placeholder="Select employee…"
+            error={errors.employeeValue}
+            touched={true}
+            required
             disabled={isEdit}
-            className={`w-full h-11 px-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-              errors.employeeValue ? 'border-red-300' : 'border-gray-200'
-            } ${isEdit ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            <option value="">Select employee…</option>
-            {employees.map((emp) => (
-              <option
-                key={`${emp.type}:${emp.id}`}
-                value={`${emp.type}:${emp.id}`}
-              >
-                {emp.label}
-              </option>
-            ))}
-          </select>
-          {errors.employeeValue && (
-            <p className="text-xs text-red-500 mt-1">{errors.employeeValue}</p>
-          )}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -283,21 +274,16 @@ const ManualAttendanceModal = ({
             )}
           </div>
 
+          {/* ✅ Status — CustomSelect */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Status <span className="text-red-500">*</span>
-            </label>
-            <select
+            <CustomSelect
+              label="Status"
               value={form.status}
-              onChange={(e) => handleChange('status', e.target.value)}
-              className="w-full h-11 px-4 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent cursor-pointer"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+              onChange={(value) => handleChange('status', value)}
+              placeholder="Select status"
+              required
+            />
           </div>
         </div>
 
@@ -569,8 +555,6 @@ const ManualAttendance = () => {
       row.roleId ??
       null;
 
-    // Infer employee type — prefer explicit field, otherwise fall back
-    // based on which id field is present / role name.
     const employeeType =
       row.employeeType ||
       (row.doctorId ? 'Doctor' : null) ||
@@ -656,7 +640,6 @@ const ManualAttendance = () => {
 
   const handleSave = async (form) => {
     try {
-      // form.employeeValue is "Doctor:<id>" or "Staff:<id>"
       const [employeeType, employeeIdRaw] = (form.employeeValue || '').split(':');
       const employeeId = employeeIdRaw || '';
 
@@ -689,7 +672,6 @@ const ManualAttendance = () => {
             checkInTime: checkInISO,
             checkOutTime: checkOutISO,
             notes: form.notes,
-            // Include type too, in case the backend needs it to resolve the owner.
             employeeType: employee.type,
           },
         }).unwrap();
@@ -785,9 +767,8 @@ const ManualAttendance = () => {
         ]}
       />
 
-      {/* ─────────────── TOOLBAR (search fills gap) ─────────────── */}
+      {/* ─────────────── TOOLBAR ─────────────── */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        {/* Search — fills available space */}
         <div className="flex-1 min-w-[220px]">
           <SearchBar
             placeholder="Search..."
@@ -797,35 +778,35 @@ const ManualAttendance = () => {
           />
         </div>
 
-        {/* Department */}
-        <select
-          value={deptFilter}
-          onChange={(e) => setDeptFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Departments</option>
-          {departments.map((dept) => (
-            <option key={dept} value={dept}>
-              {dept}
-            </option>
-          ))}
-        </select>
+        {/* ✅ Department filter — CustomSelect */}
+        <div className="w-full sm:w-48 -mt-1">
+          <CustomSelect
+            label=""
+            value={deptFilter}
+            options={[
+              { value: 'all', label: 'All Departments' },
+              ...departments.map((dept) => ({ value: dept, label: dept }))
+            ]}
+            onChange={(value) => setDeptFilter(value)}
+            placeholder="All Departments"
+          />
+        </div>
 
-        {/* Status */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        {/* ✅ Status filter — CustomSelect */}
+        <div className="w-full sm:w-44 -mt-1">
+          <CustomSelect
+            label=""
+            value={statusFilter}
+            options={[
+              { value: 'all', label: 'All Status' },
+              ...STATUS_OPTIONS.map((s) => ({ value: s, label: s }))
+            ]}
+            onChange={(value) => setStatusFilter(value)}
+            placeholder="All Status"
+          />
+        </div>
 
-        {/* Date */}
+        {/* Date filter — native date input is fine on mobile */}
         <div className="relative">
           <Calendar
             size={14}
@@ -839,7 +820,6 @@ const ManualAttendance = () => {
           />
         </div>
 
-        {/* Buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             type="button"
@@ -871,7 +851,6 @@ const ManualAttendance = () => {
           </button>
         </div>
       </div>
-      {/* ─────────────── /TOOLBAR ─────────────── */}
 
       {/* Table */}
       <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">

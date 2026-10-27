@@ -1,10 +1,9 @@
 // src/components/Ambulance/AddAmbulanceModal.jsx
 import React, { useState } from 'react';
-import { Modal, Input, Button } from '../ui';
+import { Modal, Input, Button, CustomSelect } from '../ui';
 import { Country, State, City } from 'country-state-city';
 import { showErrorToast } from '../ui/Toast';
 
-// ✅ Default ambulance types as fallback
 const DEFAULT_AMBULANCE_TYPES = [
   "Basic Life Support (BLS)",
   "Advanced Life Support (ALS)",
@@ -18,7 +17,6 @@ const DEFAULT_AMBULANCE_TYPES = [
   "Emergency Response Vehicle"
 ];
 
-// ✅ Add default value for ambulanceTypes
 const AddAmbulanceModal = ({ 
   isOpen, 
   onClose, 
@@ -47,6 +45,24 @@ const AddAmbulanceModal = ({
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(countryCode);
   const cities = City.getCitiesOfState(countryCode, stateCode);
+
+  // ---- Options for CustomSelect ----
+  const vehicleTypeOptions = (ambulanceTypes || []).map(t => ({ value: t, label: t }));
+
+  const countryOptions = countries.map(c => ({
+    value: c.isoCode,
+    label: c.name
+  }));
+
+  const stateOptions = states.map(s => ({
+    value: s.isoCode,
+    label: s.name
+  }));
+
+  const districtOptions = cities.map(c => ({
+    value: c.name,
+    label: c.name
+  }));
 
   // Validation functions
   const validateServiceName = (name) => {
@@ -122,24 +138,30 @@ const AddAmbulanceModal = ({
     }
   };
 
-  const handleCountryChange = (code, name) => {
+  const handleCountryChange = (code) => {
+    const country = countries.find(c => c.isoCode === code);
+    if (!country) return;
     setCountryCode(code);
     setFormData(prev => ({
       ...prev,
-      address: { ...prev.address, country: name, state: '', district: '', place: '', pincode: '' }
+      address: { ...prev.address, country: country.name, state: '', district: '', place: '', pincode: '' }
     }));
     setStateCode('');
+    setTouched(prev => ({ ...prev, 'address.country': true }));
     if (errors['address.country']) setErrors(prev => ({ ...prev, 'address.country': '' }));
     if (errors['address.state']) setErrors(prev => ({ ...prev, 'address.state': '' }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
   };
 
-  const handleStateChange = (code, name) => {
+  const handleStateChange = (code) => {
+    const state = states.find(s => s.isoCode === code);
+    if (!state) return;
     setStateCode(code);
     setFormData(prev => ({
       ...prev,
-      address: { ...prev.address, state: name, district: '', place: '', pincode: '' }
+      address: { ...prev.address, state: state.name, district: '', place: '', pincode: '' }
     }));
+    setTouched(prev => ({ ...prev, 'address.state': true }));
     if (errors['address.state']) setErrors(prev => ({ ...prev, 'address.state': '' }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
   };
@@ -149,7 +171,14 @@ const AddAmbulanceModal = ({
       ...prev,
       address: { ...prev.address, district: name, place: '', pincode: '' }
     }));
+    setTouched(prev => ({ ...prev, 'address.district': true }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
+  };
+
+  const handleVehicleTypeChange = (value) => {
+    setFormData(prev => ({ ...prev, vehicleType: value }));
+    setTouched(prev => ({ ...prev, vehicleType: true }));
+    if (errors.vehicleType) setErrors(prev => ({ ...prev, vehicleType: '' }));
   };
 
   const validateForm = () => {
@@ -188,22 +217,13 @@ const AddAmbulanceModal = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ FIXED: Made async and await onSave
   const handleSubmit = async () => {
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
-      
-      const errorElement = document.querySelector(
-        `[name="${firstErrorField}"]`
-      );
-      
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
       if (errorElement) {
-        errorElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center'
-        });
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      
       showErrorToast('Please fix the validation errors before submitting', 3000);
       return;
     }
@@ -224,19 +244,11 @@ const AddAmbulanceModal = ({
         }
       };
       
-      // ✅ IMPORTANT: wait for backend response
       await onSave(payload);
       
-      // ✅ Only reset/close when API succeeds
       setFormData({
         serviceName: '',
-        address: {
-          country: '',
-          state: '',
-          district: '',
-          place: '',
-          pincode: ''
-        },
+        address: { country: '', state: '', district: '', place: '', pincode: '' },
         phone: '',
         vehicleType: ''
       });
@@ -253,24 +265,16 @@ const AddAmbulanceModal = ({
       
       const backendError = error?.data?.error;
       
-      // ✅ Show actual backend validation details
       if (backendError?.details?.length) {
-        const message = backendError.details
-          .map(item => item?.message)
-          .filter(Boolean)
-          .join(', ');
-        
+        const message = backendError.details.map(item => item?.message).filter(Boolean).join(', ');
         showErrorToast(message);
       }
-      // ✅ Show backend message
       else if (backendError?.message) {
         showErrorToast(backendError.message);
       }
-      // ✅ Other API message
       else if (error?.data?.message) {
         showErrorToast(error.data.message);
       }
-      // ✅ JS/network error
       else if (error?.message) {
         showErrorToast(error.message);
       }
@@ -298,29 +302,17 @@ const AddAmbulanceModal = ({
           required
         />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Vehicle Type *
-          </label>
-          <select
-            name="vehicleType"
-            value={formData.vehicleType}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-              errors.vehicleType && touched.vehicleType ? 'border-red-500' : 'border-gray-300'
-            }`}
-          >
-            <option value="">Select vehicle type</option>
-            {/* ✅ Safe map with fallback */}
-            {(ambulanceTypes || []).map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-          {errors.vehicleType && touched.vehicleType && (
-            <p className="text-xs text-red-500 mt-1">{errors.vehicleType}</p>
-          )}
-        </div>
+        {/* ✅ Custom Vehicle Type dropdown */}
+        <CustomSelect
+          label="Vehicle Type"
+          value={formData.vehicleType}
+          options={vehicleTypeOptions}
+          onChange={handleVehicleTypeChange}
+          placeholder="Select vehicle type"
+          error={errors.vehicleType}
+          touched={touched.vehicleType}
+          required
+        />
 
         <Input
           label="Phone Number *"
@@ -339,76 +331,43 @@ const AddAmbulanceModal = ({
           <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
           
           <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Country *
-              </label>
-              <select
-                value={countryCode}
-                onChange={(e) => {
-                  const country = countries.find(c => c.isoCode === e.target.value);
-                  if (country) handleCountryChange(country.isoCode, country.name);
-                }}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] ${
-                  errors['address.country'] && touched['address.country'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select country</option>
-                {countries.map(country => (
-                  <option key={country.isoCode} value={country.isoCode}>{country.name}</option>
-                ))}
-              </select>
-              {errors['address.country'] && touched['address.country'] && (
-                <p className="text-xs text-red-500 mt-1">{errors['address.country']}</p>
-              )}
-            </div>
+            {/* ✅ Custom Country dropdown */}
+            <CustomSelect
+              label="Country"
+              value={countryCode}
+              options={countryOptions}
+              onChange={handleCountryChange}
+              placeholder="Select country"
+              error={errors['address.country']}
+              touched={touched['address.country']}
+              required
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                State *
-              </label>
-              <select
-                value={stateCode}
-                onChange={(e) => {
-                  const state = states.find(s => s.isoCode === e.target.value);
-                  if (state) handleStateChange(state.isoCode, state.name);
-                }}
-                disabled={!countryCode}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] disabled:bg-gray-100 ${
-                  errors['address.state'] && touched['address.state'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select state</option>
-                {states.map(state => (
-                  <option key={state.isoCode} value={state.isoCode}>{state.name}</option>
-                ))}
-              </select>
-              {errors['address.state'] && touched['address.state'] && (
-                <p className="text-xs text-red-500 mt-1">{errors['address.state']}</p>
-              )}
-            </div>
+            {/* ✅ Custom State dropdown */}
+            <CustomSelect
+              label="State"
+              value={stateCode}
+              options={stateOptions}
+              onChange={handleStateChange}
+              placeholder={countryCode ? 'Select state' : 'Select country first'}
+              error={errors['address.state']}
+              touched={touched['address.state']}
+              disabled={!countryCode}
+              required
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                District *
-              </label>
-              <select
-                value={formData.address.district}
-                onChange={(e) => handleCityChange(e.target.value)}
-                disabled={!stateCode}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] disabled:bg-gray-100 ${
-                  errors['address.district'] && touched['address.district'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select district</option>
-                {cities.map(city => (
-                  <option key={city.name} value={city.name}>{city.name}</option>
-                ))}
-              </select>
-              {errors['address.district'] && touched['address.district'] && (
-                <p className="text-xs text-red-500 mt-1">{errors['address.district']}</p>
-              )}
-            </div>
+            {/* ✅ Custom District dropdown */}
+            <CustomSelect
+              label="District"
+              value={formData.address.district}
+              options={districtOptions}
+              onChange={handleCityChange}
+              placeholder={stateCode ? 'Select district' : 'Select state first'}
+              error={errors['address.district']}
+              touched={touched['address.district']}
+              disabled={!stateCode}
+              required
+            />
 
             <Input
               label="Place / Locality *"

@@ -1,7 +1,8 @@
 // src/components/visits/EditVisitModal.jsx - With toast notifications
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import { Modal, Input, Select, Textarea, Button } from '../ui';
+import { Modal, Input, Textarea, Button } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import { showUpdateToast, showWarningToast } from '../ui/Toast';
 
 const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
@@ -50,6 +51,12 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
+  // ✅ Handler for CustomSelect (receives value directly, not an event)
+  const handleSelectChange = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     
@@ -87,6 +94,9 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
   const patientTypes = ['Out Patient', 'In Patient'];
   const paymentMethods = ['Cash', 'Card', 'Insurance', 'Online'];
 
+  // ✅ Helper to convert string array into { value, label } options for CustomSelect
+  const toOptions = (arr) => arr.map((item) => ({ value: item, label: item }));
+
   if (!isOpen) return null;
 
   return (
@@ -102,23 +112,30 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
             placeholder="Enter patient name"
             error={errors.patientName}
           />
-          <Select 
+
+          {/* ✅ Replaced Select with CustomSelect */}
+          <CustomSelect 
             label="Patient Type" 
             name="patientType" 
-            options={patientTypes} 
+            options={toOptions(patientTypes)} 
             value={formData.patientType} 
-            onChange={handleChange} 
+            onChange={(value) => handleSelectChange('patientType', value)} 
+            placeholder="Select Patient Type"
           />
-          <Select 
+
+          {/* ✅ Replaced Select with CustomSelect */}
+          <CustomSelect 
             label="Department" 
             name="department" 
-            options={departments} 
+            options={toOptions(departments)} 
             value={formData.department} 
-            onChange={handleChange} 
+            onChange={(value) => handleSelectChange('department', value)} 
             required 
             placeholder="Select Department"
             error={errors.department}
+            touched={!!errors.department}
           />
+
           <Input 
             label="Doctor Name" 
             name="doctorName" 
@@ -128,6 +145,7 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
             placeholder="Enter doctor name"
             error={errors.doctorName}
           />
+
           <Input 
             label="Visit Date" 
             name="visitDate" 
@@ -137,6 +155,7 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
             required 
             error={errors.visitDate}
           />
+
           <Input 
             label="Time" 
             name="time" 
@@ -146,6 +165,7 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
             placeholder="09:00 AM - 10:00 AM"
             error={errors.time}
           />
+
           <div className="md:col-span-2">
             <Textarea 
               label="Reason for Visit" 
@@ -156,12 +176,14 @@ const EditVisitModal = ({ isOpen, onClose, visit, onSave }) => {
               placeholder="Enter reason for visit..." 
             />
           </div>
-          <Select 
+
+          {/* ✅ Replaced Select with CustomSelect */}
+          <CustomSelect 
             label="Payment Method" 
             name="paymentMethod" 
-            options={paymentMethods} 
+            options={toOptions(paymentMethods)} 
             value={formData.paymentMethod} 
-            onChange={handleChange} 
+            onChange={(value) => handleSelectChange('paymentMethod', value)} 
             placeholder="Select Payment Method" 
           />
         </div>

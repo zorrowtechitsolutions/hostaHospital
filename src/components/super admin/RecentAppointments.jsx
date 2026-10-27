@@ -1,5 +1,5 @@
 // src/components/super-admin/RecentAppointments.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Stethoscope,
@@ -16,9 +16,40 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Card, Button, Input, Pagination } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import { useGetBookingsQuery } from '../../../app/service/request';
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
+
+// ✅ Static Status filter options
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'requested', label: 'Requested' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'declined', label: 'Declined' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+// ✅ Items per page options — string values matching String(itemsPerPage)
+const ITEMS_PER_PAGE_OPTIONS = [
+  { value: '6', label: '6' },
+  { value: '9', label: '9' },
+  { value: '12', label: '12' },
+  { value: '24', label: '24' },
+  { value: '48', label: '48' },
+];
+
+// Styling overrides
+const FILTER_SELECT_CLASS =
+  "min-w-[150px] [&>button]:border-gray-200 [&>button]:pl-4 [&>button]:pr-10 [&>button]:py-2 [&>button]:text-sm [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
+const ITEMS_PER_PAGE_SELECT_CLASS =
+  "w-20 [&>button]:border-gray-200 [&>button]:pl-3 [&>button]:pr-8 [&>button]:py-2 [&>button]:text-sm [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
 const RecentAppointments = () => {
   const navigate = useNavigate();
@@ -32,7 +63,7 @@ const RecentAppointments = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(9); // 3 columns x 3 rows default
+  const [itemsPerPage, setItemsPerPage] = useState(9);
 
   const { data: hospitalsData, isLoading: loadingHospitals } = useGetAllHospitalsQuery();
   const { data: doctorsData, isLoading: loadingDoctors } = useGetDoctorsQuery({
@@ -42,9 +73,20 @@ const RecentAppointments = () => {
     skipHospitalFilter: true,
   });
 
-  // ============================================================
-  // Helper function for relative time display
-  // ============================================================
+  const hospitals = hospitalsData?.data || hospitalsData || [];
+
+  // ✅ Options for the Hospital filter CustomSelect — string values for strict ===
+  const hospitalFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Hospitals' },
+      ...hospitals.map(h => ({
+        value: String(h.id || h._id),
+        label: h.name || h.hospitalName || 'Hospital',
+      })),
+    ],
+    [hospitals]
+  );
+
   const getRelativeTime = (date) => {
     if (!date) return 'Just now';
 
@@ -134,13 +176,13 @@ const RecentAppointments = () => {
 
       const hospitals = hospitalsData?.data || hospitalsData || [];
       const doctors = doctorsData?.data?.rows || doctorsData?.data || doctorsData?.doctors || [];
-      
+
       let appointmentsDataList = [];
-      
+
       if (appointmentsData) {
         if (Array.isArray(appointmentsData)) {
           appointmentsDataList = appointmentsData;
-        } 
+        }
         else if (appointmentsData.data) {
           if (Array.isArray(appointmentsData.data)) {
             appointmentsDataList = appointmentsData.data;
@@ -156,10 +198,10 @@ const RecentAppointments = () => {
               }
             }
           }
-        } 
+        }
         else if (appointmentsData.bookings && Array.isArray(appointmentsData.bookings)) {
           appointmentsDataList = appointmentsData.bookings;
-        } 
+        }
         else if (appointmentsData.rows && Array.isArray(appointmentsData.rows)) {
           appointmentsDataList = appointmentsData.rows;
         } else {
@@ -260,7 +302,6 @@ const RecentAppointments = () => {
         };
       });
 
-      // Sort by createdAt (newest first)
       processedAppointments.sort((a, b) => {
         const timeA = new Date(a.createdAt || 0).getTime();
         const timeB = new Date(b.createdAt || 0).getTime();
@@ -280,7 +321,6 @@ const RecentAppointments = () => {
   useEffect(() => {
     let filtered = appointments;
 
-    // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -291,14 +331,13 @@ const RecentAppointments = () => {
       );
     }
 
-    // Status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter((app) => app.statusLabel === statusFilter);
     }
 
-    // Hospital filter
     if (hospitalFilter !== 'all') {
-      filtered = filtered.filter((app) => app.hospitalId === hospitalFilter);
+      // ✅ Fixed: compare as strings — app.hospitalId may be a number from the API
+      filtered = filtered.filter((app) => String(app.hospitalId) === String(hospitalFilter));
     }
 
     setFilteredAppointments(filtered);
@@ -323,21 +362,6 @@ const RecentAppointments = () => {
     setItemsPerPage(Number(e.target.value));
     setCurrentPage(1);
   };
-
-  const hospitals = hospitalsData?.data || hospitalsData || [];
-
-  const statusOptions = [
-    'all',
-    'pending',
-    'requested',
-    'accepted',
-    'confirmed',
-    'approved',
-    'completed',
-    'declined',
-    'rejected',
-    'cancelled'
-  ];
 
   if (loading) {
     return (
@@ -412,55 +436,34 @@ const RecentAppointments = () => {
               </div>
             </div>
 
-            {/* Status Filter */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white cursor-pointer"
-              >
-                <option value="all">All Status</option>
-                {statusOptions.filter(s => s !== 'all').map((status) => (
-                  <option key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+            {/* ✅ Replaced native  (Status) with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={statusFilter}
+              options={STATUS_FILTER_OPTIONS}
+              onChange={(value) => setStatusFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
 
-            {/* Hospital Filter */}
-            <div className="relative">
-              <select
-                value={hospitalFilter}
-                onChange={(e) => setHospitalFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white cursor-pointer min-w-[150px]"
-              >
-                <option value="all">All Hospitals</option>
-                {hospitals.map((hospital) => (
-                  <option key={hospital.id || hospital._id} value={hospital.id || hospital._id}>
-                    {hospital.name || hospital.hospitalName || 'Hospital'}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+            {/* ✅ Replaced native  (Hospital) with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={hospitalFilter}
+              options={hospitalFilterOptions}
+              onChange={(value) => setHospitalFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
 
-            {/* Items per page */}
+            {/* ✅ Replaced native  (Items per page) with CustomSelect */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Show:</span>
-              <select
-                value={itemsPerPage}
-                onChange={handleItemsPerPageChange}
-                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white cursor-pointer"
-              >
-                <option value={6}>6</option>
-                <option value={9}>9</option>
-                <option value={12}>12</option>
-                <option value={24}>24</option>
-                <option value={48}>48</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ml-[-24px]" />
+              <CustomSelect
+                hideLabel
+                value={String(itemsPerPage)}
+                options={ITEMS_PER_PAGE_OPTIONS}
+                onChange={(value) => handleItemsPerPageChange({ target: { value } })}
+                className={ITEMS_PER_PAGE_SELECT_CLASS}
+              />
             </div>
 
             {/* Clear Filters */}
@@ -489,7 +492,6 @@ const RecentAppointments = () => {
               key={appointment.id}
               className="p-5 rounded-xl border border-gray-200 hover:border-[#1C62A0] hover:shadow-lg transition-all duration-300 bg-white"
             >
-              {/* Patient Name & Action */}
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-base font-semibold text-gray-900">
@@ -504,7 +506,6 @@ const RecentAppointments = () => {
                 </span>
               </div>
 
-              {/* Doctor */}
               <div className="flex items-center gap-2 mt-3">
                 <div className="p-1.5 rounded-lg bg-emerald-50">
                   <Stethoscope size={14} className="text-emerald-500" />
@@ -514,7 +515,6 @@ const RecentAppointments = () => {
                 </span>
               </div>
 
-              {/* Hospital */}
               <div className="flex items-center gap-2 mt-2">
                 <div className="p-1.5 rounded-lg bg-blue-50">
                   <Hospital size={14} className="text-blue-500" />
@@ -524,7 +524,6 @@ const RecentAppointments = () => {
                 </span>
               </div>
 
-              {/* Time */}
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
                 <Clock size={14} className="text-gray-400" />
                 <span className="text-xs text-gray-400">
@@ -542,7 +541,7 @@ const RecentAppointments = () => {
         )}
       </div>
 
-      {/* Pagination - Using global Pagination component with green gradient */}
+      {/* Pagination */}
       {totalItems > 0 && (
         <Pagination
           currentPage={currentPage}

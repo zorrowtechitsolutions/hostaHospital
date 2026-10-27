@@ -17,11 +17,11 @@ import {
   AlertCircle,
   Info,
   ArrowLeft,
-  // Building2 removed — no longer used after Hospital column removal
 } from 'lucide-react';
 import { Breadcrumb } from '../../ui/Breadcrumb';
 import { Pagination, SearchBar } from '../../ui';
 import { Button } from '../../ui/button';
+import CustomSelect from '../../ui/CustomSelect';
 import DeviceDetails from '../../Attendance/devices/DeviceDetails';
 import DeviceCredentialsModal from '../../Attendance/devices/credentials/DeviceCredentialsModal';
 import DeleteModal from '../../patients/DeleteModel';
@@ -37,6 +37,18 @@ import {
   registerDeviceEvents,
   unregisterDeviceEvents,
 } from '../../../socket/deviceEvents';
+
+// ✅ Static Status filter options — "all" is the default/reset sentinel
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'Active', label: 'Active' },
+  { value: 'Disabled', label: 'Disabled' },
+  { value: 'Unregistered', label: 'Unregistered' },
+];
+
+// Styling override so CustomSelect matches the border-gray-200 / rounded-md / text-sm filter look
+const SELECT_FILTER_CLASS =
+  "w-auto min-w-[150px] [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:text-gray-600 [&>button]:focus:ring-1 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0] [&>button]:shadow-sm";
 
 /* ------------------------------------------------------------------ */
 /* ConfirmModal                                                         */
@@ -137,7 +149,6 @@ const DeviceSuperAdmin = () => {
   const location = useLocation();
   const { hospitalId: routeHospitalId } = useParams();
 
-  // Hospital name passed via navigate(state)
   const stateHospitalName = location.state?.hospitalName || null;
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -257,7 +268,6 @@ const DeviceSuperAdmin = () => {
     [deviceData]
   );
 
-  // Fallback hospital name when location.state is unavailable (e.g. page refresh)
   const hospitalNameFromData = useMemo(() => {
     if (!routeHospitalId) return null;
     const match = normalizedData.find(
@@ -534,6 +544,31 @@ const DeviceSuperAdmin = () => {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [normalizedData]);
 
+  // ✅ Options for CustomSelects
+  const hospitalFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Hospitals' },
+      ...hospitals.map((h) => ({ value: String(h.id), label: h.name })),
+    ],
+    [hospitals]
+  );
+
+  const typeFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Device Types' },
+      ...deviceTypes.map((t) => ({ value: t, label: t })),
+    ],
+    [deviceTypes]
+  );
+
+  const locationFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Locations' },
+      ...locations.map((l) => ({ value: l, label: l })),
+    ],
+    [locations]
+  );
+
   const showLoading = isLoading || (isFetching && !deviceResponse);
 
   // ============================================================
@@ -606,52 +641,43 @@ const DeviceSuperAdmin = () => {
             className="flex-1 min-w-[250px] max-w-sm"
           />
 
-          {/* Hospital filter (only when viewing all hospitals) */}
+          {/* Hospital filter (only when viewing all hospitals) — ✅ Replaced native  with CustomSelect */}
           {!routeHospitalId && (
-            <select
+            <CustomSelect
+              hideLabel
               value={hospitalFilter}
-              onChange={(e) => setHospitalFilter(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-            >
-              <option value="all">All Hospitals</option>
-              {hospitals.map((h) => (
-                <option key={h.id} value={h.id}>{h.name}</option>
-              ))}
-            </select>
+              options={hospitalFilterOptions}
+              onChange={(value) => setHospitalFilter(value)}
+              className={SELECT_FILTER_CLASS}
+            />
           )}
 
-          <select
+          {/* ✅ Replaced native (Status) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Disabled">Disabled</option>
-            <option value="Unregistered">Unregistered</option>
-          </select>
+            options={STATUS_FILTER_OPTIONS}
+            onChange={(value) => setStatusFilter(value)}
+            className={SELECT_FILTER_CLASS}
+          />
 
-          <select
+          {/* ✅ Replaced native  (Type) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Device Types</option>
-            {deviceTypes.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
+            options={typeFilterOptions}
+            onChange={(value) => setTypeFilter(value)}
+            className={SELECT_FILTER_CLASS}
+          />
 
-          <select
+          {/* ✅ Replaced native  (Location) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Locations</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
+            options={locationFilterOptions}
+            onChange={(value) => setLocationFilter(value)}
+            className={SELECT_FILTER_CLASS}
+          />
         </div>
 
         <Button

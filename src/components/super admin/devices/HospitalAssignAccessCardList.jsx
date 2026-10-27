@@ -15,9 +15,29 @@ import {
   useActivateRfidCardAssignmentMutation,
 } from '../../../../app/service/accesscard';
 import { Button, Pagination, SearchBar, FilterBar, Modal } from '../../ui';
+import CustomSelect from '../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
+
+// ✅ Static filter options
+const TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'doctor', label: 'Doctor' },
+  { value: 'staff', label: 'Staff' },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'assigned', label: 'Card Assigned' },
+  { value: 'not-assigned', label: 'Not Assigned' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter look
+const FILTER_SELECT_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-6 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
 // ------------------------------------------------------------
 // Helpers
@@ -158,19 +178,17 @@ const HospitalAssignAccessCardList = ({
     member: null,
   });
 
-  // Super Admin: hospital context comes from props (from tabs) or router state
   const hospitalId = hospitalIdProp || location.state?.hospitalId || null;
   const hospitalName =
     hospitalNameProp || location.state?.hospitalName || 'Hospital';
 
-  // Navigation context forwarded to detail pages
   const navContext = useMemo(
     () => ({ hospitalId, hospitalName }),
     [hospitalId, hospitalName]
   );
 
   // ----------------------------------------------------------
-  // Queries — skip if no hospitalId
+  // Queries
   // ----------------------------------------------------------
   const {
     data: doctorsResponse,
@@ -338,6 +356,15 @@ const HospitalAssignAccessCardList = ({
     const set = new Set(members.map((m) => m.department).filter(Boolean));
     return [...set].sort();
   }, [members]);
+
+  // ✅ Options for the Department CustomSelect
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: '', label: 'All Departments' },
+      ...departments.map((dept) => ({ value: dept, label: dept })),
+    ],
+    [departments]
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -612,36 +639,32 @@ const HospitalAssignAccessCardList = ({
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <select
+            {/* ✅ Replaced native  (Type) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full h-12 px-6 border border-gray-200 rounded-xl text-gray-700 text-sm bg-white cursor-pointer"
-            >
-              <option value="all">All Types</option>
-              <option value="doctor">Doctor</option>
-              <option value="staff">Staff</option>
-            </select>
-            <select
+              options={TYPE_FILTER_OPTIONS}
+              onChange={(value) => setTypeFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
+
+            {/* ✅ Replaced native  (Department) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="w-full h-12 px-6 border border-gray-200 rounded-xl text-gray-700 text-sm bg-white cursor-pointer"
-            >
-              <option value="">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-            <select
+              options={departmentFilterOptions}
+              onChange={(value) => setDepartmentFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
+
+            {/* ✅ Replaced native  (Status) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full h-12 px-6 border border-gray-200 rounded-xl text-gray-700 text-sm bg-white cursor-pointer"
-            >
-              <option value="all">All Statuses</option>
-              <option value="assigned">Card Assigned</option>
-              <option value="not-assigned">Not Assigned</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+              options={STATUS_FILTER_OPTIONS}
+              onChange={(value) => setStatusFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
           </div>
         </div>
       )}

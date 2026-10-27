@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Mail, Lock, Building, Building2, MapPin, Globe, Landmark, Home, CreditCard,
+  Mail, Lock, Building, MapPin, Globe, Landmark, Home, CreditCard,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
   Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle, Search, FileText
-} from 'lucide-react';
+} from 'lucide-react'; // ✅ removed Building2
 import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
-import { Input, Select, Textarea, Button, Alert, Card } from '../components/ui';
+import { Input, Select, Textarea, Button, Alert, Card, CustomSelect } from '../components/ui'; // ✅ added CustomSelect
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
 import { Country, State, City } from 'country-state-city';
 import { useRegisterMutation } from '../../app/service/hospitalApi';  
@@ -521,8 +521,8 @@ const Register = () => {
     return true;
   };
 
-  const handleCategoryChange = (e) => {
-    const categoryName = e.target.value;
+  // ✅ Refactored to take value directly (used by CustomSelect)
+  const handleCategoryChange = (categoryName) => {
     if (categoryName) {
       const category = categories.find(cat => cat.name === categoryName);
       setSelectedCategory(category || null);
@@ -923,29 +923,22 @@ const Register = () => {
           <div className="grid md:grid-cols-2 gap-5">
             <Input label="Hospital Name" placeholder="Enter hospital name" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} />
             
+            {/* ✅ Custom Hospital Category dropdown */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Hospital Category <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                <select 
-                  value={hospitalType} 
-                  onChange={handleCategoryChange}
-                  disabled={isCategoriesLoading}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {isCategoriesLoading ? 'Loading categories...' : 'Select hospital category'}
-                  </option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.icon && `${category.icon} `}{category.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              </div>
+              <CustomSelect
+                label="Hospital Category"
+                value={hospitalType}
+                options={categories.map((category) => ({
+                  value: category.name,
+                  label: `${category.icon ? category.icon + ' ' : ''}${category.name}`
+                }))}
+                onChange={handleCategoryChange}
+                placeholder={
+                  isCategoriesLoading ? 'Loading categories...' : 'Select hospital category'
+                }
+                disabled={isCategoriesLoading}
+                required
+              />
               {categories.length === 0 && !isCategoriesLoading && (
                 <p className="text-xs text-amber-600 mt-1">⚠️ No categories available. Please check your connection.</p>
               )}
@@ -1007,24 +1000,20 @@ const Register = () => {
               </button>
             </div>
 
-            {/* ✅ Working Hours Type Dropdown */}
+            {/* ✅ Custom Working Hours Type dropdown */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Working Hours Type <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none z-10" />
-                <select
-                  value={workingHourType}
-                  onChange={(e) => setWorkingHourType(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer"
-                >
-                  <option value="normal">🏥 Normal Hospital</option>
-                  <option value="clinic">🏪 Clinic</option>
-                  <option value="clinic-break">🏪 Clinic with Break</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              </div>
+              <CustomSelect
+                label="Working Hours Type"
+                value={workingHourType}
+                options={[
+                  { value: 'normal', label: '🏥 Normal Hospital' },
+                  { value: 'clinic', label: '🏪 Clinic' },
+                  { value: 'clinic-break', label: '🏪 Clinic with Break' }
+                ]}
+                onChange={(value) => setWorkingHourType(value)}
+                placeholder="Select working hours type"
+                required
+              />
               <p className="text-xs text-gray-500">
                 {workingHourType === "normal" && "Single session per day (e.g., 9:00 AM - 6:00 PM)"}
                 {workingHourType === "clinic" && "Single session per day without break (e.g., 9:00 AM - 6:00 PM)"}

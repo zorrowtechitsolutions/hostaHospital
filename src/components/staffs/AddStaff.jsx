@@ -30,6 +30,7 @@ import {
   Card,
   Switch
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import DatePicker from '../ui/DatePicker';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
@@ -55,6 +56,16 @@ const languages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanes
 
 // Shift types that require start & end time
 const SHIFT_TYPES_WITH_TIME = ['Day Shift', 'Night Shift'];
+
+// ✅ Options for the Gender CustomSelect — capitalised labels, lowercase values
+const GENDER_SELECT_OPTIONS = genders.map(g => ({
+  value: g,
+  label: g.charAt(0).toUpperCase() + g.slice(1),
+}));
+
+// Styling override so CustomSelect matches the "border-gray-300 rounded-lg focus:ring-[#1C62A0]" inputs
+const SELECT_FORM_CLASS =
+  "[&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
 // Helper function to get hospital ID
 const getHospitalId = () => {
@@ -148,7 +159,7 @@ const validateField = (name, value, formData) => {
 };
 
 // Searchable Dropdown Component
-const SearchableDropdown = ({ 
+const SearchableDropdown = ({
   label, options, value, onChange, placeholder, icon: Icon,
   disabled = false, required = false,
   getOptionLabel = (option) => option.name || option,
@@ -206,12 +217,12 @@ const SearchableDropdown = ({
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${isOpen ? 'rotate-180' : ''}`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -226,7 +237,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No options found
@@ -237,7 +248,7 @@ const SearchableDropdown = ({
 };
 
 // Password Input Component
-const PasswordInput = ({ 
+const PasswordInput = ({
   label, name, value, onChange, onBlur, error, touched,
   showPassword, setShowPassword, placeholder, icon: Icon, required
 }) => (
@@ -281,9 +292,9 @@ const PasswordInput = ({
   </div>
 );
 
-// Shift Time Input Component (Clean - matches form styling)
-const ShiftTimeInput = ({ 
-  shiftStartTime, shiftEndTime, onChange, errors, touched, onBlur 
+// Shift Time Input Component
+const ShiftTimeInput = ({
+  shiftStartTime, shiftEndTime, onChange, errors, touched, onBlur
 }) => {
   const getDurationDisplay = () => {
     if (!shiftStartTime || !shiftEndTime) return null;
@@ -324,7 +335,7 @@ const ShiftTimeInput = ({
           <p className="mt-1 text-xs text-red-500">{errors.shiftStartTime}</p>
         )}
       </div>
-      
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Shift End Time <span className="text-red-500">*</span>
@@ -347,7 +358,6 @@ const ShiftTimeInput = ({
         )}
       </div>
 
-      {/* Duration + Overnight badges (only when both times are filled) */}
       {duration && (
         <div className="md:col-span-2 flex items-center gap-2 flex-wrap -mt-2">
           <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
@@ -368,7 +378,7 @@ const AddStaff = () => {
   const navigate = useNavigate();
   const [createStaff, { isLoading: isApiLoading }] = useCreateStaffMutation();
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
+
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
@@ -383,6 +393,12 @@ const AddStaff = () => {
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
 
+  // ✅ Options for the Assign Role CustomSelect — string values for strict ===
+  const roleOptions = rolesList.map(role => ({
+    value: String(role.id),
+    label: role.name || role.roleName || String(role.id),
+  }));
+
   // Form state
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', confirmPassword: '',
@@ -393,7 +409,6 @@ const AddStaff = () => {
     district: '', place: '', pincode: '',
     addressLine1: '', addressLine2: '',
     status: 'active', profileImage: null, imageKey: '',
-    // ✅ Shift time fields
     shiftStartTime: '', shiftEndTime: '',
   });
 
@@ -409,7 +424,6 @@ const AddStaff = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
 
-  // ✅ Whether shift time fields should be shown
   const requiresShiftTime = SHIFT_TYPES_WITH_TIME.includes(formData.jobType);
 
   const updateFormData = (updates) => setFormData(prev => ({ ...prev, ...updates }));
@@ -445,7 +459,7 @@ const AddStaff = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     if (name.startsWith('address.')) {
       const addressField = name.split('.')[1];
       setFormData(prev => ({
@@ -453,7 +467,6 @@ const AddStaff = () => {
         address: { ...prev.address, [addressField]: value }
       }));
     } else {
-      // ✅ Clear shift time fields if job type changes away from shift types
       if (name === 'jobType' && !SHIFT_TYPES_WITH_TIME.includes(value)) {
         setFormData(prev => ({
           ...prev,
@@ -467,19 +480,15 @@ const AddStaff = () => {
       }
       updateFormData({ [name]: type === 'checkbox' ? checked : value });
     }
-    
+
     if (name === 'password' && formData.confirmPassword) {
       const confirmError = validateConfirmPassword(formData.confirmPassword, value);
       setErrors(prev => ({ ...prev, confirmPassword: confirmError }));
     }
-    
+
     if (errors[name]) clearFieldError(name);
   };
 
-  /* =====================================================
-     DatePicker handler — receives ISO string (YYYY-MM-DD)
-     and routes through existing validation logic.
-     ===================================================== */
   const handleDateChange = (field, isoDate) => {
     updateFormData({ [field]: isoDate });
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -491,9 +500,9 @@ const AddStaff = () => {
     const { name } = e.target;
     setTouched(prev => ({ ...prev, [name]: true }));
     if (!e.target.value) {
-      setErrors(prev => ({ 
-        ...prev, 
-        [name]: name === 'shiftStartTime' ? 'Shift start time is required' : 'Shift end time is required' 
+      setErrors(prev => ({
+        ...prev,
+        [name]: name === 'shiftStartTime' ? 'Shift start time is required' : 'Shift end time is required'
       }));
     } else {
       setErrors(prev => ({ ...prev, [name]: '' }));
@@ -594,26 +603,25 @@ const AddStaff = () => {
       const error = validateField(field, formData[field], formData);
       if (error) newErrors[field] = error;
     });
-    
+
     const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
     if (confirmError) newErrors.confirmPassword = confirmError;
-    
+
     const dobError = validateDob(formData.dob);
     if (dobError) newErrors.dob = dobError;
 
-    // ✅ Shift time validation
     if (requiresShiftTime) {
       if (!formData.shiftStartTime) newErrors.shiftStartTime = 'Shift start time is required';
       if (!formData.shiftEndTime) newErrors.shiftEndTime = 'Shift end time is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
@@ -658,7 +666,6 @@ const AddStaff = () => {
         qualification: formData.qualification || undefined,
         hospitalName: hospitalName,
         hospitalId: hospitalId,
-        // ✅ Shift times (only send when applicable)
         shiftStartTime: requiresShiftTime ? formData.shiftStartTime : undefined,
         shiftEndTime: requiresShiftTime ? formData.shiftEndTime : undefined,
         address: {
@@ -713,13 +720,13 @@ const AddStaff = () => {
     } catch (error) {
       console.error('Create Staff Error:', error);
       const status = error?.status || error?.originalStatus;
-      
+
       if (status === 401) {
         showErrorToast('Session expired. Please login again.', TOAST_DURATION);
         setTimeout(() => { window.location.href = '/sign-in'; }, 2000);
         return;
       }
-      
+
       const message =
         error?.data?.error?.details?.[0]?.message ||
         error?.data?.details?.[0]?.message ||
@@ -729,7 +736,7 @@ const AddStaff = () => {
         error?.error ||
         error?.message ||
         'Failed to add staff';
-      
+
       showErrorToast(message, SUCCESS_DURATION);
       setIsSubmitting(false);
     }
@@ -829,17 +836,17 @@ const AddStaff = () => {
 
               {/* Basic Info */}
               <div className={GRID_CLASS}>
-                <Input 
+                <Input
                   label="Full Name" name="name" icon={User}
                   placeholder="Enter full name"
                   value={formData.name} onChange={handleChange} onBlur={handleBlur}
-                  error={errors.name} touched={touched.name} required 
+                  error={errors.name} touched={touched.name} required
                 />
-                <Input 
+                <Input
                   label="Email" name="email" type="email" icon={Mail}
                   placeholder="staff@example.com"
                   value={formData.email} onChange={handleChange} onBlur={handleBlur}
-                  error={errors.email} touched={touched.email} required 
+                  error={errors.email} touched={touched.email} required
                 />
               </div>
 
@@ -863,14 +870,13 @@ const AddStaff = () => {
               </div>
 
               <div className={GRID_CLASS}>
-                <Input 
+                <Input
                   label="Phone Number" name="phone" type="tel" icon={Phone}
                   placeholder="10 digit phone number"
                   value={formData.phone} onChange={handleChange}
                   error={errors.phone} touched={touched.phone}
                 />
 
-                {/* Date of Birth — using custom DatePicker */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Date of Birth
@@ -896,62 +902,41 @@ const AddStaff = () => {
               </div>
 
               <div className={GRID_CLASS}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Gender <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                    <select
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                    >
-                      {genders.map(gender => (
-                        <option key={gender} value={gender}>
-                          {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <Input 
+                {/* ✅ Replaced native (Gender) with CustomSelect */}
+                <CustomSelect
+                  label="Gender"
+                  icon={Users}
+                  value={formData.gender}
+                  options={GENDER_SELECT_OPTIONS}
+                  onChange={(value) => handleChange({ target: { name: 'gender', value } })}
+                  required
+                  className={SELECT_FORM_CLASS}
+                />
+
+                <Input
                   label="Qualification" name="qualification" icon={GraduationCap}
                   placeholder="MBA, B.Tech, etc."
-                  value={formData.qualification} onChange={handleChange} 
+                  value={formData.qualification} onChange={handleChange}
                 />
               </div>
 
               {/* Designation and Joining Date */}
               <div className={GRID_CLASS}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Designation <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                    <select
-                      name="designation"
-                      value={formData.designation}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white ${
-                        errors.designation && touched.designation ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    >
-                      <option value="">Select designation</option>
-                      {designations.map(designation => (
-                        <option key={designation} value={designation}>{designation}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {touched.designation && errors.designation && (
-                    <p className="text-sm text-red-600 mt-1">{errors.designation}</p>
-                  )}
-                </div>
+                {/* ✅ Replaced native  (Designation) with CustomSelect */}
+                <CustomSelect
+                  label="Designation"
+                  icon={Briefcase}
+                  value={formData.designation}
+                  options={designations.map(d => ({ value: d, label: d }))}
+                  placeholder="Select designation"
+                  onChange={(value) => handleChange({ target: { name: 'designation', value } })}
+                  onBlur={() => handleBlur({ target: { name: 'designation', value: formData.designation } })}
+                  error={errors.designation}
+                  touched={touched.designation}
+                  required
+                  className={SELECT_FORM_CLASS}
+                />
 
-                {/* Joining Date — using custom DatePicker */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Joining Date
@@ -971,41 +956,27 @@ const AddStaff = () => {
 
               {/* Staff Type and Job Type */}
               <div className={GRID_CLASS}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Staff Type</label>
-                  <div className="relative">
-                    <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                    <select
-                      name="staffType"
-                      value={formData.staffType}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select staff type</option>
-                      {staffTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {/* ✅ Replaced native  (Staff Type) with CustomSelect */}
+                <CustomSelect
+                  label="Staff Type"
+                  icon={Users}
+                  value={formData.staffType}
+                  options={staffTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select staff type"
+                  onChange={(value) => handleChange({ target: { name: 'staffType', value } })}
+                  className={SELECT_FORM_CLASS}
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Job Type</label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                    <select
-                      name="jobType"
-                      value={formData.jobType}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select job type</option>
-                      {jobTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {/* ✅ Replaced native  (Job Type) with CustomSelect */}
+                <CustomSelect
+                  label="Job Type"
+                  icon={Briefcase}
+                  value={formData.jobType}
+                  options={jobTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select job type"
+                  onChange={(value) => handleChange({ target: { name: 'jobType', value } })}
+                  className={SELECT_FORM_CLASS}
+                />
               </div>
 
               {/* ✅ Shift Time Fields — only for Day Shift / Night Shift */}
@@ -1021,40 +992,27 @@ const AddStaff = () => {
               )}
 
               {/* Role */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assign Role <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
-                  <select
-                    name="roleId"
-                    value={formData.roleId}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white ${
-                      errors.roleId && touched.roleId ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Select a role</option>
-                    {rolesList.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name || role.roleName}
-                      </option>
-                    ))}
-                  </select>
+              {/* ✅ Replaced native  (Role) with CustomSelect */}
+              <CustomSelect
+                label="Assign Role"
+                icon={Shield}
+                value={formData.roleId != null ? String(formData.roleId) : ''}
+                options={roleOptions}
+                placeholder="Select a role"
+                onChange={(value) => handleChange({ target: { name: 'roleId', value } })}
+                onBlur={() => handleBlur({ target: { name: 'roleId', value: formData.roleId } })}
+                error={errors.roleId}
+                touched={touched.roleId}
+                required
+                className={SELECT_FORM_CLASS}
+              />
+              {formData.roleId && (
+                <div className="-mt-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                    {getRoleNameById(formData.roleId)}
+                  </span>
                 </div>
-                {touched.roleId && errors.roleId && (
-                  <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>
-                )}
-                {formData.roleId && (
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
-                      {getRoleNameById(formData.roleId)}
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Languages */}
               <div className="space-y-2">
@@ -1124,23 +1082,23 @@ const AddStaff = () => {
                     getOptionValue={(option) => option.name}
                   />
                   <div className={GRID_CLASS}>
-                    <Input 
+                    <Input
                       label="Address Line 1" name="addressLine1" icon={Home}
                       placeholder="Street address"
-                      value={formData.addressLine1} onChange={handleAddressLineChange} 
+                      value={formData.addressLine1} onChange={handleAddressLineChange}
                     />
-                    <Input 
+                    <Input
                       label="Address Line 2" name="addressLine2" icon={Home}
                       placeholder="Apt, suite, unit (optional)"
-                      value={formData.addressLine2} onChange={handleAddressLineChange} 
+                      value={formData.addressLine2} onChange={handleAddressLineChange}
                     />
                   </div>
                   <div className={GRID_CLASS}>
-                    <Input 
+                    <Input
                       label="Place" name="place" placeholder="Place/Locality"
-                      value={formData.place} onChange={handleChange} 
+                      value={formData.place} onChange={handleChange}
                     />
-                    <Input 
+                    <Input
                       label="Pincode" name="pincode" placeholder="Postal code"
                       value={formData.pincode} onChange={handleChange} maxLength={6}
                     />
@@ -1187,8 +1145,8 @@ const AddStaff = () => {
               <Button variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" variant="primary" 
+              <Button
+                type="submit" variant="primary"
                 disabled={isFormSubmitting} loading={isFormSubmitting}
               >
                 {isFormSubmitting ? 'Saving...' : 'Save Staff'}

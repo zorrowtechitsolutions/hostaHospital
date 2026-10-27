@@ -1,17 +1,18 @@
 // src/components/super-admin/Ads.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Image, Plus, Download, MoreVertical, Eye, 
+import {
+  Image, Plus, Download, MoreVertical, Eye,
   Edit, RefreshCcw, Upload, Trash2, Calendar,
   MapPin, X, Building
 } from 'lucide-react';
-import { 
+import {
   Button, Badge, Card, Modal, Input
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import DeleteModal from '../patients/DeleteModel';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
-import { 
+import {
   useGetAdsQuery,
   useCreateAdMutation,
   useUpdateAdMutation,
@@ -21,6 +22,19 @@ import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { getS3ImageUrl, uploadToS3 } from '../../../app/service/S3';
 import { socket } from '../../socket/socket';
 import { registerAdEvents, unregisterAdEvents } from '../../socket/adEvents';
+
+// Styling override so CustomSelect matches the "border-gray-300 rounded-lg focus:ring-[#1C62A0]" inputs
+const HOSPITAL_SELECT_CLASS =
+  "w-full [&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
+// Helper to normalise the raw hospitals array into {value, label} pairs for CustomSelect
+const toHospitalOptions = (hospitals) => {
+  if (!Array.isArray(hospitals)) return [];
+  return hospitals.map(h => ({
+    value: String(h.id),
+    label: h.name || h.hospitalName || h.email || `Hospital ${h.id}`,
+  }));
+};
 
 // Helper function to format date
 const formatDate = (date) => {
@@ -51,7 +65,8 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // ✅ FIXED: handleImageUpload - only stores file locally, does NOT upload to S3
+  const hospitalOptions = toHospitalOptions(hospitals);
+
   const handleImageUpload = async (file) => {
     if (!file) return;
 
@@ -66,8 +81,6 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       return;
     }
 
-    // Don't upload to S3 yet.
-    // Just keep the file in browser state.
     setSelectedFile(file);
 
     const reader = new FileReader();
@@ -84,7 +97,6 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     if (file) handleImageUpload(file);
   };
 
-  // ✅ FIXED: removeImage now clears selectedFile
   const removeImage = () => {
     setPreviewImage(null);
     setUploadedImageKey(null);
@@ -100,7 +112,6 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     }
   };
 
-  // ✅ FIXED: handleSubmit now passes the file, not the uploaded key
   const handleSubmit = () => {
     if (!formData.hospitalId) {
       showErrorToast('Hospital is required', 3000);
@@ -114,8 +125,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       showErrorToast('End date is required', 3000);
       return;
     }
-    
-    // Pass the file instead of the image key
+
     onSave({
       imageUrl: null,
       imageKey: null,
@@ -126,7 +136,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       kilometer: formData.kilometer,
       isActive: formData.isActive
     });
-    
+
     setFormData({
       imageUrl: '',
       imageKey: '',
@@ -142,15 +152,13 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     setUploadError(null);
   };
 
-  // Update the hospital ID in formData when hospital selection changes
   const handleHospitalChange = (e) => {
     const hospitalId = e.target.value;
     setFormData(prev => ({
       ...prev,
       hospitalId: hospitalId
     }));
-    
-    // If there was an uploaded image, clear it since hospital changed
+
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
@@ -177,7 +185,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Image Upload Section - Optional */}
+        {/* Image Upload Section */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
@@ -187,9 +195,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           }`}>
             {previewImage ? (
               <div className="relative">
-                <img 
-                  src={previewImage} 
-                  alt="Preview" 
+                <img
+                  src={previewImage}
+                  alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
                 />
                 <button
@@ -229,7 +237,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             {isUploading && (
               <div className="w-full">
                 <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-[#1C62A0] transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
@@ -243,23 +251,19 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Hospital Selection */}
+        {/* Hospital Selection — ✅ Replaced native  with CustomSelect */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Hospital * <span className="text-red-500">Select first before uploading image</span>
           </label>
-          <select
-            value={formData.hospitalId}
-            onChange={handleHospitalChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-          >
-            <option value="">Select Hospital</option>
-            {Array.isArray(hospitals) && hospitals.map((hospital) => (
-              <option key={hospital.id} value={hospital.id}>
-                {hospital.name || hospital.hospitalName || hospital.email}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            hideLabel
+            value={formData.hospitalId ? String(formData.hospitalId) : ''}
+            options={hospitalOptions}
+            placeholder="Select Hospital"
+            onChange={(value) => handleHospitalChange({ target: { value } })}
+            className={HOSPITAL_SELECT_CLASS}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -322,6 +326,8 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
+  const hospitalOptions = toHospitalOptions(hospitals);
+
   useEffect(() => {
     if (ad) {
       setFormData({
@@ -338,7 +344,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     }
   }, [ad]);
 
-  // ✅ FIXED: handleImageUpload - only stores file locally, does NOT upload to S3
   const handleImageUpload = async (file) => {
     if (!file) return;
 
@@ -353,8 +358,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       return;
     }
 
-    // Keep the file locally.
-    // DO NOT upload to S3 yet.
     setSelectedFile(file);
 
     const reader = new FileReader();
@@ -386,7 +389,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     }
   };
 
-  // ✅ FIXED: handleSubmit now passes the file for new uploads, or keeps existing key
   const handleSubmit = () => {
     if (!formData.hospitalId) {
       showErrorToast('Hospital is required', 3000);
@@ -420,8 +422,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       ...prev,
       hospitalId: hospitalId
     }));
-    
-    // If there was an uploaded image, clear it since hospital changed
+
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
@@ -448,7 +449,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Image Upload Section - Optional */}
+        {/* Image Upload Section */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
@@ -458,9 +459,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           }`}>
             {previewImage ? (
               <div className="relative">
-                <img 
-                  src={previewImage} 
-                  alt="Preview" 
+                <img
+                  src={previewImage}
+                  alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
                 />
                 <button
@@ -497,7 +498,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             {isUploading && (
               <div className="w-full">
                 <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-[#1C62A0] transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
@@ -511,23 +512,19 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Hospital Selection */}
+        {/* Hospital Selection — ✅ Replaced native  with CustomSelect */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Hospital *
           </label>
-          <select
-            value={formData.hospitalId}
-            onChange={handleHospitalChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-          >
-            <option value="">Select Hospital</option>
-            {Array.isArray(hospitals) && hospitals.map((hospital) => (
-              <option key={hospital.id} value={hospital.id}>
-                {hospital.name || hospital.hospitalName || hospital.email}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            hideLabel
+            value={formData.hospitalId ? String(formData.hospitalId) : ''}
+            options={hospitalOptions}
+            placeholder="Select Hospital"
+            onChange={(value) => handleHospitalChange({ target: { value } })}
+            className={HOSPITAL_SELECT_CLASS}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -579,8 +576,8 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
       <div className="space-y-4">
         {ad.imageUrl && (
           <div className="flex justify-center mb-4">
-            <img 
-              src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl} 
+            <img
+              src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl}
               alt={ad.id}
               className="w-full max-h-48 object-cover rounded-lg"
               onError={(e) => {
@@ -589,7 +586,7 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
             />
           </div>
         )}
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-500">Ad ID</label>
@@ -621,7 +618,7 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
             </p>
           </div>
         </div>
-        
+
         <div className="flex gap-2 pt-4 border-t">
           <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
         </div>
@@ -667,19 +664,19 @@ const Ads = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState(null);
-  
+
   const [activeMenu, setActiveMenu] = useState(null);
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
-  const { 
-    data: adsResponse, 
-    isLoading: loading, 
+  const {
+    data: adsResponse,
+    isLoading: loading,
     refetch,
     isFetching
   } = useGetAdsQuery({
@@ -689,15 +686,15 @@ const Ads = () => {
   });
 
   const ads = adsResponse?.data || adsResponse?.ads || [];
-  const totalPages = adsResponse?.pagination?.totalPages || 
-                     adsResponse?.totalPages || 
+  const totalPages = adsResponse?.pagination?.totalPages ||
+                     adsResponse?.totalPages ||
                      Math.ceil(ads.length / itemsPerPage) || 1;
-  const totalItems = adsResponse?.pagination?.totalItems || 
-                     adsResponse?.totalItems || 
+  const totalItems = adsResponse?.pagination?.totalItems ||
+                     adsResponse?.totalItems ||
                      ads.length;
 
   const { data: hospitalsData } = useGetAllHospitalsQuery();
-  
+
   let hospitals = [];
   if (Array.isArray(hospitalsData)) {
     hospitals = hospitalsData;
@@ -725,7 +722,6 @@ const Ads = () => {
     return hospitalMap.get(hospitalId) || `Hospital ID: ${hospitalId}`;
   };
 
-  // Register socket event listeners
   useEffect(() => {
     registerAdEvents({
       onAdCreated: () => {
@@ -750,7 +746,6 @@ const Ads = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
       if (!eventsRegistered) {
@@ -793,10 +788,8 @@ const Ads = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ✅ FIXED: handleAddAd now uploads image AFTER creating the ad
   const handleAddAd = async (newAd) => {
     try {
-      // 1. Create the ad first WITHOUT an image
       const result = await createAd({
         imageUrl: null,
         imageKey: null,
@@ -813,10 +806,7 @@ const Ads = () => {
         throw new Error("Ad was created but no ad ID was returned");
       }
 
-
-      // 2. Now upload the image because the ad exists
       if (newAd.imageFile) {
-
         const uploaded = await uploadToS3(
           newAd.imageFile,
           null,
@@ -824,8 +814,6 @@ const Ads = () => {
           "ad"
         );
 
-
-        // 3. Save S3 key into the ad
         await updateAd({
           id: createdAd.id,
           data: {
@@ -835,7 +823,6 @@ const Ads = () => {
         }).unwrap();
       }
 
-      // 4. Socket event
       socket.emit("ad_event", {
         event: "AD_CREATED",
         data: {
@@ -864,10 +851,8 @@ const Ads = () => {
     }
   };
 
-  // ✅ FIXED: handleEditAd now uploads image AFTER updating the ad
   const handleEditAd = async (updatedAd) => {
     try {
-      // 1. Update the ad first WITHOUT the new image (if a new image is being uploaded)
       await updateAd({
         id: updatedAd.id,
         data: {
@@ -876,7 +861,6 @@ const Ads = () => {
           endDate: updatedAd.endDate,
           kilometer: updatedAd.kilometer,
           isActive: updatedAd.isActive,
-          // Keep existing image if no new file, otherwise clear it temporarily
           ...(updatedAd.imageFile
             ? {
                 imageUrl: null,
@@ -889,9 +873,7 @@ const Ads = () => {
         }
       }).unwrap();
 
-      // 2. Upload new image AFTER the ad already exists
       if (updatedAd.imageFile) {
-
         const uploaded = await uploadToS3(
           updatedAd.imageFile,
           null,
@@ -899,8 +881,6 @@ const Ads = () => {
           "ad"
         );
 
-
-        // 3. Save S3 key to this AD
         await updateAd({
           id: updatedAd.id,
           data: {
@@ -910,7 +890,6 @@ const Ads = () => {
         }).unwrap();
       }
 
-      // 4. Socket event
       socket.emit("ad_event", {
         event: "AD_UPDATED",
         data: {
@@ -944,11 +923,11 @@ const Ads = () => {
   const handleToggleStatus = async (ad) => {
     try {
       const newStatus = !ad.isActive;
-      await updateAd({ 
-        id: ad.id, 
-        data: { isActive: newStatus } 
+      await updateAd({
+        id: ad.id,
+        data: { isActive: newStatus }
       }).unwrap();
-      
+
       socket.emit("ad_event", {
         event: "AD_UPDATED",
         data: {
@@ -960,7 +939,7 @@ const Ads = () => {
           timestamp: new Date().toISOString()
         }
       });
-      
+
       showSuccessToast(`Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
       refetch();
     } catch (error) {
@@ -972,7 +951,7 @@ const Ads = () => {
     if (selectedAd) {
       try {
         await deleteAd(selectedAd.id).unwrap();
-        
+
         socket.emit("ad_event", {
           event: "AD_DELETED",
           data: {
@@ -982,7 +961,7 @@ const Ads = () => {
             timestamp: new Date().toISOString()
           }
         });
-        
+
         showSuccessToast('Ad deleted successfully!', 3000);
         refetch();
         setShowDeleteModal(false);
@@ -1018,11 +997,11 @@ const Ads = () => {
       'Created At': ad.createdAt,
       'Updated At': ad.updatedAt
     }));
-    
+
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const exportFileDefaultName = `ads_export_${new Date().toISOString().split('T')[0]}.json`;
-    
+
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
@@ -1084,8 +1063,8 @@ const Ads = () => {
             <Card key={ad.id} className="overflow-hidden hover:shadow-lg transition-shadow">
               <div className="relative">
                 {ad.imageUrl ? (
-                  <img 
-                    src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl} 
+                  <img
+                    src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl}
                     alt={`Ad ${ad.id}`}
                     className="w-full h-48 object-cover"
                     onError={(e) => {

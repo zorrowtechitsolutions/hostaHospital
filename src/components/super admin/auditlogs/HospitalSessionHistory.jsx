@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button, Pagination, SearchBar } from "../../ui";
+import CustomSelect from "../../ui/CustomSelect";
 import { useGetSessionHistoryQuery } from "../../../../app/service/sessionHistoryApi";
 import { showSuccessToast, showErrorToast } from "../../ui/Toast";
 import { exportToExcel } from "../../../utils/excelExport";
@@ -24,8 +25,23 @@ import { getAuthUser } from "../../../utils/auth";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "FAILED"];
 const RISK_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 
+// ✅ Static filter options for CustomSelect — "" is the "no filter" sentinel
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All Status" },
+  ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+];
+
+const RISK_FILTER_OPTIONS = [
+  { value: "", label: "All Risk Levels" },
+  ...RISK_OPTIONS.map((r) => ({ value: r, label: r })),
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter inputs
+const FILTER_SELECT_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-4 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
+
 // ============================================================
-// Helpers (keep all existing helpers)
+// Helpers
 // ============================================================
 
 const safeToString = (value) => {
@@ -276,64 +292,49 @@ const RowActionMenu = ({ session, onView }) => {
 const HospitalSessionHistory = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Get hospital ID from navigation state (when coming from hospital card)
+
   const navigationHospitalId = location.state?.hospitalId;
   const navigationHospitalName = location.state?.hospitalName;
 
-  // Get authenticated user info
   const auth = getAuthUser();
 
-  // State for hospital selection (for users with multiple hospital access)
   const [selectedHospitalId, setSelectedHospitalId] = useState(
-    navigationHospitalId || "" // Pre-select if coming from hospital card
+    navigationHospitalId || ""
   );
-  
-  // State to track which hospital is being viewed (from card or dropdown)
+
   const [viewingHospitalName, setViewingHospitalName] = useState(
     navigationHospitalName || ""
   );
 
-  // Search state with debounce
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
-  
-  // Date filters
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
-  // Pagination
+
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSession, setSelectedSession] = useState(null);
 
   const itemsPerPage = 10;
 
-  // ============================================================
-  // UPDATED: Determine which hospital ID to use
-  // Priority: selectedHospitalId → navigationHospitalId → auth.hospitalId
-  // ============================================================
-  const effectiveHospitalId = 
-    selectedHospitalId || 
-    navigationHospitalId || 
-    auth?.hospitalId || 
+  const effectiveHospitalId =
+    selectedHospitalId ||
+    navigationHospitalId ||
+    auth?.hospitalId ||
     undefined;
 
-  // Clear navigation state after reading it (optional)
   useEffect(() => {
     if (navigationHospitalId) {
-      // Clear the state from location to prevent re-selection on refresh
       window.history.replaceState({}, document.title);
     }
   }, [navigationHospitalId]);
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim());
@@ -342,7 +343,6 @@ const HospitalSessionHistory = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch data with backend filters
   const {
     data: sessionResponse,
     isLoading,
@@ -361,26 +361,39 @@ const HospitalSessionHistory = () => {
     limit: itemsPerPage,
   });
 
-  // Use backend response values
   const sessions = sessionResponse?.data ?? [];
   const totalItems = sessionResponse?.count ?? 0;
   const totalPages = sessionResponse?.totalPages ?? 0;
 
-  // Get unique values for department filter from current page data
   const departments = useMemo(
     () =>
       [...new Set(sessions.map((session) => session.department).filter(Boolean))].sort(),
     [sessions]
   );
 
-  // Get unique values for role filter from current page data
   const roles = useMemo(
     () =>
       [...new Set(sessions.map((session) => session.role).filter(Boolean))].sort(),
     [sessions]
   );
 
-  // Count active filters
+  // ✅ Options for the Role and Department CustomSelects
+  const roleFilterOptions = useMemo(
+    () => [
+      { value: "", label: "All Roles" },
+      ...roles.map((role) => ({ value: role, label: role })),
+    ],
+    [roles]
+  );
+
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: "", label: "All Departments" },
+      ...departments.map((dept) => ({ value: dept, label: dept })),
+    ],
+    [departments]
+  );
+
   const activeFilterCount =
     (roleFilter ? 1 : 0) +
     (statusFilter ? 1 : 0) +
@@ -457,25 +470,18 @@ const HospitalSessionHistory = () => {
     }
   };
 
-  // Handle hospital selection change
   const handleHospitalChange = (hospitalId, hospitalName) => {
     setSelectedHospitalId(hospitalId);
     setViewingHospitalName(hospitalName || "");
     setCurrentPage(1);
   };
 
-  // ============================================================
-  // UPDATED: Go back to hospital details page
-  // ============================================================
   const handleBack = () => {
     if (navigationHospitalId) {
-      // If we came from hospital details, go back there
       navigate(`/super-admin/hospitals/${navigationHospitalId}`);
     } else if (selectedHospitalId) {
-      // If a hospital is selected via dropdown, go to its details
       navigate(`/super-admin/hospitals/${selectedHospitalId}`);
     } else {
-      // Fallback to hospitals list
       navigate('/super-admin/hospitals');
     }
   };
@@ -529,17 +535,17 @@ const HospitalSessionHistory = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">
-              {viewingHospitalName 
-                ? `Session History - ${viewingHospitalName}` 
+              {viewingHospitalName
+                ? `Session History - ${viewingHospitalName}`
                 : "Session History"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              {viewingHospitalName 
+              {viewingHospitalName
                 ? `Viewing all sessions for ${viewingHospitalName}`
                 : "View and manage user login sessions and activity history"}
             </p>
           </div>
-          
+
           {viewingHospitalName && (
             <button
               onClick={handleBack}
@@ -625,76 +631,64 @@ const HospitalSessionHistory = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {/* Role Filter */}
+            {/* Role Filter — ✅ Replaced native with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">Role</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={roleFilter}
-                onChange={(event) => {
-                  setRoleFilter(event.target.value);
+                options={roleFilterOptions}
+                onChange={(value) => {
+                  setRoleFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Roles</option>
-                {roles.map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Status Filter */}
+            {/* Status Filter — ✅ Replaced native  with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">Status</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value);
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setStatusFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Status</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Risk Level Filter */}
+            {/* Risk Level Filter — ✅ Replaced native with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">Risk Level</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={riskFilter}
-                onChange={(event) => {
-                  setRiskFilter(event.target.value);
+                options={RISK_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setRiskFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Risk Levels</option>
-                {RISK_OPTIONS.map((risk) => (
-                  <option key={risk} value={risk}>{risk}</option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Department Filter */}
+            {/* Department Filter — ✅ Replaced native with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">Department</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={departmentFilter}
-                onChange={(event) => {
-                  setDepartmentFilter(event.target.value);
+                options={departmentFilterOptions}
+                onChange={(value) => {
+                  setDepartmentFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
             {/* Start Date Filter */}

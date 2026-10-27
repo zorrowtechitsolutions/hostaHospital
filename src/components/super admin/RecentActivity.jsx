@@ -24,6 +24,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Card, Button, Pagination } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import { useGetAllHospitalsQuery } from '../../../app/service/hospitalApi';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
 import { useGetPatientsQuery } from '../../../app/service/patients';
@@ -33,6 +34,36 @@ import { useGetAmbulanceQuery } from '../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../app/service/bloodbank';
 import { useGetUsersQuery } from '../../../app/service/users';
 import { useGetDonorsQuery } from '../../../app/service/blooddonor';
+
+// ✅ Activity type filter options — moved outside the component (static)
+const ACTIVITY_TYPE_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'hospital', label: 'Hospitals' },
+  { value: 'doctor', label: 'Doctors' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'patient', label: 'Patients' },
+  { value: 'user', label: 'Users' },
+  { value: 'donor', label: 'Blood Donors' },
+  { value: 'ad', label: 'Ads' },
+  { value: 'ambulance', label: 'Ambulances' },
+  { value: 'bloodbank', label: 'Blood Banks' },
+];
+
+// ✅ Items per page options — string values so they match CustomSelect's strict === with String(itemsPerPage)
+const ITEMS_PER_PAGE_OPTIONS = [
+  { value: '5', label: '5' },
+  { value: '10', label: '10' },
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+];
+
+// Styling overrides
+const FILTER_SELECT_CLASS =
+  "min-w-[150px] [&>button]:border-gray-200 [&>button]:pl-4 [&>button]:pr-10 [&>button]:py-2 [&>button]:text-sm [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
+const ITEMS_PER_PAGE_SELECT_CLASS =
+  "w-20 [&>button]:border-gray-200 [&>button]:pl-3 [&>button]:pr-8 [&>button]:py-2 [&>button]:text-sm [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
 const RecentActivity = () => {
   const navigate = useNavigate();
@@ -147,7 +178,7 @@ const RecentActivity = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      if (loadingHospitals || loadingDoctors || loadingPatients || loadingStaff || 
+      if (loadingHospitals || loadingDoctors || loadingPatients || loadingStaff ||
           loadingAds || loadingAmbulance || loadingBloodBank || loadingUsers || loadingDonors) {
         return;
       }
@@ -157,7 +188,7 @@ const RecentActivity = () => {
       const patients = patientsData?.data || [];
       const ads = adsData?.data || adsData?.ads || [];
       const ambulances = ambulanceData?.data || [];
-      
+
       let staff = [];
       if (staffData?.data?.rows) {
         staff = staffData.data.rows;
@@ -168,7 +199,7 @@ const RecentActivity = () => {
       } else if (staffData?.staff) {
         staff = Array.isArray(staffData.staff) ? staffData.staff : [];
       }
-      
+
       const bloodBanks = bloodBankData?.data || [];
       const users = usersData?.data || usersData?.users || [];
       const donors = donorsData?.data || donorsData?.donors || [];
@@ -259,7 +290,7 @@ const RecentActivity = () => {
         }
       });
 
-      // USER CREATED (All users - no hospital filter)
+      // USER CREATED
       users.forEach((user) => {
         const createdAt = user.createdAt || user.created_at || user.registeredAt;
         if (createdAt) {
@@ -289,14 +320,13 @@ const RecentActivity = () => {
         }
       });
 
-      // AMBULANCE ADDED (with creator info if available)
+      // AMBULANCE ADDED
       ambulances.forEach((ambulance) => {
         const createdAt = ambulance.createdAt || ambulance.created_at;
         if (createdAt) {
           const hospitalId = ambulance.hospitalId || ambulance.hospital_id || ambulance.hospital?.id;
           const hospital = hospitals.find((h) => String(h.id || h._id) === String(hospitalId));
 
-          // Who added the ambulance
           const creatorId = ambulance.createdBy || ambulance.created_by || ambulance.createdById || ambulance.userId || ambulance.user_id;
           const creator = users.find((u) => String(u.id || u._id) === String(creatorId));
           const creatorName = ambulance.createdByName || ambulance.created_by_name || creator?.name || 'User';
@@ -336,7 +366,7 @@ const RecentActivity = () => {
         }
       });
 
-      // BLOOD DONOR ADDED (with creator info if available)
+      // BLOOD DONOR ADDED
       donors.forEach((donor) => {
         const createdAt = donor.createdAt || donor.created_at || donor.registeredAt;
         if (createdAt) {
@@ -347,7 +377,6 @@ const RecentActivity = () => {
           const hospitalId = donor.hospitalId || donor.hospital_id || donor.hospital?.id;
           const hospital = hospitals.find((h) => String(h.id || h._id) === String(hospitalId));
 
-          // Who created/added the donor
           const creatorId = donor.createdBy || donor.created_by || donor.createdById || donor.userId || donor.user_id;
           const creator = users.find((u) => String(u.id || u._id) === String(creatorId));
           const creatorName = donor.createdByName || donor.created_by_name || creator?.name || 'User';
@@ -375,7 +404,7 @@ const RecentActivity = () => {
       setActivities(allActivities);
       setFilteredActivities(allActivities);
       setLoading(false);
-      setCurrentPage(1); // Reset to first page when data loads
+      setCurrentPage(1);
     };
 
     loadData();
@@ -418,7 +447,7 @@ const RecentActivity = () => {
     }
 
     setFilteredActivities(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [searchTerm, typeFilter, activities]);
 
   // Pagination calculations
@@ -431,7 +460,6 @@ const RecentActivity = () => {
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      // Scroll to top of the list
       document.getElementById('activity-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
@@ -440,19 +468,6 @@ const RecentActivity = () => {
     setItemsPerPage(Number(e.target.value));
     setCurrentPage(1);
   };
-
-  const activityTypes = [
-    { value: 'all', label: 'All Types' },
-    { value: 'hospital', label: 'Hospitals' },
-    { value: 'doctor', label: 'Doctors' },
-    { value: 'staff', label: 'Staff' },
-    { value: 'patient', label: 'Patients' },
-    { value: 'user', label: 'Users' },
-    { value: 'donor', label: 'Blood Donors' },
-    { value: 'ad', label: 'Ads' },
-    { value: 'ambulance', label: 'Ambulances' },
-    { value: 'bloodbank', label: 'Blood Banks' }
-  ];
 
   if (loading) {
     return (
@@ -516,37 +531,25 @@ const RecentActivity = () => {
               </div>
             </div>
 
-            {/* Type Filter */}
-            <div className="relative">
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white cursor-pointer min-w-[150px]"
-              >
-                {activityTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
+            {/* ✅ Replaced native  (Type filter) with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={typeFilter}
+              options={ACTIVITY_TYPE_OPTIONS}
+              onChange={(value) => setTypeFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
 
-            {/* Items per page */}
+            {/* Items per page — ✅ Replaced native  with CustomSelect */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Show:</span>
-              <select
-                value={itemsPerPage}
-                onChange={handleItemsPerPageChange}
-                className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white cursor-pointer"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ml-[-24px]" />
+              <CustomSelect
+                hideLabel
+                value={String(itemsPerPage)}
+                options={ITEMS_PER_PAGE_OPTIONS}
+                onChange={(value) => handleItemsPerPageChange({ target: { value } })}
+                className={ITEMS_PER_PAGE_SELECT_CLASS}
+              />
             </div>
 
             {/* Clear Filters */}
@@ -572,21 +575,18 @@ const RecentActivity = () => {
           currentItems.map((activity, index) => {
             const Icon = getActivityIcon(activity.type);
             const colorClass = getActivityColor(activity.type);
-            
+
             return (
               <div key={activity.id} className="relative">
-                {/* Timeline connector */}
                 {index < currentItems.length - 1 && (
                   <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-gray-200"></div>
                 )}
-                
+
                 <div className="flex items-start gap-4 p-4 rounded-xl bg-white border border-gray-100 hover:border-[#1C62A0] hover:shadow-md transition-all duration-300">
-                  {/* Icon */}
                   <div className={`p-3 rounded-xl ${colorClass}`}>
                     <Icon size={20} />
                   </div>
-                  
-                  {/* Content */}
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between flex-wrap gap-2">
                       <div>
@@ -601,8 +601,7 @@ const RecentActivity = () => {
                         {activity.time}
                       </span>
                     </div>
-                    
-                    {/* Type badge */}
+
                     <div className="mt-2">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
                         <Icon size={12} />
@@ -623,7 +622,7 @@ const RecentActivity = () => {
         )}
       </div>
 
-      {/* Pagination - Using global Pagination component with green gradient */}
+      {/* Pagination */}
       {totalItems > 0 && (
         <Pagination
           currentPage={currentPage}

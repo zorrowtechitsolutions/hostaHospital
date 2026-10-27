@@ -14,7 +14,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar } from '../ui';
+import { Pagination, SearchBar, CustomSelect } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
@@ -64,8 +64,6 @@ const Attendance = () => {
 
   /* ============================================================
      ✅ REAL-TIME ATTENDANCE EVENTS
-     Backend emits on `hospital_<id>` and `role_1` with event
-     name `attendance_event`.
      ============================================================ */
   useEffect(() => {
     registerAttendanceEvents({
@@ -344,52 +342,70 @@ const Attendance = () => {
             className="flex-1 min-w-[250px] max-w-sm"
           />
 
-          <select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Departments</option>
-            {departments.map((dept) => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
+          {/* ✅ Department — CustomSelect */}
+          <div className="w-full sm:w-48 -mt-1">
+            <CustomSelect
+              label=""
+              value={deptFilter}
+              options={[
+                { value: 'all', label: 'All Departments' },
+                ...departments.map(dept => ({ value: dept, label: dept }))
+              ]}
+              onChange={(value) => setDeptFilter(value)}
+              placeholder="All Departments"
+            />
+          </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="Present">Present</option>
-            <option value="Late">Late</option>
-            <option value="Early Departure">Early Departure</option>
-            <option value="Shift Completed">Shift Completed</option>
-            <option value="Half Day">Half Day</option>
-            <option value="Absent">Absent</option>
-            <option value="On Leave">On Leave</option>
-          </select>
+          {/* ✅ Status — CustomSelect */}
+          <div className="w-full sm:w-48 -mt-1">
+            <CustomSelect
+              label=""
+              value={statusFilter}
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'Present', label: 'Present' },
+                { value: 'Late', label: 'Late' },
+                { value: 'Early Departure', label: 'Early Departure' },
+                { value: 'Shift Completed', label: 'Shift Completed' },
+                { value: 'Half Day', label: 'Half Day' },
+                { value: 'Absent', label: 'Absent' },
+                { value: 'On Leave', label: 'On Leave' }
+              ]}
+              onChange={(value) => setStatusFilter(value)}
+              placeholder="All Status"
+            />
+          </div>
 
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Methods</option>
-            <option value="Face">Face</option>
-            <option value="Access Card">Access Card</option>
-            <option value="Punch In">Punch In</option>
-          </select>
+          {/* ✅ Method — CustomSelect */}
+          <div className="w-full sm:w-44 -mt-1">
+            <CustomSelect
+              label=""
+              value={methodFilter}
+              options={[
+                { value: 'all', label: 'All Methods' },
+                { value: 'Face', label: 'Face' },
+                { value: 'Access Card', label: 'Access Card' },
+                { value: 'Punch In', label: 'Punch In' }
+              ]}
+              onChange={(value) => setMethodFilter(value)}
+              placeholder="All Methods"
+            />
+          </div>
 
-          <select
-            value={attTypeFilter}
-            onChange={(e) => setAttTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Attendance Types</option>
-            <option value="Check In">Check In</option>
-            <option value="Check Out">Check Out</option>
-          </select>
+          {/* ✅ Attendance Type — CustomSelect */}
+          <div className="w-full sm:w-52 -mt-1">
+            <CustomSelect
+              label=""
+              value={attTypeFilter}
+              options={[
+                { value: 'all', label: 'All Attendance Types' },
+                { value: 'Check In', label: 'Check In' },
+                { value: 'Check Out', label: 'Check Out' }
+              ]}
+              onChange={(value) => setAttTypeFilter(value)}
+              placeholder="All Attendance Types"
+            />
+          </div>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">

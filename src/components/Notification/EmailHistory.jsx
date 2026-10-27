@@ -1,7 +1,7 @@
 // EmailHistory.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   useGetEmailsQuery,
   useSendDraftMutation,
   useDeleteDraftMutation,
@@ -12,7 +12,21 @@ import {
 } from '../../../app/service/emailnotification';
 import { getHospitalId } from '../../utils/auth';
 import { Pagination } from '../ui/Pagination';
+import CustomSelect from '../ui/CustomSelect';
 import { showErrorToast, showSuccessToast } from '../ui/Toast';
+
+// ✅ Options for the Status filter — "all" is a real value (default + reset)
+const EMAIL_STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Drafts' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'archived', label: 'Archived' },
+];
+
+// Styling override so CustomSelect matches the border-slate-300 / text-sm search input
+const SELECT_FILTER_CLASS =
+  "w-32 [&>button]:border-slate-300 [&>button]:py-1.5 [&>button]:text-sm [&>button]:focus:ring-indigo-400 [&>button]:focus:border-indigo-400";
 
 // Import skeleton
 const EmailHistorySkeleton = () => {
@@ -297,17 +311,14 @@ const EmailHistory = () => {
               </h3>
             </div>
             <div className="flex items-center gap-2">
-              <select
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={filterStatus}
-                onChange={handleFilterChange}
-                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-              >
-                <option value="all">All</option>
-                <option value="draft">Drafts</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-                <option value="archived">Archived</option>
-              </select>
+                options={EMAIL_STATUS_FILTER_OPTIONS}
+                onChange={(value) => handleFilterChange({ target: { value } })}
+                className={SELECT_FILTER_CLASS}
+              />
               <button
                 onClick={() => refetch()}
                 className="p-1.5 text-slate-400 hover:text-slate-600 transition"
@@ -336,8 +347,8 @@ const EmailHistory = () => {
               <div className="text-4xl mb-2">📭</div>
               <p>No emails found</p>
               <p className="text-xs mt-1">
-                {filterStatus !== 'all' 
-                  ? `No ${filterStatus} emails match your criteria` 
+                {filterStatus !== 'all'
+                  ? `No ${filterStatus} emails match your criteria`
                   : 'Try adjusting your filters or search'}
               </p>
             </div>
@@ -376,7 +387,7 @@ const EmailHistory = () => {
                         </span>
                         {email.recipients?.length > 0 && (
                           <span className="text-xs text-slate-400 truncate max-w-[150px]">
-                            {email.recipients.map(r => 
+                            {email.recipients.map(r =>
                               r.userIds?.length || 0
                             ).reduce((a, b) => a + b, 0)} users
                           </span>

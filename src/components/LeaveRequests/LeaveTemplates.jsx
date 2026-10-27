@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Pagination } from "../ui/Pagination";
+import CustomSelect from "../ui/CustomSelect";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import DeleteModal from "../patients/DeleteModel";
 import { getAuthUser } from "../../utils/auth";
@@ -30,6 +31,26 @@ const categoryStyles = {
   "Casual Leave": "bg-sky-50 text-sky-600",
   "Maternity Leave": "bg-amber-50 text-amber-600",
 };
+
+// ✅ Options for the Category filter — "All Categories" is a real value (default + reset)
+const CATEGORY_OPTIONS = [
+  { value: "All Categories", label: "All Categories" },
+  { value: "Annual Leave", label: "Annual Leave" },
+  { value: "Sick Leave", label: "Sick Leave" },
+  { value: "Casual Leave", label: "Casual Leave" },
+  { value: "Maternity Leave", label: "Maternity Leave" },
+];
+
+// ✅ Options for the Status filter — "All Statuses" is a real value
+const STATUS_OPTIONS = [
+  { value: "All Statuses", label: "All Statuses" },
+  { value: "Active", label: "Active" },
+  { value: "Inactive", label: "Inactive" },
+];
+
+// Styling override so CustomSelect matches the h-10 / border-slate-200 inputs
+const SELECT_FILTER_CLASS =
+  "w-44 [&>button]:h-10 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-600 [&>button]:px-4";
 
 const getIconForCategory = (category) => {
   const map = {
@@ -87,7 +108,9 @@ const LeaveTemplates = () => {
 
   const filtered = useMemo(() => {
     if (status === "All Statuses") return templates;
-    return templates;
+    return templates.filter(
+      (t) => (t.status || "Active") === status
+    );
   }, [templates, status]);
 
   const totalItems = filtered.length;
@@ -207,7 +230,7 @@ const LeaveTemplates = () => {
 
       {/* Header / Filters */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
           <div className="relative flex-1 max-w-sm">
             <Search
               size={17}
@@ -222,27 +245,23 @@ const LeaveTemplates = () => {
             />
           </div>
 
-          <select
+          {/* ✅ Replaced native  (Category) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="h-10 w-44 px-4 border border-slate-200 rounded-lg bg-white text-sm text-slate-600 outline-none focus:border-indigo-400"
-          >
-            <option>All Categories</option>
-            <option>Annual Leave</option>
-            <option>Sick Leave</option>
-            <option>Casual Leave</option>
-            <option>Maternity Leave</option>
-          </select>
+            options={CATEGORY_OPTIONS}
+            onChange={(value) => setCategory(value)}
+            className={SELECT_FILTER_CLASS}
+          />
 
-          <select
+          {/* ✅ Replaced native  (Status) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="h-10 w-44 px-4 border border-slate-200 rounded-lg bg-white text-sm text-slate-600 outline-none focus:border-indigo-400"
-          >
-            <option value="All Statuses">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+            options={STATUS_OPTIONS}
+            onChange={(value) => setStatus(value)}
+            className={SELECT_FILTER_CLASS}
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -302,6 +321,7 @@ const LeaveTemplates = () => {
                   paginated.map((template) => {
                     const Icon = getIconForCategory(template.reasonCategory);
                     const iconStyles = getIconStyles(template.reasonCategory);
+                    const rowStatus = template.status || "Active";
 
                     return (
                       <tr
@@ -361,8 +381,15 @@ const LeaveTemplates = () => {
                         </td>
 
                         <td className="px-6 py-4">
-                          <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600">
-                            Active
+                          {/* ✅ Now reflects template.status instead of hardcoding "Active" */}
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                              rowStatus === "Active"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {rowStatus}
                           </span>
                         </td>
 

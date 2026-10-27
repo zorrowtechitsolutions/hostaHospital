@@ -1,16 +1,16 @@
 // src/components/super-admin/hospitals/AddHospital.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
+import {
   Mail, Lock, Building, Building2, MapPin, Globe, Landmark, Home, CreditCard,
   Phone, Eye, EyeOff, Navigation, ArrowLeft,
   Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle, FileText
 } from 'lucide-react';
 import GoogleMapsLocationPicker from '../../../Authentication/GoogleMapsLocationPicker';
 import { Input, Button, Alert } from '../../ui';
+import CustomSelect from '../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '../../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-// ✅ USE useRegisterMutation instead of useAddNewHospitalMutation
 import { useRegisterMutation } from '../../../../app/service/hospitalApi';
 import { useGetCategoryQuery } from '../../../../app/service/category';
 import { useAuth } from '../../../context/AuthContext';
@@ -19,16 +19,27 @@ import logo from "../../../assets/logo.jpeg";
 import { socket } from '../../../socket/socket';
 import { registerHospitalEvents, unregisterHospitalEvents } from '../../../socket/hospitalEvents';
 
+// ✅ Static Working Hours Type options — emojis preserved
+const WORKING_HOUR_TYPE_OPTIONS = [
+  { value: 'normal', label: '🏥 Normal Hospital' },
+  { value: 'clinic', label: '🏪 Clinic' },
+  { value: 'clinic-break', label: '🏪 Clinic with Break' },
+];
+
+// Styling override so CustomSelect matches the py-3 rounded-xl / focus:ring-[#154A7D] form fields
+const FORM_SELECT_CLASS =
+  "w-full [&>button]:py-3 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:text-sm [&>button]:font-medium [&>button]:text-black [&>button]:focus:ring-2 [&>button]:focus:ring-[#154A7D] [&>button]:focus:border-transparent";
+
 // ============================================
 // SEARCHABLE DROPDOWN COMPONENTS
 // ============================================
 
-const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -94,14 +105,14 @@ const SearchableDropdown = ({
             disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -116,7 +127,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500">
           No results found
@@ -126,12 +137,12 @@ const SearchableDropdown = ({
   );
 };
 
-const SearchableCityDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableCityDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   disabled = false,
   required = false
 }) => {
@@ -139,7 +150,7 @@ const SearchableCityDropdown = ({
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => 
+  const filteredOptions = options.filter(option =>
     option.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -184,14 +195,14 @@ const SearchableCityDropdown = ({
             disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -206,7 +217,7 @@ const SearchableCityDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500">
           No cities found
@@ -223,24 +234,20 @@ const SearchableCityDropdown = ({
 const AddHospital = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  // ✅ USE useRegisterMutation
   const [register, { isLoading: isApiLoading }] = useRegisterMutation();
-  
-  // ✅ Working Hours Type - replaces tabs
+
   const [workingHourType, setWorkingHourType] = useState("normal");
-  
+
   const [is24x7, setIs24x7] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);     
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
-  
-  // ✅ Track if events are registered
+
   const [eventsRegistered, setEventsRegistered] = useState(false);
-  
-  // ✅ Fetch categories from API
-  const { 
-    data: categoriesResponse, 
+
+  const {
+    data: categoriesResponse,
     isLoading: isCategoriesLoading,
     error: categoriesError
   } = useGetCategoryQuery({
@@ -248,12 +255,10 @@ const AddHospital = () => {
     limit: 100
   });
 
-  // Extract categories from response
   const categories = categoriesResponse?.data || [];
-  
-  // State for selected category
+
   const [selectedCategory, setSelectedCategory] = useState(null);
-  
+
   const [hospitalName, setHospitalName] = useState("");
   const [about, setAbout] = useState("");
   const [email, setEmail] = useState("");
@@ -265,18 +270,28 @@ const AddHospital = () => {
   const [hospitalType, setHospitalType] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
+
   const [countryCode, setCountryCode] = useState("");
   const [countryName, setCountryName] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [stateName, setStateName] = useState("");
   const [cityName, setCityName] = useState("");
   const [pincode, setPincode] = useState("");
-  
+
   const countries = Country.getAllCountries();
   const states = State.getStatesOfCountry(countryCode);
   const cities = City.getCitiesOfState(countryCode, stateCode);
-  
+
+  // ✅ Options for the Hospital Category CustomSelect
+  const categoryOptions = React.useMemo(
+    () =>
+      categories.map((category) => ({
+        value: category.name,
+        label: `${category.icon ? `${category.icon} ` : ''}${category.name}`,
+      })),
+    [categories]
+  );
+
   // ✅ Normal Hours (for "normal" type)
   const [normalHours, setNormalHours] = useState({
     monday: { start: "09:00", end: "18:00", isHoliday: false },
@@ -320,19 +335,19 @@ const AddHospital = () => {
       onHospitalRegistered: (data) => {
         showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
       },
-      
+
       onHospitalUpdated: (data) => {
         showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
       },
-      
+
       onHospitalDeleted: (data) => {
         showSuccessToast(`Hospital deleted!`, 3000);
       },
-      
+
       onHospitalBlacklisted: (data) => {
         showSuccessToast(`Hospital blacklisted!`, 3000);
       },
-      
+
       onHospitalRecovered: (data) => {
         showSuccessToast(`Hospital recovered successfully!`, 3000);
       }
@@ -414,7 +429,6 @@ const AddHospital = () => {
 
   const toggle247Mode = () => {
     if (!is24x7) {
-      // Set all days to 24/7 based on current working hour type
       if (workingHourType === "normal") {
         const newHours = {};
         daysOfWeek.forEach(day => {
@@ -437,7 +451,6 @@ const AddHospital = () => {
       setIs24x7(true);
       showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
     } else {
-      // Reset to defaults based on workingHourType
       const defaultNormalHours = {
         monday: { start: "09:00", end: "18:00", isHoliday: false },
         tuesday: { start: "09:00", end: "18:00", isHoliday: false },
@@ -465,11 +478,11 @@ const AddHospital = () => {
         saturday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: false },
         sunday: { morningStart: "09:00", morningEnd: "12:00", eveningStart: "16:00", eveningEnd: "20:00", isHoliday: true }
       };
-      
+
       if (workingHourType === "normal") setNormalHours(defaultNormalHours);
       else if (workingHourType === "clinic") setClinicHours(defaultClinicHours);
       else setClinicBreakHours(defaultClinicBreakHours);
-      
+
       setIs24x7(false);
       showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
     }
@@ -558,7 +571,6 @@ const AddHospital = () => {
     setCityName(name);
   };
 
-  // ✅ Convert 24-hour time to 12-hour format with AM/PM
   const convertTo12Hour = (time) => {
     if (!time) return '09:00 AM';
     const [hours, minutes] = time.split(':').map(Number);
@@ -567,11 +579,10 @@ const AddHospital = () => {
     return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
-  // ✅ Convert to API format based on selected type
   const convertToApiWorkingHours = () => {
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     const result = [];
-    
+
     if (workingHourType === "normal") {
       days.forEach(day => {
         const dayData = normalHours[day];
@@ -605,15 +616,14 @@ const AddHospital = () => {
         });
       });
     }
-    
+
     return result;
   };
 
-  // ✅ Convert working hours to frontend WorkingHours object format based on type
   const convertToWorkingHoursObject = () => {
     const workingHours = {};
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    
+
     if (workingHourType === "normal") {
       days.forEach(day => {
         const dayData = normalHours[day];
@@ -635,7 +645,6 @@ const AddHospital = () => {
     } else if (workingHourType === "clinic-break") {
       days.forEach(day => {
         const dayData = clinicBreakHours[day];
-        // For break type, use morning start as open and evening end as close
         workingHours[day] = {
           open: convertTo12Hour(dayData?.morningStart || '09:00'),
           close: convertTo12Hour(dayData?.eveningEnd || '20:00'),
@@ -643,7 +652,7 @@ const AddHospital = () => {
         };
       });
     }
-    
+
     return workingHours;
   };
 
@@ -653,8 +662,7 @@ const AddHospital = () => {
       setIsSubmitting(true);
       setRegisterError('');
       showInfoToast('Creating hospital account...', 2000);
-      
-      // ✅ Convert working hours based on selected type
+
       const workingHours = convertToWorkingHoursObject();
       const apiWorkingHours = convertToApiWorkingHours();
 
@@ -681,11 +689,9 @@ const AddHospital = () => {
         workingHoursData: apiWorkingHours
       };
 
-
       try {
         const response = await register(hospitalData).unwrap();
-        
-        // ✅ Emit socket event for hospital registration
+
         socket.emit("hospital_event", {
           event: "HOSPITAL_REGISTERED",
           data: {
@@ -698,10 +704,9 @@ const AddHospital = () => {
             timestamp: new Date().toISOString()
           }
         });
-        
-        // Extract hospital data from response
+
         const hospital = response.data || response;
-        
+
         if (!hospital || !hospital.id) {
           showSuccessToast(
             "Registration completed successfully.",
@@ -712,7 +717,6 @@ const AddHospital = () => {
           return;
         }
 
-        // Auto login if data exists
         login({
           id: hospital.id,
           name: hospital.name || hospitalName,
@@ -720,15 +724,15 @@ const AddHospital = () => {
           phone: hospital.phone || phone,
           type: hospital.type || hospitalType,
         });
-        
+
         showSuccessToast(` Welcome ${hospitalName}! Your account has been created and you're logged in.`, 5000);
-        
+
         setIsSubmitting(false);
-        
+
         setTimeout(() => {
           navigate('/dashboard');
         }, 2000);
-        
+
       } catch (error) {
         let errorMessage = "Registration failed. Please try again.";
         if (error.data?.message) errorMessage = error.data.message;
@@ -740,7 +744,6 @@ const AddHospital = () => {
     }
   };
 
-  // ✅ Render Normal Hospital Hours
   const renderNormalHours = () => {
     return daysOfWeek.map((day) => {
       const dayHours = normalHours[day.toLowerCase()] || { start: "09:00", end: "18:00", isHoliday: false };
@@ -749,11 +752,11 @@ const AddHospital = () => {
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
             <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={dayHours.isHoliday} 
-                onChange={(e) => handleNormalHoursChange(day, 'isHoliday', e.target.checked)} 
-                className="w-4 h-4 rounded border-red-400" 
+              <input
+                type="checkbox"
+                checked={dayHours.isHoliday}
+                onChange={(e) => handleNormalHoursChange(day, 'isHoliday', e.target.checked)}
+                className="w-4 h-4 rounded border-red-400"
               />
               Holiday
             </label>
@@ -762,20 +765,20 @@ const AddHospital = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Open Time</label>
-                <input 
-                  type="time" 
-                  value={dayHours.start} 
-                  onChange={(e) => handleNormalHoursChange(day, 'start', e.target.value)} 
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                <input
+                  type="time"
+                  value={dayHours.start}
+                  onChange={(e) => handleNormalHoursChange(day, 'start', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                 />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Close Time</label>
-                <input 
-                  type="time" 
-                  value={dayHours.end} 
-                  onChange={(e) => handleNormalHoursChange(day, 'end', e.target.value)} 
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                <input
+                  type="time"
+                  value={dayHours.end}
+                  onChange={(e) => handleNormalHoursChange(day, 'end', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                 />
               </div>
             </div>
@@ -787,7 +790,6 @@ const AddHospital = () => {
     });
   };
 
-  // ✅ Render Clinic Hours (single session, no break)
   const renderClinicHours = () => {
     return daysOfWeek.map((day) => {
       const dayHours = clinicHours[day.toLowerCase()] || { start: "09:00", end: "18:00", isHoliday: false };
@@ -796,11 +798,11 @@ const AddHospital = () => {
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
             <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={dayHours.isHoliday} 
-                onChange={(e) => handleClinicHoursChange(day, 'isHoliday', e.target.checked)} 
-                className="w-4 h-4 rounded border-red-400" 
+              <input
+                type="checkbox"
+                checked={dayHours.isHoliday}
+                onChange={(e) => handleClinicHoursChange(day, 'isHoliday', e.target.checked)}
+                className="w-4 h-4 rounded border-red-400"
               />
               Holiday
             </label>
@@ -809,20 +811,20 @@ const AddHospital = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Opening Time</label>
-                <input 
-                  type="time" 
-                  value={dayHours.start} 
-                  onChange={(e) => handleClinicHoursChange(day, 'start', e.target.value)} 
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                <input
+                  type="time"
+                  value={dayHours.start}
+                  onChange={(e) => handleClinicHoursChange(day, 'start', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                 />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Closing Time</label>
-                <input 
-                  type="time" 
-                  value={dayHours.end} 
-                  onChange={(e) => handleClinicHoursChange(day, 'end', e.target.value)} 
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                <input
+                  type="time"
+                  value={dayHours.end}
+                  onChange={(e) => handleClinicHoursChange(day, 'end', e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                 />
               </div>
             </div>
@@ -834,24 +836,23 @@ const AddHospital = () => {
     });
   };
 
-  // ✅ Render Clinic Break Hours (morning + evening sessions)
   const renderClinicBreakHours = () => {
     return daysOfWeek.map((day) => {
-      const dayHours = clinicBreakHours[day.toLowerCase()] || { 
-        morningStart: "09:00", morningEnd: "12:00", 
-        eveningStart: "16:00", eveningEnd: "20:00", 
-        isHoliday: false 
+      const dayHours = clinicBreakHours[day.toLowerCase()] || {
+        morningStart: "09:00", morningEnd: "12:00",
+        eveningStart: "16:00", eveningEnd: "20:00",
+        isHoliday: false
       };
       return (
         <div key={day} className="rounded-xl border border-blue-200 bg-white p-5 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-[#154A7D] text-lg">{day}</h3>
             <label className="flex items-center gap-2 text-sm font-medium text-red-600 cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={dayHours.isHoliday} 
-                onChange={(e) => handleClinicBreakHoursChange(day, 'isHoliday', e.target.checked)} 
-                className="w-4 h-4 rounded border-red-400" 
+              <input
+                type="checkbox"
+                checked={dayHours.isHoliday}
+                onChange={(e) => handleClinicBreakHoursChange(day, 'isHoliday', e.target.checked)}
+                className="w-4 h-4 rounded border-red-400"
               />
               Holiday
             </label>
@@ -862,19 +863,19 @@ const AddHospital = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Morning Session</label>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <input 
-                      type="time" 
-                      value={dayHours.morningStart} 
-                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningStart', e.target.value)} 
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    <input
+                      type="time"
+                      value={dayHours.morningStart}
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningStart', e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                     />
                   </div>
                   <div>
-                    <input 
-                      type="time" 
-                      value={dayHours.morningEnd} 
-                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningEnd', e.target.value)} 
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    <input
+                      type="time"
+                      value={dayHours.morningEnd}
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'morningEnd', e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                     />
                   </div>
                 </div>
@@ -883,19 +884,19 @@ const AddHospital = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Evening Session</label>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <input 
-                      type="time" 
-                      value={dayHours.eveningStart} 
-                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningStart', e.target.value)} 
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    <input
+                      type="time"
+                      value={dayHours.eveningStart}
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningStart', e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                     />
                   </div>
                   <div>
-                    <input 
-                      type="time" 
-                      value={dayHours.eveningEnd} 
-                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningEnd', e.target.value)} 
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium" 
+                    <input
+                      type="time"
+                      value={dayHours.eveningEnd}
+                      onChange={(e) => handleClinicBreakHoursChange(day, 'eveningEnd', e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#154A7D] outline-none text-black font-medium"
                     />
                   </div>
                 </div>
@@ -929,30 +930,24 @@ const AddHospital = () => {
 
           <div className="grid md:grid-cols-2 gap-5">
             <Input label="Hospital Name" placeholder="Enter hospital name" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} required />
-            
+
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Hospital Category <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                <select 
-                  value={hospitalType} 
-                  onChange={handleCategoryChange}
-                  disabled={isCategoriesLoading}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {isCategoriesLoading ? 'Loading categories...' : 'Select hospital category'}
-                  </option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.icon && `${category.icon} `}{category.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              </div>
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
+                icon={Building2}
+                value={hospitalType}
+                options={categoryOptions}
+                placeholder={
+                  isCategoriesLoading ? 'Loading categories...' : 'Select hospital category'
+                }
+                onChange={(value) => handleCategoryChange({ target: { value } })}
+                disabled={isCategoriesLoading}
+                className={FORM_SELECT_CLASS}
+              />
               {categories.length === 0 && !isCategoriesLoading && (
                 <p className="text-xs text-amber-600 mt-1">⚠️ No categories available. Please check your connection.</p>
               )}
@@ -1014,24 +1009,19 @@ const AddHospital = () => {
               </button>
             </div>
 
-            {/* ✅ Working Hours Type Dropdown */}
+            {/* ✅ Working Hours Type — Replaced native  with CustomSelect */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Working Hours Type <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none z-10" />
-                <select
-                  value={workingHourType}
-                  onChange={(e) => setWorkingHourType(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 bg-white text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#154A7D] appearance-none cursor-pointer"
-                >
-                  <option value="normal">🏥 Normal Hospital</option>
-                  <option value="clinic">🏪 Clinic</option>
-                  <option value="clinic-break">🏪 Clinic with Break</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              </div>
+              <CustomSelect
+                hideLabel
+                icon={Briefcase}
+                value={workingHourType}
+                options={WORKING_HOUR_TYPE_OPTIONS}
+                onChange={(value) => setWorkingHourType(value)}
+                className={FORM_SELECT_CLASS}
+              />
               <p className="text-xs text-gray-500">
                 {workingHourType === "normal" && "Single session per day (e.g., 9:00 AM - 6:00 PM)"}
                 {workingHourType === "clinic" && "Single session per day without break (e.g., 9:00 AM - 6:00 PM)"}

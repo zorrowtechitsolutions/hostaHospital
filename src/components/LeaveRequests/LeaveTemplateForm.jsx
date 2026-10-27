@@ -9,6 +9,7 @@ import {
   Italic,
   Underline,
 } from "lucide-react";
+import CustomSelect from "../ui/CustomSelect";
 import { showErrorToast } from "../ui/Toast";
 
 const AVAILABLE_VARIABLES = [
@@ -19,6 +20,12 @@ const AVAILABLE_VARIABLES = [
   { key: "TOTAL_DAYS", label: "Total days" },
   { key: "REASON", label: "Reason" },
   { key: "MANAGER_NAME", label: "Manager name" },
+];
+
+// ✅ Options for the Status CustomSelect — static, both values are real choices
+const STATUS_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Inactive", label: "Inactive" },
 ];
 
 const LeaveTemplateForm = ({
@@ -122,10 +129,10 @@ const LeaveTemplateForm = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen w-full min-w-0 overflow-x-hidden overflow-y-auto bg-slate-50 p-3 sm:p-4 lg:p-6">
       <form onSubmit={handleSubmit} className="max-w-7xl mx-auto">
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="px-6 py-5 border-b border-slate-200">
+          <div className="px-4 sm:px-6 py-5 border-b border-slate-200">
             <h1 className="text-lg font-semibold text-slate-800">
               {mode === "edit"
                 ? "Edit Leave Request Template"
@@ -138,13 +145,13 @@ const LeaveTemplateForm = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-12 gap-6 p-6">
-            <div className="col-span-12 lg:col-span-9">
+          <div className="grid grid-cols-12 gap-4 sm:gap-6 p-4 sm:p-6">
+            <div className="col-span-12 lg:col-span-9 min-w-0">
               <h2 className="text-sm font-semibold text-slate-800 mb-5">
                 Template Information
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Template Name <span className="text-red-500 ml-1">*</span>
@@ -175,14 +182,16 @@ const LeaveTemplateForm = ({
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Status <span className="text-red-500 ml-1">*</span>
                   </label>
-                  <select
+                  {/* ✅ Replaced native  with CustomSelect.
+                      The arbitrary variants [&>button]: override CustomSelect's default
+                      styling to match the surrounding h-11 / border-slate-200 inputs. */}
+                  <CustomSelect
+                    hideLabel
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full h-11 px-3 border border-slate-200 rounded-lg bg-white text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+                    options={STATUS_OPTIONS}
+                    onChange={(value) => setStatus(value)}
+                    className="[&>button]:h-11 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-700 [&>button]:focus:ring-indigo-500 [&>button]:focus:border-indigo-500"
+                  />
                 </div>
               </div>
 
@@ -191,12 +200,13 @@ const LeaveTemplateForm = ({
                   Message <span className="text-red-500 ml-1">*</span>
                 </label>
                 <div className="border border-slate-200 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100">
-                  <div className="h-11 px-3 flex items-center gap-4 border-b border-slate-200 bg-slate-50">
-                    <span className="text-xs font-medium text-slate-600">
+                  {/* Toolbar — horizontally scrollable on mobile so all icons remain reachable */}
+                  <div className="h-11 px-3 flex items-center gap-4 border-b border-slate-200 bg-slate-50 overflow-x-auto whitespace-nowrap">
+                    <span className="text-xs font-medium text-slate-600 shrink-0">
                       Paragraph
                     </span>
-                    <ChevronDown size={14} className="text-slate-400" />
-                    <div className="w-px h-5 bg-slate-200" />
+                    <ChevronDown size={14} className="text-slate-400 shrink-0" />
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
 
                     <button
                       type="button"
@@ -205,7 +215,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("bold");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Bold"
                     >
                       <Bold size={16} />
@@ -217,7 +227,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("italic");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Italic"
                     >
                       <Italic size={16} />
@@ -229,13 +239,13 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("underline");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Underline"
                     >
                       <Underline size={16} />
                     </button>
 
-                    <div className="w-px h-5 bg-slate-200" />
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
 
                     <button
                       type="button"
@@ -244,7 +254,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("insertUnorderedList");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Bullet list"
                     >
                       <List size={16} />
@@ -256,7 +266,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("insertOrderedList");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Numbered list"
                     >
                       <ListOrdered size={16} />
@@ -268,7 +278,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         formatText("justifyLeft");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Align left"
                     >
                       <AlignLeft size={16} />
@@ -281,7 +291,7 @@ const LeaveTemplateForm = ({
                         saveSelection();
                         fileInputRef.current?.click();
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Attach file"
                     >
                       <Paperclip size={16} />
@@ -301,7 +311,7 @@ const LeaveTemplateForm = ({
                     contentEditable
                     suppressContentEditableWarning
                     onInput={handleEditorInput}
-                    className="w-full min-h-[280px] p-4 text-sm text-slate-700 outline-none overflow-y-auto
+                    className="w-full min-h-[220px] sm:min-h-[280px] p-4 text-sm text-slate-700 outline-none overflow-y-auto
                       [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2
                       [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2
                       [&_li]:my-1
@@ -314,12 +324,12 @@ const LeaveTemplateForm = ({
               </div>
             </div>
 
-            <div className="col-span-12 lg:col-span-3">
-              <div className="bg-indigo-50 rounded-xl p-5 sticky top-6">
+            <div className="col-span-12 lg:col-span-3 min-w-0">
+              <div className="bg-indigo-50 rounded-xl p-5 lg:sticky lg:top-6">
                 <h3 className="text-sm font-semibold text-slate-700 mb-5">
                   Available Variables
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {AVAILABLE_VARIABLES.map((variable) => (
                     <button
                       key={variable.key}
@@ -351,18 +361,18 @@ const LeaveTemplateForm = ({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onCancel}
-              className="px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="w-full sm:w-auto px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium shadow-sm"
+              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-medium shadow-sm"
             >
               {isLoading
                 ? mode === "edit"

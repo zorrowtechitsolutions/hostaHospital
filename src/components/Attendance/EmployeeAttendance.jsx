@@ -10,7 +10,7 @@ import {
   List,
   Filter,
 } from "lucide-react";
-import { Pagination } from "../ui";
+import { Pagination, CustomSelect } from "../ui";
 import { useGetAttendancesQuery } from "../../../app/service/attendance";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { useGetStaffByIdQuery } from "../../../app/service/staffApi";
@@ -929,23 +929,26 @@ const EmployeeAttendance = () => {
                   <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1.5">
                     Status
                   </label>
-                  <select
+                  {/* ✅ Status — CustomSelect */}
+                  <CustomSelect
+                    label=""
                     value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
+                    options={[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'Present', label: 'Present' },
+                      { value: 'Late', label: 'Late' },
+                      { value: 'Early Departure', label: 'Early Departure' },
+                      { value: 'Shift Completed', label: 'Shift Completed' },
+                      { value: 'Half Day', label: 'Half Day' },
+                      { value: 'Absent', label: 'Absent' },
+                      { value: 'On Leave', label: 'On Leave' }
+                    ]}
+                    onChange={(value) => {
+                      setStatusFilter(value);
                       setCurrentPage(1);
                     }}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="Present">Present</option>
-                    <option value="Late">Late</option>
-                    <option value="Early Departure">Early Departure</option>
-                    <option value="Shift Completed">Shift Completed</option>
-                    <option value="Half Day">Half Day</option>
-                    <option value="Absent">Absent</option>
-                    <option value="On Leave">On Leave</option>
-                  </select>
+                    placeholder="All Status"
+                  />
                 </div>
 
                 <div>
@@ -1044,49 +1047,51 @@ const EmployeeAttendance = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border border-gray-200">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Date</th>
-                          <th className="px-4 py-3 font-medium">Check In</th>
-                          <th className="px-4 py-3 font-medium">Check Out</th>
-                          <th className="px-4 py-3 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedData.map((row) => (
-                          <tr
-                            key={row.id}
-                            className="border-t border-gray-100 hover:bg-gray-50"
-                          >
-                            <td className="px-4 py-3 text-gray-800">
-                              {row.dateLong}
-                            </td>
-                            <td className="px-4 py-3 text-gray-600">
-                              {row.checkInShort}
-                            </td>
-                            <td className="px-4 py-3 text-gray-600">
-                              {row.checkOutShort}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
-                                  row.status
-                                )}`}
-                              >
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[480px] text-left text-sm">
+                        <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500">
+                          <tr>
+                            <th className="px-4 py-3 font-medium">Date</th>
+                            <th className="px-4 py-3 font-medium">Check In</th>
+                            <th className="px-4 py-3 font-medium">Check Out</th>
+                            <th className="px-4 py-3 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedData.map((row) => (
+                            <tr
+                              key={row.id}
+                              className="border-t border-gray-100 hover:bg-gray-50"
+                            >
+                              <td className="px-4 py-3 text-gray-800">
+                                {row.dateLong}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">
+                                {row.checkInShort}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">
+                                {row.checkOutShort}
+                              </td>
+                              <td className="px-4 py-3">
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusBadge(
                                     row.status
                                   )}`}
-                                ></span>
-                                {row.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getStatusDot(
+                                      row.status
+                                    )}`}
+                                  ></span>
+                                  {row.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

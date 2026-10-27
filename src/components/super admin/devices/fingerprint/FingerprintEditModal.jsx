@@ -11,7 +11,32 @@ import {
   useUpdateFingerprintEnrollmentMutation,
 } from '../../../../../app/service/fingerprint';
 import { useGetDevicesQuery } from '../../../../../app/service/device';
+import CustomSelect from '../../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
+
+// ✅ Static Finger Position options — value === label (matches the original <option> without explicit value)
+const FINGER_POSITION_OPTIONS = [
+  { value: 'Right Thumb', label: 'Right Thumb' },
+  { value: 'Right Index', label: 'Right Index' },
+  { value: 'Right Middle', label: 'Right Middle' },
+  { value: 'Right Ring', label: 'Right Ring' },
+  { value: 'Right Little', label: 'Right Little' },
+  { value: 'Left Thumb', label: 'Left Thumb' },
+  { value: 'Left Index', label: 'Left Index' },
+  { value: 'Left Middle', label: 'Left Middle' },
+  { value: 'Left Ring', label: 'Left Ring' },
+  { value: 'Left Little', label: 'Left Little' },
+];
+
+// ✅ Static Status options
+const STATUS_OPTIONS = [
+  { value: 'Active', label: 'Active' },
+  { value: 'Inactive', label: 'Inactive' },
+];
+
+// Styling override so CustomSelect matches the inputCls (h-11 border-gray-200 rounded-lg focus:ring-blue-500/40)
+const FORM_SELECT_CLASS =
+  "w-full [&>button]:h-11 [&>button]:border-gray-200 [&>button]:rounded-lg [&>button]:px-3.5 [&>button]:text-sm [&>button]:text-gray-800 [&>button]:focus:ring-2 [&>button]:focus:ring-blue-500/40 [&>button]:focus:border-blue-400";
 
 const Field = ({ label, required, hint, children }) => (
   <div className="mb-4">
@@ -92,6 +117,22 @@ const FingerprintEditModal = () => {
     ),
     [devicesResponse]
   );
+
+  // ✅ Options for the Device CustomSelect — "" sentinel + dynamic devices
+  const deviceSelectOptions = useMemo(() => {
+    let placeholder;
+    if (devicesLoading) placeholder = 'Loading fingerprint devices...';
+    else if (fingerprintDevices.length === 0) placeholder = 'No fingerprint devices available';
+    else placeholder = 'Select fingerprint device';
+
+    return [
+      { value: '', label: placeholder },
+      ...fingerprintDevices.map((d) => ({
+        value: String(d.deviceId),
+        label: `${d.deviceName} — ${d.location}`,
+      })),
+    ];
+  }, [devicesLoading, fingerprintDevices]);
 
   const resolvedMember = useMemo(() => {
     const doctors = doctorsResponse?.data || [];
@@ -321,38 +362,26 @@ const FingerprintEditModal = () => {
                 </div>
 
                 <Field label="Device" required>
-                  <select
-                    value={form.deviceId}
-                    onChange={update('deviceId')}
-                    className={inputCls}
+                  {/* ✅ Replaced native  with CustomSelect */}
+                  <CustomSelect
+                    hideLabel
+                    value={form.deviceId ? String(form.deviceId) : ''}
+                    options={deviceSelectOptions}
+                    onChange={(value) => update('deviceId')({ target: { value } })}
                     disabled={devicesLoading}
-                  >
-                    <option value="">
-                      {devicesLoading ? 'Loading fingerprint devices...'
-                        : fingerprintDevices.length === 0 ? 'No fingerprint devices available'
-                        : 'Select fingerprint device'}
-                    </option>
-                    {fingerprintDevices.map((d) => (
-                      <option key={d.id ?? d._id ?? d.deviceId} value={d.deviceId}>
-                        {d.deviceName} — {d.location}
-                      </option>
-                    ))}
-                  </select>
+                    className={FORM_SELECT_CLASS}
+                  />
                 </Field>
 
                 <Field label="Finger Position" required>
-                  <select value={form.fingerPosition} onChange={update('fingerPosition')} className={inputCls}>
-                    <option>Right Thumb</option>
-                    <option>Right Index</option>
-                    <option>Right Middle</option>
-                    <option>Right Ring</option>
-                    <option>Right Little</option>
-                    <option>Left Thumb</option>
-                    <option>Left Index</option>
-                    <option>Left Middle</option>
-                    <option>Left Ring</option>
-                    <option>Left Little</option>
-                  </select>
+                  {/* ✅ Replaced native  with CustomSelect */}
+                  <CustomSelect
+                    hideLabel
+                    value={form.fingerPosition}
+                    options={FINGER_POSITION_OPTIONS}
+                    onChange={(value) => update('fingerPosition')({ target: { value } })}
+                    className={FORM_SELECT_CLASS}
+                  />
                 </Field>
 
                 <Field label="Quality">
@@ -364,10 +393,14 @@ const FingerprintEditModal = () => {
                 </Field>
 
                 <Field label="Status" required>
-                  <select value={form.status} onChange={update('status')} className={inputCls}>
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+                  {/* ✅ Replaced native  with CustomSelect */}
+                  <CustomSelect
+                    hideLabel
+                    value={form.status}
+                    options={STATUS_OPTIONS}
+                    onChange={(value) => update('status')({ target: { value } })}
+                    className={FORM_SELECT_CLASS}
+                  />
                 </Field>
 
                 <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3.5 py-3 mt-2">

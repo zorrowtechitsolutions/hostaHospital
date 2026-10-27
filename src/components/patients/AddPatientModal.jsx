@@ -11,6 +11,7 @@ import {
 import {
   Button, Input, Select, Card, DatePicker
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import {
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast
 } from '../ui/Toast';
@@ -204,6 +205,13 @@ const AddPatient = () => {
   const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed'];
   const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
   const patientTypeOptions = ['Outpatient', 'Inpatient'];
+
+  // ✅ Convert local string arrays → {value, label} for CustomSelect
+  const bloodGroupSelectOptions = bloodGroupOptions.map(v => ({ value: v, label: v }));
+  const maritalStatusSelectOptions = maritalStatusOptions.map(v => ({ value: v, label: v }));
+  const guardianRelationSelectOptions = guardianRelationOptions.map(v => ({ value: v, label: v }));
+  const patientTypeSelectOptions = patientTypeOptions.map(v => ({ value: v, label: v }));
+  const genderSelectOptions = ['Male', 'Female', 'Other'].map(v => ({ value: v, label: v }));
 
   const handleCountryChange = (code, name) => {
     setFormData(prev => ({
@@ -506,27 +514,24 @@ const AddPatient = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <Select
+                  {/* ✅ Replaced  (Blood Group) with CustomSelect */}
+                  <CustomSelect
                     label="Blood Group"
-                    name="bloodGroup"
-                    options={bloodGroupOptions}
-                    placeholder="Select Blood Group (Optional)"
                     value={formData.bloodGroup}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    options={bloodGroupSelectOptions}
+                    placeholder="Select Blood Group (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'bloodGroup', value } })}
                     error={errors.bloodGroup}
                     touched={touched.bloodGroup}
                   />
 
-                  <Select
+                  {/* ✅ Replaced (Patient Type) with CustomSelect */}
+                  <CustomSelect
                     label="Patient Type"
-                    name="patientType"
-                    icon={Activity}
-                    options={patientTypeOptions}
-                    placeholder="Select Patient Type"
                     value={formData.patientType}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    options={patientTypeSelectOptions}
+                    placeholder="Select Patient Type"
+                    onChange={(value) => handleChange({ target: { name: 'patientType', value } })}
                     error={errors.patientType}
                     touched={touched.patientType}
                     required
@@ -580,14 +585,13 @@ const AddPatient = () => {
                     )}
                   </div>
 
-                  <Select
+                  {/* ✅ Replaced  (Gender) with CustomSelect */}
+                  <CustomSelect
                     label="Gender"
-                    name="gender"
-                    options={['Male', 'Female', 'Other']}
-                    placeholder="Select Gender"
                     value={formData.gender}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    options={genderSelectOptions}
+                    placeholder="Select Gender"
+                    onChange={(value) => handleChange({ target: { name: 'gender', value } })}
                     error={errors.gender}
                     touched={touched.gender}
                     required
@@ -595,17 +599,17 @@ const AddPatient = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <Select
+                  {/* ✅ Replaced  (Marital Status) with CustomSelect */}
+                  <CustomSelect
                     label="Marital Status"
-                    name="maritalStatus"
-                    options={maritalStatusOptions}
-                    placeholder="Select Marital Status (Optional)"
                     value={formData.maritalStatus}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    options={maritalStatusSelectOptions}
+                    placeholder="Select Marital Status (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'maritalStatus', value } })}
                     error={errors.maritalStatus}
                     touched={touched.maritalStatus}
                   />
+
                   <Input
                     label="Occupation"
                     name="occupation"
@@ -662,14 +666,14 @@ const AddPatient = () => {
                     error={errors.guardianName}
                     touched={touched.guardianName}
                   />
-                  <Select
+
+                  {/* ✅ Replaced  (Guardian Relation) with CustomSelect */}
+                  <CustomSelect
                     label="Guardian Relation"
-                    name="guardianRelation"
-                    options={guardianRelationOptions}
-                    placeholder="Relationship (Optional)"
                     value={formData.guardianRelation}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    options={guardianRelationSelectOptions}
+                    placeholder="Relationship (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'guardianRelation', value } })}
                     error={errors.guardianRelation}
                     touched={touched.guardianRelation}
                   />

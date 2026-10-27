@@ -1,8 +1,9 @@
 // src/components/appointments/EditAppointmentModal.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button } from '../ui';
 import DatePicker from '../ui/DatePicker';
+import CustomSelect from '../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { useUpdateBookingMutation } from '../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
@@ -35,6 +36,18 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
       setDoctors(doctorList);
     }
   }, [doctorsData]);
+
+  // ✅ Options for the doctor CustomSelect — string values, label = "name - dept"
+  const doctorOptions = useMemo(
+    () =>
+      doctors.map((doctor) => ({
+        value: String(doctor.id),
+        label: `${doctor.displayName || doctor.name || ''}${
+          doctor.department ? ` - ${doctor.department}` : ''
+        }`,
+      })),
+    [doctors]
+  );
 
   // Populate form when appointment changes
   useEffect(() => {
@@ -151,16 +164,13 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
 
   /* =====================================================
      DatePicker handler — receives ISO string (YYYY-MM-DD)
-     from the DatePicker component.
      ===================================================== */
   const handleDateChange = (isoDate) => {
     setFormData(prev => ({ ...prev, booking_date: isoDate }));
     setTouched(prev => ({ ...prev, booking_date: true }));
 
-    // Clear any existing date error
     setErrors(prev => ({ ...prev, booking_date: '' }));
 
-    // Re-validate if it was previously touched
     const error = validateDate(isoDate);
     if (error) {
       setErrors(prev => ({ ...prev, booking_date: error }));
@@ -238,7 +248,6 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
           ? Number(formData.token)
           : undefined,
       };
-
 
       await updateBooking({
         bookingNumber: Number(appointment.bookingNumber),
@@ -326,26 +335,18 @@ const EditAppointmentModal = ({ isOpen, onClose, appointment, onSave }) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Doctor *
               </label>
-              <select
-                name="doctorId"
-                value={formData.doctorId}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white ${
-                  errors.doctorId && touched.doctorId ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select a doctor</option>
-                {doctors.map((doctor) => (
-                  <option key={doctor.id} value={String(doctor.id)}>
-                    {doctor.displayName || doctor.name}
-                    {doctor.department && ` - ${doctor.department}`}
-                  </option>
-                ))}
-              </select>
-              {errors.doctorId && touched.doctorId && (
-                <p className="text-xs text-red-500 mt-1">{errors.doctorId}</p>
-              )}
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
+                value={formData.doctorId || ''}
+                options={doctorOptions}
+                placeholder="Select a doctor"
+                onChange={(value) => handleChange({ target: { name: 'doctorId', value } })}
+                onBlur={() => handleBlur({ target: { name: 'doctorId' } })}
+                error={errors.doctorId}
+                touched={touched.doctorId}
+                className="[&>button]:border-gray-300 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]"
+              />
               {selectedDoctor && (
                 <p className="text-xs text-gray-400 mt-1">
                   Department: {selectedDoctor.department || 'N/A'}

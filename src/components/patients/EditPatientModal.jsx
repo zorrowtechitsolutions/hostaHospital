@@ -1,29 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  User, Mail, Phone, Calendar, MapPin, 
-  ArrowLeft, Users, 
+import {
+  User, Mail, Phone, Calendar, MapPin,
+  ArrowLeft, Users,
   Briefcase, Clock, AlertTriangle,
   ChevronDown, Activity
 } from 'lucide-react';
-import { 
-  Button, Input, Select, Card, Loader 
+import {
+  Button, Input, Select, Card, Loader
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import DatePicker from '../ui/DatePicker';
-import { 
-  showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast 
+import {
+  showSuccessToast, showErrorToast, showWarningToast, showInfoToast, showUpdateToast
 } from '../ui/Toast';
 import { useGetPatientByIdQuery, useUpdatePatientMutation } from '../../../app/service/patients';
 import { Country, State, City } from 'country-state-city';
 import { getAuthUser } from '../../utils/auth';
 
 // SearchableDropdown Component
-const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -87,14 +88,14 @@ const SearchableDropdown = ({
             disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -109,7 +110,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No results found
@@ -122,40 +123,38 @@ const SearchableDropdown = ({
 const EditPatient = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  
+
   const numericId = id ? Number(id) : null;
   const authUser = getAuthUser();
-  
+
   // 🔥 FIX: Get hospitalId properly
   const getHospitalId = () => {
-    // Priority 1: Check localStorage
     const storedHospitalId = localStorage.getItem('hospitalId');
     if (storedHospitalId) {
       return storedHospitalId;
     }
-    
-    // Priority 2: Check auth.hospitalId
+
     if (authUser?.hospitalId) {
       return authUser.hospitalId;
     }
-    
+
     return null;
   };
-  
+
   const hospitalId = getHospitalId();
-  
-  const { 
-    data: patientResponse, 
-    isLoading: isLoadingPatient, 
+
+  const {
+    data: patientResponse,
+    isLoading: isLoadingPatient,
     refetch
   } = useGetPatientByIdQuery(numericId, {
     skip: !numericId
   });
-  
+
   const [updatePatient, { isLoading: isUpdating }] = useUpdatePatientMutation();
-  
+
   const patient = patientResponse?.data || patientResponse || null;
-  
+
   const [formData, setFormData] = useState({
     fullName: '',
     bloodGroup: '',
@@ -194,10 +193,17 @@ const EditPatient = () => {
   const guardianRelationOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Other'];
   const patientTypeOptions = ['Outpatient', 'Inpatient'];
 
+  // ✅ Convert local string arrays → {value, label} for CustomSelect
+  const bloodGroupSelectOptions = bloodGroupOptions.map(v => ({ value: v, label: v }));
+  const maritalStatusSelectOptions = maritalStatusOptions.map(v => ({ value: v, label: v }));
+  const guardianRelationSelectOptions = guardianRelationOptions.map(v => ({ value: v, label: v }));
+  const patientTypeSelectOptions = patientTypeOptions.map(v => ({ value: v, label: v }));
+  const genderSelectOptions = ['Male', 'Female', 'Other'].map(v => ({ value: v, label: v }));
+
   useEffect(() => {
     if (patient) {
       const country = countries.find(c => c.name === patient.location?.country);
-      
+
       setFormData({
         fullName: patient.name || '',
         bloodGroup: patient.bloodGroup || '',
@@ -221,7 +227,7 @@ const EditPatient = () => {
         occupation: patient.occupation || '',
         email: patient.email || '',
       });
-      
+
       setOriginalPatientId(patient.id || patient._id);
     }
   }, [patient, countries]);
@@ -306,17 +312,17 @@ const EditPatient = () => {
       'fullName', 'mobileNumber', 'gender', 'patientType',
       'addressLine', 'countryName', 'stateName', 'district'
     ];
-    
+
     if (formData.age) {
       const ageError = validateField('age', formData.age);
       if (ageError) newErrors.age = ageError;
     }
-    
+
     fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -344,13 +350,9 @@ const EditPatient = () => {
   const handleDateChange = (isoDate) => {
     setFormData(prev => ({ ...prev, dob: isoDate }));
 
-    // Mark as touched so error styling behaves consistently
     setTouched(prev => ({ ...prev, dob: true }));
-
-    // Clear any existing dob error
     setErrors(prev => ({ ...prev, dob: '' }));
 
-    // Auto-calculate age from DOB
     if (isoDate) {
       const today = new Date();
       const birthDate = new Date(isoDate);
@@ -398,12 +400,12 @@ const EditPatient = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!originalPatientId) {
       showErrorToast('❌ Patient ID not found. Please try again.');
       return;
     }
-    
+
     const allFields = [
       'fullName', 'mobileNumber', 'gender', 'patientType',
       'addressLine', 'countryName', 'stateName', 'district'
@@ -411,19 +413,19 @@ const EditPatient = () => {
     const touchedFields = {};
     allFields.forEach(field => touchedFields[field] = true);
     setTouched(touchedFields);
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
       showInfoToast('Updating patient profile...', 2000);
-      
+
       try {
         const updateData = prepareUpdateData();
-        
-        await updatePatient({ 
-          id: originalPatientId, 
-          updatePatient: updateData 
+
+        await updatePatient({
+          id: originalPatientId,
+          updatePatient: updateData
         }).unwrap();
-        
+
         showUpdateToast(
           `${formData.fullName} has been updated successfully!`,
           4000,
@@ -435,16 +437,15 @@ const EditPatient = () => {
             'Blood Group': formData.bloodGroup || 'N/A'
           }
         );
-        
+
         setIsSubmitting(false);
         refetch();
-        
+
         setTimeout(() => {
           navigate('/patients');
         }, 1500);
-        
+
       } catch (error) {
-        // ✅ Extract specific validation error first, then fallback
         console.error('Update Patient Error:', error);
 
         const message =
@@ -524,62 +525,60 @@ const EditPatient = () => {
               {/* Personal Information */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
-                
+
                 <div className="grid grid-cols-1 gap-5">
-                  <Input 
-                    label="Full Name" 
-                    name="fullName" 
-                    icon={User} 
-                    placeholder="Enter full name" 
-                    value={formData.fullName} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.fullName} 
-                    touched={touched.fullName} 
-                    required 
+                  <Input
+                    label="Full Name"
+                    name="fullName"
+                    icon={User}
+                    placeholder="Enter full name"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.fullName}
+                    touched={touched.fullName}
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <Select 
-                    label="Blood Group" 
-                    name="bloodGroup" 
-                    options={bloodGroupOptions} 
-                    placeholder="Select Blood Group (Optional)" 
-                    value={formData.bloodGroup} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.bloodGroup} 
-                    touched={touched.bloodGroup} 
+                  {/* ✅ Replaced  (Blood Group) with CustomSelect */}
+                  <CustomSelect
+                    label="Blood Group"
+                    value={formData.bloodGroup}
+                    options={bloodGroupSelectOptions}
+                    placeholder="Select Blood Group (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'bloodGroup', value } })}
+                    error={errors.bloodGroup}
+                    touched={touched.bloodGroup}
                   />
-                  
-                  <Select 
-                    label="Patient Type" 
-                    name="patientType" 
+
+                  {/* ✅ Replaced  (Patient Type) with CustomSelect */}
+                  <CustomSelect
+                    label="Patient Type"
                     icon={Activity}
-                    options={patientTypeOptions} 
-                    placeholder="Select Patient Type" 
-                    value={formData.patientType} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.patientType} 
-                    touched={touched.patientType} 
-                    required 
+                    value={formData.patientType}
+                    options={patientTypeSelectOptions}
+                    placeholder="Select Patient Type"
+                    onChange={(value) => handleChange({ target: { name: 'patientType', value } })}
+                    error={errors.patientType}
+                    touched={touched.patientType}
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
-                  <Input 
-                    label="Age" 
-                    name="age" 
-                    type="number" 
-                    icon={Clock} 
-                    placeholder="Age in years (Optional)" 
-                    value={formData.age} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.age} 
-                    touched={touched.age} 
+                  <Input
+                    label="Age"
+                    name="age"
+                    type="number"
+                    icon={Clock}
+                    placeholder="Age in years (Optional)"
+                    value={formData.age}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.age}
+                    touched={touched.age}
                   />
 
                   {/* DatePicker — replaces native Input type="date" */}
@@ -606,42 +605,41 @@ const EditPatient = () => {
                     )}
                   </div>
 
-                  <Select 
-                    label="Gender" 
-                    name="gender" 
-                    options={['Male', 'Female', 'Other']} 
-                    placeholder="Select Gender" 
-                    value={formData.gender} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.gender} 
-                    touched={touched.gender} 
-                    required 
+                  {/* ✅ Replaced  (Gender) with CustomSelect */}
+                  <CustomSelect
+                    label="Gender"
+                    value={formData.gender}
+                    options={genderSelectOptions}
+                    placeholder="Select Gender"
+                    onChange={(value) => handleChange({ target: { name: 'gender', value } })}
+                    error={errors.gender}
+                    touched={touched.gender}
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <Select 
-                    label="Marital Status" 
-                    name="maritalStatus" 
-                    options={maritalStatusOptions} 
-                    placeholder="Select Marital Status (Optional)" 
-                    value={formData.maritalStatus} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.maritalStatus} 
-                    touched={touched.maritalStatus} 
+                  {/* ✅ Replaced  (Marital Status) with CustomSelect */}
+                  <CustomSelect
+                    label="Marital Status"
+                    value={formData.maritalStatus}
+                    options={maritalStatusSelectOptions}
+                    placeholder="Select Marital Status (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'maritalStatus', value } })}
+                    error={errors.maritalStatus}
+                    touched={touched.maritalStatus}
                   />
-                  <Input 
-                    label="Occupation" 
-                    name="occupation" 
-                    icon={Briefcase} 
-                    placeholder="Occupation (Optional)" 
-                    value={formData.occupation} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.occupation} 
-                    touched={touched.occupation} 
+
+                  <Input
+                    label="Occupation"
+                    name="occupation"
+                    icon={Briefcase}
+                    placeholder="Occupation (Optional)"
+                    value={formData.occupation}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.occupation}
+                    touched={touched.occupation}
                   />
                 </div>
               </div>
@@ -649,70 +647,70 @@ const EditPatient = () => {
               {/* Contact Information */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Contact Information</h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Input 
-                    label="Mobile Number" 
-                    name="mobileNumber" 
-                    icon={Phone} 
-                    placeholder="+1 234 567 8900" 
-                    value={formData.mobileNumber} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.mobileNumber} 
-                    touched={touched.mobileNumber} 
-                    required 
+                  <Input
+                    label="Mobile Number"
+                    name="mobileNumber"
+                    icon={Phone}
+                    placeholder="+1 234 567 8900"
+                    value={formData.mobileNumber}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.mobileNumber}
+                    touched={touched.mobileNumber}
+                    required
                   />
-                  <Input 
-                    label="Emergency Number" 
-                    name="emergencyNumber" 
-                    icon={AlertTriangle} 
-                    placeholder="Emergency contact (Optional)" 
-                    value={formData.emergencyNumber} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.emergencyNumber} 
-                    touched={touched.emergencyNumber} 
+                  <Input
+                    label="Emergency Number"
+                    name="emergencyNumber"
+                    icon={AlertTriangle}
+                    placeholder="Emergency contact (Optional)"
+                    value={formData.emergencyNumber}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.emergencyNumber}
+                    touched={touched.emergencyNumber}
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <Input 
-                    label="Guardian Name" 
-                    name="guardianName" 
-                    icon={Users} 
-                    placeholder="Parent or guardian name (Optional)" 
-                    value={formData.guardianName} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.guardianName} 
-                    touched={touched.guardianName} 
+                  <Input
+                    label="Guardian Name"
+                    name="guardianName"
+                    icon={Users}
+                    placeholder="Parent or guardian name (Optional)"
+                    value={formData.guardianName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.guardianName}
+                    touched={touched.guardianName}
                   />
-                  <Select 
-                    label="Guardian Relation" 
-                    name="guardianRelation" 
-                    options={guardianRelationOptions} 
-                    placeholder="Relationship (Optional)" 
-                    value={formData.guardianRelation} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.guardianRelation} 
-                    touched={touched.guardianRelation} 
+
+                  {/* ✅ Replaced  (Guardian Relation) with CustomSelect */}
+                  <CustomSelect
+                    label="Guardian Relation"
+                    value={formData.guardianRelation}
+                    options={guardianRelationSelectOptions}
+                    placeholder="Relationship (Optional)"
+                    onChange={(value) => handleChange({ target: { name: 'guardianRelation', value } })}
+                    error={errors.guardianRelation}
+                    touched={touched.guardianRelation}
                   />
                 </div>
 
                 <div className="mt-5">
-                  <Input 
-                    label="Email Address" 
-                    name="email" 
-                    type="email" 
-                    icon={Mail} 
-                    placeholder="patient@example.com (Optional)" 
-                    value={formData.email} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.email} 
-                    touched={touched.email} 
+                  <Input
+                    label="Email Address"
+                    name="email"
+                    type="email"
+                    icon={Mail}
+                    placeholder="patient@example.com (Optional)"
+                    value={formData.email}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.email}
+                    touched={touched.email}
                   />
                 </div>
               </div>
@@ -720,18 +718,18 @@ const EditPatient = () => {
               {/* Address Information */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6 pt-4 border-t border-gray-200">Address Information</h3>
-                
-                <Input 
-                  label="Address Line" 
-                  name="addressLine" 
-                  icon={MapPin} 
-                  placeholder="Street address" 
-                  value={formData.addressLine} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.addressLine} 
-                  touched={touched.addressLine} 
-                  required 
+
+                <Input
+                  label="Address Line"
+                  name="addressLine"
+                  icon={MapPin}
+                  placeholder="Street address"
+                  value={formData.addressLine}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.addressLine}
+                  touched={touched.addressLine}
+                  required
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
@@ -769,25 +767,25 @@ const EditPatient = () => {
                     getOptionLabel={(option) => option.name}
                     getOptionValue={(option) => option.name}
                   />
-                  <Input 
-                    label="Place / Locality" 
-                    name="place" 
-                    placeholder="Place/Locality (Optional)" 
-                    value={formData.place} 
-                    onChange={handleChange} 
+                  <Input
+                    label="Place / Locality"
+                    name="place"
+                    placeholder="Place/Locality (Optional)"
+                    value={formData.place}
+                    onChange={handleChange}
                   />
                 </div>
 
                 <div className="mt-5">
-                  <Input 
-                    label="Pin Code" 
-                    name="pincode" 
-                    placeholder="Postal code (Optional)" 
-                    value={formData.pincode} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.pincode} 
-                    touched={touched.pincode} 
+                  <Input
+                    label="Pin Code"
+                    name="pincode"
+                    placeholder="Postal code (Optional)"
+                    value={formData.pincode}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.pincode}
+                    touched={touched.pincode}
                   />
                 </div>
               </div>
@@ -797,10 +795,10 @@ const EditPatient = () => {
               <Button variant="outline" onClick={handleGoBack}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={isSubmitting || isUpdating} 
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={isSubmitting || isUpdating}
                 loading={isSubmitting || isUpdating}
               >
                 {isSubmitting || isUpdating ? 'Saving...' : 'Save Changes'}

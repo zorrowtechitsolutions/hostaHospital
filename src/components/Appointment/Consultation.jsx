@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import ViewMedicalHistory from "./ViewMedicalHistory";
-import { Button, Card, Badge } from "../ui";
+import { Button, Card, Badge, CustomSelect } from "../ui"; // ✅ added CustomSelect
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 import { useCreateVitalMutation } from "../../../app/service/vitals";
@@ -184,34 +184,30 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Frequency <span className="text-red-500">*</span>
-          </label>
-          <select
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.frequency ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-            value={medication.frequency}
-            onChange={(e) => onUpdate(medication.id, "frequency", e.target.value)}
-          >
-            <option value="">Select</option>
-            {frequencies.map(freq => <option key={freq} value={freq}>{freq}</option>)}
-          </select>
-          {errors.frequency && <p className="text-red-500 text-[10px] mt-1">{errors.frequency}</p>}
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Timing <span className="text-red-500">*</span>
-          </label>
-          <select
-            className={`w-full px-2 py-1.5 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.timing ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-            value={medication.timing}
-            onChange={(e) => onUpdate(medication.id, "timing", e.target.value)}
-          >
-            <option value="">Select</option>
-            {timings.map(time => <option key={time} value={time}>{time}</option>)}
-          </select>
-          {errors.timing && <p className="text-red-500 text-[10px] mt-1">{errors.timing}</p>}
-        </div>
+        {/* ✅ Frequency — CustomSelect */}
+        <CustomSelect
+          label="Frequency"
+          value={medication.frequency}
+          options={frequencies.map(freq => ({ value: freq, label: freq }))}
+          onChange={(value) => onUpdate(medication.id, "frequency", value)}
+          placeholder="Select"
+          error={errors.frequency}
+          touched={true}
+          required
+        />
+
+        {/* ✅ Timing — CustomSelect */}
+        <CustomSelect
+          label="Timing"
+          value={medication.timing}
+          options={timings.map(time => ({ value: time, label: time }))}
+          onChange={(value) => onUpdate(medication.id, "timing", value)}
+          placeholder="Select"
+          error={errors.timing}
+          touched={true}
+          required
+        />
+
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Special Instructions</label>
           <input
@@ -306,21 +302,13 @@ const Consultation = () => {
 
   /* =====================================================
      ✅ Scroll to top — handles window AND internal containers
-     Resets:
-       - window / document / body scroll
-       - <main> and [role="main"] elements
-       - any .overflow-y-auto / .overflow-auto container
-     Runs 3 times (immediate + double rAF) so it survives
-     layout reflow after route change.
      ===================================================== */
   useEffect(() => {
     const scrollToTop = () => {
-      // 1. Browser / page scroll
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
 
-      // 2. App's internal scroll containers
       const selectors = [
         "main",
         '[role="main"]',
@@ -338,13 +326,8 @@ const Consultation = () => {
       });
     };
 
-    // Reset immediately
     scrollToTop();
-
-    // Reset again after layout / render
     const frame1 = requestAnimationFrame(scrollToTop);
-
-    // Triple-check after two paints (React commit + browser paint)
     const frame2 = requestAnimationFrame(() => {
       requestAnimationFrame(scrollToTop);
     });
@@ -1307,14 +1290,18 @@ const Consultation = () => {
                 />
               </div>
 
-              {/* ============ Empty Stomach ============ */}
+              {/* ============ Empty Stomach — CustomSelect ============ */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Empty Stomach Required?</label>
-                <select className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white" value={emptyStomach} onChange={(e) => setEmptyStomach(e.target.value)}>
-                  <option value="">Select</option>
-                  <option value="yes">Yes, come on empty stomach</option>
-                  <option value="no">No, can have food</option>
-                </select>
+                <CustomSelect
+                  label="Empty Stomach Required?"
+                  value={emptyStomach}
+                  options={[
+                    { value: 'yes', label: 'Yes, come on empty stomach' },
+                    { value: 'no', label: 'No, can have food' }
+                  ]}
+                  onChange={(value) => setEmptyStomach(value)}
+                  placeholder="Select"
+                />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">

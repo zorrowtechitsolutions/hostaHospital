@@ -1,5 +1,17 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import CustomSelect from "../ui/CustomSelect";
+
+// ✅ Options for the Unit Type CustomSelect — mg / ml only (no empty entry,
+// matching the original  which has no placeholder option)
+const UNIT_OPTIONS = [
+  { value: "mg", label: "mg" },
+  { value: "ml", label: "ml" },
+];
+
+// Styling override so CustomSelect matches the sibling "text-sm border-gray-200" inputs
+const UNIT_SELECT_CLASS =
+  "w-full [&>button]:border-gray-200 [&>button]:text-sm [&>button]:px-3 [&>button]:py-2 [&>button]:rounded-md [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0]/20 [&>button]:focus:border-[#1C62A0]";
 
 const EditProduct = ({ isOpen, onClose, product, onUpdate }) => {
   const [form, setForm] = useState({
@@ -9,8 +21,8 @@ const EditProduct = ({ isOpen, onClose, product, onUpdate }) => {
     offerPrice: "",
     purchaseDate: "",
     expiryDate: "",
-   unitValue: "",
-   unitType: "mg",
+    unitValue: "",
+    unitType: "mg",
     stock: "",
     description: "",
     status: true,
@@ -62,161 +74,160 @@ const EditProduct = ({ isOpen, onClose, product, onUpdate }) => {
     onClose();
   };
 
-return (
-  <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-    <div className="bg-white w-full max-w-lg rounded-xl shadow-xl animate-fadeIn">
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white w-full max-w-lg rounded-xl shadow-xl animate-fadeIn">
 
-      {/* Header */}
-      <div className="flex justify-between items-center px-6 py-4 ">
-        <h1 className="text-base font-semibold text-gray-800">
-          Edit Product
-        </h1>
-        <button onClick={onClose}>
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="px-6 py-4 space-y-4 text-sm">
-
-        {/* ID */}
-        <div>
-          <label className="block mb-1 text-gray-600">ID</label>
-          <input
-            value={form.id}
-            disabled
-            className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500"
-          />
+        {/* Header */}
+        <div className="flex justify-between items-center px-6 py-4">
+          <h1 className="text-base font-semibold text-gray-800">
+            Edit Product
+          </h1>
+          <button onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Name */}
-        <div>
-          <label className="block mb-1 text-gray-600">Name</label>
-          <input
-            name="name"
-            value={form.name}
+        {/* Body */}
+        <div className="px-6 py-4 space-y-4 text-sm">
+
+          {/* ID */}
+          <div>
+            <label className="block mb-1 text-gray-600">ID</label>
+            <input
+              value={form.id}
+              disabled
+              className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500"
+            />
+          </div>
+
+          {/* Name */}
+          <div>
+            <label className="block mb-1 text-gray-600">Name</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+            />
+            {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
+          </div>
+
+          {/* Price + Offer */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1 text-gray-600">Price</label>
+              <input
+                name="price"
+                type="number"
+                value={form.price}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1 text-gray-600">Offer Price</label>
+              <input
+                name="offerPrice"
+                type="number"
+                value={form.offerPrice}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+              />
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1 text-gray-600">Purchase</label>
+              <input
+                name="purchaseDate"
+                type="date"
+                value={form.purchaseDate}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1 text-gray-600">Expire</label>
+              <input
+                name="expiryDate"
+                type="date"
+                value={form.expiryDate}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+              />
+            </div>
+          </div>
+
+          {/* Unit + Stock */}
+          <div className="grid grid-cols-3 gap-3">
+
+            {/* Unit Amount */}
+            <input
+              name="unitValue"
+              type="number"
+              placeholder="Amount"
+              value={form.unitValue}
+              onChange={handleChange}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+            />
+
+            {/* Unit Type — ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={form.unitType || "mg"}
+              options={UNIT_OPTIONS}
+              onChange={(value) =>
+                handleChange({ target: { name: "unitType", value, type: "select-one" } })
+              }
+              className={UNIT_SELECT_CLASS}
+            />
+
+            {/* Stock */}
+            <input
+              name="stock"
+              type="number"
+              placeholder="Stock"
+              value={form.stock}
+              onChange={handleChange}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
+            />
+          </div>
+
+          {/* Description */}
+          <textarea
+            name="description"
+            placeholder="Description"
+            value={form.description}
             onChange={handleChange}
             className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
           />
-          {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
+
         </div>
 
-        {/* Price + Offer */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block mb-1 text-gray-600">Price</label>
-            <input
-              name="price"
-              type="number"
-              value={form.price}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-1 text-gray-600">Offer Price</label>
-            <input
-              name="offerPrice"
-              type="number"
-              value={form.offerPrice}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-            />
-          </div>
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border rounded-md text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="px-4 py-2 bg-[#1C62A0] text-white rounded-md text-sm"
+          >
+            Save Changes
+          </button>
         </div>
-
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block mb-1 text-gray-600">Purchase</label>
-            <input
-              name="purchaseDate"
-              type="date"
-              value={form.purchaseDate}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-1 text-gray-600">Expire</label>
-            <input
-              name="expiryDate"
-              type="date"
-              value={form.expiryDate}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-            />
-          </div>
-        </div>
-
-        {/* Unit + Stock */}
-<div className="grid grid-cols-3 gap-3">
-
-  {/* Unit Amount */}
-  <input
-    name="unitValue"
-    type="number"
-    placeholder="Amount"
-    value={form.unitValue}
-    onChange={handleChange}
-    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-  />
-
-  {/* Unit Type */}
-  <select
-    name="unitType"
-    value={form.unitType}
-    onChange={handleChange}
-    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-  >
-    <option value="mg">mg</option>
-    <option value="ml">ml</option>
-  </select>
-
-  {/* Stock */}
-  <input
-    name="stock"
-    type="number"
-    placeholder="Stock"
-    value={form.stock}
-    onChange={handleChange}
-    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-  />
-</div>
-
-
-        {/* Description */}
-        <textarea
-          name="description"
-          placeholder="Description"
-          value={form.description}
-          onChange={handleChange}
-            className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1C62A0]/20 focus:border-[#1C62A0]"
-         />
 
       </div>
-
-      {/* Footer */}
-      <div className="flex justify-end gap-2 px-6 py-4 ">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 border rounded-md text-sm"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          className="px-4 py-2 bg-[#1C62A0] text-white rounded-md text-sm"
-        >
-          Save Changes
-        </button>
-      </div>
-
     </div>
-  </div>
-);
+  );
 };
 
 export default EditProduct;

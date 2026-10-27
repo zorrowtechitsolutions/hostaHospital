@@ -10,6 +10,7 @@ import {
   TableHeader, TableCell, Badge, Avatar, SearchBar, 
   Pagination, Modal, Loader, FilterBar
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
@@ -751,23 +752,29 @@ const Visits = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select 
-              value={departmentFilter} 
-              onChange={(e) => setDepartmentFilter(e.target.value)} 
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-            >
-              <option value="">All Departments</option>
-              {getAllDepartments().map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-
-            <input 
-              type="date" 
-              value={dateFilter} 
-              onChange={(e) => setDateFilter(e.target.value)} 
-              className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]" 
+            {/* ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              label="Department"
+              value={departmentFilter}
+              options={[
+                { value: '', label: 'All Departments' },
+                ...getAllDepartments().map((dept) => ({ value: dept, label: dept }))
+              ]}
+              onChange={(value) => setDepartmentFilter(value)}
+              placeholder="All Departments"
             />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date
+              </label>
+              <input 
+                type="date" 
+                value={dateFilter} 
+                onChange={(e) => setDateFilter(e.target.value)} 
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]" 
+              />
+            </div>
           </div>
         </div>
       )}

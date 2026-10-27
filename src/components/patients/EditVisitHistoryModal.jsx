@@ -1,12 +1,35 @@
 // src/components/visits/EditVisitModal.jsx - With toast notifications
 import React, { useState, useEffect } from "react";
 import { Modal, Input, Select, Button } from "../ui";
+import CustomSelect from "../ui/CustomSelect";
 import { showUpdateToast, showWarningToast } from "../ui/Toast";
 
-const EditVisitModal = ({ 
-  isOpen, 
-  onClose, 
-  visitData, 
+/* ============================================================
+   Helper: normalize any options prop into {value, label} pairs.
+   Handles:
+     - plain strings:       ['Cardiology', ...]
+     - already-normalized:  [{value, label}, ...]  (pass through)
+     - objects w/ name:     [{id, name}, ...]      (value = name)
+     - objects w/ id only:  [{id}, ...]            (value = id)
+   Prefers `name` over `id` for the value, to match how
+   visitData stores department / doctor / patient by NAME.
+   ============================================================ */
+const toSelectOptions = (arr = []) =>
+  (Array.isArray(arr) ? arr : []).map((opt) => {
+    if (opt && typeof opt === 'object') {
+      if ('value' in opt && 'label' in opt) return opt;
+      return {
+        value: opt.value ?? opt.name ?? opt.id ?? String(opt),
+        label: opt.label ?? opt.name ?? String(opt),
+      };
+    }
+    return { value: opt, label: opt };
+  });
+
+const EditVisitModal = ({
+  isOpen,
+  onClose,
+  visitData,
   onSave,
   patients = [],
   departments = [],
@@ -60,14 +83,14 @@ const EditVisitModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       showWarningToast('Please fill in all required fields', 3000);
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     setTimeout(() => {
       const updatedData = {
         patientName: formData.patient,
@@ -79,9 +102,9 @@ const EditVisitModal = ({
         reason: formData.reason,
         paymentMethod: formData.payment
       };
-      
+
       if (onSave) onSave(updatedData);
-      
+
       showUpdateToast(
         `Visit for ${formData.patient} has been updated successfully!`,
         4000,
@@ -92,7 +115,7 @@ const EditVisitModal = ({
           'Date': formData.date
         }
       );
-      
+
       setIsSubmitting(false);
       onClose();
     }, 500);
@@ -104,69 +127,76 @@ const EditVisitModal = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Visit" size="lg" showCloseButton={false}>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-2 gap-4">
-          <Select 
-            label="Select Patient" 
-            name="patient" 
-            options={patients} 
-            value={formData.patient} 
-            onChange={handleChange} 
+          {/* ✅ Replaced  (Patient) with CustomSelect */}
+          <CustomSelect
+            label="Select Patient"
+            value={formData.patient}
+            options={toSelectOptions(patients)}
+            onChange={(value) => handleChange({ target: { name: 'patient', value } })}
           />
-          <Select 
-            label="Patient Type" 
-            name="patientType" 
-            options={patientTypes} 
-            value={formData.patientType} 
-            onChange={handleChange} 
+
+          {/* ✅ Replaced  (Patient Type) with CustomSelect */}
+          <CustomSelect
+            label="Patient Type"
+            value={formData.patientType}
+            options={toSelectOptions(patientTypes)}
+            onChange={(value) => handleChange({ target: { name: 'patientType', value } })}
           />
-          <Select 
-            label="Select Department" 
-            name="department" 
-            options={departments} 
-            value={formData.department} 
-            onChange={handleChange} 
+
+          {/* ✅ Replaced  (Department) with CustomSelect */}
+          <CustomSelect
+            label="Select Department"
+            value={formData.department}
+            options={toSelectOptions(departments)}
+            onChange={(value) => handleChange({ target: { name: 'department', value } })}
             error={errors.department}
-            required 
+            touched={!!errors.department}
+            required
           />
-          <Select 
-            label="Select Doctor" 
-            name="doctor" 
-            options={doctors} 
-            value={formData.doctor} 
-            onChange={handleChange} 
+
+          {/* ✅ Replaced  (Doctor) with CustomSelect */}
+          <CustomSelect
+            label="Select Doctor"
+            value={formData.doctor}
+            options={toSelectOptions(doctors)}
+            onChange={(value) => handleChange({ target: { name: 'doctor', value } })}
             error={errors.doctor}
-            required 
+            touched={!!errors.doctor}
+            required
           />
-          <Input 
-            label="Date of Visit" 
-            name="date" 
-            type="date" 
-            value={formData.date} 
-            onChange={handleChange} 
+
+          <Input
+            label="Date of Visit"
+            name="date"
+            type="date"
+            value={formData.date}
+            onChange={handleChange}
             error={errors.date}
-            required 
+            required
           />
-          <Input 
-            label="Time of Visit" 
-            name="time" 
-            type="time" 
-            value={formData.time} 
-            onChange={handleChange} 
+          <Input
+            label="Time of Visit"
+            name="time"
+            type="time"
+            value={formData.time}
+            onChange={handleChange}
           />
-          <Input 
-            label="Reason" 
-            name="reason" 
-            value={formData.reason} 
-            onChange={handleChange} 
-            placeholder="Enter reason for visit" 
+          <Input
+            label="Reason"
+            name="reason"
+            value={formData.reason}
+            onChange={handleChange}
+            placeholder="Enter reason for visit"
             error={errors.reason}
-            required 
+            required
           />
-          <Select 
-            label="Mode of Payment" 
-            name="payment" 
-            options={paymentMethods} 
-            value={formData.payment} 
-            onChange={handleChange} 
+
+          {/* ✅ Replaced  (Payment) with CustomSelect */}
+          <CustomSelect
+            label="Mode of Payment"
+            value={formData.payment}
+            options={toSelectOptions(paymentMethods)}
+            onChange={(value) => handleChange({ target: { name: 'payment', value } })}
           />
         </div>
 

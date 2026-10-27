@@ -1,13 +1,14 @@
 // src/components/Laboratory/AllLabResults.jsx - With span instead of Badge
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   Search, Filter, RefreshCcw, Download, Upload,
   Eye, Edit, Trash2, FileText, MoreVertical, Plus
 } from 'lucide-react';
-import { 
+import {
   Button, Card, SearchBar, FilterBar, Pagination
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import LaboratoryReportModal from '../patients/modals/LaboratoryReportModal';
 import DeleteModal from '../patients/DeleteModel';
 
@@ -65,6 +66,17 @@ const AllLabResults = () => {
   };
 
   const getAllStatuses = () => [...new Set(labResults.map(r => r.status))].sort();
+
+  // ✅ Options for CustomSelect — first option is "All Status" with empty-string value
+  // (kept as a real option, not a placeholder, so users can select it to clear the filter)
+  const statusOptions = useMemo(
+    () => [
+      { value: '', label: 'All Status' },
+      ...getAllStatuses().map(status => ({ value: status, label: status })),
+    ],
+    [labResults]
+  );
+
   const getFilteredResults = () => {
     let filtered = [...labResults];
     if (searchTerm) filtered = filtered.filter(item => item.testId?.toLowerCase().includes(searchTerm.toLowerCase()) || item.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) || item.testName?.toLowerCase().includes(searchTerm.toLowerCase()) || item.referredBy?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -211,20 +223,18 @@ const AllLabResults = () => {
               Clear All Filters
             </button>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-              <select
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-gray-300 text-sm rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Status</option>
-                {getAllStatuses().map(status => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
+                options={statusOptions}
+                onChange={(value) => setStatusFilter(value)}
+                className="w-full"
+              />
             </div>
 
             <div>

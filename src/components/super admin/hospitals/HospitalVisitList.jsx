@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Calendar, Clock, User, Stethoscope, Phone, Loader2, CheckCircle, XCircle, Clock as ClockIcon, MapPin, Users as UsersIcon, Filter, RefreshCcw, Download, Upload, MoreVertical, Eye, Edit, Trash2, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, Button, Badge, Modal } from '../../ui';
+import CustomSelect from '../../ui/CustomSelect'; // ✅ Added import
 import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
@@ -132,6 +133,16 @@ const HospitalVisitList = () => {
   const allVisits = bookingsData?.data || [];
   const totalItems = bookingsData?.pagination?.totalItems || allVisits.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // ✅ Build options for CustomSelect
+  const departmentOptions = [
+    { value: '', label: 'All Departments' },
+    { value: 'Cardiology', label: 'Cardiology' },
+    { value: 'Neurology', label: 'Neurology' },
+    { value: 'Orthopedics', label: 'Orthopedics' },
+    { value: 'Pediatrics', label: 'Pediatrics' },
+    { value: 'General', label: 'General' },
+  ];
 
   // Register socket event listeners
   useEffect(() => {
@@ -469,25 +480,24 @@ const HospitalVisitList = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <select 
-              value={departmentFilter} 
-              onChange={(e) => setDepartmentFilter(e.target.value)} 
-              className="h-10 px-3 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6366F1] bg-white text-sm"
-            >
-              <option value="">All Departments</option>
-              <option value="Cardiology">Cardiology</option>
-              <option value="Neurology">Neurology</option>
-              <option value="Orthopedics">Orthopedics</option>
-              <option value="Pediatrics">Pediatrics</option>
-              <option value="General">General</option>
-            </select>
-
-            <input 
-              type="date" 
-              value={dateFilter} 
-              onChange={(e) => setDateFilter(e.target.value)} 
-              className="h-10 px-3 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6366F1] text-sm" 
+            {/* Department Filter - CustomSelect */}
+            <CustomSelect
+              label="Department"
+              value={departmentFilter}
+              options={departmentOptions}
+              onChange={setDepartmentFilter}
+              placeholder="All Departments"
             />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input 
+                type="date" 
+                value={dateFilter} 
+                onChange={(e) => setDateFilter(e.target.value)} 
+                className="w-full h-10 px-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" 
+              />
+            </div>
           </div>
         </div>
       )}

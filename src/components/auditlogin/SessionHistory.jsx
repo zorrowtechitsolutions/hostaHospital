@@ -11,13 +11,12 @@ import {
   Monitor,
 } from "lucide-react";
 
-import { Button, Pagination, SearchBar } from "../ui";
+import { Button, Pagination, SearchBar, CustomSelect } from "../ui";
 import { useGetSessionHistoryQuery } from "../../../app/service/sessionHistoryApi";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import { exportToExcel } from "../../utils/excelExport";
 import { getAuthUser } from "../../utils/auth";
 
-// ✅ Real-time auth / audit events
 import {
   registerAuditEvents,
   unregisterAuditEvents,
@@ -26,14 +25,12 @@ import {
 // ============================================================
 // Constants
 // ============================================================
-
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "FAILED"];
 const RISK_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 
 // ============================================================
 // Helpers
 // ============================================================
-
 const safeToString = (value) => {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -93,9 +90,8 @@ const getRiskBadgeClass = (riskLevel) => {
 // ============================================================
 // Skeleton Loader
 // ============================================================
-
 const SkeletonLoader = () => (
-  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+  <div className="min-h-screen bg-[#F8F9FA] p-3 sm:p-4 lg:p-6 font-sans">
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-2">
         <div className="w-8 h-8 bg-gray-200 rounded animate-pulse" />
@@ -145,9 +141,8 @@ const SkeletonLoader = () => (
 );
 
 // ============================================================
-// Session Details Modal
+// Session Details Modal — SCROLLABLE BODY
 // ============================================================
-
 const SessionDetailsModal = ({ session, onClose }) => {
   if (!session) return null;
 
@@ -166,7 +161,6 @@ const SessionDetailsModal = ({ session, onClose }) => {
     ["Registered Address", session.registeredAddress || "N/A"],
     ["Login Method", session.loginMethod || "N/A"],
     ["Login Time", formatDateTime(session.loginTime)],
-    // ✅ Only show Logout Time when it actually exists (no "N/A" line)
     ...(session.logoutTime
       ? [["Logout Time", formatDateTime(session.logoutTime)]]
       : []),
@@ -177,35 +171,41 @@ const SessionDetailsModal = ({ session, onClose }) => {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl shadow-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <div>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl shadow-xl flex flex-col overflow-hidden">
+
+        {/* Header — fixed, never scrolls */}
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-gray-800">Session Details</h2>
-            <p className="text-xs text-gray-500 mt-1">Session #{session.id}</p>
+            <p className="text-xs text-gray-500 mt-1 truncate">Session #{session.id}</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-xl leading-none"
+            aria-label="Close"
           >
             ×
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">
-          <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold">
+
+        {/* Scrollable body */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4">
+          {/* User summary card */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 p-4 bg-gray-50 rounded-xl">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 shrink-0 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold">
                 {getInitials(session.name)}
               </div>
-              <div>
-                <p className="font-semibold text-gray-800">{session.name}</p>
-                <p className="text-sm text-gray-500">
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-800 truncate">{session.name}</p>
+                <p className="text-sm text-gray-500 truncate">
                   {session.role || "N/A"}
                   {session.department ? ` • ${session.department}` : ""}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <span className={getStatusBadgeClass(session.status)}>
                 {session.status || "N/A"}
               </span>
@@ -214,6 +214,8 @@ const SessionDetailsModal = ({ session, onClose }) => {
               </span>
             </div>
           </div>
+
+          {/* Detail rows */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {detailRows.map(([label, value]) => (
               <div key={label} className="border border-gray-100 rounded-lg p-3">
@@ -224,6 +226,8 @@ const SessionDetailsModal = ({ session, onClose }) => {
               </div>
             ))}
           </div>
+
+          {/* User Agent */}
           <div className="mt-4 border border-gray-100 rounded-lg p-4">
             <p className="text-xs text-gray-500 mb-1">User Agent</p>
             <p className="text-sm text-gray-700 break-all">
@@ -231,7 +235,9 @@ const SessionDetailsModal = ({ session, onClose }) => {
             </p>
           </div>
         </div>
-        <div className="flex justify-end px-6 py-4 border-t bg-gray-50">
+
+        {/* Footer — fixed, never scrolls */}
+        <div className="shrink-0 flex justify-end px-4 sm:px-6 py-4 border-t bg-gray-50">
           <button
             onClick={onClose}
             className="px-4 py-2 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50"
@@ -239,6 +245,7 @@ const SessionDetailsModal = ({ session, onClose }) => {
             Close
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -247,7 +254,6 @@ const SessionDetailsModal = ({ session, onClose }) => {
 // ============================================================
 // Row Action Menu
 // ============================================================
-
 const RowActionMenu = ({ session, onView }) => {
   const [open, setOpen] = useState(false);
 
@@ -282,67 +288,52 @@ const RowActionMenu = ({ session, onView }) => {
 // ============================================================
 // Main Component
 // ============================================================
-
 const SessionHistory = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Get hospital ID from navigation state (when coming from hospital card)
   const navigationHospitalId = location.state?.hospitalId;
   const navigationHospitalName = location.state?.hospitalName;
 
-  // Get authenticated user info
   const auth = getAuthUser();
 
-  // State for hospital selection (for users with multiple hospital access)
   const [selectedHospitalId, setSelectedHospitalId] = useState(
     navigationHospitalId || ""
   );
 
-  // State to track which hospital is being viewed (from card or dropdown)
   const [viewingHospitalName, setViewingHospitalName] = useState(
     navigationHospitalName || ""
   );
 
-  // Search state with debounce
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
 
-  // Date filters
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSession, setSelectedSession] = useState(null);
 
   const itemsPerPage = 10;
 
-  // ============================================================
-  // Determine which hospital ID to use
-  // Priority: selectedHospitalId → navigationHospitalId → auth.hospitalId
-  // ============================================================
   const effectiveHospitalId =
     selectedHospitalId ||
     navigationHospitalId ||
     auth?.hospitalId ||
     undefined;
 
-  // Clear navigation state after reading it (optional)
   useEffect(() => {
     if (navigationHospitalId) {
       window.history.replaceState({}, document.title);
     }
   }, [navigationHospitalId]);
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim());
@@ -351,7 +342,6 @@ const SessionHistory = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch data with backend filters
   const {
     data: sessionResponse,
     isLoading,
@@ -370,26 +360,22 @@ const SessionHistory = () => {
     limit: itemsPerPage,
   });
 
-  // Use backend response values
   const sessions = sessionResponse?.data ?? [];
   const totalItems = sessionResponse?.count ?? 0;
   const totalPages = sessionResponse?.totalPages ?? 0;
 
-  // Get unique values for department filter from current page data
   const departments = useMemo(
     () =>
       [...new Set(sessions.map((session) => session.department).filter(Boolean))].sort(),
     [sessions]
   );
 
-  // Get unique values for role filter from current page data
   const roles = useMemo(
     () =>
       [...new Set(sessions.map((session) => session.role).filter(Boolean))].sort(),
     [sessions]
   );
 
-  // Count active filters
   const activeFilterCount =
     (roleFilter ? 1 : 0) +
     (statusFilter ? 1 : 0) +
@@ -399,16 +385,9 @@ const SessionHistory = () => {
     (startDate ? 1 : 0) +
     (endDate ? 1 : 0);
 
-  /* ============================================================
-     ✅ REAL-TIME AUTH EVENTS
-     Backend emits on `auth_event` with event = "AUTH_LOGIN"
-     whenever a new session starts. We refresh the table + toast.
-     ============================================================ */
   useEffect(() => {
     registerAuditEvents({
       onAuthLogin: ({ message, data }) => {
-        // Optional guard: skip if the login came from a different
-        // hospital than the one currently being viewed.
         if (
           effectiveHospitalId &&
           data?.hospitalId &&
@@ -421,8 +400,6 @@ const SessionHistory = () => {
           showSuccessToast(message, 4000);
         }
 
-        // Refresh the list so the newest login shows up.
-        // (Only page 1 with no filters will visibly shift — that's fine.)
         refetch();
       },
     });
@@ -475,7 +452,7 @@ const SessionHistory = () => {
         "Login Time": formatDateTime(session.loginTime),
         "Logout Time": session.logoutTime
           ? formatDateTime(session.logoutTime)
-          : "", // ✅ blank when missing
+          : "",
         "Last Activity": formatDateTime(session.lastActivity),
         "Status": session.status,
         "Risk Level": session.riskLevel,
@@ -515,8 +492,7 @@ const SessionHistory = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb */}
+    <div className="min-h-screen bg-[#F8F9FA] p-3 sm:p-4 lg:p-6 font-sans">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -555,9 +531,9 @@ const SessionHistory = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-gray-800 truncate">
               {viewingHospitalName
                 ? `Session History - ${viewingHospitalName}`
                 : "Session History"}
@@ -572,7 +548,7 @@ const SessionHistory = () => {
           {viewingHospitalName && (
             <button
               onClick={handleBackToHospitals}
-              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+              className="shrink-0 px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 self-start sm:self-auto"
             >
               ← Back to Hospitals
             </button>
@@ -580,9 +556,9 @@ const SessionHistory = () => {
         </div>
       </div>
 
-      {/* Search + Actions */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
+      {/* Search + Actions — mobile stacked, desktop row */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
+        <div className="w-full lg:flex-1 lg:max-w-md">
           <SearchBar
             placeholder="Search by name..."
             value={searchTerm}
@@ -595,11 +571,11 @@ const SessionHistory = () => {
               setDebouncedSearch("");
               setCurrentPage(1);
             }}
-            className="flex-1 max-w-md"
+            className="w-full"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 items-center justify-end">
           <button
             onClick={handleRefresh}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
@@ -634,13 +610,13 @@ const SessionHistory = () => {
 
       {/* Filters Section */}
       {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
                 <Filter size={18} className="text-[#1C62A0]" />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-xl font-semibold text-gray-800">Filters</h2>
                 {activeFilterCount > 0 && (
                   <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
@@ -649,84 +625,75 @@ const SessionHistory = () => {
                 )}
               </div>
             </div>
-            <button onClick={clearFilters} className="text-sm font-medium text-red-500 hover:text-red-600">
+            <button onClick={clearFilters} className="text-sm font-medium text-red-500 hover:text-red-600 self-start sm:self-auto">
               Clear All Filters
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {/* Role Filter */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">Role</label>
-              <select
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
+            <div>
+              <CustomSelect
+                label="Role"
                 value={roleFilter}
-                onChange={(event) => {
-                  setRoleFilter(event.target.value);
+                options={[
+                  { value: '', label: 'All Roles' },
+                  ...roles.map((role) => ({ value: role, label: role }))
+                ]}
+                onChange={(value) => {
+                  setRoleFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Roles</option>
-                {roles.map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
+                placeholder="All Roles"
+              />
             </div>
 
-            {/* Status Filter */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">Status</label>
-              <select
+            <div>
+              <CustomSelect
+                label="Status"
                 value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value);
+                options={[
+                  { value: '', label: 'All Status' },
+                  ...STATUS_OPTIONS.map((status) => ({ value: status, label: status }))
+                ]}
+                onChange={(value) => {
+                  setStatusFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Status</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
+                placeholder="All Status"
+              />
             </div>
 
-            {/* Risk Level Filter */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">Risk Level</label>
-              <select
+            <div>
+              <CustomSelect
+                label="Risk Level"
                 value={riskFilter}
-                onChange={(event) => {
-                  setRiskFilter(event.target.value);
+                options={[
+                  { value: '', label: 'All Risk Levels' },
+                  ...RISK_OPTIONS.map((risk) => ({ value: risk, label: risk }))
+                ]}
+                onChange={(value) => {
+                  setRiskFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Risk Levels</option>
-                {RISK_OPTIONS.map((risk) => (
-                  <option key={risk} value={risk}>{risk}</option>
-                ))}
-              </select>
+                placeholder="All Risk Levels"
+              />
             </div>
 
-            {/* Department Filter */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">Department</label>
-              <select
+            <div>
+              <CustomSelect
+                label="Department"
                 value={departmentFilter}
-                onChange={(event) => {
-                  setDepartmentFilter(event.target.value);
+                options={[
+                  { value: '', label: 'All Departments' },
+                  ...departments.map((dept) => ({ value: dept, label: dept }))
+                ]}
+                onChange={(value) => {
+                  setDepartmentFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
+                placeholder="All Departments"
+              />
             </div>
 
-            {/* Start Date Filter */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">Start Date</label>
               <input
@@ -740,7 +707,6 @@ const SessionHistory = () => {
               />
             </div>
 
-            {/* End Date Filter */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">End Date</label>
               <input
@@ -764,7 +730,7 @@ const SessionHistory = () => {
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             {activeFilterCount > 0 ? "No sessions found" : "No session history available"}
           </h3>
-          <p className="text-gray-500 mb-4">
+          <p className="text-gray-500 mb-4 px-4">
             {searchTerm
               ? `No results found for "${searchTerm}". Try adjusting your search.`
               : activeFilterCount > 0
@@ -779,7 +745,7 @@ const SessionHistory = () => {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 px-3 sm:px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Sessions
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">

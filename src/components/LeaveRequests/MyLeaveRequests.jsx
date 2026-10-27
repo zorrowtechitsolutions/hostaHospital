@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar, Modal, Button } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import MiniCalendar from './MiniCalendar';
 
 // ✅ API
@@ -39,6 +40,12 @@ const LEAVE_TYPES = [
   { label: 'Sick', color: 'bg-red-100 text-red-700' },
   { label: 'Maternity', color: 'bg-purple-100 text-purple-700' },
   { label: 'Annual', color: 'bg-green-100 text-green-700' },
+];
+
+// ✅ Options for the Leave Type filter — "all" is a real value (default + reset)
+const LEAVE_TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Leave Types' },
+  ...LEAVE_TYPES.map((t) => ({ value: t.label, label: t.label })),
 ];
 
 const getStatusBadge = (status) => {
@@ -544,16 +551,14 @@ const MyLeaveRequests = () => {
                 onClear={handleClearSearch}
                 className="flex-1 min-w-[250px] max-w-sm"
               />
-              <select
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-              >
-                <option value="all">All Leave Types</option>
-                {LEAVE_TYPES.map((t) => (
-                  <option key={t.label} value={t.label}>{t.label}</option>
-                ))}
-              </select>
+                options={LEAVE_TYPE_FILTER_OPTIONS}
+                onChange={(value) => setTypeFilter(value)}
+                className="w-44"
+              />
             </div>
 
             <div className="flex gap-2 flex-wrap items-center">

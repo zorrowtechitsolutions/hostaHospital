@@ -222,7 +222,7 @@ const RoleDropdown = memo(({ role, onView, onEdit, onDelete, onPermissions }) =>
 
 // Loading Skeleton Component
 const RoleSkeleton = () => (
-  <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+  <div className="min-h-screen bg-[#F8F9FA] p-3 sm:p-4 lg:p-6 font-sans">
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-1">
         <div className="p-1 w-9 h-9 bg-gray-200 rounded animate-pulse"></div>
@@ -559,7 +559,7 @@ const UserPermissions = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
+    <div className="min-h-screen bg-[#F8F9FA] p-3 sm:p-4 lg:p-6 font-sans">
       {/* Header with Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
@@ -582,14 +582,17 @@ const UserPermissions = () => {
       </div>
 
       <Card className="flex flex-col bg-white rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
+        <div className="px-3 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            {/* Total Roles */}
+            <div className="shrink-0">
               <h2 className="text-sm font-semibold text-gray-700">
                 Total Roles
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
                   {totalFilteredRoles}
                 </span>
+
                 {searchTerm && totalFilteredRoles > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
                     (Filtered)
@@ -597,9 +600,12 @@ const UserPermissions = () => {
                 )}
               </h2>
             </div>
-            <div className="flex gap-3 items-center">
-              {/* ✅ Using global SearchBar component */}
-              <div className="w-64">
+
+            {/* Search + New Role */}
+            <div className="w-full sm:w-auto flex flex-col gap-2 sm:flex-row sm:items-center">
+
+              {/* Search */}
+              <div className="w-full sm:w-64">
                 <SearchBar
                   placeholder="Search by role name or description..."
                   value={searchTerm}
@@ -608,10 +614,40 @@ const UserPermissions = () => {
                   className="w-full"
                 />
               </div>
-              <Button type="button" variant="primary" onClick={() => setShowNewRoleModal(true)} className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+
+              {/* New Role */}
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setShowNewRoleModal(true)}
+                className="
+                  w-full
+                  sm:w-auto
+                  h-10
+                  flex
+                  items-center
+                  justify-center
+                  gap-2
+                  whitespace-nowrap
+                  shrink-0
+                "
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
                 New Role
               </Button>
+
             </div>
           </div>
         </div>

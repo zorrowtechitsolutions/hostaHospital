@@ -95,7 +95,7 @@ const ViewMedicalHistory = ({
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 ease-in-out z-40 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 ease-in-out z-40 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl p-8">
           <div className="flex items-center gap-3">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -108,8 +108,8 @@ const ViewMedicalHistory = ({
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 ease-in-out z-40 flex items-center justify-center">
-        <div className="bg-white rounded-xl p-8 max-w-md">
+      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 ease-in-out z-40 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl p-8 max-w-md w-full">
           <div className="text-center">
             <div className="text-red-500 text-4xl mb-3">⚠️</div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Error Loading Data</h3>
@@ -135,13 +135,14 @@ const ViewMedicalHistory = ({
         <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <style>{`.overflow-y-auto::-webkit-scrollbar { display: none; }`}</style>
           
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
             <h2 className="text-lg font-semibold text-gray-800">Medical History</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">✕</button>
           </div>
 
-          <div className="px-6 py-4 space-y-6">
-            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+          {/* ✅ FIX: responsive padding + header row collapses on mobile */}
+          <div className="px-4 sm:px-6 py-4 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-3 border-b border-gray-100">
               <div>
                 <p className="text-xs text-gray-500">Department</p>
                 <p className="text-sm font-medium text-gray-800">
@@ -212,32 +213,35 @@ const ViewMedicalHistory = ({
                 <span className="w-1.5 h-1.5 bg-[#1C62A0] rounded-full"></span>
                 Previous Medications
               </h3>
+              {/* ✅ FIX: wrap table in overflow-x-auto with min-w */}
               <div className="bg-gray-50 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs">Medicine</th>
-                      <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs">Dosage</th>
-                      <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {medications.map((med, index) => (
-                      <tr key={index} className="border-t border-gray-200">
-                        <td className="py-2 px-4 text-gray-700">{med.name}</td>
-                        <td className="py-2 px-4 text-gray-700">{med.dosage}</td>
-                        <td className="py-2 px-4 text-gray-700">{med.duration}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[400px] text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs whitespace-nowrap">Medicine</th>
+                        <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs whitespace-nowrap">Dosage</th>
+                        <th className="text-left py-2 px-4 font-medium text-gray-600 text-xs whitespace-nowrap">Duration</th>
                       </tr>
-                    ))}
-                    {medications.length === 0 && (
-                      <tr className="border-t border-gray-200">
-                        <td colSpan="3" className="py-2 px-4 text-gray-500 text-center">
-                          No medications prescribed
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {medications.map((med, index) => (
+                        <tr key={index} className="border-t border-gray-200">
+                          <td className="py-2 px-4 text-gray-700">{med.name}</td>
+                          <td className="py-2 px-4 text-gray-700">{med.dosage}</td>
+                          <td className="py-2 px-4 text-gray-700">{med.duration}</td>
+                        </tr>
+                      ))}
+                      {medications.length === 0 && (
+                        <tr className="border-t border-gray-200">
+                          <td colSpan="3" className="py-2 px-4 text-gray-500 text-center">
+                            No medications prescribed
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
@@ -260,7 +264,7 @@ const ViewMedicalHistory = ({
             )}
           </div>
 
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-end sticky bottom-0 bg-white">
+          <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end sticky bottom-0 bg-white">
             <Button variant="primary" onClick={onClose}>Close</Button>
           </div>
         </div>

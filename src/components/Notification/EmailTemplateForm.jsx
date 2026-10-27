@@ -10,6 +10,7 @@ import {
   Italic,
   Underline,
 } from "lucide-react";
+import CustomSelect from "../ui/CustomSelect";
 import { showErrorToast } from "../ui/Toast";
 
 const AVAILABLE_VARIABLES = [
@@ -35,23 +36,29 @@ const AVAILABLE_VARIABLES = [
   },
 ];
 
+// ✅ Options for the Status CustomSelect — static, both values are real choices
+const STATUS_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Inactive", label: "Inactive" },
+];
+
 // ================= SKELETON LOADING COMPONENT =================
 const FormSkeleton = () => {
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen w-full overflow-x-hidden bg-slate-50 p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
           {/* Header Skeleton */}
-          <div className="px-6 py-5 border-b border-slate-200">
+          <div className="px-4 sm:px-6 py-5 border-b border-slate-200">
             <div className="h-7 w-48 bg-gray-200 rounded animate-pulse"></div>
             <div className="h-4 w-64 bg-gray-200 rounded animate-pulse mt-2"></div>
           </div>
 
           {/* Content Skeleton */}
-          <div className="grid grid-cols-12 gap-6 p-6">
+          <div className="grid grid-cols-12 gap-6 p-4 sm:p-6">
             <div className="col-span-12 lg:col-span-9">
               <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-5"></div>
-              
+
               {/* Form Fields Skeleton */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {[1, 2, 3].map((i) => (
@@ -101,7 +108,7 @@ const FormSkeleton = () => {
           </div>
 
           {/* Footer Skeleton */}
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
             <div className="h-10 w-20 bg-gray-200 rounded-lg animate-pulse"></div>
             <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse"></div>
           </div>
@@ -145,7 +152,7 @@ const EmailTemplateForm = ({
   const editorRef = useRef(null);
   const subjectRef = useRef(null);
   const savedSelectionRef = useRef(null);
-  
+
   // Track which field is active
   const [activeField, setActiveField] = useState("message");
 
@@ -321,7 +328,7 @@ const EmailTemplateForm = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen w-full min-w-0 overflow-x-hidden overflow-y-auto bg-slate-50 p-3 sm:p-4 lg:p-6">
       <form
         onSubmit={handleSubmit}
         className="max-w-7xl mx-auto"
@@ -329,7 +336,7 @@ const EmailTemplateForm = ({
         {/* ================= MAIN CARD ================= */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
           {/* Header */}
-          <div className="px-6 py-5 border-b border-slate-200">
+          <div className="px-4 sm:px-6 py-5 border-b border-slate-200">
             <h1 className="text-lg font-semibold text-slate-800">
               {mode === "edit"
                 ? "Edit Email Template"
@@ -343,15 +350,15 @@ const EmailTemplateForm = ({
           </div>
 
           {/* ================= CONTENT ================= */}
-          <div className="grid grid-cols-12 gap-6 p-6">
+          <div className="grid grid-cols-12 gap-4 sm:gap-6 p-4 sm:p-6">
             {/* LEFT */}
-            <div className="col-span-12 lg:col-span-9">
+            <div className="col-span-12 lg:col-span-9 min-w-0">
               <h2 className="text-sm font-semibold text-slate-800 mb-5">
                 Template Information
               </h2>
 
               {/* Name + Category + Status - 3 columns */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
                 {/* Template Name */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -363,16 +370,7 @@ const EmailTemplateForm = ({
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
                     placeholder="Enter template name"
-                    className="
-                      w-full h-11 px-3
-                      border border-slate-200
-                      rounded-lg
-                      text-sm
-                      outline-none
-                      focus:border-indigo-500
-                      focus:ring-2
-                      focus:ring-indigo-100
-                    "
+                    className="w-full h-11 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                   />
                 </div>
 
@@ -387,16 +385,7 @@ const EmailTemplateForm = ({
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     placeholder="Enter category (e.g., General, Alert, Training)"
-                    className="
-                      w-full h-11 px-3
-                      border border-slate-200
-                      rounded-lg
-                      text-sm
-                      outline-none
-                      focus:border-indigo-500
-                      focus:ring-2
-                      focus:ring-indigo-100
-                    "
+                    className="w-full h-11 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                   />
                 </div>
 
@@ -406,25 +395,15 @@ const EmailTemplateForm = ({
                     Status
                     <span className="text-red-500 ml-1">*</span>
                   </label>
-                  <select
+                  {/* ✅ Replaced native  with CustomSelect.
+                      The [&>button]:* overrides match the sibling h-11 / border-slate-200 inputs. */}
+                  <CustomSelect
+                    hideLabel
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="
-                      w-full h-11 px-3
-                      border border-slate-200
-                      rounded-lg
-                      bg-white
-                      text-sm
-                      text-slate-700
-                      outline-none
-                      focus:border-indigo-500
-                      focus:ring-2
-                      focus:ring-indigo-100
-                    "
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+                    options={STATUS_OPTIONS}
+                    onChange={(value) => setStatus(value)}
+                    className="[&>button]:h-11 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-700 [&>button]:focus:ring-indigo-500 [&>button]:focus:border-indigo-500"
+                  />
                 </div>
               </div>
 
@@ -441,16 +420,7 @@ const EmailTemplateForm = ({
                   onFocus={() => setActiveField("subject")}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="Enter email subject"
-                  className="
-                    w-full h-11 px-3
-                    border border-slate-200
-                    rounded-lg
-                    text-sm
-                    outline-none
-                    focus:border-indigo-500
-                    focus:ring-2
-                    focus:ring-indigo-100
-                  "
+                  className="w-full h-11 px-3 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
 
@@ -460,31 +430,15 @@ const EmailTemplateForm = ({
                   Message
                   <span className="text-red-500 ml-1">*</span>
                 </label>
-                <div
-                  className="
-                    border border-slate-200
-                    rounded-lg
-                    overflow-hidden
-                    focus-within:border-indigo-500
-                    focus-within:ring-2
-                    focus-within:ring-indigo-100
-                  "
-                >
-                  {/* Toolbar */}
-                  <div className="
-                    h-11
-                    px-3
-                    flex items-center
-                    gap-4
-                    border-b border-slate-200
-                    bg-slate-50
-                  ">
-                    <span className="text-xs font-medium text-slate-600">
+                <div className="border border-slate-200 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100">
+                  {/* Toolbar — horizontally scrollable on mobile so all icons remain reachable */}
+                  <div className="h-11 px-3 flex items-center gap-4 border-b border-slate-200 bg-slate-50 overflow-x-auto whitespace-nowrap">
+                    <span className="text-xs font-medium text-slate-600 shrink-0">
                       Paragraph
                     </span>
-                    <ChevronDown size={14} className="text-slate-400" />
-                    <div className="w-px h-5 bg-slate-200" />
-                    
+                    <ChevronDown size={14} className="text-slate-400 shrink-0" />
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
+
                     {/* Bold */}
                     <button
                       type="button"
@@ -493,12 +447,12 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("bold");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Bold"
                     >
                       <Bold size={16} />
                     </button>
-                    
+
                     {/* Italic */}
                     <button
                       type="button"
@@ -507,12 +461,12 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("italic");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Italic"
                     >
                       <Italic size={16} />
                     </button>
-                    
+
                     {/* Underline */}
                     <button
                       type="button"
@@ -521,14 +475,14 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("underline");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Underline"
                     >
                       <Underline size={16} />
                     </button>
-                    
-                    <div className="w-px h-5 bg-slate-200" />
-                    
+
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
+
                     {/* Bullet List */}
                     <button
                       type="button"
@@ -537,12 +491,12 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("insertUnorderedList");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Bullet list"
                     >
                       <List size={16} />
                     </button>
-                    
+
                     {/* Numbered List */}
                     <button
                       type="button"
@@ -551,12 +505,12 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("insertOrderedList");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Numbered list"
                     >
                       <ListOrdered size={16} />
                     </button>
-                    
+
                     {/* Align Left */}
                     <button
                       type="button"
@@ -565,12 +519,12 @@ const EmailTemplateForm = ({
                         saveSelection();
                         formatText("justifyLeft");
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Align left"
                     >
                       <AlignLeft size={16} />
                     </button>
-                    
+
                     {/* Attachment - File picker */}
                     <button
                       type="button"
@@ -579,7 +533,7 @@ const EmailTemplateForm = ({
                         saveSelection();
                         fileInputRef.current?.click();
                       }}
-                      className="text-slate-600 hover:text-indigo-600"
+                      className="text-slate-600 hover:text-indigo-600 shrink-0"
                       title="Attach file"
                     >
                       <Paperclip size={16} />
@@ -603,7 +557,8 @@ const EmailTemplateForm = ({
                     onInput={handleEditorInput}
                     className="
                       w-full
-                      min-h-[280px]
+                      min-h-[220px]
+                      sm:min-h-[280px]
                       p-4
                       text-sm
                       text-slate-700
@@ -611,7 +566,6 @@ const EmailTemplateForm = ({
                       overflow-y-auto
                       focus:outline-none
 
-                      /* List styles */
                       [&_ul]:list-disc
                       [&_ul]:pl-6
                       [&_ul]:my-2
@@ -622,16 +576,13 @@ const EmailTemplateForm = ({
 
                       [&_li]:my-1
 
-                      /* Link styles */
                       [&_a]:text-indigo-600
                       [&_a]:underline
 
-                      /* Image styles */
                       [&_img]:max-w-full
                       [&_img]:h-auto
                       [&_img]:my-2
 
-                      /* Attachment styles */
                       [&_.email-attachment]:inline-block
                       [&_.email-attachment]:bg-slate-100
                       [&_.email-attachment]:text-slate-700
@@ -650,12 +601,12 @@ const EmailTemplateForm = ({
             </div>
 
             {/* ================= RIGHT VARIABLES ================= */}
-            <div className="col-span-12 lg:col-span-3">
-              <div className="bg-indigo-50 rounded-xl p-5 sticky top-6">
+            <div className="col-span-12 lg:col-span-3 min-w-0">
+              <div className="bg-indigo-50 rounded-xl p-5 lg:sticky lg:top-6">
                 <h3 className="text-sm font-semibold text-slate-700 mb-5">
                   Available Variables
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {AVAILABLE_VARIABLES.map((variable) => (
                     <button
                       key={variable.key}
@@ -669,28 +620,12 @@ const EmailTemplateForm = ({
 
                         insertVariable(variable.key);
                       }}
-                      className="
-                        w-full
-                        flex
-                        items-center
-                        gap-3
-                        text-left
-                        group
-                      "
+                      className="w-full flex items-center gap-3 text-left group"
                     >
-                      <span className="
-                        min-w-[110px]
-                        text-[11px]
-                        font-semibold
-                        text-slate-700
-                      ">
+                      <span className="min-w-[110px] text-[11px] font-semibold text-slate-700">
                         ({variable.key})
                       </span>
-                      <span className="
-                        text-xs
-                        text-slate-500
-                        group-hover:text-indigo-600
-                      ">
+                      <span className="text-xs text-slate-500 group-hover:text-indigo-600">
                         {variable.label}
                       </span>
                     </button>
@@ -698,16 +633,7 @@ const EmailTemplateForm = ({
                 </div>
 
                 {/* Hint */}
-                <div className="
-                  mt-6
-                  bg-white/70
-                  rounded-lg
-                  p-3
-                  text-xs
-                  text-slate-500
-                  flex
-                  gap-2
-                ">
+                <div className="mt-6 bg-white/70 rounded-lg p-3 text-xs text-slate-500 flex gap-2">
                   <span className="text-indigo-500">💡</span>
                   <span>
                     Click on a variable to insert it at the cursor position.
@@ -718,37 +644,18 @@ const EmailTemplateForm = ({
           </div>
 
           {/* ================= FOOTER ================= */}
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onCancel}
-              className="
-                px-5 py-2.5
-                border border-slate-200
-                rounded-lg
-                text-sm
-                font-medium
-                text-slate-600
-                hover:bg-slate-50
-              "
+              className="w-full sm:w-auto px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="
-                px-6 py-2.5
-                bg-indigo-600
-                hover:bg-indigo-700
-                disabled:bg-indigo-300
-                disabled:cursor-not-allowed
-                text-white
-                rounded-lg
-                text-sm
-                font-medium
-                shadow-sm
-              "
+              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium shadow-sm"
             >
               {isLoading
                 ? mode === "edit"

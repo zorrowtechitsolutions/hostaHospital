@@ -32,6 +32,7 @@ import {
   FilterBar
 } from '../ui';
 
+import CustomSelect from '../ui/CustomSelect';
 import DeleteModal from '../patients/DeleteModel';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 
@@ -73,18 +74,37 @@ const PERMISSIONS = {
   DELETE: 12
 };
 
+// ✅ Static Gender filter options
+const GENDER_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Genders' },
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+];
+
+// ✅ Static Status filter options
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'Active', label: 'Active' },
+  { value: 'Inactive', label: 'Inactive' },
+  { value: 'Blacklisted', label: 'Blacklisted' },
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter inputs
+const SELECT_FILTER_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-4 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
 // Helper function to get hospital ID
 const getHospitalId = () => {
   const storedHospitalId = localStorage.getItem('hospitalId');
   if (storedHospitalId) {
     return storedHospitalId;
   }
-  
+
   const authUser = getAuthUser();
   if (authUser?.hospitalId) {
     return authUser.hospitalId;
   }
-  
+
   return null;
 };
 
@@ -97,18 +117,17 @@ const getAuthId = () => {
 // FIX: Enhanced getS3ImageUrl with cache-busting
 const getS3ImageUrlWithCache = (imageKey) => {
   if (!imageKey) return null;
-  
+
   if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return `${imageKey}?t=${Date.now()}`;
   }
-  
+
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
 // ✅ Helper to format shift time for display
 const formatShiftTime = (time) => {
   if (!time) return '';
-  // Convert "HH:MM" to "HH:MM AM/PM"
   const [hours, minutes] = time.split(':').map(Number);
   const period = hours >= 12 ? 'PM' : 'AM';
   const displayHours = hours % 12 || 12;
@@ -118,12 +137,12 @@ const formatShiftTime = (time) => {
 // ✅ Staff Action Menu Component with Permission Checks
 const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelete, onRecover }) => {
   if (activeMenu !== staff.id) return null;
-  
+
   return (
     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
       {!staff.isDelete && (
-        <button 
-          onClick={() => onView(staff)} 
+        <button
+          onClick={() => onView(staff)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <Eye className="w-4 h-4" />
@@ -131,8 +150,8 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
         </button>
       )}
       {!staff.isDelete && (
-        <button 
-          onClick={() => onEdit(staff)} 
+        <button
+          onClick={() => onEdit(staff)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <Edit className="w-4 h-4" />
@@ -140,7 +159,7 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
         </button>
       )}
       {!staff.isDelete && <div className="border-t border-gray-100 my-1"></div>}
-      
+
       {staff.isDelete ? (
         <button
           onClick={() => onRecover(staff)}
@@ -150,8 +169,8 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
           Recover Staff
         </button>
       ) : (
-        <button 
-          onClick={() => onDelete(staff)} 
+        <button
+          onClick={() => onDelete(staff)}
           className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
         >
           <Trash2 className="w-4 h-4" />
@@ -162,7 +181,7 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
   );
 });
 
-// ✅ Skeleton Loader Component (matches Doctor pattern — full card look)
+// ✅ Skeleton Loader Component
 const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
   if (viewMode === 'grid') {
     return (
@@ -172,24 +191,18 @@ const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
             key={index}
             className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm"
           >
-            {/* ID + menu */}
             <div className="w-full flex justify-between items-start mb-4">
               <div className="h-5 w-16 bg-gray-200 rounded animate-pulse"></div>
               <div className="w-7 h-7 bg-gray-200 rounded-full animate-pulse"></div>
             </div>
 
-            {/* Avatar */}
             <div className="relative mb-3">
               <div className="w-16 h-16 rounded-full bg-gray-200 animate-pulse"></div>
             </div>
 
-            {/* Name */}
             <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
-
-            {/* Designation */}
             <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-4"></div>
 
-            {/* Info row */}
             <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
               <div className="text-center">
                 <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mx-auto mb-1"></div>
@@ -206,7 +219,6 @@ const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
     );
   }
 
-  // List view skeleton — keeps the card wrapper so rows are still readable
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -250,15 +262,15 @@ const Staffs = () => {
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('staffViewMode') || 'grid';
   });
-  
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [staffToDelete, setStaffToDelete] = useState(null);
-  
+
   const [designationFilter, setDesignationFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -266,14 +278,11 @@ const Staffs = () => {
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState(null);
 
-  // Permission Denied Modal state
   const [showPermissionDeniedModal, setShowPermissionDeniedModal] = useState(false);
   const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
 
-  // Get authenticated user
   const auth = getAuthUser();
-  
-  // Get hospital ID using helper
+
   const hospitalId = getHospitalId();
   const authId = getAuthId();
 
@@ -324,7 +333,7 @@ const Staffs = () => {
     console.warn('⚠️ No hospitalId found for filtering');
   }
 
-  // API Hooks with pagination parameters
+  // API Hooks
   const {
     data: staffApiResponse,
     isLoading: loading,
@@ -427,24 +436,24 @@ const Staffs = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // ✅ Transform API response with shift time fields
+  // ✅ Transform API response
   const transformStaffData = (staffList) => {
     if (!staffList || !Array.isArray(staffList)) return [];
-    
+
     return staffList.map((staff, index) => {
       const imageKey = staff?.imageUrl || staff?.profileImage || staff?.imageKey || staff?.profilePicture || null;
-      
+
       let staffStatus = 'Inactive';
       if (staff.isDelete) {
         staffStatus = 'Blacklisted';
       } else if (staff.isActive) {
         staffStatus = 'Active';
       }
-      
+
       return {
         id: staff.id,
         staffNumber: staff.staffNumber,
-        formattedId: staff.staffNumber 
+        formattedId: staff.staffNumber
           ? `#STF${String(staff.staffNumber).padStart(5, '0')}`
           : '#STF00000',
         originalId: staff.id || staff._id,
@@ -463,7 +472,6 @@ const Staffs = () => {
         imageUrl: imageKey,
         status: staffStatus,
         jobType: staff.jobType || '',
-        // ✅ Shift time fields
         shiftStartTime: staff.shiftStartTime || '',
         shiftEndTime: staff.shiftEndTime || '',
         dob: staff.dob ? new Date(staff.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
@@ -484,7 +492,7 @@ const Staffs = () => {
 
   const staffsData = useMemo(() => {
     const transformed = transformStaffData(staffApiResponse?.data || []);
-    
+
     return [...transformed].sort((a, b) => {
       const numberA = Number(a.staffNumber) || 0;
       const numberB = Number(b.staffNumber) || 0;
@@ -517,13 +525,13 @@ const Staffs = () => {
     }
 
     if (designationFilter !== 'all') {
-      filtered = filtered.filter(staff => 
+      filtered = filtered.filter(staff =>
         staff.designation?.toLowerCase() === designationFilter.toLowerCase()
       );
     }
 
     if (genderFilter !== 'all') {
-      filtered = filtered.filter(staff => 
+      filtered = filtered.filter(staff =>
         staff.gender?.toLowerCase() === genderFilter.toLowerCase()
       );
     }
@@ -552,7 +560,7 @@ const Staffs = () => {
   }, [staffsData, debouncedSearchTerm, designationFilter, genderFilter, statusFilter, dateFilter]);
 
   const displayStaffsData = filteredStaffsData;
-  
+
   const totalItems = staffApiResponse?.pagination?.totalItems || 0;
   const totalPages = staffApiResponse?.pagination?.totalPages || Math.ceil(totalItems / itemsPerPage);
 
@@ -571,6 +579,15 @@ const Staffs = () => {
     const designations = [...new Set(allData.map(s => s.designation).filter(Boolean))];
     return designations.sort();
   };
+
+  // ✅ Options for the Designation filter CustomSelect
+  const designationFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Designations' },
+      ...getAllDesignations().map(d => ({ value: d, label: d })),
+    ],
+    [staffsData, staffApiResponse]
+  );
 
   const clearAllFilters = () => {
     setDesignationFilter('all');
@@ -648,7 +665,7 @@ const Staffs = () => {
     if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
       return;
     }
-    
+
     if (staff.isDelete) {
       showErrorToast('Cannot view details of blacklisted staff', 3000);
       return;
@@ -662,7 +679,7 @@ const Staffs = () => {
     if (!checkPermission(PERMISSIONS.EDIT, 'edit staff')) {
       return;
     }
-    
+
     if (staff.isDelete) {
       showErrorToast('Cannot edit blacklisted staff', 3000);
       return;
@@ -676,7 +693,7 @@ const Staffs = () => {
     if (!checkPermission(PERMISSIONS.DELETE, 'delete staff')) {
       return;
     }
-    
+
     setStaffToDelete(staff);
     setShowDeleteModal(true);
     setActiveMenu(null);
@@ -715,7 +732,7 @@ const Staffs = () => {
     }
     navigate('/add-staff');
   };
-  
+
   const getActiveFilterCount = () =>
     [
       designationFilter !== 'all',
@@ -730,20 +747,20 @@ const Staffs = () => {
     setActiveMenu(prevActive => prevActive === id ? null : id);
   }, []);
 
-  // StaffDetailsModal with shift time display (neutral gray)
+  // StaffDetailsModal
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
-    
+
     const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
     const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
-    
+
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
           <Avatar className="w-16 h-16">
-            <AvatarImage 
-              src={imageUrl || undefined} 
-              alt={staff.name} 
+            <AvatarImage
+              src={imageUrl || undefined}
+              alt={staff.name}
             />
             <AvatarFallback className="text-xl font-medium">
               {staff.name?.charAt(0)?.toUpperCase() || '?'}
@@ -759,7 +776,7 @@ const Staffs = () => {
             )}
           </div>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-500">Designation</label>
@@ -803,19 +820,19 @@ const Staffs = () => {
               {staff.isDelete ? 'Blacklisted' : staff.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
-          
+
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500">Address</label>
             <p className="text-sm text-gray-800">{staff.address || 'N/A'}</p>
           </div>
-          
+
           {staff.staffType && (
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500">Staff Type</label>
               <p className="text-sm text-gray-800">{staff.staffType}</p>
             </div>
           )}
-          
+
           {staff.jobType && (
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500">Job Type</label>
@@ -823,7 +840,6 @@ const Staffs = () => {
             </div>
           )}
 
-          {/* ✅ Shift Timing display — neutral gray */}
           {hasShiftTiming && (
             <div className="col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -844,7 +860,7 @@ const Staffs = () => {
             </div>
           )}
         </div>
-        
+
         <div className="flex gap-2 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
           <Button variant="primary" onClick={() => { handleEditStaff(staff); onClose(); }} fullWidth>
@@ -862,12 +878,9 @@ const Staffs = () => {
   const isSearchActive = debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
   const hasActiveFilters = designationFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all' || !!dateFilter;
 
-  // ✅ Loading state — full page layout + skeleton cards (matches Doctor page)
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-
-        {/* Header / Breadcrumb skeleton */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -876,9 +889,7 @@ const Staffs = () => {
           <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
         </div>
 
-        {/* Search + filters + actions skeleton */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
           <div className="flex flex-1 gap-3 w-full lg:w-auto">
             <div className="relative flex-1 max-w-sm">
               <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
@@ -920,7 +931,7 @@ const Staffs = () => {
             </div>
           </div>
           <h1 className="text-xl font-bold text-gray-800">Staffs</h1>
-          
+
           {uniqueHospitals.length > 1 && (
             <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 flex items-center gap-2">
               <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -936,27 +947,27 @@ const Staffs = () => {
         {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
-            <SearchBar 
-              placeholder="Search by name, staff ID, designation, phone or hospital..." 
-              value={searchTerm} 
-              onChange={setSearchTerm} 
+            <SearchBar
+              placeholder="Search by name, staff ID, designation, phone or hospital..."
+              value={searchTerm}
+              onChange={setSearchTerm}
               onClear={() => {
                 setSearchTerm('');
                 setDebouncedSearchTerm('');
-              }} 
+              }}
             />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-              <button 
-                onClick={() => setViewMode('grid')} 
+              <button
+                onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="Grid view"
               >
                 <LayoutGrid size={16} />
               </button>
-              <button 
-                onClick={() => setViewMode('list')} 
+              <button
+                onClick={() => setViewMode('list')}
                 className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="List view"
               >
@@ -977,9 +988,9 @@ const Staffs = () => {
               activeFilterCount={activeFilterCount}
               title="Toggle Filters"
             />
-            
-            <Button 
-              onClick={handleAddStaff} 
+
+            <Button
+              onClick={handleAddStaff}
               className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <Plus size={16} /> New Staff
@@ -1010,37 +1021,32 @@ const Staffs = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              <select
+              {/* ✅ Replaced native  (Designation) with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={designationFilter}
-                onChange={(e) => setDesignationFilter(e.target.value)}
-                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-              >
-                <option value="all">All Designations</option>
-                {getAllDesignations().map((des) => (
-                  <option key={des} value={des}>{des}</option>
-                ))}
-              </select>
+                options={designationFilterOptions}
+                onChange={(value) => setDesignationFilter(value)}
+                className={SELECT_FILTER_CLASS}
+              />
 
-              <select
+              {/* ✅ Replaced native  (Gender) with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={genderFilter}
-                onChange={(e) => setGenderFilter(e.target.value)}
-                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-              >
-                <option value="all">All Genders</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
+                options={GENDER_FILTER_OPTIONS}
+                onChange={(value) => setGenderFilter(value)}
+                className={SELECT_FILTER_CLASS}
+              />
 
-              <select
+              {/* ✅ Replaced native  (Status) with CustomSelect */}
+              <CustomSelect
+                hideLabel
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-              >
-                <option value="all">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Blacklisted">Blacklisted</option>
-              </select>
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => setStatusFilter(value)}
+                className={SELECT_FILTER_CLASS}
+              />
 
               <input
                 type="date"
@@ -1060,14 +1066,14 @@ const Staffs = () => {
               {isSearchActive || hasActiveFilters ? 'No staff found' : 'No staff available'}
             </h3>
             <p className="text-sm text-gray-500">
-              {isSearchActive 
+              {isSearchActive
                 ? `No results found for "${searchTerm}". Try adjusting your search.`
                 : hasActiveFilters
                 ? 'No staff match the selected filters. Try adjusting your filters.'
                 : 'Start by adding a new staff member.'}
             </p>
             {(isSearchActive || hasActiveFilters) && (
-              <button 
+              <button
                 onClick={clearAllFilters}
                 className="mt-4 text-sm text-[#1C62A0] hover:underline"
               >
@@ -1083,10 +1089,10 @@ const Staffs = () => {
                 const isBlacklisted = staff.isDelete;
                 const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                 const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
-                
+
                 return (
-                  <div 
-                    key={staff.id} 
+                  <div
+                    key={staff.id}
                     className={`bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow ${
                       isBlacklisted ? 'opacity-75' : ''
                     }`}
@@ -1096,8 +1102,8 @@ const Staffs = () => {
                         {staff.formattedId}
                       </Badge>
                       <div className="relative menu-container">
-                        <button 
-                          onClick={(e) => toggleMenu(staff.id, e)} 
+                        <button
+                          onClick={(e) => toggleMenu(staff.id, e)}
                           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                           aria-label="Actions menu"
                         >
@@ -1113,12 +1119,12 @@ const Staffs = () => {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="relative mb-3">
                       <Avatar className="w-16 h-16">
-                        <AvatarImage 
-                          src={imageUrl || undefined} 
-                          alt={staff.name} 
+                        <AvatarImage
+                          src={imageUrl || undefined}
+                          alt={staff.name}
                         />
                         <AvatarFallback className={`text-sm font-medium ${
                           isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
@@ -1136,8 +1142,8 @@ const Staffs = () => {
                         }`}
                       />
                     </div>
-                    
-                    <h3 
+
+                    <h3
                       onClick={() => {
                         if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
                           return;
@@ -1145,7 +1151,7 @@ const Staffs = () => {
                         if (!isBlacklisted) {
                           handleViewDetails(staff);
                         }
-                      }} 
+                      }}
                       className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                     >
                       {staff.name}
@@ -1154,14 +1160,13 @@ const Staffs = () => {
                       {staff.designation || 'N/A'}
                     </p>
 
-                    {/* ✅ Shift timing badge — neutral gray */}
                     {hasShiftTiming && (
                       <div className="mt-2 flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
                         <Clock className="w-3 h-3" />
                         <span>{formatShiftTime(staff.shiftStartTime)} - {formatShiftTime(staff.shiftEndTime)}</span>
                       </div>
                     )}
-                    
+
                     <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mt-4">
                       <div className="text-center">
                         <p className="text-[9px] text-gray-400 uppercase font-bold">Gender</p>
@@ -1187,13 +1192,13 @@ const Staffs = () => {
                     </div>
 
                     {isBlacklisted && (
-                      <button 
+                      <button
                         onClick={() => {
                           if (!checkPermission(PERMISSIONS.DELETE, 'recover staff')) {
                             return;
                           }
                           handleRecoverStaff(staff);
-                        }} 
+                        }}
                         className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2 mt-2"
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -1235,7 +1240,7 @@ const Staffs = () => {
                 )}
               </h2>
             </div>
-            
+
             <div className="flex flex-col min-h-[420px]">
               <div className="overflow-x-auto flex-1">
                 <table className="w-full text-sm text-left">
@@ -1257,10 +1262,10 @@ const Staffs = () => {
                       const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                       const isBlacklisted = staff.isDelete;
                       const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
-                      
+
                       return (
-                        <tr 
-                          key={staff.id} 
+                        <tr
+                          key={staff.id}
                           className={`hover:bg-gray-50 border-b border-gray-100 ${
                             isBlacklisted ? 'bg-gray-50' : ''
                           }`}
@@ -1273,9 +1278,9 @@ const Staffs = () => {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <Avatar className="w-8 h-8">
-                                <AvatarImage 
-                                  src={imageUrl || undefined} 
-                                  alt={staff.name} 
+                                <AvatarImage
+                                  src={imageUrl || undefined}
+                                  alt={staff.name}
                                 />
                                 <AvatarFallback className={`text-sm font-medium ${
                                   isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
@@ -1283,7 +1288,7 @@ const Staffs = () => {
                                   {staff.name?.charAt(0)?.toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span 
+                              <span
                                 onClick={() => {
                                   if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {
                                     return;
@@ -1303,7 +1308,6 @@ const Staffs = () => {
                           <td className="px-6 py-4 text-gray-600">{staff.gender || 'N/A'}</td>
                           <td className="px-6 py-4 text-gray-600">{staff.designation || 'N/A'}</td>
                           <td className="px-6 py-4 text-gray-600">{staff.phone || 'N/A'}</td>
-                          {/* ✅ Shift timing column — neutral gray */}
                           <td className="px-6 py-4 text-gray-600">
                             {hasShiftTiming ? (
                               <div className="flex items-center gap-1 text-xs">
@@ -1337,8 +1341,8 @@ const Staffs = () => {
                           </td>
                           <td className="px-6 py-4 text-right relative menu-container">
                             <div className="flex justify-end">
-                              <button 
-                                onClick={(e) => toggleMenu(staff.id, e)} 
+                              <button
+                                onClick={(e) => toggleMenu(staff.id, e)}
                                 className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                                 aria-label="Actions menu"
                               >
@@ -1360,7 +1364,7 @@ const Staffs = () => {
                   </tbody>
                 </table>
               </div>
-              
+
               <div className="mt-auto px-6 py-3 bg-white border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}
@@ -1382,13 +1386,13 @@ const Staffs = () => {
       )}
 
       {/* Delete Confirmation Modal */}
-      <DeleteModal 
-        isOpen={showDeleteModal} 
-        onClose={() => setShowDeleteModal(false)} 
-        onConfirm={handleConfirmDelete} 
-        title="Delete Staff Member" 
-        message="Are you sure you want to delete this staff member? This action cannot be undone." 
-        itemName={staffToDelete?.name} 
+      <DeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Staff Member"
+        message="Are you sure you want to delete this staff member? This action cannot be undone."
+        itemName={staffToDelete?.name}
       />
 
       {/* Permission Denied Modal */}

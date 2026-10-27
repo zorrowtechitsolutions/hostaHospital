@@ -7,8 +7,8 @@ import {
   Filter, X, RotateCcw, ChevronLeft, ChevronRight, Users as UsersIcon
 } from 'lucide-react';
 import { Card, Button, Modal, Badge } from '../../ui';
+import CustomSelect from '../../ui/CustomSelect'; // ✅ Added import
 import { useGetStaffQuery, useDeleteStaffMutation, useRecoverStaffMutation } from '../../../../app/service/staffApi';
-// ✅ Import StaffDetailsModal instead of StaffDetails page
 import StaffDetailsModal from './staff/staffDetails';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
@@ -157,7 +157,6 @@ const HospitalStaffList = () => {
 
   // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
   const filteredStaff = useMemo(() => {
-    // If no search term or search term is too short, return all data
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allStaff;
     }
@@ -223,6 +222,25 @@ const HospitalStaffList = () => {
     return designations.sort();
   };
 
+  // ✅ Build options for CustomSelect
+  const genderOptions = [
+    { value: 'all', label: 'All Genders' },
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Other', label: 'Other' },
+  ];
+
+  const designationOptions = [
+    { value: 'all', label: 'All Designations' },
+    ...getAllDesignations().map((des) => ({ value: des, label: des })),
+  ];
+
+  const statusOptions = [
+    { value: 'all', label: 'All Status' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+  ];
+
   // Helper functions
   const formatAddress = (address) => {
     if (!address) return 'N/A';
@@ -278,14 +296,12 @@ const HospitalStaffList = () => {
     return '';
   };
 
-  // ✅ FIXED: Show Staff Details Modal instead of navigating
   const handleViewDetails = (staff) => {
     if (staff.isDelete) {
       showErrorToast("Cannot view details of deleted staff", 3000);
       return;
     }
 
-    // Transform staff data for the modal
     const transformedStaff = {
       ...staff,
       id: staff.id || staff._id,
@@ -309,7 +325,6 @@ const HospitalStaffList = () => {
     setShowDetailsModal(true);
   };
 
-  // ✅ FIXED: Navigation to Add Staff - uses the correct route
   const handleAddStaff = () => {
     if (!canModifyStaff) {
       showErrorToast('You do not have permission to add staff', 3000);
@@ -325,7 +340,6 @@ const HospitalStaffList = () => {
     });
   };
 
-  // ✅ FIXED: Navigation to Edit Staff - uses the correct route
   const handleEditStaff = (staff) => {
     if (!canModifyStaff) {
       showErrorToast('You do not have permission to edit staff', 3000);
@@ -339,7 +353,6 @@ const HospitalStaffList = () => {
     const staffId = staff.id;
     const basePath = getBasePath();
     
-    // Close the details modal if open
     setShowDetailsModal(false);
     
     navigate(`${basePath}/staff/edit/${staffId}`, {
@@ -690,49 +703,32 @@ const HospitalStaffList = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Gender Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Gender</label>
-              <select
-                value={genderFilter}
-                onChange={(e) => setGenderFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent outline-none text-sm"
-              >
-                <option value="all">All Genders</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+            {/* Gender Filter - CustomSelect */}
+            <CustomSelect
+              label="Gender"
+              value={genderFilter}
+              options={genderOptions}
+              onChange={setGenderFilter}
+              placeholder="All Genders"
+            />
 
-            {/* Designation Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Designation</label>
-              <select
-                value={designationFilter}
-                onChange={(e) => setDesignationFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent outline-none text-sm"
-              >
-                <option value="all">All Designations</option>
-                {getAllDesignations().map((des) => (
-                  <option key={des} value={des}>{des}</option>
-                ))}
-              </select>
-            </div>
+            {/* Designation Filter - CustomSelect */}
+            <CustomSelect
+              label="Designation"
+              value={designationFilter}
+              options={designationOptions}
+              onChange={setDesignationFilter}
+              placeholder="All Designations"
+            />
 
-            {/* Status Filter */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6366F1] focus:border-transparent outline-none text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+            {/* Status Filter - CustomSelect */}
+            <CustomSelect
+              label="Status"
+              value={statusFilter}
+              options={statusOptions}
+              onChange={setStatusFilter}
+              placeholder="All Status"
+            />
           </div>
         </div>
       )}

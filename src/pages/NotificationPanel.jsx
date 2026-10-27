@@ -404,8 +404,31 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   return (
     <>
-      <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
-        {/* Header */}
+<div
+  className="
+    fixed
+    top-[60px]
+    left-2
+    right-2
+    w-auto
+    max-w-none
+    bg-white dark:bg-gray-800
+    rounded-xl
+    shadow-2xl
+    border border-gray-200 dark:border-gray-700
+    overflow-hidden
+    z-50
+
+    sm:absolute
+    sm:top-auto
+    sm:left-auto
+    sm:right-0
+    sm:mt-2
+    sm:w-96
+    sm:max-w-96
+  "
+>
+          {/* Header */}
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center">
             <div>

@@ -20,6 +20,7 @@ import {
   SearchBar
 } from '../ui';
 
+import CustomSelect from '../ui/CustomSelect'; // ✅ Added import
 import DeleteModal from '../patients/DeleteModel';
 
 import {
@@ -170,6 +171,12 @@ const Users = () => {
     return [...new Set(users.map(u => u.userType).filter(Boolean))];
   };
 
+  // ✅ Build options for CustomSelect
+  const userTypeOptions = [
+    { value: 'all', label: 'All User Types' },
+    ...getUserTypes().map((type) => ({ value: type, label: type })),
+  ];
+
   const getFilteredUsers = () => {
     let filtered = [...users];
     
@@ -246,8 +253,6 @@ const Users = () => {
     URL.revokeObjectURL(link.href);
     showSuccessToast(`Exported ${exportData.length} user records as CSV`, 2000);
   };
-
-  // ✅ REMOVED: handleImport function
 
   // ✅ Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
@@ -367,8 +372,6 @@ const Users = () => {
               <RefreshCcw size={16} className={isRefreshing ? "animate-spin" : ""} />
             </Button>
             
-            {/* ✅ IMPORT BUTTON REMOVED */}
-            
             <Button variant="outline" size="sm" onClick={handleExportCSV} title="Export CSV">
               <Download size={16} />
             </Button>
@@ -413,16 +416,14 @@ const Users = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-5">
-              <select
+              {/* User Type Filter - CustomSelect */}
+              <CustomSelect
+                label="User Type"
                 value={userTypeFilter}
-                onChange={(e) => setUserTypeFilter(e.target.value)}
-                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white"
-              >
-                <option value="all">All User Types</option>
-                {getUserTypes().map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+                options={userTypeOptions}
+                onChange={setUserTypeFilter}
+                placeholder="All User Types"
+              />
             </div>
           </div>
         )}

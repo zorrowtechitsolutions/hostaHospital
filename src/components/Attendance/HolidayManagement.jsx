@@ -15,7 +15,7 @@ import {
   Flag,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button } from '../ui';
+import { Pagination, SearchBar, Modal, Button, CustomSelect } from '../ui';
 import {
   showSuccessToast,
   showErrorToast,
@@ -182,21 +182,18 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
           )}
         </div>
 
+        {/* ✅ Holiday Type — CustomSelect */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Holiday Type <span className="text-red-500">*</span>
-          </label>
-          <select
+          <CustomSelect
+            label="Holiday Type"
             value={form.type}
-            onChange={(e) => handleChange('type', e.target.value)}
-            className="w-full h-11 px-4 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent cursor-pointer"
-          >
-            {HOLIDAY_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+            options={HOLIDAY_TYPES.map((t) => ({ value: t, label: t }))}
+            onChange={(value) => handleChange('type', value)}
+            placeholder="Select holiday type"
+            error={errors.type}
+            touched={true}
+            required
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -512,7 +509,6 @@ const HolidayManagement = () => {
 
     try {
       await deleteHolidayApi(deleteTarget.id).unwrap();
-      // ✅ Same success toast style as Add / Update
       showSuccessToast('Holiday deleted successfully', 2500);
       setDeleteTarget(null);
     } catch (err) {
@@ -643,31 +639,33 @@ const HolidayManagement = () => {
           />
         </div>
 
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Types</option>
-          {HOLIDAY_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+        {/* ✅ Type filter — CustomSelect */}
+        <div className="w-full sm:w-44 -mt-1">
+          <CustomSelect
+            label=""
+            value={typeFilter}
+            options={[
+              { value: 'all', label: 'All Types' },
+              ...HOLIDAY_TYPES.map((t) => ({ value: t, label: t }))
+            ]}
+            onChange={(value) => setTypeFilter(value)}
+            placeholder="All Types"
+          />
+        </div>
 
-        <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="">All Years</option>
-          {yearOptions.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
+        {/* ✅ Year filter — CustomSelect */}
+        <div className="w-full sm:w-32 -mt-1">
+          <CustomSelect
+            label=""
+            value={yearFilter}
+            options={[
+              { value: '', label: 'All Years' },
+              ...yearOptions.map((y) => ({ value: y, label: y }))
+            ]}
+            onChange={(value) => setYearFilter(value)}
+            placeholder="All Years"
+          />
+        </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button

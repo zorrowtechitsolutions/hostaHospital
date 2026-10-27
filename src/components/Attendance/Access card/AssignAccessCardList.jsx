@@ -14,7 +14,7 @@ import {
   useDeactivateRfidCardAssignmentMutation,
   useActivateRfidCardAssignmentMutation,
 } from '../../../../app/service/accesscard';
-import { Button, Pagination, SearchBar, FilterBar, Modal } from '../../ui';
+import { Button, Pagination, SearchBar, FilterBar, Modal, CustomSelect } from '../../ui';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
@@ -154,18 +154,14 @@ const AssignAccessCardList = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const itemsPerPage = 10;
 
-  // Modal state
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
-    action: null, // 'deactivate' | 'reactivate'
+    action: null,
     member: null,
   });
 
   const hospitalId = useMemo(() => getHospitalId(), []);
 
-  // ----------------------------------------------------------
-  // Fetch doctors, staff, and RFID assignments
-  // ----------------------------------------------------------
   const {
     data: doctorsResponse,
     isLoading: doctorsLoading,
@@ -195,9 +191,6 @@ const AssignAccessCardList = () => {
   const [activateCard, { isLoading: isActivating }] =
     useActivateRfidCardAssignmentMutation();
 
-  /* ============================================================
-     ✅ REAL-TIME ACCESS CARD EVENTS
-     ============================================================ */
   useEffect(() => {
     const matchesThisHospital = (data) => {
       if (!data?.hospitalId) return true;
@@ -234,9 +227,6 @@ const AssignAccessCardList = () => {
   const loading = doctorsLoading || staffLoading || assignmentsLoading;
   const isFetching = doctorsFetching || staffFetching || assignmentsFetching;
 
-  // ----------------------------------------------------------
-  // Build assignment map for quick lookup
-  // ----------------------------------------------------------
   const assignmentMap = useMemo(() => {
     const map = new Map();
     (assignmentsResponse?.data || []).forEach((assignment) => {
@@ -246,11 +236,7 @@ const AssignAccessCardList = () => {
     return map;
   }, [assignmentsResponse]);
 
-  // ----------------------------------------------------------
-  // Normalize into unified member list
-  // ----------------------------------------------------------
   const members = useMemo(() => {
-    // ----- Doctors -----
     const doctorsList = (doctorsResponse?.data || []).map((doc) => {
       const key = `doctor-${doc.id || doc.doctorNumber || doc.authId}`;
       const assignment = assignmentMap.get(`doctor-${doc.id}`);
@@ -290,7 +276,6 @@ const AssignAccessCardList = () => {
       };
     });
 
-    // ----- Staff -----
     const staffList = (staffResponse?.data || []).map((st) => {
       const key = `staff-${st.id || st.staffNumber || st.authId}`;
       const assignment = assignmentMap.get(`staff-${st.id}`);
@@ -333,9 +318,6 @@ const AssignAccessCardList = () => {
     return [...doctorsList, ...staffList];
   }, [doctorsResponse, staffResponse, assignmentMap, hospitalId]);
 
-  // ----------------------------------------------------------
-  // Filtering
-  // ----------------------------------------------------------
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
 
   const filteredMembers = useMemo(() => {
@@ -381,9 +363,6 @@ const AssignAccessCardList = () => {
     });
   }, [members, typeFilter, departmentFilter, statusFilter, searchTerm, hasSearchTerm]);
 
-  // ----------------------------------------------------------
-  // Pagination
-  // ----------------------------------------------------------
   const totalFilteredItems = filteredMembers.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
 
@@ -396,17 +375,11 @@ const AssignAccessCardList = () => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, departmentFilter, statusFilter]);
 
-  // ----------------------------------------------------------
-  // Departments list
-  // ----------------------------------------------------------
   const departments = useMemo(() => {
     const set = new Set(members.map((m) => m.department).filter(Boolean));
     return [...set].sort();
   }, [members]);
 
-  // ----------------------------------------------------------
-  // Click outside to close menu
-  // ----------------------------------------------------------
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -417,9 +390,6 @@ const AssignAccessCardList = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ----------------------------------------------------------
-  // Handlers
-  // ----------------------------------------------------------
   const handleRefresh = useCallback(async () => {
     setSearchTerm('');
     setTypeFilter('all');
@@ -539,9 +509,6 @@ const AssignAccessCardList = () => {
     }
   };
 
-  // ----------------------------------------------------------
-  // Stats
-  // ----------------------------------------------------------
   const stats = useMemo(() => {
     const totalCards = members.filter((m) => m.accessCardUid).length;
     const activeCards = members.filter((m) => m.cardStatus === 'Active').length;
@@ -558,9 +525,6 @@ const AssignAccessCardList = () => {
     };
   }, [members]);
 
-  // ----------------------------------------------------------
-  // Loading skeleton
-  // ----------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -589,9 +553,6 @@ const AssignAccessCardList = () => {
     );
   }
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Breadcrumb */}
@@ -714,54 +675,50 @@ const AssignAccessCardList = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* ✅ Member Type — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Member Type
-              </label>
-              <select
+              <CustomSelect
+                label="Member Type"
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="all">All Types</option>
-                <option value="doctor">Doctor</option>
-                <option value="staff">Staff</option>
-              </select>
+                options={[
+                  { value: 'all', label: 'All Types' },
+                  { value: 'doctor', label: 'Doctor' },
+                  { value: 'staff', label: 'Staff' }
+                ]}
+                onChange={(value) => setTypeFilter(value)}
+                placeholder="All Types"
+              />
             </div>
 
+            {/* ✅ Department / Designation — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Department / Designation
-              </label>
-              <select
+              <CustomSelect
+                label="Department / Designation"
                 value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Departments' },
+                  ...departments.map((dept) => ({ value: dept, label: dept }))
+                ]}
+                onChange={(value) => setDepartmentFilter(value)}
+                placeholder="All Departments"
+              />
             </div>
 
+            {/* ✅ Card Status — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Card Status
-              </label>
-              <select
+              <CustomSelect
+                label="Card Status"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="all">All Statuses</option>
-                <option value="assigned">Card Assigned</option>
-                <option value="not-assigned">Not Assigned</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'assigned', label: 'Card Assigned' },
+                  { value: 'not-assigned', label: 'Not Assigned' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+                onChange={(value) => setStatusFilter(value)}
+                placeholder="All Statuses"
+              />
             </div>
           </div>
         </div>
@@ -937,7 +894,6 @@ const AssignAccessCardList = () => {
               </table>
             </div>
 
-            {/* ✅ Pagination — always visible, sticky to bottom */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}

@@ -18,7 +18,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Breadcrumb } from '../../ui/Breadcrumb';
-import { Pagination, SearchBar } from '../../ui';
+import { Pagination, SearchBar, CustomSelect } from '../../ui';
 import { Button } from '../../ui/button';
 import DeviceDetails from './DeviceDetails';
 import DeviceCredentialsModal from './credentials/DeviceCredentialsModal';
@@ -32,14 +32,13 @@ import {
 } from '../../../../app/service/device';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 
-// ✅ Real-time device events (matches backend handleDeviceEvent)
 import {
   registerDeviceEvents,
   unregisterDeviceEvents,
 } from '../../../socket/deviceEvents';
 
 /* ------------------------------------------------------------------ */
-/* Popup: Confirm dialog (replaces window.confirm)                     */
+/* Popup: Confirm dialog                                               */
 /* ------------------------------------------------------------------ */
 const ConfirmModal = ({
   isOpen,
@@ -109,7 +108,7 @@ const ConfirmModal = ({
 };
 
 /* ------------------------------------------------------------------ */
-/* Popup: Alert message (replaces window.alert)                        */
+/* Popup: Alert message                                                */
 /* ------------------------------------------------------------------ */
 const AlertModal = ({ isOpen, type = 'info', title, message, onClose }) => {
   if (!isOpen) return null;
@@ -197,13 +196,9 @@ const Device = () => {
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const dropdownRef = useRef(null);
 
-  // Selected device for the details view
   const [selectedDevice, setSelectedDevice] = useState(null);
-
-  // Restore credentials (shown after successful restore)
   const [restoredCredentials, setRestoredCredentials] = useState(null);
 
-  /* ── Popup state ── */
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
@@ -253,12 +248,6 @@ const Device = () => {
     }
   };
 
-  // ============================================================
-  // API — fetch ALL devices for the hospital once.
-  // All filtering (search / status / type / location) happens
-  // on the client below so it's instant and doesn't depend on
-  // backend support for those query params.
-  // ============================================================
   const {
     data: deviceResponse,
     isLoading,
@@ -278,11 +267,6 @@ const Device = () => {
 
   const deviceData = deviceResponse?.data ?? [];
 
-  // ============================================================
-  // REAL-TIME DEVICE EVENTS
-  // Mirrors backend handleDeviceEvent routing keys.
-  // SuperAdmin is in room "role_1"; hospital admins in "hospital_<id>".
-  // ============================================================
   useEffect(() => {
     registerDeviceEvents({
       onRegistered: ({ message }) => {
@@ -316,9 +300,6 @@ const Device = () => {
     };
   }, [refetch]);
 
-  // ============================================================
-  // NORMALIZE ROW (matches backend fields)
-  // ============================================================
   const normalizeRow = (row, index) => {
     const formatDate = (value) => {
       if (!value) return '-';
@@ -353,11 +334,6 @@ const Device = () => {
     [deviceData]
   );
 
-  // ============================================================
-  // CLIENT-SIDE FILTERING
-  // Search across name / deviceId / location / type.
-  // Combined with status, type, and location dropdowns.
-  // ============================================================
   const filteredData = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
@@ -392,9 +368,6 @@ const Device = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
@@ -421,7 +394,6 @@ const Device = () => {
     navigate(`/devices/edit/${row.id}`);
   };
 
-  // ── Unregister (soft delete) — confirm popup + toast ──
   const doUnregister = async (row) => {
     try {
       const res = await unregisterDevice(row.id).unwrap();
@@ -453,7 +425,6 @@ const Device = () => {
     });
   };
 
-  // ── Enable (Disabled → Active) — uses PUT /devices/:id ──
   const doEnable = async (row) => {
     try {
       const res = await updateDevice({
@@ -488,7 +459,6 @@ const Device = () => {
     });
   };
 
-  // ── Disable (Active → Disabled) — uses PUT /devices/:id ──
   const doDisable = async (row) => {
     try {
       const res = await updateDevice({
@@ -523,7 +493,6 @@ const Device = () => {
     });
   };
 
-  // ── Restore (Unregistered → Active) — uses PUT /devices/:id/restore ──
   const doRestore = async (row) => {
     try {
       const res = await restoreDevice(row.id).unwrap();
@@ -539,7 +508,6 @@ const Device = () => {
 
       showSuccessToast(`"${row.name}" restored successfully.`);
 
-      // Show the NEW credentials returned by the restore endpoint
       const creds = res?.credentials;
       if (creds?.apiKey || creds?.secretKey) {
         setRestoredCredentials({
@@ -572,16 +540,13 @@ const Device = () => {
     });
   };
 
-  // ── Open the shared DeleteModal for permanent delete ──
   const handleDelete = (row) => {
-    // Guard: only unregistered devices can be permanently deleted
     if (row.status !== 'Unregistered') return;
     setDeviceToDelete(row);
     setShowDeleteModal(true);
     setOpenDropdownId(null);
   };
 
-  // Called by DeleteModal after successful delete
   const handleDeleteConfirm = async () => {
     if (!deviceToDelete) return;
     try {
@@ -599,7 +564,6 @@ const Device = () => {
     }
   };
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -618,9 +582,6 @@ const Device = () => {
     setOpenDropdownId(null);
   };
 
-  // ============================================================
-  // BADGE HELPERS
-  // ============================================================
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Active': return 'bg-green-50 text-green-700 border-green-200';
@@ -639,11 +600,6 @@ const Device = () => {
     }
   };
 
-  // ============================================================
-  // DERIVED FILTER OPTIONS
-  // Computed from the FULL list (normalizedData), not the filtered
-  // list, so dropdown options remain stable while the user filters.
-  // ============================================================
   const locations = [
     ...new Set(normalizedData.map((r) => r.location).filter((l) => l && l !== '-')),
   ];
@@ -653,9 +609,6 @@ const Device = () => {
 
   const showLoading = isLoading || (isFetching && !deviceResponse);
 
-  // ============================================================
-  // DETAILS VIEW — short-circuits the list
-  // ============================================================
   if (selectedDevice) {
     return (
       <DeviceDetails
@@ -665,12 +618,8 @@ const Device = () => {
     );
   }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
-      {/* Breadcrumb */}
       <Breadcrumb
         items={[
           { label: 'Hospital', path: '/hospital' },
@@ -678,7 +627,6 @@ const Device = () => {
         ]}
       />
 
-      {/* Subtitle only */}
       <div className="mb-4">
         <p className="text-sm text-gray-500">
           Manage your hospital's Attendance physical devices
@@ -696,38 +644,49 @@ const Device = () => {
             className="flex-1 min-w-[250px] max-w-sm"
           />
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Disabled">Disabled</option>
-            <option value="Unregistered">Unregistered</option>
-          </select>
+          {/* ✅ Status filter — CustomSelect */}
+          <div className="w-full sm:w-44 -mt-1">
+            <CustomSelect
+              label=""
+              value={statusFilter}
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'Active', label: 'Active' },
+                { value: 'Disabled', label: 'Disabled' },
+                { value: 'Unregistered', label: 'Unregistered' }
+              ]}
+              onChange={(value) => setStatusFilter(value)}
+              placeholder="All Status"
+            />
+          </div>
 
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Device Types</option>
-            {deviceTypes.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
+          {/* ✅ Type filter — CustomSelect */}
+          <div className="w-full sm:w-52 -mt-1">
+            <CustomSelect
+              label=""
+              value={typeFilter}
+              options={[
+                { value: 'all', label: 'All Device Types' },
+                ...deviceTypes.map((type) => ({ value: type, label: type }))
+              ]}
+              onChange={(value) => setTypeFilter(value)}
+              placeholder="All Device Types"
+            />
+          </div>
 
-          <select
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          >
-            <option value="all">All Locations</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
+          {/* ✅ Location filter — CustomSelect */}
+          <div className="w-full sm:w-48 -mt-1">
+            <CustomSelect
+              label=""
+              value={locationFilter}
+              options={[
+                { value: 'all', label: 'All Locations' },
+                ...locations.map((loc) => ({ value: loc, label: loc }))
+              ]}
+              onChange={(value) => setLocationFilter(value)}
+              placeholder="All Locations"
+            />
+          </div>
         </div>
 
         <Button
@@ -805,7 +764,6 @@ const Device = () => {
                             className="absolute right-4 top-10 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-left"
                           >
                             {row.status === 'Unregistered' ? (
-                              /* ── Unregistered: Restore + Delete ── */
                               <>
                                 <button
                                   onClick={() => handleRestore(row)}
@@ -821,7 +779,6 @@ const Device = () => {
                                 </button>
                               </>
                             ) : (
-                              /* ── Active / Disabled: full menu ── */
                               <>
                                 <button
                                   onClick={() => handleViewDetails(row)}
@@ -830,7 +787,6 @@ const Device = () => {
                                   <Eye size={14} className="text-gray-400" /> View Details
                                 </button>
 
-                                {/* Edit — disabled when device is not Active */}
                                 <button
                                   onClick={() => handleEdit(row)}
                                   disabled={row.status !== 'Active'}
@@ -847,7 +803,6 @@ const Device = () => {
                                   Edit
                                 </button>
 
-                                {/* Toggle: Disable (Active) / Enable-Connect (Disabled) */}
                                 {row.status === 'Active' ? (
                                   <button
                                     onClick={() => handleDisable(row)}
@@ -892,7 +847,6 @@ const Device = () => {
             </table>
           </div>
 
-          {/* Pagination */}
           {!showLoading && !isError && (
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
@@ -908,7 +862,6 @@ const Device = () => {
         </div>
       </div>
 
-      {/* ── Restore Credentials Modal (shows NEW api key after restore) ── */}
       <DeviceCredentialsModal
         isOpen={!!restoredCredentials}
         credentials={restoredCredentials}
@@ -917,7 +870,6 @@ const Device = () => {
         onClose={() => setRestoredCredentials(null)}
       />
 
-      {/* ── Global Delete Confirmation Modal ── */}
       <DeleteModal
         isOpen={showDeleteModal}
         onClose={() => {
@@ -936,7 +888,6 @@ const Device = () => {
         loading={isDeleting}
       />
 
-      {/* ── Confirm popup (replaces window.confirm) ── */}
       <ConfirmModal
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -948,7 +899,6 @@ const Device = () => {
         onCancel={closeConfirm}
       />
 
-      {/* ── Alert popup (replaces window.alert) ── */}
       <AlertModal
         isOpen={alertState.isOpen}
         type={alertState.type}

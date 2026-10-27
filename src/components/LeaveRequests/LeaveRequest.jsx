@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar, Modal, Button } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ API
@@ -49,6 +50,23 @@ const LEAVE_TYPES = [
 ];
 
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
+
+// ✅ Options for the three toolbar filters — "all" is a real value (not a placeholder)
+const DEPT_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Departments' },
+  { value: 'Doctor', label: 'Doctor' },
+  { value: 'Staff', label: 'Staff' },
+];
+
+const LEAVE_TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Leave Types' },
+  ...LEAVE_TYPES.map((t) => ({ value: t.label, label: t.label })),
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+];
 
 const getStatusBadge = (status) => {
   switch (status) {
@@ -178,7 +196,6 @@ const LeaveDetailsModal = ({ isOpen, onClose, record }) => {
               <span className="text-slate-500">Submitted At</span>
               <span className="font-medium">{record.submittedAt}</span>
             </div>
-            
           </div>
         </div>
       </div>
@@ -253,23 +270,24 @@ const ApproveRejectModal = ({
         </div>
 
         <div className="bg-slate-50 border rounded-lg p-4 text-sm space-y-3">
-          <div className="grid grid-cols-3">
-            <span className="text-slate-500">Leave Type</span>
-            <span className="col-span-2 font-medium">{record.type}</span>
+          {/* ✅ FIX: all four grid-cols-3 rows now collapse to grid-cols-1 on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+            <span className="text-slate-500 text-xs sm:text-sm">Leave Type</span>
+            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.type}</span>
           </div>
-          <div className="grid grid-cols-3">
-            <span className="text-slate-500">Date Range</span>
-            <span className="col-span-2 font-medium">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+            <span className="text-slate-500 text-xs sm:text-sm">Date Range</span>
+            <span className="col-span-1 sm:col-span-2 font-medium text-sm">
               {record.start} → {record.end}
             </span>
           </div>
-          <div className="grid grid-cols-3">
-            <span className="text-slate-500">Total Days</span>
-            <span className="col-span-2 font-medium">{record.days} Days</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+            <span className="text-slate-500 text-xs sm:text-sm">Total Days</span>
+            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.days} Days</span>
           </div>
-          <div className="grid grid-cols-3">
-            <span className="text-slate-500">Reason</span>
-            <span className="col-span-2 font-medium">{record.reason}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+            <span className="text-slate-500 text-xs sm:text-sm">Reason</span>
+            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.reason}</span>
           </div>
         </div>
 
@@ -564,37 +582,32 @@ const LeaveRequests = () => {
           />
         </div>
 
-        <select
+        {/* ✅ Replaced native  with CustomSelect */}
+        <CustomSelect
+          hideLabel
           value={deptFilter}
-          onChange={(e) => setDeptFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Departments</option>
-          <option value="Doctor">Doctor</option>
-          <option value="Staff">Staff</option>
-        </select>
+          options={DEPT_FILTER_OPTIONS}
+          onChange={(value) => setDeptFilter(value)}
+          className="w-44"
+        />
 
-        <select
+        {/* ✅ Replaced native with CustomSelect */}
+        <CustomSelect
+          hideLabel
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Leave Types</option>
-          {LEAVE_TYPES.map((t) => (
-            <option key={t.label} value={t.label}>{t.label}</option>
-          ))}
-        </select>
+          options={LEAVE_TYPE_FILTER_OPTIONS}
+          onChange={(value) => setTypeFilter(value)}
+          className="w-44"
+        />
 
-        <select
+        {/* ✅ Replaced native  with CustomSelect */}
+        <CustomSelect
+          hideLabel
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-9 border border-gray-200 rounded-md px-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-        >
-          <option value="all">All Status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+          options={STATUS_FILTER_OPTIONS}
+          onChange={(value) => setStatusFilter(value)}
+          className="w-40"
+        />
 
         <div className="relative">
           <Calendar

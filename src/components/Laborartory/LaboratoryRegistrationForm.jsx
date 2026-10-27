@@ -1,14 +1,15 @@
 // src/components/Laboratory/LaboratoryRegistrationForm.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Building, Phone, Mail, MapPin, Lock, 
+import {
+  Building, Phone, Mail, MapPin, Lock,
   ArrowLeft, Globe, Clock, FileText, PhoneCall, MapPinned,
   Upload, X
 } from 'lucide-react';
-import { 
-  Button, Input, Select, Textarea, Card, Alert, Tabs, Checkbox 
+import {
+  Button, Input, Select, Textarea, Card, Alert, Tabs, Checkbox
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -16,7 +17,7 @@ const PHONE_REGEX = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[
 
 const LaboratoryRegistrationForm = () => {
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState({
     name: '',
     address: { country: '', state: '', district: '', place: '', pincode: '' },
@@ -41,11 +42,11 @@ const LaboratoryRegistrationForm = () => {
 
   const validateField = (name, value) => {
     const validations = {
-      name: () => !value ? 'Laboratory name is required' : 
+      name: () => !value ? 'Laboratory name is required' :
              value.length < 3 ? 'Name must be at least 3 characters' : '',
-      phone: () => !value ? 'Phone number is required' : 
+      phone: () => !value ? 'Phone number is required' :
              !PHONE_REGEX.test(value) ? 'Please enter a valid phone number' : '',
-      emergencyContact: () => !value ? 'Emergency contact is required' : 
+      emergencyContact: () => !value ? 'Emergency contact is required' :
                         !PHONE_REGEX.test(value) ? 'Please enter a valid emergency contact number' : '',
       email: () => value && !/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value) ? 'Please enter a valid email address' : '',
       password: () => value && (value.length < 8 ? 'Password must be at least 8 characters' :
@@ -54,9 +55,9 @@ const LaboratoryRegistrationForm = () => {
                  !/[0-9]/.test(value) ? 'Password must contain at least one number' : ''),
       confirmPassword: () => formData.password && (!value ? 'Please confirm your password' :
                          value !== formData.password ? 'Passwords do not match' : ''),
-      'address.place': () => !value ? 'Address is required' : 
+      'address.place': () => !value ? 'Address is required' :
                          value.length < 5 ? 'Please enter a complete address' : '',
-      'address.pincode': () => !value ? 'Pincode is required' : 
+      'address.pincode': () => !value ? 'Pincode is required' :
                          !/^\d{5,6}$/.test(String(value)) ? 'Pincode must be 5 or 6 digits' : '',
       latitude: () => !value && value !== 0 ? 'Latitude is required' :
                 isNaN(value) ? 'Latitude must be a number' :
@@ -126,11 +127,11 @@ const LaboratoryRegistrationForm = () => {
     }
     setErrors(prev => ({ ...prev, profileImage: '' }));
     setUploadProgress(0);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       await uploadToS3(file);
       showSuccessToast('Logo uploaded successfully!', 2000);
@@ -168,7 +169,7 @@ const LaboratoryRegistrationForm = () => {
     const required = ['name', 'phone', 'emergencyContact', 'about', 'address.place', 'address.pincode', 'latitude', 'longitude'];
     const touchedFields = Object.fromEntries(required.map(field => [field, true]));
     setTouched(touchedFields);
-    
+
     if (!validateForm()) {
       const firstError = Object.keys(errors)[0];
       if (firstError) showWarningToast(`Please fix the ${firstError} field`, 3000);
@@ -183,7 +184,7 @@ const LaboratoryRegistrationForm = () => {
         setIsSubmitting(false);
         return;
       }
-      
+
       const newLabId = Date.now();
       const newLab = {
         id: newLabId,
@@ -193,15 +194,15 @@ const LaboratoryRegistrationForm = () => {
         tests: 0,
         createdAt: new Date().toISOString(),
       };
-      
+
       localStorage.setItem('laboratories', JSON.stringify([...existingLabs, newLab]));
-      
+
       showAddToast(
         `${formData.name} has been registered successfully!`,
         4000,
         { 'Laboratory': formData.name, 'Phone': formData.phone, 'ID': `#LAB${String(newLabId).slice(-6)}` }
       );
-      
+
       setIsSubmitting(false);
       setTimeout(() => navigate('/laboratories'), 1500);
     } catch {
@@ -222,25 +223,30 @@ const LaboratoryRegistrationForm = () => {
   const renderField = (field) => {
     const { label, name, type = 'text', icon, placeholder, required = false, options } = field;
     const value = name.includes('.') ? name.split('.').reduce((obj, key) => obj?.[key], formData) : formData[name];
-    
+
+    // ✅ Select branch uses CustomSelect (renders its own label + error internally)
     if (type === 'select') {
+      const normalizedOptions = (options || [])
+        .filter(opt => opt !== '')
+        .map(opt => ({ value: opt, label: opt }));
+
       return (
-        <Select
-          key={name}
-          label={label}
-          name={name}
-          options={options}
-          placeholder={placeholder}
-          value={value}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          error={errors[name]}
-          touched={touched[name]}
-          required={required}
-        />
+        <div key={name}>
+          <CustomSelect
+            label={label}
+            value={value || ''}
+            options={normalizedOptions}
+            placeholder={placeholder || `Select ${label}`}
+            onChange={(val) => handleChange({ target: { name, value: val } })}
+            onBlur={() => handleBlur({ target: { name, value } })}
+            error={errors[name]}
+            touched={touched[name]}
+            required={required}
+          />
+        </div>
       );
     }
-    
+
     return (
       <Input
         key={name}
@@ -275,7 +281,7 @@ const LaboratoryRegistrationForm = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <Tabs 
+          <Tabs
             tabs={[
               { id: 'basic', label: 'Basic Information', icon: Building },
               { id: 'address', label: 'Address & Location', icon: MapPin },
@@ -308,7 +314,7 @@ const LaboratoryRegistrationForm = () => {
                     </button>
                   )}
                 </div>
-                
+
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Laboratory Logo</label>
                   <input
@@ -328,7 +334,7 @@ const LaboratoryRegistrationForm = () => {
                     <Upload className="h-4 w-4" /> Upload Logo
                   </Button>
                   <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP. Max 5MB</p>
-                  
+
                   {uploadProgress > 0 && uploadProgress < 100 && (
                     <div className="mt-2">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
@@ -402,10 +408,10 @@ const LaboratoryRegistrationForm = () => {
                   {formData.working_hours.map((session, index) => (
                     <div key={session.day} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg flex-wrap">
                       <div className="w-28 font-medium text-gray-700 text-sm">{session.day}</div>
-                      <Checkbox 
-                        label="Holiday" 
-                        checked={session.is_holiday} 
-                        onChange={(e) => handleWorkingHoursChange(index, 'is_holiday', e.target.checked)} 
+                      <Checkbox
+                        label="Holiday"
+                        checked={session.is_holiday}
+                        onChange={(e) => handleWorkingHoursChange(index, 'is_holiday', e.target.checked)}
                       />
                       {!session.is_holiday && (
                         <div className="flex items-center gap-2">
@@ -422,17 +428,17 @@ const LaboratoryRegistrationForm = () => {
               {activeTab === 'about' && (
                 <div className="space-y-5">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Laboratory Information</h3>
-                  <Textarea 
-                    label="About the Laboratory" 
-                    name="about" 
-                    required 
-                    rows={6} 
-                    placeholder="Write a detailed description about the laboratory including types of tests offered, accreditations, equipment, sample collection services, home collection availability, and reporting time." 
-                    value={formData.about} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.about} 
-                    touched={touched.about} 
+                  <Textarea
+                    label="About the Laboratory"
+                    name="about"
+                    required
+                    rows={6}
+                    placeholder="Write a detailed description about the laboratory including types of tests offered, accreditations, equipment, sample collection services, home collection availability, and reporting time."
+                    value={formData.about}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.about}
+                    touched={touched.about}
                   />
                   <Alert type="info" message="Provide comprehensive information about your laboratory including types of tests offered, accreditations, equipment, sample collection services, home collection availability, and reporting time." />
                 </div>
