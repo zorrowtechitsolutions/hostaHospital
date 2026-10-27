@@ -1,10 +1,10 @@
 // app/service/s3.ts
 import { getToken } from "../../src/utils/auth";
 
-const API_URL = "https://supplier-preaching-breezy.ngrok-free.dev/api/presignurl";
+const API_URL = `${import.meta.env.VITE_API_URL}/presignurl`;
 
 export const S3_BASE_URL =
-  "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
+  (import.meta.env.VITE_S3_BASE_URL as string) || "";
 
 interface UploadResponse {
   imageUrl: string;
@@ -31,6 +31,11 @@ export const getS3ImageUrl = (key?: string | null) => {
   if (!key) return null;
 
   if (key.startsWith("http://") || key.startsWith("https://")) {
+    return key;
+  }
+
+  if (!S3_BASE_URL) {
+    console.warn("VITE_S3_BASE_URL is not configured");
     return key;
   }
 
@@ -173,12 +178,12 @@ export const uploadToS3 = async (
     const data = await res.json();
 
     const upload = await fetch(data.presignedUrl, {
-  method: "PUT",
-  headers: {
-    "Content-Type": compressed.type,
-  },
-  body: compressed,
-});
+      method: "PUT",
+      headers: {
+        "Content-Type": compressed.type,
+      },
+      body: compressed,
+    });
 
     if (!upload.ok) {
       console.error("Upload to S3 failed:", {

@@ -21,8 +21,7 @@ import {
 
 const baseQuery = fetchBaseQuery({
   baseUrl:
-    import.meta.env.VITE_API_URL ||
-    "https://supplier-preaching-breezy.ngrok-free.dev/api",
+    import.meta.env.VITE_API_URL,
 
   /*
    * IMPORTANT:

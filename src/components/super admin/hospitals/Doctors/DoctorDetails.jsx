@@ -24,13 +24,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Appointments from '../../../Appointment/Appointment';
 import RequestTable from '../../../Requests/RequestTable';
 
-// Helper function to get S3 image URL
-const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) return imageKey;
-  const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl } from "../../../../../app/service/S3";
 
 // Helper functions
 const getValue = (value, fallback = "N/A") => value || fallback;

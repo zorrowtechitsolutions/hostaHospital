@@ -41,7 +41,9 @@ import { useCreateBookingMutation } from '../../../app/service/request';
 import { getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { getS3ImageUrl } from '../../../app/service/S3';
+
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl as getS3ImageUrlRaw } from '../../../../app/service/S3';
 
 // Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
@@ -62,9 +64,6 @@ const PERMISSIONS = {
   DELETE: 16
 };
 
-// S3 Base URL for images
-const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
-
 // ✅ Static Status filter options — "All" is a real value (default + reset)
 const STATUS_FILTER_OPTIONS = [
   { value: 'All', label: 'All Status' },
@@ -77,13 +76,11 @@ const STATUS_FILTER_OPTIONS = [
 const SELECT_FILTER_CLASS =
   "w-40 [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:text-sm [&>button]:text-gray-600 [&>button]:focus:ring-1 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
-// getS3ImageUrl with cache-busting
-const getS3ImageUrlWithCache = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+// ✅ Local wrapper adds cache-busting (?t=timestamp) on top of shared helper
+const getS3ImageUrl = (imageKey) => {
+  const url = getS3ImageUrlRaw(imageKey);
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 };
 
 // ✅ Enhanced Helper function to format address
@@ -866,7 +863,7 @@ const Patients = () => {
               />
             </div>
 
-            {/* ✅ Replaced native  (Gender) with CustomSelect */}
+            {/* ✅ Replaced native select (Gender) with CustomSelect */}
             <CustomSelect
               hideLabel
               value={genderFilter}
@@ -878,7 +875,7 @@ const Patients = () => {
               className={SELECT_FILTER_CLASS}
             />
 
-            {/* ✅ Replaced native  (Status) with CustomSelect */}
+            {/* ✅ Replaced native select (Status) with CustomSelect */}
             <CustomSelect
               hideLabel
               value={statusFilter}

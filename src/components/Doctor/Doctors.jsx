@@ -18,6 +18,9 @@ import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/docto
 // Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
 
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl as getS3ImageUrlRaw } from "../../../../app/service/S3";
+
 // Permission IDs for Doctor module (1-4)
 const PERMISSIONS = {
   CREATE: 1,
@@ -26,14 +29,11 @@ const PERMISSIONS = {
   DELETE: 4
 };
 
-const S3_BASE_URL = "https://hosta-hospital-demo-images-2026.s3.ap-southeast-1.amazonaws.com";
-
+// ✅ Local wrapper adds cache-busting (?t=timestamp)
 const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+  const url = getS3ImageUrlRaw(imageKey);
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 };
 
 const getHospitalId = () => {
@@ -765,7 +765,7 @@ const Doctors = () => {
               />
             </div>
 
-            {/* ✅ Replaced native  for Department with CustomSelect */}
+            {/* ✅ Replaced native select for Department with CustomSelect */}
             <CustomSelect
               hideLabel
               value={selectedSpecialty}
@@ -774,7 +774,7 @@ const Doctors = () => {
               className="w-44"
             />
 
-            {/* ✅ Replaced native  for Status with CustomSelect */}
+            {/* ✅ Replaced native select for Status with CustomSelect */}
             <CustomSelect
               hideLabel
               value={filterStatus}
@@ -978,8 +978,8 @@ const Doctors = () => {
                           </div>
 
                           <span className="inline-flex items-center whitespace-nowrap shrink-0 px-3 py-1.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">
-  Not Available Today
-</span>
+                            Not Available Today
+                          </span>
                         </div>
                       ) : doctor.bookingOpen === false ? (
                         <div className="flex items-center justify-between min-h-[52px]">
