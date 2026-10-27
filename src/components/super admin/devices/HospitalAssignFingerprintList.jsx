@@ -15,6 +15,7 @@ import {
   useActivateFingerprintEnrollmentMutation,
 } from '../../../../app/service/fingerprint';
 import { Button, Pagination, SearchBar, FilterBar } from '../../ui';
+import CustomSelect from '../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
@@ -22,6 +23,17 @@ import {
   registerFingerprintEvents,
   unregisterFingerprintEvents,
 } from '../../../socket/fingerprintEvents';
+
+// ✅ Static Type filter options — "all" is the default/reset sentinel
+const TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'doctor', label: 'Doctor' },
+  { value: 'staff', label: 'Staff' },
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter look
+const FILTER_SELECT_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-6 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
 // ------------------------------------------------------------
 // Helpers
@@ -420,6 +432,15 @@ const HospitalAssignFingerprintList = ({
     return [...set].sort();
   }, [members]);
 
+  // ✅ Options for the Department CustomSelect
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: '', label: 'All Departments' },
+      ...departments.map((dept) => ({ value: dept, label: dept })),
+    ],
+    [departments]
+  );
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -687,25 +708,23 @@ const HospitalAssignFingerprintList = ({
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select
+            {/* ✅ Replaced native  (Type) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full h-12 px-6 border border-gray-200 rounded-xl text-gray-700 text-sm bg-white cursor-pointer"
-            >
-              <option value="all">All Types</option>
-              <option value="doctor">Doctor</option>
-              <option value="staff">Staff</option>
-            </select>
-            <select
+              options={TYPE_FILTER_OPTIONS}
+              onChange={(value) => setTypeFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
+
+            {/* ✅ Replaced native  (Department) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="w-full h-12 px-6 border border-gray-200 rounded-xl text-gray-700 text-sm bg-white cursor-pointer"
-            >
-              <option value="">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
+              options={departmentFilterOptions}
+              onChange={(value) => setDepartmentFilter(value)}
+              className={FILTER_SELECT_CLASS}
+            />
           </div>
         </div>
       )}

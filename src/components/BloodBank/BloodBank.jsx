@@ -5,7 +5,7 @@ import {
   Edit, RefreshCcw, Trash2, Search
 } from 'lucide-react';
 import { 
-  Button, Badge, Loader, Card, Modal, SearchBar, Pagination
+  Button, Badge, Loader, Card, Modal, SearchBar, Pagination, CustomSelect
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
@@ -18,17 +18,12 @@ import {
 } from '../../../app/service/bloodbank';
 import { getHospitalId } from '../../utils/auth';
 
-// Import the export function
 import { exportToExcel } from "../../utils/excelExport";
-
-// Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
 
-// Import socket
 import { socket } from '../../socket/socket';
 import { registerBloodBankEvents, unregisterBloodBankEvents } from '../../socket/bloodBankEvents';
 
-// Permission IDs for Blood Bank module (25-28)
 const PERMISSIONS = {
   CREATE: 25,
   VIEW: 26,
@@ -36,48 +31,35 @@ const PERMISSIONS = {
   DELETE: 28
 };
 
-// Blood groups list
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
-// Helper function to safely convert to string for search
 const safeToString = (value) => {
   if (value === null || value === undefined) return '';
   return String(value);
 };
 
-// ✅ FIXED: Format stock number to display ID (5 digits padding)
 const formatBloodId = (stockNumber) => {
   if (!stockNumber && stockNumber !== 0) return '#BLD00000';
   return `#BLD${String(stockNumber).padStart(5, '0')}`;
 };
 
-// ✅ FIXED: Transform API response - Use backend stockNumber and stockId
-// ✅ ADDED: Sort by stockNumber to ensure proper ordering (1, 2, 3, 4...)
 const transformBloodStockData = (stockList) => {
   if (!stockList || !Array.isArray(stockList)) return [];
 
   return stockList
     .map((stock) => ({
       id: stock.id || stock._id,
-      
-      // ✅ Use backend values
       stockNumber: stock.stockNumber,
       stockId: stock.stockId || formatBloodId(stock.stockNumber),
-      
-      // Use stockId as formattedId for display
       formattedId: stock.stockId || formatBloodId(stock.stockNumber),
-      
       bloodGroup: stock.bloodGroup || '',
       count: stock.count || 0,
       hospitalId: stock.hospitalId,
-      
       lastUpdated: stock.updatedAt?.split('T')[0] || stock.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]
     }))
-    // ✅ CRITICAL FIX: Sort by stockNumber to ensure proper ordering
     .sort((a, b) => Number(a.stockNumber) - Number(b.stockNumber));
 };
 
-// Skeleton Loading Component
 const BloodBankSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -127,7 +109,6 @@ const BloodBankSkeleton = () => {
   );
 };
 
-// Add Blood Stock Modal
 const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
   const [formData, setFormData] = useState({
     bloodGroup: 'A+',
@@ -178,17 +159,16 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
           </div>
         </div>
 
+        {/* ✅ Blood Group — CustomSelect */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
-          <select
+          <CustomSelect
+            label="Blood Group"
             value={formData.bloodGroup}
-            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-          >
-            {BLOOD_GROUPS.map(group => (
-              <option key={group} value={group}>{group}</option>
-            ))}
-          </select>
+            options={BLOOD_GROUPS.map(group => ({ value: group, label: group }))}
+            onChange={(value) => setFormData({ ...formData, bloodGroup: value })}
+            placeholder="Select blood group"
+            required
+          />
         </div>
 
         <div>
@@ -215,7 +195,6 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
   );
 };
 
-// Edit Blood Stock Modal
 const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }) => {
   const [formData, setFormData] = useState({
     bloodGroup: '',
@@ -274,17 +253,16 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }
           </div>
         </div>
 
+        {/* ✅ Blood Group — CustomSelect */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group *</label>
-          <select
+          <CustomSelect
+            label="Blood Group"
             value={formData.bloodGroup}
-            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-          >
-            {BLOOD_GROUPS.map(group => (
-              <option key={group} value={group}>{group}</option>
-            ))}
-          </select>
+            options={BLOOD_GROUPS.map(group => ({ value: group, label: group }))}
+            onChange={(value) => setFormData({ ...formData, bloodGroup: value })}
+            placeholder="Select blood group"
+            required
+          />
         </div>
 
         <div>
@@ -310,7 +288,6 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }
   );
 };
 
-// View Modal Component
 const ViewBloodStockModal = ({ isOpen, onClose, stock }) => {
   if (!stock) return null;
   
@@ -357,32 +334,24 @@ const BloodBank = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   
-  // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBloodStock, setSelectedBloodStock] = useState(null);
   
-  // Error states for modals
   const [addError, setAddError] = useState(null);
   const [editError, setEditError] = useState(null);
   
-  // Permission Denied Modal State
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
   const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
   
-  // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
-  
-  // Filter states
   const [bloodGroupFilter, setBloodGroupFilter] = useState('all');
 
-  // Get hospital ID from auth
   const hospitalId = getHospitalId();
 
-  // API Hooks - WITH hospitalId from auth
   const { 
     data: bloodStocksResponse, 
     isLoading: loading, 
@@ -400,7 +369,6 @@ const BloodBank = () => {
   const [updateBloodBank, { isLoading: isUpdating }] = useUpdateBloodBankMutation();
   const [deleteBloodBank, { isLoading: isDeleting }] = useDeleteBloodBankMutation();
 
-  // Register socket event listeners
   useEffect(() => {
     registerBloodBankEvents({
       onStockCreated: async () => {
@@ -422,7 +390,6 @@ const BloodBank = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       registerBloodBankEvents({
@@ -452,10 +419,8 @@ const BloodBank = () => {
     };
   }, [refetch]);
 
-  // Transform data from API response with sorting
   const allBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
   
-  // Frontend search filtering - fallback when API doesn't filter properly
   const filteredBloodStocks = React.useMemo(() => {
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allBloodStocks;
@@ -474,7 +439,6 @@ const BloodBank = () => {
     });
   }, [allBloodStocks, searchTerm]);
 
-  // Apply blood group filter (frontend fallback)
   const paginatedBloodStocks = React.useMemo(() => {
     let result = filteredBloodStocks;
 
@@ -487,27 +451,22 @@ const BloodBank = () => {
     return result;
   }, [filteredBloodStocks, bloodGroupFilter]);
 
-  // Pagination
   const totalFilteredItems = paginatedBloodStocks.length;
   const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
 
-  // Paginate the filtered results
   const paginatedData = React.useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return paginatedBloodStocks.slice(startIndex, endIndex);
   }, [paginatedBloodStocks, currentPage, itemsPerPage]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, bloodGroupFilter]);
 
-  // Check if filters are active
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = bloodGroupFilter !== 'all';
 
-  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -518,19 +477,16 @@ const BloodBank = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
   };
 
-  // Permission check helper with modal
   const checkPermission = (permissionId, actionName) => {
     if (!hasPermission(permissionId)) {
       setPermissionDeniedAction(actionName);
@@ -541,7 +497,6 @@ const BloodBank = () => {
     return true;
   };
 
-  // CRUD Handlers with Proper Error Handling
   const handleAddBloodStock = async (newBloodStock) => {
     if (!checkPermission(PERMISSIONS.CREATE, 'create blood stock')) {
       return;
@@ -687,7 +642,6 @@ const BloodBank = () => {
     setActiveMenu(null);
   };
 
-  // Menu handlers
   const toggleMenu = (id, e) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === id ? null : id);
@@ -709,7 +663,6 @@ const BloodBank = () => {
     setShowAddModal(true);
   };
 
-  // Updated Export handler with Excel functionality
   const handleExport = () => {
     if (paginatedBloodStocks.length === 0) {
       showErrorToast("No data available to export", 3000);
@@ -758,7 +711,6 @@ const BloodBank = () => {
   return (
     <>
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-        {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <button
@@ -780,9 +732,8 @@ const BloodBank = () => {
           <h1 className="text-xl font-bold text-gray-800">Blood Bank Management</h1>
         </div>
 
-        {/* Search and Action Buttons Row */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
             <SearchBar
               placeholder="Search by blood group or ID..."
               value={searchTerm}
@@ -790,19 +741,22 @@ const BloodBank = () => {
               onClear={handleClearSearch}
               className="flex-1 max-w-sm"
             />
-            <select
-              value={bloodGroupFilter}
-              onChange={(e) => {
-                setBloodGroupFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-            >
-              <option value="all">All Blood Groups</option>
-              {BLOOD_GROUPS.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
+            {/* ✅ Blood Group filter — CustomSelect */}
+            <div className="w-full sm:w-48 -mt-1">
+              <CustomSelect
+                label=""
+                value={bloodGroupFilter}
+                options={[
+                  { value: 'all', label: 'All Blood Groups' },
+                  ...BLOOD_GROUPS.map(group => ({ value: group, label: group }))
+                ]}
+                onChange={(value) => {
+                  setBloodGroupFilter(value);
+                  setCurrentPage(1);
+                }}
+                placeholder="All Blood Groups"
+              />
+            </div>
           </div>
 
           <div className="flex gap-2 flex-wrap items-center">
@@ -827,7 +781,6 @@ const BloodBank = () => {
           </div>
         </div>
 
-        {/* No Results */}
         {!loading && paginatedBloodStocks.length === 0 && (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <Droplet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -844,7 +797,6 @@ const BloodBank = () => {
           </div>
         )}
 
-        {/* GRID VIEW */}
         {paginatedBloodStocks.length > 0 && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -890,7 +842,6 @@ const BloodBank = () => {
               })}
             </div>
 
-            {/* Pagination */}
             {totalFilteredPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -907,7 +858,6 @@ const BloodBank = () => {
           </>
         )}
 
-        {/* Modals */}
         <AddBloodStockModal
           isOpen={showAddModal}
           onClose={() => {

@@ -20,7 +20,8 @@ import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { 
   Badge, 
   Pagination,
-  SearchBar
+  SearchBar,
+  CustomSelect
 } from '../ui';
 import { 
   useGetAmbulanceQuery,
@@ -469,7 +470,7 @@ const Ambulance = () => {
 
       {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
           {/* Using global SearchBar component */}
           <SearchBar
             placeholder="Search by name, ID, place..."
@@ -478,16 +479,19 @@ const Ambulance = () => {
             onClear={handleClearSearch}
             className="flex-1 max-w-sm"
           />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-          >
-            <option value="all">All Vehicle Types</option>
-            {ambulanceTypes.map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
+          {/* ✅ Custom Vehicle Type filter (mobile-safe) */}
+          <div className="w-full sm:w-56 -mt-1">
+            <CustomSelect
+              label=""
+              value={typeFilter}
+              options={[
+                { value: 'all', label: 'All Vehicle Types' },
+                ...ambulanceTypes.map(type => ({ value: type, label: type }))
+              ]}
+              onChange={(value) => setTypeFilter(value)}
+              placeholder="All Vehicle Types"
+            />
+          </div>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">

@@ -1,7 +1,9 @@
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
 
-export const socket = io("https://zorrowtek.in", {
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+
+export const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
   autoConnect: true,
 });
@@ -16,7 +18,7 @@ export const initSocket = () => {
 
 
     if (!authUser) {
-      console.warn("⚠️ No authenticated user found");
+      console.warn(":warning: No authenticated user found");
       return;
     }
 
@@ -72,3 +74,14 @@ export const logoutSocket = () => {
   socket.emit("leave-all-rooms");
   socket.disconnect();
 };
+
+
+
+
+
+
+
+
+
+
+

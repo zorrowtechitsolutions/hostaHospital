@@ -5,6 +5,7 @@ import { CalendarClock } from "lucide-react";
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
 import { Badge, Pagination, SearchBar } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +18,9 @@ import { registerDoctorEvents, unregisterDoctorEvents } from '../../socket/docto
 // Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
 
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl as getS3ImageUrlRaw } from "../../../app/service/S3";
+
 // Permission IDs for Doctor module (1-4)
 const PERMISSIONS = {
   CREATE: 1,
@@ -25,14 +29,11 @@ const PERMISSIONS = {
   DELETE: 4
 };
 
-const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
-
+// ✅ Local wrapper adds cache-busting (?t=timestamp)
 const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+  const url = getS3ImageUrlRaw(imageKey);
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 };
 
 const getHospitalId = () => {
@@ -40,12 +41,12 @@ const getHospitalId = () => {
   if (storedHospitalId) {
     return storedHospitalId;
   }
-  
+
   const authUser = getAuthUser();
   if (authUser?.hospitalId) {
     return authUser.hospitalId;
   }
-  
+
   return null;
 };
 
@@ -56,21 +57,21 @@ const getAuthId = () => {
 
 const formatAddress = (address) => {
   if (!address) return 'N/A';
-  
+
   if (typeof address === 'string') {
     return address;
   }
-  
+
   if (typeof address === 'object') {
     const parts = [];
     if (address.place) parts.push(address.place);
     if (address.district) parts.push(address.district);
     if (address.state) parts.push(address.state);
     if (address.country) parts.push(address.country);
-    if (address.pincode) parts.push(address.pincode);    
+    if (address.pincode) parts.push(address.pincode);
     return parts.length > 0 ? parts.join(', ') : 'N/A';
   }
-  
+
   return 'N/A';
 };
 
@@ -181,14 +182,14 @@ const getAppointmentCountDisplay = (doctor) => {
 
 const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== doctor.id) return null;
-  
+
   const isBlacklisted = doctor.isDelete === true;
-  
+
   return (
     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
       {!isBlacklisted && (
-        <button 
-          onClick={() => onView(doctor)} 
+        <button
+          onClick={() => onView(doctor)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,8 +200,8 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
         </button>
       )}
       {!isBlacklisted && (
-        <button 
-          onClick={() => onEdit(doctor)} 
+        <button
+          onClick={() => onEdit(doctor)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,8 +211,8 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
         </button>
       )}
       {!isBlacklisted && (
-        <button 
-          onClick={() => onAppointment(doctor)} 
+        <button
+          onClick={() => onAppointment(doctor)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,7 +222,7 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
         </button>
       )}
       {!isBlacklisted && <div className="border-t border-gray-100 my-1"></div>}
-      
+
       {isBlacklisted ? (
         <button
           onClick={() => onRecover(doctor)}
@@ -233,8 +234,8 @@ const DoctorActionMenu = React.memo(({ doctor, activeMenu, onView, onEdit, onDel
           Recover Doctor
         </button>
       ) : (
-        <button 
-          onClick={() => onDelete(doctor)} 
+        <button
+          onClick={() => onDelete(doctor)}
           className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,19 +446,19 @@ const Doctors = () => {
     return response.data
       .map((doctor) => ({
         ...doctor,
-        
+
         // Keep database ID for CRUD
         id: doctor.id,
-        
+
         // Hospital-specific sequential number
         doctorNumber: doctor.doctorNumber,
-        
+
         // Use backend virtual ID if available
-        doctorId: doctor.doctorId || 
-          (doctor.doctorNumber !== undefined 
+        doctorId: doctor.doctorId ||
+          (doctor.doctorNumber !== undefined
             ? `#DR${String(doctor.doctorNumber).padStart(4, '0')}`
             : '#DR0000'),
-        
+
         imageUrl: doctor.imageUrl || doctor.profileImage || doctor.photo || null,
         hospitalName: doctor?.hospital?.name || doctor?.hospitalName || "No Hospital",
         authId: doctor.authId || doctor.userId || doctor.id,
@@ -489,6 +490,26 @@ const Doctors = () => {
     );
     return ['All', ...Array.from(departmentSet)];
   }, [response?.departments, doctors]);
+
+  // ✅ Options for CustomSelect — department filter
+  const departmentFilterOptions = useMemo(
+    () =>
+      departments.map((dept) => ({
+        value: dept,
+        label: dept === 'All' ? 'All Departments' : dept,
+      })),
+    [departments]
+  );
+
+  // ✅ Options for CustomSelect — status filter
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'All', label: 'All Status' },
+      { value: 'Active', label: 'Active' },
+      { value: 'Inactive', label: 'Inactive' },
+    ],
+    []
+  );
 
   const totalPages = response?.pagination?.totalPages || 1;
   const totalItems = response?.pagination?.totalItems || 0;
@@ -618,7 +639,7 @@ const Doctors = () => {
       const formattedDOB = doctor.dob ? formatDate(doctor.dob) : 'N/A';
       const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
       const onLeaveToday = isDoctorUnavailableToday(doctor);
-      
+
       return {
         'Doctor ID': getDoctorId(doctor),
         'Auth ID': doctor.authId || 'N/A',
@@ -655,7 +676,7 @@ const Doctors = () => {
           </svg>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Doctors</h3>
           <p className="text-gray-500 mb-4">Failed to load doctor data. Please try again.</p>
-          <button 
+          <button
             onClick={handleRefresh}
             className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
           >
@@ -733,7 +754,7 @@ const Doctors = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto">
+          <div className="flex flex-1 gap-3 w-full lg:w-auto items-start">
             <div className="flex-1 max-w-sm">
               <SearchBar
                 placeholder="Search by name, department, specialty..."
@@ -744,35 +765,29 @@ const Doctors = () => {
               />
             </div>
 
-            <select
+            {/* ✅ Replaced native select for Department with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={selectedSpecialty}
-              onChange={(e) => setSelectedSpecialty(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-              aria-label="Filter by department"
-            >
-              {departments.map(dept => (
-                <option key={dept} value={dept}>
-                  {dept === 'All' ? 'All Departments' : dept}
-                </option>
-              ))}
-            </select>
+              options={departmentFilterOptions}
+              onChange={(value) => setSelectedSpecialty(value)}
+              className="w-44"
+            />
 
-            <select
+            {/* ✅ Replaced native select for Status with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-              aria-label="Filter by status"
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+              options={statusFilterOptions}
+              onChange={(value) => setFilterStatus(value)}
+              className="w-36"
+            />
           </div>
 
           <div className="flex gap-2 flex-wrap items-center">
             <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-              <button 
-                onClick={() => setViewMode('grid')} 
+              <button
+                onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="Grid view"
               >
@@ -780,8 +795,8 @@ const Doctors = () => {
                   <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z" />
                 </svg>
               </button>
-              <button 
-                onClick={() => setViewMode('list')} 
+              <button
+                onClick={() => setViewMode('list')}
                 className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="List view"
               >
@@ -791,8 +806,8 @@ const Doctors = () => {
               </button>
             </div>
 
-            <button 
-              onClick={handleRefresh} 
+            <button
+              onClick={handleRefresh}
               className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
               disabled={isFetching}
               aria-label="Refresh"
@@ -809,7 +824,7 @@ const Doctors = () => {
               className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             />
 
-            <Link 
+            <Link
               to="/add-doctor"
               onClick={(e) => {
                 if (!hasPermission(PERMISSIONS.CREATE)) {
@@ -861,12 +876,12 @@ const Doctors = () => {
                 const { totalSlots, takenSlots, leftSlots, bookingAvailable, hasLimit } = slotData;
                 const autoDecline = hasAutoDecline(doctor);
                 const appointmentLimit = getAppointmentCountDisplay(doctor);
-                
+
                 // ✅ Calculate utilization based on booked / total
                 const utilization = totalSlots > 0
                   ? Math.round((takenSlots / totalSlots) * 100)
                   : 0;
-                
+
                 return (
                   <div key={doctor.id} className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow min-h-[400px]">
                     <div className="w-full flex justify-between items-start mb-4">
@@ -874,8 +889,8 @@ const Doctors = () => {
                         {getDoctorId(doctor)}
                       </Badge>
                       <div className="relative menu-container">
-                        <button 
-                          onClick={(e) => toggleMenu(doctor.id, e)} 
+                        <button
+                          onClick={(e) => toggleMenu(doctor.id, e)}
                           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                           aria-label="Actions menu"
                         >
@@ -912,7 +927,7 @@ const Doctors = () => {
                         }`}
                       />
                     </div>
-                    <h3 
+                    <h3
                       onClick={() => {
                         if (!hasPermission(PERMISSIONS.VIEW)) {
                           setPermissionDeniedMessage('You do not have permission to view doctor details.');
@@ -922,14 +937,15 @@ const Doctors = () => {
                         if (!isBlacklisted) {
                           handleViewDetails(doctor);
                         }
-                      }} 
+                      }}
                       className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                     >
                       {getDoctorName(doctor)}
                     </h3>
                     <p className="text-[11px] text-gray-500 mb-4">{getDepartmentDisplay(doctor)}</p>
-                    
-                    <div className="grid grid-cols-3 gap-2 w-full border-t border-gray-50 pt-4 mb-3">
+
+                    {/* ✅ FIX: grid-cols-3 → grid-cols-2 sm:grid-cols-3 so it collapses on small screens */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full border-t border-gray-50 pt-4 mb-3">
                       <div className="text-center">
                         <p className="text-[8px] text-gray-400 uppercase font-bold">Experience</p>
                         <p className="text-xs font-bold text-gray-700">{doctor.experience || 'N/A'}</p>
@@ -940,7 +956,7 @@ const Doctors = () => {
                           {autoDecline ? `${doctor.autoDecline} min` : 'Off'}
                         </p>
                       </div>
-                      <div className="text-center">
+                      <div className="text-center col-span-2 sm:col-span-1">
                         <p className="text-[8px] text-gray-400 uppercase font-bold">Appt. Limit</p>
                         <p className="text-xs font-bold text-gray-700">
                           {appointmentLimit}
@@ -962,8 +978,8 @@ const Doctors = () => {
                           </div>
 
                           <span className="inline-flex items-center whitespace-nowrap shrink-0 px-3 py-1.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-500 border border-red-100">
-  Not Available Today
-</span>
+                            Not Available Today
+                          </span>
                         </div>
                       ) : doctor.bookingOpen === false ? (
                         <div className="flex items-center justify-between min-h-[52px]">
@@ -1055,9 +1071,9 @@ const Doctors = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     {isBlacklisted && (
-                      <button 
+                      <button
                         onClick={() => {
                           if (!hasPermission(PERMISSIONS.DELETE)) {
                             setPermissionDeniedMessage('You do not have permission to recover doctor.');
@@ -1065,7 +1081,7 @@ const Doctors = () => {
                             return;
                           }
                           handleRecoverDoctor(doctor);
-                        }} 
+                        }}
                         className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2 mt-3"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1133,7 +1149,7 @@ const Doctors = () => {
                       const { totalSlots, takenSlots, leftSlots } = calculateSlots(doctor);
                       const autoDecline = hasAutoDecline(doctor);
                       const appointmentLimit = getAppointmentCountDisplay(doctor);
-                      
+
                       return (
                         <tr key={doctor.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-6 py-4 text-[#1C62A0] font-medium">
@@ -1153,7 +1169,7 @@ const Doctors = () => {
                                   {(doctor.firstName?.[0] || "D").toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span 
+                              <span
                                 onClick={() => {
                                   if (!hasPermission(PERMISSIONS.VIEW)) {
                                     setPermissionDeniedMessage('You do not have permission to view doctor details.');
@@ -1163,7 +1179,7 @@ const Doctors = () => {
                                   if (!isBlacklisted) {
                                     handleViewDetails(doctor);
                                   }
-                                }} 
+                                }}
                                 className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                               >
                                 {getDoctorName(doctor)}
@@ -1204,8 +1220,8 @@ const Doctors = () => {
                           </td>
                           <td className="px-6 py-4 text-right relative menu-container">
                             <div className="flex justify-end">
-                              <button 
-                                onClick={(e) => toggleMenu(doctor.id, e)} 
+                              <button
+                                onClick={(e) => toggleMenu(doctor.id, e)}
                                 className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                                 aria-label="Actions menu"
                               >
@@ -1263,7 +1279,7 @@ const Doctors = () => {
           }}
           onSave={handleSaveAppointmentSettings}
           doctor={selectedDoctorForManagement}
-          refetchDoctors={refetch} 
+          refetchDoctors={refetch}
         />
       </div>
 

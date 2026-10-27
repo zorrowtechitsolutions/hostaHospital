@@ -217,7 +217,7 @@ const NotificationsPage = () => {
         userId: ROLE_ID,
         notificationIds: unreadIds 
       }).unwrap();
-      showSuccessToast(`✅ Marked ${unreadIds.length} notifications as read`);
+      showSuccessToast(` Marked ${unreadIds.length} notifications as read`);
       refetch();
     } catch (error) {
       showErrorToast('Failed to mark all as read');

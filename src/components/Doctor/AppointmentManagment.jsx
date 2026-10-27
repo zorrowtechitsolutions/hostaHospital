@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Clock, X, Save, Settings, Users, Calendar, AlertCircle } from 'lucide-react';
-import { 
+import { Clock, X, Save, Settings, Users } from 'lucide-react';
+import {
   useUpdateDoctorMutation,
   useStartAutoDeclineMutation,
-  useCancelAutoDeclineMutation 
+  useCancelAutoDeclineMutation,
 } from "../../../app/service/doctorApi";
 import { showSaveToast, showErrorToast } from '../ui/Toast';
 
@@ -11,8 +11,6 @@ import { showSaveToast, showErrorToast } from '../ui/Toast';
 const STORAGE_KEY = 'appointmentSettings';
 
 const MODAL_CLASS = 'fixed inset-0 bg-black/30 flex items-center justify-center z-50';
-const INPUT_CLASS = 'border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#3676ae]';
-const SECTION_CLASS = 'mt-5 pt-4 border-t border-gray-100';
 const INFO_BOX_CLASS = 'mt-3 p-2 bg-gray-50 rounded border border-gray-100';
 
 // ==================== HELPER FUNCTIONS ====================
@@ -21,6 +19,18 @@ const getDoctorName = (doctor) =>
   `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim() ||
   doctor?.name ||
   'Doctor';
+
+// Resolve a friendly doctor number, falling back to the doctorNumber field
+// formatted as #DR0001, and finally to 'N/A'.
+const getDoctorNumberLabel = (doctor) => {
+  if (doctor?.doctorId) return doctor.doctorId;
+
+  if (doctor?.doctorNumber !== undefined && doctor?.doctorNumber !== null) {
+    return `#DR${String(doctor.doctorNumber).padStart(4, '0')}`;
+  }
+
+  return 'N/A';
+};
 
 const getStorageData = (key, fallback) => {
   try {
@@ -71,13 +81,19 @@ const InfoBox = ({ children }) => (
   <div className={INFO_BOX_CLASS}>{children}</div>
 );
 
-const AppointmentManagement = ({ isOpen, onClose, onSave, doctor = null, refetchDoctors }) => {
-  
-const [autoDeclineEnabled, setAutoDeclineEnabled] = useState(false);
-const [manualCountEnabled, setManualCountEnabled] = useState(false);
+const AppointmentManagement = ({
+  isOpen,
+  onClose,
+  onSave,
+  doctor = null,
+  refetchDoctors,
+}) => {
+  const [autoDeclineEnabled, setAutoDeclineEnabled] = useState(false);
+  const [manualCountEnabled, setManualCountEnabled] = useState(false);
 
-const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(5);
-const [manualCount, setManualCount] = useState(21);
+  const [autoDeclineMinutes, setAutoDeclineMinutes] = useState(5);
+  const [manualCount, setManualCount] = useState(21);
+
   const [updateDoctor, { isLoading: isUpdating }] = useUpdateDoctorMutation();
   const [startAutoDecline, { isLoading: isStartingAutoDecline }] = useStartAutoDeclineMutation();
   const [cancelAutoDecline, { isLoading: isCancelingAutoDecline }] = useCancelAutoDeclineMutation();
@@ -102,241 +118,204 @@ const [manualCount, setManualCount] = useState(21);
     }
   };
 
-useEffect(() => {
-  if (!doctor?.id) return;
+  useEffect(() => {
+    if (!doctor?.id) return;
 
-  // AUTO DECLINE
-  if (doctor.autoDecline && Number(doctor.autoDecline) > 0) {
-    setAutoDeclineEnabled(true);
-    setAutoDeclineMinutes(Number(doctor.autoDecline));
-  } else {
-    setAutoDeclineEnabled(false);
-  }
-
-  // MANUAL COUNT
-  if (doctor.appointmentCount && Number(doctor.appointmentCount) > 0) {
-    setManualCountEnabled(true);
-    setManualCount(Number(doctor.appointmentCount));
-  } else {
-    setManualCountEnabled(false);
-  }
-
-  // Local storage fallback
-  const savedSettings = getStorageData(STORAGE_KEY, {});
-  const settings = savedSettings[doctor.id];
-
-  if (settings) {
-    if (!doctor.autoDecline) {
-      setAutoDeclineEnabled(
-        settings.autoDeclineEnabled ?? false
-      );
+    // AUTO DECLINE
+    if (doctor.autoDecline && Number(doctor.autoDecline) > 0) {
+      setAutoDeclineEnabled(true);
+      setAutoDeclineMinutes(Number(doctor.autoDecline));
+    } else {
+      setAutoDeclineEnabled(false);
     }
 
-    if (!doctor.appointmentCount) {
-      setManualCountEnabled(
-        settings.manualCountEnabled ?? false
-      );
+    // MANUAL COUNT
+    if (doctor.appointmentCount && Number(doctor.appointmentCount) > 0) {
+      setManualCountEnabled(true);
+      setManualCount(Number(doctor.appointmentCount));
+    } else {
+      setManualCountEnabled(false);
     }
 
-    setAutoDeclineMinutes(
-      settings.autoDeclineMinutes || doctor.autoDecline || 5
-    );
+    // Local storage fallback
+    const savedSettings = getStorageData(STORAGE_KEY, {});
+    const settings = savedSettings[doctor.id];
 
-    setManualCount(
-      settings.manualCount || doctor.appointmentCount || 21
-    );
-  }
-}, [doctor]);
+    if (settings) {
+      if (!doctor.autoDecline) {
+        setAutoDeclineEnabled(settings.autoDeclineEnabled ?? false);
+      }
 
+      if (!doctor.appointmentCount) {
+        setManualCountEnabled(settings.manualCountEnabled ?? false);
+      }
+
+      setAutoDeclineMinutes(
+        settings.autoDeclineMinutes || doctor.autoDecline || 5
+      );
+
+      setManualCount(
+        settings.manualCount || doctor.appointmentCount || 21
+      );
+    }
+  }, [doctor]);
 
   if (!isOpen) return null;
 
-const handleSave = async () => {
-  try {
-    if (!doctor?.id) {
-      showErrorToast(
-        'Doctor information is missing. Please try again.',
-        4000
-      );
-      return;
-    }
-
-    // At least one option should be selected
-    if (!autoDeclineEnabled && !manualCountEnabled) {
-      showErrorToast(
-        'Please select at least one appointment setting.',
-        4000
-      );
-      return;
-    }
-
-    const doctorName = getDoctorName(doctor);
-    const bookingId = doctor.authId || doctor.id;
-
-    // ===============================
-    // SAVE BOTH SETTINGS TOGETHER
-    // ===============================
-
-    const updateData = {
-      autoDecline: autoDeclineEnabled
-        ? Number(autoDeclineMinutes)
-        : 0,
-
-      appointmentCount: manualCountEnabled
-        ? Number(manualCount)
-        : 0,
-    };
-
-    const payload = {
-      id: doctor.id,
-      updateDoctor: updateData,
-    };
-
-    // Update doctor settings
-    await updateDoctor(payload).unwrap();
-
-
-    // ===============================
-    // AUTO DECLINE API MANAGEMENT
-    // ===============================
-
-    if (autoDeclineEnabled) {
-      try {
-        await startAutoDecline({
-          doctorId: bookingId,
-          autoDeclineMinutes: Number(autoDeclineMinutes),
-        }).unwrap();
-
-
-      } catch (error) {
-        console.error(
-          'Auto-decline start failed:',
-          error
-        );
-
+  const handleSave = async () => {
+    try {
+      if (!doctor?.id) {
         showErrorToast(
-          'Settings updated, but auto-decline failed to start.',
-          5000
+          'Doctor information is missing. Please try again.',
+          4000
         );
-
         return;
       }
-    } else {
-      // Cancel only when auto decline is disabled
-      try {
-        await cancelAutoDecline({
-          doctorId: bookingId,
-        }).unwrap();
 
-
-      } catch (error) {
+      // At least one option should be selected
+      if (!autoDeclineEnabled && !manualCountEnabled) {
+        showErrorToast(
+          'Please select at least one appointment setting.',
+          4000
+        );
+        return;
       }
-    }
 
+      const doctorName = getDoctorName(doctor);
+      const bookingId = doctor.authId || doctor.id;
 
-    // ===============================
-    // REFRESH DOCTORS
-    // ===============================
+      // ===============================
+      // SAVE BOTH SETTINGS TOGETHER
+      // ===============================
+      const updateData = {
+        autoDecline: autoDeclineEnabled ? Number(autoDeclineMinutes) : 0,
+        appointmentCount: manualCountEnabled ? Number(manualCount) : 0,
+      };
 
-    await refetchDoctors?.();
+      const payload = {
+        id: doctor.id,
+        updateDoctor: updateData,
+      };
 
+      // Update doctor settings
+      await updateDoctor(payload).unwrap();
 
-    // ===============================
-    // SAVE LOCAL STORAGE
-    // ===============================
+      // ===============================
+      // AUTO DECLINE API MANAGEMENT
+      // ===============================
+      if (autoDeclineEnabled) {
+        try {
+          await startAutoDecline({
+            doctorId: bookingId,
+            autoDeclineMinutes: Number(autoDeclineMinutes),
+          }).unwrap();
+        } catch (error) {
+          console.error('Auto-decline start failed:', error);
 
-    const settingsToSave = {
-      doctorId: doctor.id,
-      doctorName,
+          showErrorToast(
+            'Settings updated, but auto-decline failed to start.',
+            5000
+          );
 
-      autoDeclineEnabled,
-      autoDeclineMinutes: autoDeclineEnabled
-        ? Number(autoDeclineMinutes)
-        : null,
+          return;
+        }
+      } else {
+        // Cancel only when auto decline is disabled
+        try {
+          await cancelAutoDecline({ doctorId: bookingId }).unwrap();
+        } catch (error) {
+          // Non-fatal — ignore
+        }
+      }
 
-      manualCountEnabled,
-      manualCount: manualCountEnabled
-        ? Number(manualCount)
-        : null,
+      // ===============================
+      // REFRESH DOCTORS
+      // ===============================
+      await refetchDoctors?.();
 
-      timestamp: new Date().toISOString(),
-    };
+      // ===============================
+      // SAVE LOCAL STORAGE
+      // ===============================
+      const settingsToSave = {
+        doctorId: doctor.id,
+        doctorName,
 
-    const savedSettings = getStorageData(
-      STORAGE_KEY,
-      {}
-    );
+        autoDeclineEnabled,
+        autoDeclineMinutes: autoDeclineEnabled
+          ? Number(autoDeclineMinutes)
+          : null,
 
-    savedSettings[doctor.id] = settingsToSave;
+        manualCountEnabled,
+        manualCount: manualCountEnabled ? Number(manualCount) : null,
 
-    setStorageData(
-      STORAGE_KEY,
-      savedSettings
-    );
+        timestamp: new Date().toISOString(),
+      };
 
+      const savedSettings = getStorageData(STORAGE_KEY, {});
+      savedSettings[doctor.id] = settingsToSave;
+      setStorageData(STORAGE_KEY, savedSettings);
 
-    // ===============================
-    // SUCCESS MESSAGE
-    // ===============================
+      // ===============================
+      // SUCCESS MESSAGE
+      // ===============================
+      const settingDescription = [];
 
-    let settingDescription = [];
+      if (autoDeclineEnabled) {
+        settingDescription.push(
+          `Auto-decline: ${autoDeclineMinutes} minutes`
+        );
+      }
 
-    if (autoDeclineEnabled) {
-      settingDescription.push(
-        `Auto-decline: ${autoDeclineMinutes} minutes`
+      if (manualCountEnabled) {
+        settingDescription.push(
+          `Daily limit: ${manualCount} appointments`
+        );
+      }
+
+      showSaveToast(
+        `Settings saved for ${doctorName}!`,
+        4000,
+        {
+          Doctor: doctorName,
+          Settings: settingDescription.join(' | '),
+          Status: 'Successfully applied',
+        }
+      );
+
+      onSave?.(settingsToSave);
+      onClose();
+    } catch (error) {
+      const doctorName = getDoctorName(doctor);
+
+      const errorMessage =
+        error?.data?.message ||
+        error?.message ||
+        'Unknown error occurred';
+
+      console.error('Save settings error:', error);
+
+      showErrorToast(
+        `Failed to save settings for ${doctorName}`,
+        5000,
+        {
+          Doctor: doctorName,
+          'Error Details': errorMessage,
+          'Action Required': 'Please try again',
+        }
       );
     }
+  };
 
-    if (manualCountEnabled) {
-      settingDescription.push(
-        `Daily limit: ${manualCount} appointments`
-      );
-    }
-
-    showSaveToast(
-      `Settings saved for ${doctorName}!`,
-      4000,
-      {
-        Doctor: doctorName,
-        Settings: settingDescription.join(' | '),
-        Status: 'Successfully applied',
-      }
-    );
-
-
-    onSave?.(settingsToSave);
-    onClose();
-
-  } catch (error) {
-
-    const doctorName = getDoctorName(doctor);
-
-    const errorMessage =
-      error?.data?.message ||
-      error?.message ||
-      'Unknown error occurred';
-
-    console.error('Save settings error:', error);
-
-    showErrorToast(
-      `Failed to save settings for ${doctorName}`,
-      5000,
-      {
-        Doctor: doctorName,
-        'Error Details': errorMessage,
-        'Action Required': 'Please try again',
-      }
-    );
-  }
-};
   return (
     <div className={MODAL_CLASS}>
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header (pinned) */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-2">
             <Settings size={18} className="text-gray-600" />
-            <h2 className="text-md font-semibold text-gray-800">Appointment Settings</h2>
+            <h2 className="text-md font-semibold text-gray-800">
+              Appointment Settings
+            </h2>
           </div>
           <button
             onClick={handleClose}
@@ -347,8 +326,8 @@ const handleSave = async () => {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5">
+        {/* Scrollable Body */}
+        <div className="p-5 flex-1 overflow-y-auto min-h-0">
           {doctor && (
             <div className="mb-4 pb-3 border-b border-gray-100">
               <p className="text-sm text-gray-600">
@@ -357,108 +336,101 @@ const handleSave = async () => {
                 {!doctor?.specialist && doctor?.specialty && ` • ${doctor.specialty}`}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                ID: {doctor.id} {doctor.authId && `| Auth ID: ${doctor.authId}`}
+                Doctor No: {getDoctorNumberLabel(doctor)}
               </p>
             </div>
           )}
 
-          <p className="text-xs text-gray-500 mb-3">Choose how to manage appointment bookings</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Choose how to manage appointment bookings
+          </p>
 
-<p className="text-xs text-gray-500 mb-4">
-  Configure one or both appointment rules for this doctor
-</p>
+          <p className="text-xs text-gray-500 mb-4">
+            Configure one or both appointment rules for this doctor
+          </p>
 
-{/* AUTO DECLINE CARD */}
-<div
-  className={`rounded-xl border p-4 mb-3 transition-all ${
-    autoDeclineEnabled
-      ? 'border-blue-300 bg-blue-50/40'
-      : 'border-gray-200 bg-white'
-  }`}
->
-  <CheckboxOption
-    checked={autoDeclineEnabled}
-    onChange={setAutoDeclineEnabled}
-    icon={Clock}
-    title="Auto Decline"
-    description="Automatically decline pending bookings after a set time"
-  />
+          {/* AUTO DECLINE CARD */}
+          <div
+            className={`rounded-xl border p-4 mb-3 transition-all ${
+              autoDeclineEnabled
+                ? 'border-blue-300 bg-blue-50/40'
+                : 'border-gray-200 bg-white'
+            }`}
+          >
+            <CheckboxOption
+              checked={autoDeclineEnabled}
+              onChange={setAutoDeclineEnabled}
+              icon={Clock}
+              title="Auto Decline"
+              description="Automatically decline pending bookings after a set time"
+            />
 
-  {autoDeclineEnabled && (
-    <div className="mt-3 ml-7 pt-3 border-t border-blue-100">
-      <label className="block text-xs font-medium text-gray-600 mb-2">
-        Auto Decline After
-      </label>
+            {autoDeclineEnabled && (
+              <div className="mt-3 ml-7 pt-3 border-t border-blue-100">
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  Auto Decline After
+                </label>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min="1"
-          max="1440"
-          value={autoDeclineMinutes}
-          onChange={(e) =>
-            setAutoDeclineMinutes(
-              parseInt(e.target.value) || 1
-            )
-          }
-          className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={autoDeclineMinutes}
+                    onChange={(e) =>
+                      setAutoDeclineMinutes(parseInt(e.target.value) || 1)
+                    }
+                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
 
-        <span className="text-xs text-gray-500">
-          minutes
-        </span>
-      </div>
-    </div>
-  )}
-</div>
+                  <span className="text-xs text-gray-500">minutes</span>
+                </div>
+              </div>
+            )}
+          </div>
 
+          {/* MANUAL COUNT CARD */}
+          <div
+            className={`rounded-xl border p-4 transition-all ${
+              manualCountEnabled
+                ? 'border-emerald-300 bg-emerald-50/40'
+                : 'border-gray-200 bg-white'
+            }`}
+          >
+            <CheckboxOption
+              checked={manualCountEnabled}
+              onChange={setManualCountEnabled}
+              icon={Users}
+              title="Daily Appointment Limit"
+              description="Set maximum number of appointments allowed per day"
+            />
 
-{/* MANUAL COUNT CARD */}
-<div
-  className={`rounded-xl border p-4 transition-all ${
-    manualCountEnabled
-      ? 'border-emerald-300 bg-emerald-50/40'
-      : 'border-gray-200 bg-white'
-  }`}
->
-  <CheckboxOption
-    checked={manualCountEnabled}
-    onChange={setManualCountEnabled}
-    icon={Users}
-    title="Daily Appointment Limit"
-    description="Set maximum number of appointments allowed per day"
-  />
+            {manualCountEnabled && (
+              <div className="mt-3 ml-7 pt-3 border-t border-emerald-100">
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  Maximum Appointments
+                </label>
 
-  {manualCountEnabled && (
-    <div className="mt-3 ml-7 pt-3 border-t border-emerald-100">
-      <label className="block text-xs font-medium text-gray-600 mb-2">
-        Maximum Appointments
-      </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={manualCount}
+                    onChange={(e) => handleManualCountChange(e.target.value)}
+                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
 
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min="1"
-          value={manualCount}
-          onChange={(e) =>
-            handleManualCountChange(e.target.value)
-          }
-          className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-        />
-
-        <span className="text-xs text-gray-500">
-          appointments / day
-        </span>
-      </div>
-    </div>
-  )}
-</div>
-
-
+                  <span className="text-xs text-gray-500">
+                    appointments / day
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+        {/* Footer (pinned) */}
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50 shrink-0">
           <button
             onClick={handleClose}
             className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"

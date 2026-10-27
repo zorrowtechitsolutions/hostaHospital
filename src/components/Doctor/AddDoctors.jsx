@@ -1,8 +1,8 @@
 // src/components/Doctor/AddDoctors.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  User, Mail, Phone, Calendar, MapPin, Lock, Image, 
+import {
+  User, Mail, Phone, Calendar, MapPin, Lock, Image,
   DollarSign, IdCard, ArrowLeft, Upload, X, GraduationCap,
   Home, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Shield
 } from 'lucide-react';
@@ -13,6 +13,7 @@ import {
   Card,
 } from "../ui";
 import DatePicker from "../ui/DatePicker";
+import CustomSelect from "../ui/CustomSelect";
 import {
   showSuccessToast,
   showErrorToast,
@@ -139,9 +140,9 @@ const TABS = [
 ];
 
 const REQUIRED_FIELDS = [
-  'firstName', 'lastName', 'department', 'qualification', 'fees', 
+  'firstName', 'lastName', 'department', 'qualification', 'fees',
   'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
-  'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
+  'knownLanguages', 'countryName', 'stateName', 'district', 'displayName',
   'password', 'confirmPassword', 'experience', 'roleId'
 ];
 
@@ -197,12 +198,12 @@ const validatePasswordStrength = (password) => {
   return '';
 };
 
-const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -267,14 +268,14 @@ const SearchableDropdown = ({
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -289,7 +290,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No options found
@@ -308,66 +309,8 @@ const SearchableDropdown = ({
   );
 };
 
-const GenderDropdown = ({ value, onChange, error, touched, required, onBlur }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectedGender = GENDER_OPTIONS.find(option => option.value === value);
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Gender {required && <span className="text-red-500">*</span>}
-      </label>
-      <div className="relative">
-        <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          onBlur={onBlur}
-          className={`w-full pl-10 pr-10 py-2 text-left border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between ${
-            error && touched ? 'border-red-500' : 'border-gray-300'
-          }`}
-        >
-          <span className={!selectedGender ? 'text-gray-400' : 'text-gray-700'}>
-            {selectedGender ? selectedGender.label : 'Select gender'}
-          </span>
-          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
-      
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-          {GENDER_OPTIONS.map((option) => (
-            <div
-              key={option.value}
-              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
-              onClick={() => {
-                onChange({ target: { name: 'gender', value: option.value } });
-                setIsOpen(false);
-              }}
-            >
-              <Users className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-700">{option.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {touched && error && <p className="text-sm text-red-600 mt-1">{error}</p>}
-    </div>
-  );
-};
+// NOTE: GenderDropdown component has been removed — replaced by CustomSelect.
+// If other files import GenderDropdown, keep it in a shared file, not here.
 
 const DayScheduleRow = ({ day, schedule, onUpdate }) => {
   const [isHoliday, setIsHoliday] = useState(schedule.isHoliday || false);
@@ -514,43 +457,43 @@ const AddDoctor = () => {
   const navigate = useNavigate();
   const [addNewDoctor] = useAddNewDoctorMutation();
   const [assignPermissions] = useAssignPermissionsMutation();
-  
-  const getHospitalId = () => {
+
+  const getHospitalIdLocal = () => {
     const storedHospitalId = localStorage.getItem('hospitalId');
     if (storedHospitalId) {
       return storedHospitalId;
     }
-    
+
     const authUser = getAuthUser();
     if (authUser?.hospitalId) {
       return authUser.hospitalId;
     }
-    
+
     return null;
   };
-  
-  const hospitalId = getHospitalId();
+
+  const hospitalId = getHospitalIdLocal();
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
-  
+
   const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery({
     hospitalId,
     limit: 100
   }, {
     skip: !hospitalId
   });
-  
+
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
-  
-const { data: specialitiesData, isLoading: isLoadingSpecialities } =
-  useGetSpecialitiesQuery({
-    page: 1,
-    limit: 1000,
-  });
-  
+
+  const { data: specialitiesData, isLoading: isLoadingSpecialities } =
+    useGetSpecialitiesQuery({
+      page: 1,
+      limit: 1000,
+    });
+
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
@@ -560,6 +503,14 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
       label: spec.name.toUpperCase()
     }));
   }, [specialitiesData]);
+
+  // ✅ Options for the role CustomSelect (normalized to strings for strict === match)
+  const roleOptions = React.useMemo(() => {
+    return rolesList.map(role => ({
+      value: String(role.id),
+      label: role.name || role.roleName || String(role.id),
+    }));
+  }, [rolesList]);
 
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -668,7 +619,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
       ...prev,
       department: departmentValue
     }));
-    
+
     if (touched.department) {
       const error = validateField('department', departmentValue);
       setErrors(prev => ({ ...prev, department: error }));
@@ -772,15 +723,15 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
     }));
-    
+
     if (name === 'password') {
       setPasswordStrength(validatePasswordStrength(value));
     }
-    
+
     if (touched[name]) {
       const error = validateField(name, type === 'checkbox' ? (checked ? 'true' : 'false') : value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -816,7 +767,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
 
   const handleImageUpload = async (file) => {
     if (!file) return false;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showWarningToast('File size must be less than 5MB');
       return false;
@@ -834,8 +785,8 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
 
     try {
       const uploaded = await uploadToS3(file);
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData(prev => ({
+        ...prev,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
@@ -932,8 +883,8 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
       doctorData.appoimentCount = Number(formData.appointmentCount);
     }
 
-    if (formData.outDoorConsultingOpen && 
-        formData.outDoorConsultingClose && 
+    if (formData.outDoorConsultingOpen &&
+        formData.outDoorConsultingClose &&
         formData.outDoorConsultingPlace) {
       doctorData.outDoorConsulting = {
         time: {
@@ -949,27 +900,27 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
     }
-    
+
     const touchedFields = {};
     REQUIRED_FIELDS.forEach(field => touchedFields[field] = true);
     setTouched(touchedFields);
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
-      
+
       try {
         const doctorData = prepareDoctorData();
         const roleId = Number(formData.roleId);
         const selectedRoleName = getRoleNameById(roleId);
-        
+
         const result = await addNewDoctor(doctorData).unwrap();
         const doctor = result.data || result;
-        
+
         if (doctor?.id && roleId) {
           const payload = {
             hospitalId: Number(hospitalId),
@@ -984,13 +935,13 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
           };
           await assignPermissions(payload).unwrap();
         }
-        
+
         showSuccessToast(
           `Dr. ${formData.firstName} ${formData.lastName} has been added with role ${selectedRoleName}!`
         );
-        
+
         setTimeout(() => navigate('/doctors'), 2000);
-        
+
       } catch (error) {
         console.error("Error adding doctor:", error);
 
@@ -1033,8 +984,8 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
           <p className="text-gray-600 mb-4">
             Please log in again to access this page.
           </p>
-          <Button 
-            variant="primary" 
+          <Button
+            variant="primary"
             onClick={() => navigate('/login')}
           >
             Go to Login
@@ -1164,41 +1115,37 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                   {touched.department && errors.department && (
                     <p className="text-sm text-red-600 -mt-4">{errors.department}</p>
                   )}
-                  
-                  <Input 
-                    label="Specialist" 
-                    name="specialist" 
-                    icon={IdCard} 
-                    placeholder="e.g., Cardiologist (Optional)" 
-                    value={formData.specialist} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.specialist} 
-                    touched={touched.specialist} 
+
+                  <Input
+                    label="Specialist"
+                    name="specialist"
+                    icon={IdCard}
+                    placeholder="e.g., Cardiologist (Optional)"
+                    value={formData.specialist}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.specialist}
+                    touched={touched.specialist}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign Role <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <select
-                      name="roleId"
-                      value={formData.roleId}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select a role</option>
-                      {rolesList.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name || role.roleName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
+                  {/* ✅ Replaced native  with CustomSelect */}
+                  <CustomSelect
+                    label="Assign Role"
+                    icon={Shield}
+                    placeholder="Select a role"
+                    value={formData.roleId}
+                    options={roleOptions}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, roleId: value }));
+                      setTouched(prev => ({ ...prev, roleId: true }));
+                      setErrors(prev => ({ ...prev, roleId: validateField('roleId', value) }));
+                    }}
+                    error={errors.roleId}
+                    touched={touched.roleId}
+                    required
+                  />
                   {formData.roleId && (
                     <div className="mt-2">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
@@ -1218,7 +1165,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                   <Input label="Email Address" name="email" type="email" icon={Mail} placeholder="doctor@example.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required />
                 </div>
 
-                {/* Date of Birth & Gender — DatePicker for DOB */}
+                {/* Date of Birth & Gender — DatePicker for DOB, CustomSelect for Gender */}
                 <div className={GRID_CLASS}>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1242,13 +1189,22 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                       <p className="text-sm text-red-600 mt-1">{errors.dob}</p>
                     )}
                   </div>
-                  <GenderDropdown 
+
+                  {/* ✅ Replaced GenderDropdown with CustomSelect */}
+                  <CustomSelect
+                    label="Gender"
+                    icon={Users}
+                    placeholder="Select gender"
                     value={formData.gender}
-                    onChange={handleChange}
+                    options={GENDER_OPTIONS}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, gender: value }));
+                      setTouched(prev => ({ ...prev, gender: true }));
+                      setErrors(prev => ({ ...prev, gender: validateField('gender', value) }));
+                    }}
                     error={errors.gender}
                     touched={touched.gender}
-                    required={true}
-                    onBlur={handleBlur}
+                    required
                   />
                 </div>
 
@@ -1260,7 +1216,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                   <label className="block text-sm font-medium text-gray-700">
                     Known Languages <span className="text-red-500">*</span>
                   </label>
-                  
+
                   {formData.knownLanguages.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {formData.knownLanguages.map(lang => (
@@ -1273,7 +1229,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                       ))}
                     </div>
                   )}
-                  
+
                   <div className="relative">
                     <button
                       type="button"
@@ -1285,7 +1241,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                       <span>{formData.knownLanguages.length === 0 ? 'Select languages' : `${formData.knownLanguages.length} language(s) selected`}</span>
                       <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
-                    
+
                     {isLanguageDropdownOpen && (
                       <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
                         {LANGUAGE_OPTIONS.map(lang => (
@@ -1358,7 +1314,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className={GRID_CLASS}>
                     <Input label="Display Name" name="displayName" icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} required />
-                    
+
                     <div className="relative">
                       <Input label="Password" name="password" type={showPassword ? "text" : "password"} required icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400">
@@ -1374,7 +1330,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                         Password must contain: 8+ chars, uppercase, lowercase, number & special character
                       </p>
                     </div>
-                    
+
                     <div className="relative">
                       <Input label="Confirm Password" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} required icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
                       <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400">
@@ -1389,7 +1345,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
             {activeTab === 'professional' && (
               <div className="p-6 space-y-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
-                
+
                 <div className="space-y-4">
                   {WEEK_DAYS.map((day) => (
                     <DayScheduleRow
@@ -1404,11 +1360,11 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-6">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                     <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-                      <Home className="h-5 w-5 text-blue-600" /> 
+                      <Home className="h-5 w-5 text-blue-600" />
                       Out Door Consulting
                     </h3>
                   </div>
-                  
+
                   <div className="p-5 space-y-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1437,7 +1393,7 @@ const { data: specialitiesData, isLoading: isLoadingSpecialities } =
                         </div>
                       </div>
                     </div>
- 
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Consulting Place

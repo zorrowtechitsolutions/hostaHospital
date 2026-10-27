@@ -1,12 +1,21 @@
 // src/components/Laboratory/LabTests.jsx - CORRECTED
 import React, { useState } from 'react';
-import { 
+import {
   RefreshCcw, Download, Upload,
   Edit, Trash2, FileText, MoreVertical, Plus
 } from 'lucide-react';
 import { Button, SearchBar } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import DeleteModal from '../patients/DeleteModel';
 import AddEditLabTestModal from './AddEditLabTestModal';
+
+// ✅ Options for the Type filter — first entry is "All Types" (empty-string value)
+// kept as a real option so users can select it to clear the filter
+const TYPE_FILTER_OPTIONS = [
+  { value: '', label: 'All Types' },
+  { value: 'Test', label: 'Test' },
+  { value: 'Group', label: 'Group' }
+];
 
 const LabTests = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,18 +45,18 @@ const LabTests = () => {
 
   const getTypeBadge = (type) => type === "Test" ? "info" : "purple";
 
-  const handleEditTest = (test) => { 
-    setSelectedTest(test); 
-    setShowAddEditModal(true); 
-    setOpenMenu(null); 
+  const handleEditTest = (test) => {
+    setSelectedTest(test);
+    setShowAddEditModal(true);
+    setOpenMenu(null);
   };
-  
-  const handleDeleteClick = (test) => { 
-    setItemToDelete(test); 
-    setShowDeleteModal(true); 
-    setOpenMenu(null); 
+
+  const handleDeleteClick = (test) => {
+    setItemToDelete(test);
+    setShowDeleteModal(true);
+    setOpenMenu(null);
   };
-  
+
   const handleConfirmDelete = () => {
     if (itemToDelete) {
       setLabTests(labTests.filter(t => t.id !== itemToDelete.id));
@@ -55,22 +64,22 @@ const LabTests = () => {
       setItemToDelete(null);
     }
   };
-  
-  const handleAddNewTest = () => { 
-    setSelectedTest(null); 
-    setShowAddEditModal(true); 
+
+  const handleAddNewTest = () => {
+    setSelectedTest(null);
+    setShowAddEditModal(true);
   };
-  
+
   const handleSaveTest = (testData) => {
     if (selectedTest) {
       setLabTests(labTests.map(t => t.id === selectedTest.id ? { ...testData, id: t.id } : t));
     } else {
       const newId = `LT${String(labTests.length + 1).padStart(3, '0')}`;
       const newTestId = testData.type === "Test" ? "BLD" : "PNL";
-      setLabTests([...labTests, { 
-        ...testData, 
-        id: newId, 
-        testId: `${newTestId}${String(labTests.length + 1).padStart(3, '0')}` 
+      setLabTests([...labTests, {
+        ...testData,
+        id: newId,
+        testId: `${newTestId}${String(labTests.length + 1).padStart(3, '0')}`
       }]);
     }
     setShowAddEditModal(false);
@@ -80,7 +89,7 @@ const LabTests = () => {
   const getFilteredTests = () => {
     let filtered = [...labTests];
     if (searchTerm) {
-      filtered = filtered.filter(item => 
+      filtered = filtered.filter(item =>
         item.testId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.testName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -97,29 +106,29 @@ const LabTests = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTests = filteredTests.slice(startIndex, startIndex + itemsPerPage);
 
-  const handleRefresh = () => { 
-    setSearchTerm(""); 
-    setTypeFilter(""); 
-    setCurrentPage(1); 
+  const handleRefresh = () => {
+    setSearchTerm("");
+    setTypeFilter("");
+    setCurrentPage(1);
   };
-  
+
   const handleExport = () => {
-    const exportData = getFilteredTests().map(test => ({ 
-      'Test ID': test.testId, 
-      'Test Name': test.testName, 
-      'Type': test.type, 
-      'Price (₹)': test.price, 
-      'Category': test.category, 
-      'Sample Type': test.sampleType, 
-      'Turnaround Time': test.turnaroundTime, 
-      'Status': test.status 
+    const exportData = getFilteredTests().map(test => ({
+      'Test ID': test.testId,
+      'Test Name': test.testName,
+      'Type': test.type,
+      'Price (₹)': test.price,
+      'Category': test.category,
+      'Sample Type': test.sampleType,
+      'Turnaround Time': test.turnaroundTime,
+      'Status': test.status
     }));
     const link = document.createElement('a');
     link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     link.download = `lab_tests_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
   };
-  
+
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -128,17 +137,17 @@ const LabTests = () => {
       try {
         const importedData = JSON.parse(e.target.result);
         alert(`Successfully imported ${importedData.length} lab tests!`);
-      } catch (error) { 
-        alert('Error parsing JSON file.'); 
+      } catch (error) {
+        alert('Error parsing JSON file.');
       }
     };
     reader.readAsText(file);
     event.target.value = '';
   };
-  
-  const clearAllFilters = () => { 
-    setTypeFilter(''); 
-    setSearchTerm(''); 
+
+  const clearAllFilters = () => {
+    setTypeFilter('');
+    setSearchTerm('');
   };
 
   // Row Action Menu Component
@@ -154,21 +163,21 @@ const LabTests = () => {
         </button>
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-            <button 
-              onClick={() => { 
-                handleEditTest(test); 
-                setShowMenu(false); 
-              }} 
+            <button
+              onClick={() => {
+                handleEditTest(test);
+                setShowMenu(false);
+              }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
             >
               <Edit size={16} /> Edit
             </button>
             <div className="border-t border-gray-100 my-1"></div>
-            <button 
-              onClick={() => { 
-                handleDeleteClick(test); 
-                setShowMenu(false); 
-              }} 
+            <button
+              onClick={() => {
+                handleDeleteClick(test);
+                setShowMenu(false);
+              }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
             >
               <Trash2 size={16} /> Delete
@@ -209,25 +218,24 @@ const LabTests = () => {
 
         {/* Search Bar and Action Buttons */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            <SearchBar 
-              placeholder="Search by Test ID, Test Name, Category..." 
-              value={searchTerm} 
-              onChange={setSearchTerm} 
-              onClear={() => setSearchTerm('')} 
-              className="flex-1 max-w-sm" 
+          <div className="flex flex-1 gap-3 w-full lg:w-auto items-start">
+            <SearchBar
+              placeholder="Search by Test ID, Test Name, Category..."
+              value={searchTerm}
+              onChange={setSearchTerm}
+              onClear={() => setSearchTerm('')}
+              className="flex-1 max-w-sm"
             />
-            <select
+            {/* ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              <option value="">All Types</option>
-              <option value="Test">Test</option>
-              <option value="Group">Group</option>
-            </select>
+              options={TYPE_FILTER_OPTIONS}
+              onChange={(value) => setTypeFilter(value)}
+              className="w-36"
+            />
           </div>
-          
+
           <div className="flex gap-2 flex-wrap items-center">
             <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Refresh">
               <RefreshCcw size={16} />

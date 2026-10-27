@@ -16,6 +16,7 @@ import {
   SearchBar,
   FilterBar,
 } from "../ui";
+import CustomSelect from "../ui/CustomSelect";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
 import { showSuccessToast, showErrorToast, showAddToast } from "../ui/Toast";
@@ -29,7 +30,6 @@ import { getS3ImageUrl } from "../../../app/service/S3";
 
 import { registerBookingEvents } from '../../socket/bookingEvents';
 
-// Import the export function
 import { exportToExcel } from "../../utils/excelExport";
 
 // Constants
@@ -38,6 +38,19 @@ const SUCCESS_DURATION = 4000;
 
 const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transition-colors";
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
+
+// ✅ Static options for the Status filter — "" is the "All Status" sentinel
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All Status" },
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "cancel", label: "Cancelled" },
+  { value: "rejected", label: "Rejected" },
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter inputs
+const SELECT_FILTER_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-6 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
 // Helper functions
 const calculateAge = (dob) => {
@@ -345,6 +358,15 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
   }, [safeData, doctorId, doctorName, showAllData]);
 
+  // ✅ Options for the Department filter CustomSelect — "" sentinel + dynamic departments
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: "", label: "All Departments" },
+      ...departments.map((d) => ({ value: d, label: d })),
+    ],
+    [departments]
+  );
+
   const activeFilterCount = [departmentFilter, dateFilter, statusFilter, searchTerm].filter(Boolean).length;
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = departmentFilter !== '' || dateFilter !== '' || statusFilter !== '';
@@ -450,7 +472,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsApproving(true);
 
     try {
-     
       await approveBooking({
         bookingNumber,
         data: {
@@ -521,7 +542,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     setIsRejecting(true);
 
     try {
-
       await rejectBooking({
         bookingNumber,
         data: {
@@ -675,7 +695,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             <Download size={16} />
           </button>
 
-          {/* ✅ FilterBar — icon always stays gray */}
           <FilterBar
             onClick={() => setShowFilters(prev => !prev)}
             isOpen={showFilters}
@@ -704,46 +723,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Department — native select matching Appointments UI, Backspace clears */}
+            {/* Department — ✅ Replaced native  with CustomSelect */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" || e.key === "Delete") {
-                    e.preventDefault();
-                    setDepartmentFilter("");
-                  }
-                }}
-                className="
-                  w-full
-                  h-12
-                  px-6
-                  border
-                  border-gray-200
-                  rounded-xl
-                  outline-none
-                  focus:ring-2
-                  focus:ring-[#1C62A0]
-                  focus:border-transparent
-                  text-gray-700
-                  text-sm
-                  bg-white
-                  cursor-pointer
-                "
-              >
-                <option value="">All Departments</option>
-
-                {departments.map((department) => (
-                  <option
-                    key={department}
-                    value={department}
-                  >
-                    {department}
-                  </option>
-                ))}
-              </select>
+                options={departmentFilterOptions}
+                onChange={(value) => setDepartmentFilter(value)}
+                className={SELECT_FILTER_CLASS}
+              />
             </div>
 
             {/* Appointment Date */}
@@ -771,41 +760,16 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               />
             </div>
 
-            {/* Status — Backspace clears */}
+            {/* Status — ✅ Replaced native  with CustomSelect */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" || e.key === "Delete") {
-                    e.preventDefault();
-                    setStatusFilter("");
-                  }
-                }}
-                className="
-                  w-full
-                  h-12
-                  px-6
-                  border
-                  border-gray-200
-                  rounded-xl
-                  outline-none
-                  focus:ring-2
-                  focus:ring-[#1C62A0]
-                  focus:border-transparent
-                  text-gray-700
-                  text-sm
-                  bg-white
-                  cursor-pointer
-                "
-              >
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="accepted">Accepted</option>
-                <option value="cancel">Cancelled</option>
-                <option value="rejected">Rejected</option>
-              </select>
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => setStatusFilter(value)}
+                className={SELECT_FILTER_CLASS}
+              />
             </div>
           </div>
         </div>

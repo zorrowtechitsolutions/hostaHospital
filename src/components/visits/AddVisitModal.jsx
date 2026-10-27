@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
 import { Modal, Input, Select, Textarea, Button } from '../ui';
+import CustomSelect from '../ui/CustomSelect'; // ✅ Added import
 import { showAddToast, showWarningToast } from '../ui/Toast';
 
 const AddVisitModal = ({ isOpen, onClose, onSave }) => {
@@ -17,6 +18,21 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  // ✅ Static option lists
+  const departments = [
+    'Cardiology', 'Neurology', 'Orthopedics', 'Pediatrics', 'Dermatology',
+    'ENT', 'Ophthalmology', 'General Medicine', 'Surgery', 'Pulmonology',
+    'Nursing', 'Pharmacy'
+  ];
+  const patientTypes = ['Out Patient', 'In Patient'];
+  const paymentMethods = ['Cash', 'Card', 'Insurance', 'Online'];
+
+  // ✅ Build options for CustomSelect
+  const patientTypeOptions = patientTypes.map(t => ({ value: t, label: t }));
+  const departmentOptions = departments.map(d => ({ value: d, label: d }));
+  const paymentMethodOptions = paymentMethods.map(p => ({ value: p, label: p }));
 
   const validateForm = () => {
     const newErrors = {};
@@ -33,6 +49,20 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
+  // ✅ Handlers for CustomSelect fields (receive value directly)
+  const handlePatientTypeChange = (value) => {
+    setFormData(prev => ({ ...prev, patientType: value }));
+  };
+
+  const handleDepartmentChange = (value) => {
+    setFormData(prev => ({ ...prev, department: value }));
+    if (errors.department) setErrors(prev => ({ ...prev, department: '' }));
+  };
+
+  const handlePaymentMethodChange = (value) => {
+    setFormData(prev => ({ ...prev, paymentMethod: value }));
   };
 
   const handleSubmit = (e) => {
@@ -109,20 +139,13 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
       paymentMethod: ''
     });
     setErrors({});
+    setTouched({});
   };
 
   const handleClose = () => {
     resetForm();
     onClose();
   };
-
-  const departments = [
-    'Cardiology', 'Neurology', 'Orthopedics', 'Pediatrics', 'Dermatology',
-    'ENT', 'Ophthalmology', 'General Medicine', 'Surgery', 'Pulmonology',
-    'Nursing', 'Pharmacy'
-  ];
-  const patientTypes = ['Out Patient', 'In Patient'];
-  const paymentMethods = ['Cash', 'Card', 'Insurance', 'Online'];
 
   if (!isOpen) return null;
 
@@ -139,23 +162,29 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
             placeholder="Enter patient name"
             error={errors.patientName}
           />
-          <Select 
-            label="Patient Type" 
-            name="patientType" 
-            options={patientTypes} 
-            value={formData.patientType} 
-            onChange={handleChange} 
+
+          {/* ✅ Patient Type - CustomSelect */}
+          <CustomSelect
+            label="Patient Type"
+            value={formData.patientType}
+            options={patientTypeOptions}
+            onChange={handlePatientTypeChange}
+            placeholder="Select Patient Type"
           />
-          <Select 
-            label="Department" 
-            name="department" 
-            options={departments} 
-            value={formData.department} 
-            onChange={handleChange} 
-            required 
+
+          {/* ✅ Department - CustomSelect */}
+          <CustomSelect
+            label="Department"
+            value={formData.department}
+            options={departmentOptions}
+            onChange={handleDepartmentChange}
+            onBlur={() => setTouched(prev => ({ ...prev, department: true }))}
             placeholder="Select Department"
+            required
             error={errors.department}
+            touched={!!errors.department || touched.department}
           />
+
           <Input 
             label="Doctor Name" 
             name="doctorName" 
@@ -193,13 +222,14 @@ const AddVisitModal = ({ isOpen, onClose, onSave }) => {
               placeholder="Enter reason for visit..." 
             />
           </div>
-          <Select 
-            label="Payment Method" 
-            name="paymentMethod" 
-            options={paymentMethods} 
-            value={formData.paymentMethod} 
-            onChange={handleChange} 
-            placeholder="Select Payment Method" 
+
+          {/* ✅ Payment Method - CustomSelect */}
+          <CustomSelect
+            label="Payment Method"
+            value={formData.paymentMethod}
+            options={paymentMethodOptions}
+            onChange={handlePaymentMethodChange}
+            placeholder="Select Payment Method"
           />
         </div>
 

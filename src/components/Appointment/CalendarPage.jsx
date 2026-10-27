@@ -353,7 +353,7 @@ const CalendarPage = () => {
               <div className="grid grid-cols-7 border-b border-gray-200">
                 {weekdays.map(day => (
                   <div key={day} className="py-3 text-center">
-                    <span className="text-xs font-medium text-gray-500">{day}</span>
+                    <span className="text-[10px] sm:text-xs font-medium text-gray-500">{day}</span>
                   </div>
                 ))}
               </div>
@@ -372,7 +372,8 @@ const CalendarPage = () => {
                       key={index}
                       onClick={() => handleDateClick(date)}
                       className={`
-                        min-h-[100px] p-2 border-b border-r border-gray-100 transition-all
+                        min-h-[64px] sm:min-h-[80px] lg:min-h-[100px]
+                        p-1 sm:p-2 border-b border-r border-gray-100 transition-all
                         ${future ? 'bg-gray-50 cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-blue-50'}
                         ${isSelected ? 'bg-blue-100 ring-2 ring-blue-500 ring-inset' : ''}
                       `}
@@ -381,17 +382,18 @@ const CalendarPage = () => {
                         <div className="flex flex-col h-full">
                           <div className="flex justify-between items-start">
                             <span className={`
-                              text-sm font-medium inline-flex items-center justify-center w-7 h-7 rounded-full
+                              text-[11px] sm:text-sm font-medium inline-flex items-center justify-center
+                              w-5 h-5 sm:w-7 sm:h-7 rounded-full
                               ${today_date ? 'bg-blue-600 text-white' : 'text-gray-700'}
                               ${future ? 'text-gray-400' : ''}
                             `}>
                               {date.getDate()}
                             </span>
-                            {isVisited && !future && <div className="w-2 h-2 bg-green-500 rounded-full"></div>}
+                            {isVisited && !future && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>}
                           </div>
                           {isVisited && !future && (
-                            <div className="mt-1">
-                              <span className="text-[10px] text-green-600 font-medium">✓ Visited</span>
+                            <div className="mt-1 hidden sm:block">
+                              <span className="text-[9px] sm:text-[10px] text-green-600 font-medium">✓ Visited</span>
                             </div>
                           )}
                         </div>

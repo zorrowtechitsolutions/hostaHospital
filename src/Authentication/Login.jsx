@@ -1,11 +1,12 @@
 // src/Authentication/Login.jsx - WITH SKELETON LOADING (Neutral Colors)
 // ✅ Does NOT store refreshToken — backend uses HttpOnly cookie
 // ✅ Optionally uses setToken() utility
+// ✅ Uses CustomSelect for hospital selection (mobile-safe, no native popup)
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Building, ChevronDown } from 'lucide-react';
-import { Input, Button, Alert, Card } from '../components/ui';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react'; // ✅ removed Building, ChevronDown
+import { Input, Button, Alert, Card, CustomSelect } from '../components/ui'; // ✅ added CustomSelect
 import { showSuccessToast, showErrorToast, showWarningToast } from '../components/ui/Toast';
 import {
   useLoginMutation,
@@ -581,30 +582,23 @@ const Login = () => {
 
             {showHospitalSelect && (
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Hospital <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
-                  <select
-                    value={selectedHospital?.hospitalId || ""}
-                    onChange={(e) => {
-                      const hospital = hospitalOptions.find(
-                        h => h.hospitalId === Number(e.target.value)
-                      );
-                      setSelectedHospital(hospital);
-                    }}
-                    className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#154A7D] focus:border-[#154A7D] outline-none transition appearance-none bg-white text-sm"
-                  >
-                    <option value="">Select Hospital</option>
-                    {hospitalOptions.map((hospital) => (
-                      <option key={hospital.hospitalId} value={hospital.hospitalId}>
-                        {hospital.hospitalName}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                </div>
+                {/* ✅ Custom hospital dropdown  */}
+                <CustomSelect
+                  label="Select Hospital"
+                  value={selectedHospital?.hospitalId ? String(selectedHospital.hospitalId) : ''}
+                  options={hospitalOptions.map(h => ({
+                    value: String(h.hospitalId),
+                    label: h.hospitalName
+                  }))}
+                  onChange={(value) => {
+                    const hospital = hospitalOptions.find(
+                      h => String(h.hospitalId) === value
+                    );
+                    setSelectedHospital(hospital || null);
+                  }}
+                  placeholder="Select Hospital"
+                  required
+                />
                 {selectedHospital && (
                   <Button
                     type="button"

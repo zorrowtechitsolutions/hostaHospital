@@ -14,6 +14,7 @@ import {
 import { useGetDevicesQuery } from '../../../../app/service/device';
 import { getAuthUser } from '../../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+import { CustomSelect } from '../../ui'; // ✅ added CustomSelect
 
 // ------------------------------------------------------------
 // Small form field wrapper
@@ -46,7 +47,6 @@ const FingerprintEditModal = () => {
   const hospitalId =
     auth?.hospitalId || localStorage.getItem('hospitalId') || null;
 
-  // Fallback fetch (skipped if member came from route state)
   const { data: doctorsResponse, isLoading: doctorsLoading } = useGetDoctorsQuery(
     { page: 1, limit: 1000 },
     { skip: !!stateMember }
@@ -56,7 +56,6 @@ const FingerprintEditModal = () => {
     { skip: !!stateMember }
   );
 
-  // Enrollment lookup — fetch ALL statuses so we can edit even inactive ones.
   const {
     data: enrollmentsResponse,
     isLoading: enrollmentsLoading,
@@ -93,7 +92,6 @@ const FingerprintEditModal = () => {
       enrollments.map((e) => [`${e.employeeType}-${e.employeeId}`, e])
     );
 
-    // If we already have the member from route state, enrich with enrollment
     if (stateMember) {
       const enr = enrollmentByKey.get(
         `${stateMember.type}-${stateMember.id}`
@@ -262,9 +260,6 @@ const FingerprintEditModal = () => {
 
   const handleCancel = () => navigate('/attendance/fingerprint');
 
-  // ----------------------------------------------------------
-  // Loading / not found
-  // ----------------------------------------------------------
   if (isLoadingMember || isLoadingEnrollment) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex items-center justify-center">
@@ -327,12 +322,8 @@ const FingerprintEditModal = () => {
     );
   }
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -365,7 +356,6 @@ const FingerprintEditModal = () => {
         </p>
       </div>
 
-      {/* Card wrapper */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-6xl mx-auto">
         <form onSubmit={handleSave}>
           <div className="px-6 py-6">
@@ -439,49 +429,51 @@ const FingerprintEditModal = () => {
                   </h3>
                 </div>
 
+                {/* ✅ Device — CustomSelect */}
                 <Field label="Device" required>
-                  <select
+                  <CustomSelect
+                    label=""
                     value={form.deviceId}
-                    onChange={update('deviceId')}
-                    className={inputCls}
-                    disabled={devicesLoading}
-                  >
-                    <option value="">
-                      {devicesLoading
+                    options={fingerprintDevices.map((device) => ({
+                      value: device.deviceId,
+                      label: `${device.deviceName} — ${device.location}`
+                    }))}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, deviceId: value }))
+                    }
+                    placeholder={
+                      devicesLoading
                         ? 'Loading fingerprint devices...'
                         : fingerprintDevices.length === 0
                         ? 'No fingerprint devices available'
-                        : 'Select fingerprint device'}
-                    </option>
-
-                    {fingerprintDevices.map((device) => (
-                      <option
-                        key={device.id ?? device._id ?? device.deviceId}
-                        value={device.deviceId}
-                      >
-                        {device.deviceName} — {device.location}
-                      </option>
-                    ))}
-                  </select>
+                        : 'Select fingerprint device'
+                    }
+                    disabled={devicesLoading}
+                  />
                 </Field>
 
+                {/* ✅ Finger Position — CustomSelect */}
                 <Field label="Finger Position" required>
-                  <select
+                  <CustomSelect
+                    label=""
                     value={form.fingerPosition}
-                    onChange={update('fingerPosition')}
-                    className={inputCls}
-                  >
-                    <option>Right Thumb</option>
-                    <option>Right Index</option>
-                    <option>Right Middle</option>
-                    <option>Right Ring</option>
-                    <option>Right Little</option>
-                    <option>Left Thumb</option>
-                    <option>Left Index</option>
-                    <option>Left Middle</option>
-                    <option>Left Ring</option>
-                    <option>Left Little</option>
-                  </select>
+                    options={[
+                      { value: 'Right Thumb', label: 'Right Thumb' },
+                      { value: 'Right Index', label: 'Right Index' },
+                      { value: 'Right Middle', label: 'Right Middle' },
+                      { value: 'Right Ring', label: 'Right Ring' },
+                      { value: 'Right Little', label: 'Right Little' },
+                      { value: 'Left Thumb', label: 'Left Thumb' },
+                      { value: 'Left Index', label: 'Left Index' },
+                      { value: 'Left Middle', label: 'Left Middle' },
+                      { value: 'Left Ring', label: 'Left Ring' },
+                      { value: 'Left Little', label: 'Left Little' }
+                    ]}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, fingerPosition: value }))
+                    }
+                    placeholder="Select finger position"
+                  />
                 </Field>
 
                 <Field label="Quality" hint="Optional quality score from the scanner">
@@ -504,15 +496,20 @@ const FingerprintEditModal = () => {
                   />
                 </Field>
 
+                {/* ✅ Status — CustomSelect */}
                 <Field label="Status" required>
-                  <select
+                  <CustomSelect
+                    label=""
                     value={form.status}
-                    onChange={update('status')}
-                    className={inputCls}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
+                    options={[
+                      { value: 'Active', label: 'Active' },
+                      { value: 'Inactive', label: 'Inactive' }
+                    ]}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, status: value }))
+                    }
+                    placeholder="Select status"
+                  />
                 </Field>
 
                 <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3.5 py-3 mt-2">

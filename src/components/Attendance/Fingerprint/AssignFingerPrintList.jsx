@@ -14,7 +14,7 @@ import {
   useDeactivateFingerprintEnrollmentMutation,
   useActivateFingerprintEnrollmentMutation,
 } from '../../../../app/service/fingerprint';
-import { Button, Pagination, SearchBar, FilterBar } from '../../ui';
+import { Button, Pagination, SearchBar, FilterBar, CustomSelect } from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
@@ -70,7 +70,7 @@ const getHospitalId = () => {
 };
 
 // ------------------------------------------------------------
-// Confirmation Modal (styled like the "Disable device?" dialog)
+// Confirmation Modal
 // ------------------------------------------------------------
 const ConfirmModal = ({
   isOpen,
@@ -103,7 +103,6 @@ const ConfirmModal = ({
       aria-modal="true"
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
-        {/* Icon + Title */}
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -115,12 +114,10 @@ const ConfirmModal = ({
           </div>
         </div>
 
-        {/* Message */}
         <p className="text-sm text-gray-600 leading-relaxed mb-6 pl-13">
           {message}
         </p>
 
-        {/* Actions */}
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -226,7 +223,6 @@ const AssignFingerprintList = () => {
 
   const [activeMenu, setActiveMenu] = useState(null);
 
-  // Confirm modal state
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     member: null,
@@ -235,9 +231,6 @@ const AssignFingerprintList = () => {
 
   const hospitalId = useMemo(() => getHospitalId(), []);
 
-  // ----------------------------------------------------------
-  // Fetch doctors, staff, and fingerprint enrollments
-  // ----------------------------------------------------------
   const {
     data: doctorsResponse,
     isLoading: doctorsLoading,
@@ -268,9 +261,6 @@ const AssignFingerprintList = () => {
   const loading = doctorsLoading || staffLoading || enrollmentsLoading;
   const isFetching = doctorsFetching || staffFetching || enrollmentsFetching;
 
-  // ----------------------------------------------------------
-  // Real-time fingerprint events (socket)
-  // ----------------------------------------------------------
   useEffect(() => {
     const refreshAll = async () => {
       try {
@@ -312,9 +302,6 @@ const AssignFingerprintList = () => {
     };
   }, [refetchDoctors, refetchStaff, refetchEnrollments, hospitalId]);
 
-  // ----------------------------------------------------------
-  // Enrollment lookup
-  // ----------------------------------------------------------
   const enrollmentsByEmployee = useMemo(() => {
     const map = new Map();
     (enrollmentsResponse?.data || []).forEach((e) => {
@@ -323,9 +310,6 @@ const AssignFingerprintList = () => {
     return map;
   }, [enrollmentsResponse]);
 
-  // ----------------------------------------------------------
-  // Normalize members
-  // ----------------------------------------------------------
   const members = useMemo(() => {
     const doctorsList = (doctorsResponse?.data || []).map((doc) => {
       const enrollment = enrollmentsByEmployee.get(`Doctor-${doc.id}`);
@@ -410,9 +394,6 @@ const AssignFingerprintList = () => {
     return [...doctorsList, ...staffList];
   }, [doctorsResponse, staffResponse, enrollmentsByEmployee, hospitalId]);
 
-  // ----------------------------------------------------------
-  // Filtering
-  // ----------------------------------------------------------
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
 
   const filteredMembers = useMemo(() => {
@@ -446,9 +427,6 @@ const AssignFingerprintList = () => {
     });
   }, [members, typeFilter, departmentFilter, searchTerm, hasSearchTerm]);
 
-  // ----------------------------------------------------------
-  // Pagination
-  // ----------------------------------------------------------
   const totalFilteredItems = filteredMembers.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
 
@@ -476,9 +454,6 @@ const AssignFingerprintList = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // ----------------------------------------------------------
-  // Handlers
-  // ----------------------------------------------------------
   const handleRefresh = useCallback(async () => {
     setSearchTerm('');
     setTypeFilter('all');
@@ -560,7 +535,6 @@ const AssignFingerprintList = () => {
     [activateEnrollment, refetchDoctors, refetchStaff, refetchEnrollments]
   );
 
-  // ✅ Opens the styled confirmation modal
   const handleDeactivateFingerprint = useCallback((member) => {
     setActiveMenu(null);
 
@@ -572,7 +546,6 @@ const AssignFingerprintList = () => {
     setConfirmModal({ isOpen: true, member, loading: false });
   }, []);
 
-  // ✅ Runs after user confirms in the modal
   const confirmDeactivate = useCallback(async () => {
     const member = confirmModal.member;
     if (!member) return;
@@ -624,9 +597,6 @@ const AssignFingerprintList = () => {
     }
   };
 
-  // ----------------------------------------------------------
-  // Loading skeleton
-  // ----------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -655,12 +625,8 @@ const AssignFingerprintList = () => {
     );
   }
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <Button
@@ -686,7 +652,6 @@ const AssignFingerprintList = () => {
         </p>
       </div>
 
-      {/* Quick stats */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
           <Stethoscope size={14} className="text-blue-500" />
@@ -706,7 +671,6 @@ const AssignFingerprintList = () => {
         </span>
       </div>
 
-      {/* Search + Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <SearchBar
@@ -747,7 +711,6 @@ const AssignFingerprintList = () => {
         </div>
       </div>
 
-      {/* Filters panel */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
           <div className="flex items-center justify-between mb-4">
@@ -770,43 +733,38 @@ const AssignFingerprintList = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* ✅ Member Type — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Member Type
-              </label>
-              <select
+              <CustomSelect
+                label="Member Type"
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="all">All Types</option>
-                <option value="doctor">Doctor</option>
-                <option value="staff">Staff</option>
-              </select>
+                options={[
+                  { value: 'all', label: 'All Types' },
+                  { value: 'doctor', label: 'Doctor' },
+                  { value: 'staff', label: 'Staff' }
+                ]}
+                onChange={(value) => setTypeFilter(value)}
+                placeholder="All Types"
+              />
             </div>
 
+            {/* ✅ Department / Designation — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Department / Designation
-              </label>
-              <select
+              <CustomSelect
+                label="Department / Designation"
                 value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Departments' },
+                  ...departments.map((dept) => ({ value: dept, label: dept }))
+                ]}
+                onChange={(value) => setDepartmentFilter(value)}
+                placeholder="All Departments"
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Table */}
       {filteredMembers.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -961,7 +919,6 @@ const AssignFingerprintList = () => {
               </table>
             </div>
 
-            {/* ✅ Pagination — always visible, sticky to bottom */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}
@@ -976,7 +933,6 @@ const AssignFingerprintList = () => {
         </div>
       )}
 
-      {/* ✅ Styled confirmation modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title="Deactivate fingerprint?"

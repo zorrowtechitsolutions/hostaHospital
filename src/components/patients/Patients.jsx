@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  User, 
-  Calendar, 
+import {
+  User,
+  Calendar,
   Activity,
   Plus,
   Download,
@@ -23,24 +23,27 @@ import AddAppointmentModal from './AddAppointmentModal';
 import DeleteModal from './DeleteModel';
 import ApproveRequestModal from '../Requests/ApproveRequestModel';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
-import { 
-  Button, 
-  Badge, 
-  Loader, 
-  Pagination, 
+import {
+  Button,
+  Badge,
+  Loader,
+  Pagination,
   SearchBar,
   Card
 } from '../ui';
-import { 
-  useGetPatientsQuery, 
+import CustomSelect from '../ui/CustomSelect';
+import {
+  useGetPatientsQuery,
   useDeletePatientMutation,
-  useRecoverPatientMutation 
+  useRecoverPatientMutation
 } from '../../../app/service/patients';
 import { useCreateBookingMutation } from '../../../app/service/request';
 import { getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { getS3ImageUrl } from '../../../app/service/S3';
+
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl as getS3ImageUrlRaw } from '../../../app/service/S3';
 
 // Import hasPermission for permission checks
 import { hasPermission } from "../../utils/permission";
@@ -61,71 +64,70 @@ const PERMISSIONS = {
   DELETE: 16
 };
 
-// S3 Base URL for images
-const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+// ✅ Static Status filter options — "All" is a real value (default + reset)
+const STATUS_FILTER_OPTIONS = [
+  { value: 'All', label: 'All Status' },
+  { value: 'Active', label: 'Active' },
+  { value: 'Inactive', label: 'Inactive' },
+  { value: 'Blacklisted', label: 'Blacklisted' },
+];
 
-// getS3ImageUrl with cache-busting
-const getS3ImageUrlWithCache = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+// Styling override so CustomSelect matches the border-gray-200 / rounded-md / text-sm filter look
+const SELECT_FILTER_CLASS =
+  "w-40 [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:text-sm [&>button]:text-gray-600 [&>button]:focus:ring-1 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
+
+// ✅ Local wrapper adds cache-busting (?t=timestamp) on top of shared helper
+const getS3ImageUrl = (imageKey) => {
+  const url = getS3ImageUrlRaw(imageKey);
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 };
 
-// ✅ Enhanced Helper function to format address - tries multiple address formats
+// ✅ Enhanced Helper function to format address
 const formatAddress = (address) => {
   if (!address) return '';
-  
-  // If address is a string, return it
+
   if (typeof address === 'string') {
     return address;
   }
-  
-  // If address is an object, extract fields
+
   if (typeof address === 'object') {
     const parts = [];
-    
-    // Common address field names
+
     const fieldNames = [
       'place', 'district', 'state', 'country', 'pincode'
     ];
-    
-    // Check each field and add if it has a value
+
     fieldNames.forEach(field => {
       if (address[field] && typeof address[field] === 'string' && address[field].trim()) {
         parts.push(address[field].trim());
       }
     });
-    
-    // If we have parts, join them
+
     if (parts.length > 0) {
       return parts.join(', ');
     }
-    
-    // If no fields found but address object exists, try to get values
+
     const values = Object.values(address).filter(v => v && typeof v === 'string' && v.trim());
     if (values.length > 0) {
       return values.join(', ');
     }
   }
-  
+
   return '';
 };
 
-// ✅ Function to extract address from patient object - tries multiple sources
+// ✅ Function to extract address from patient object
 const extractAddress = (patient) => {
   if (!patient) return '';
-  
-  // Try multiple possible address locations
+
   const addressSources = [
     patient.address,
     patient.patientAddress,
     patient.patient_address,
     patient.addressLine,
   ];
-  
-  // Find the first valid address source
+
   let addressData = null;
   for (const source of addressSources) {
     if (source) {
@@ -133,8 +135,7 @@ const extractAddress = (patient) => {
       break;
     }
   }
-  
-  // If no address found, try to build from individual fields
+
   if (!addressData) {
     const parts = [];
     const individualFields = ['place', 'district', 'state', 'country', 'pincode', 'city', 'street'];
@@ -147,8 +148,7 @@ const extractAddress = (patient) => {
       return parts.join(', ');
     }
   }
-  
-  // Format the address data
+
   return formatAddress(addressData);
 };
 
@@ -160,7 +160,6 @@ const getPatientDisplayId = (patient) => {
   if (patient?.patientNumber) {
     return `#PT${String(patient.patientNumber).padStart(4, '0')}`;
   }
-  // Fallback to database ID if patientNumber is not available
   const id = patient?.id || patient?._id;
   return id ? `#PT${String(id).padStart(4, '0')}` : '#PT0000';
 };
@@ -180,12 +179,12 @@ const getPatientStatus = (patient) => {
 // ✅ Patient Action Menu Component (Matches DoctorActionMenu style)
 const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onDelete, onAppointment, onRecover }) => {
   if (activeMenu !== patient.id) return null;
-  
+
   return (
     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
       {!patient.isDelete && (
-        <button 
-          onClick={() => onView(patient)} 
+        <button
+          onClick={() => onView(patient)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <Eye className="w-4 h-4" />
@@ -193,8 +192,8 @@ const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onD
         </button>
       )}
       {!patient.isDelete && (
-        <button 
-          onClick={() => onEdit(patient)} 
+        <button
+          onClick={() => onEdit(patient)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <Edit className="w-4 h-4" />
@@ -202,8 +201,8 @@ const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onD
         </button>
       )}
       {!patient.isDelete && (
-        <button 
-          onClick={() => onAppointment(patient)} 
+        <button
+          onClick={() => onAppointment(patient)}
           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
         >
           <Calendar className="w-4 h-4" />
@@ -211,7 +210,7 @@ const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onD
         </button>
       )}
       {!patient.isDelete && <div className="border-t border-gray-100 my-1"></div>}
-      
+
       {patient.isDelete ? (
         <button
           onClick={() => onRecover(patient)}
@@ -221,8 +220,8 @@ const PatientActionMenu = React.memo(({ patient, activeMenu, onView, onEdit, onD
           Recover Patient
         </button>
       ) : (
-        <button 
-          onClick={() => onDelete(patient)} 
+        <button
+          onClick={() => onDelete(patient)}
           className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
         >
           <Trash2 className="w-4 h-4" />
@@ -342,42 +341,39 @@ const Patients = () => {
   const isDoctor = authUser?.role === 'doctor' || authUser?.roleId === 46;
   const isHospitalAdmin = authUser?.role === 'hospital' || authUser?.roleId === 2;
   const isStaff = authUser?.role === 'staff' || authUser?.roleId === 3;
-  
-  // ✅ CRITICAL FIX: Get hospitalId from localStorage or auth.hospitalId only
+
   const getHospitalId = () => {
-    // Priority 1: Check localStorage
     const storedHospitalId = localStorage.getItem('hospitalId');
     if (storedHospitalId) {
       return storedHospitalId;
     }
-    
-    // Priority 2: Check auth.hospitalId
+
     if (authUser?.hospitalId) {
       return authUser.hospitalId;
     }
-    
+
     return null;
   };
-  
+
   const hospitalId = getHospitalId();
 
   // ✅ API hooks - fetch ALL patients (no filters sent to server)
-  const { 
-    data: patientsResponse, 
+  const {
+    data: patientsResponse,
     isLoading: isLoadingPatients,
     refetch: refetchPatients,
     isFetching
   } = useGetPatientsQuery({
     hospitalId: hospitalId,
     page: 1,
-    limit: 1000, // Fetch all patients for client-side filtering
+    limit: 1000,
   });
 
   const [deletePatient] = useDeletePatientMutation();
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  // ✅ Register socket event listeners (SAME AS DOCTORS)
+  // ✅ Register socket event listeners
   useEffect(() => {
     registerPatientEvents({
       onPatientRegistered: () => {
@@ -403,15 +399,10 @@ const Patients = () => {
     };
   }, [refetchPatients]);
 
-  // ✅ Listen for socket connection/disconnection (SAME AS DOCTORS)
+  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
-    const handleConnect = () => {
-      // Re-register events if needed
-    };
-
-    const handleDisconnect = () => {
-      // Handle disconnect
-    };
+    const handleConnect = () => {};
+    const handleDisconnect = () => {};
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -433,7 +424,7 @@ const Patients = () => {
   // ✅ Transform patient data with enhanced address handling
   const transformPatientData = (patients) => {
     if (!patients || !Array.isArray(patients)) return [];
-    
+
     return patients.map((patient, index) => {
       let status = 'Active';
       if (patient.isDelete) {
@@ -441,10 +432,9 @@ const Patients = () => {
       } else if (patient.isActive === false) {
         status = 'Inactive';
       }
-      
-      // ✅ Extract and format address using enhanced function
+
       const formattedAddress = extractAddress(patient);
-      
+
       return {
         ...patient,
         isDelete: patient.isDelete || false,
@@ -455,11 +445,10 @@ const Patients = () => {
     });
   };
 
-  // ✅ CRITICAL FIX: Sort patients by patientNumber (ascending) before any filtering
+  // ✅ Sort patients by patientNumber (ascending) before any filtering
   const transformedPatients = useMemo(() => {
     const patients = transformPatientData(allPatients);
-    
-    // ✅ Sort by patientNumber to ensure proper ordering (PT0001, PT0002, PT0003...)
+
     return [...patients].sort((a, b) => {
       const numberA = Number(a.patientNumber) || 0;
       const numberB = Number(b.patientNumber) || 0;
@@ -467,11 +456,10 @@ const Patients = () => {
     });
   }, [allPatients]);
 
-  // ✅ CLIENT-SIDE FILTERING - Apply both gender and status filters
+  // ✅ CLIENT-SIDE FILTERING
   const filteredPatients = useMemo(() => {
     let result = transformedPatients;
-    
-    // ✅ Filter by search term (client-side) - now includes patientNumber
+
     if (searchTerm && searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
       result = result.filter(patient => {
@@ -481,33 +469,31 @@ const Patients = () => {
         const patientNumber = String(patient.patientNumber || '');
         const dbId = String(patient.id || patient._id || '');
         const displayId = getPatientDisplayId(patient).toLowerCase();
-        
-        return name.includes(search) || 
-               mobile.includes(search) || 
-               email.includes(search) || 
+
+        return name.includes(search) ||
+               mobile.includes(search) ||
+               email.includes(search) ||
                patientNumber.includes(search) ||
                displayId.includes(search) ||
                dbId.includes(search);
       });
     }
-    
-    // ✅ Filter by gender (client-side)
+
     if (genderFilter !== 'All') {
       result = result.filter(patient => patient.gender === genderFilter);
     }
-    
-    // ✅ Filter by status (client-side)
+
     if (statusFilter !== 'All') {
       result = result.filter(patient => {
         const status = getPatientStatus(patient);
         return status === statusFilter;
       });
     }
-    
+
     return result;
   }, [transformedPatients, searchTerm, genderFilter, statusFilter]);
 
-  // ✅ Client-side pagination for filtered results
+  // ✅ Client-side pagination
   const paginatedPatients = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -526,6 +512,16 @@ const Patients = () => {
     });
     return ['All', ...Array.from(genders)];
   }, [transformedPatients]);
+
+  // ✅ Options for the Gender filter CustomSelect
+  const genderFilterOptions = useMemo(
+    () =>
+      genderOptions.map((g) => ({
+        value: g,
+        label: g === 'All' ? 'All Genders' : g,
+      })),
+    [genderOptions]
+  );
 
   // Reset page when filters change
   useEffect(() => {
@@ -553,13 +549,11 @@ const Patients = () => {
     return true;
   };
 
-  // ✅ Search handler
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -574,23 +568,20 @@ const Patients = () => {
 
   // Navigation handlers with permission checks
   const handleViewDetails = useCallback((patient) => {
-    // Check VIEW permission
     if (!checkPermission(PERMISSIONS.VIEW, 'view patient details')) {
       return;
     }
-    
+
     if (patient.isDelete) {
       showErrorToast('Cannot view details of blacklisted patient', 3000);
       return;
     }
-    // Use database ID for navigation
     const dbId = getPatientDbId(patient);
     navigate(`/patients/${dbId}`, { state: { patient } });
     setActiveMenu(null);
   }, [navigate]);
 
   const handleAddPatient = useCallback(() => {
-    // Check CREATE permission
     if (!checkPermission(PERMISSIONS.CREATE, 'add a patient')) {
       return;
     }
@@ -598,27 +589,24 @@ const Patients = () => {
   }, [navigate]);
 
   const handleEditPatient = useCallback((patient) => {
-    // Check EDIT permission
     if (!checkPermission(PERMISSIONS.EDIT, 'edit patient')) {
       return;
     }
-    
+
     if (patient.isDelete) {
       showErrorToast('Cannot edit blacklisted patient', 3000);
       return;
     }
-    // Use database ID for navigation
     const dbId = getPatientDbId(patient);
     navigate(`/edit-patient/${dbId}`, { state: { patient } });
     setActiveMenu(null);
   }, [navigate]);
 
   const handleDeleteClick = useCallback((patient) => {
-    // Check DELETE permission
     if (!checkPermission(PERMISSIONS.DELETE, 'delete patient')) {
       return;
     }
-    
+
     setPatientToDelete(patient);
     setShowDeleteModal(true);
     setActiveMenu(null);
@@ -627,7 +615,6 @@ const Patients = () => {
   const handleConfirmDelete = useCallback(async () => {
     if (patientToDelete) {
       try {
-        // Use database ID for API call
         const dbId = getPatientDbId(patientToDelete);
         await deletePatient(dbId).unwrap();
         await refetchPatients();
@@ -642,13 +629,11 @@ const Patients = () => {
   }, [patientToDelete, deletePatient, refetchPatients]);
 
   const handleRecoverPatient = useCallback(async (patient) => {
-    // Check DELETE permission for recover (same as delete)
     if (!checkPermission(PERMISSIONS.DELETE, 'recover patient')) {
       return;
     }
-    
+
     try {
-      // Use database ID for API call
       const dbId = getPatientDbId(patient);
       await recoverPatient(dbId).unwrap();
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
@@ -671,11 +656,10 @@ const Patients = () => {
   }, [refetchPatients]);
 
   const handleAddAppointmentModal = useCallback((patient) => {
-    // Check CREATE permission for appointment
     if (!checkPermission(PERMISSIONS.CREATE, 'create appointment')) {
       return;
     }
-    
+
     if (patient.isDelete) {
       showErrorToast('Cannot create appointment for blacklisted patient', 3000);
       return;
@@ -686,16 +670,13 @@ const Patients = () => {
   }, []);
 
   const handleProceedApprove = useCallback((data) => {
-    // ✅ FIXED: Use patientNumber for booking, not database ID
     const patientNumber = appointmentPatient?.patientNumber;
-    
+
     const updatedData = {
       ...data,
-      // Use patientNumber for the booking (user-facing ID)
-      patientId: patientNumber 
+      patientId: patientNumber
         ? `#PT${String(patientNumber).padStart(4, '0')}`
         : null,
-      // Keep the database ID for internal use if needed
       patientDbId: appointmentPatient?.id || appointmentPatient?._id || null,
     };
 
@@ -718,7 +699,7 @@ const Patients = () => {
     const birth = new Date(dob);
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
-    if (today.getMonth() < birth.getMonth() || 
+    if (today.getMonth() < birth.getMonth() ||
         (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
       age--;
     }
@@ -727,15 +708,12 @@ const Patients = () => {
 
   const handleConfirmAppointment = useCallback(async (approveData) => {
     try {
-      // ✅ FIXED: Extract patientNumber from the formatted patientId
-      const patientNumber = bookingData?.patientId 
+      const patientNumber = bookingData?.patientId
         ? Number(bookingData.patientId.replace("#PT", ""))
         : null;
-      
+
       const payload = {
-        // Use patientNumber instead of database ID
         patientNumber: patientNumber,
-        // Keep patientId for backward compatibility if needed
         patientId: patientNumber,
         userId: Number(bookingData?.userId),
         patient_name: bookingData?.patient_name,
@@ -792,12 +770,11 @@ const Patients = () => {
   // ✅ Prepare export data for Excel with patientNumber
   const getExportData = useCallback(() => {
     const patientsToExport = filteredPatients;
-    
+
     return patientsToExport.map((patient) => {
       const address = patient.formattedAddress || 'N/A';
-      
+
       return {
-        // ✅ Use patientNumber for display
         'Patient Number': patient.patientNumber ? `#PT${String(patient.patientNumber).padStart(4, '0')}` : 'N/A',
         'Name': patient.name || 'N/A',
         'Gender': patient.gender || 'N/A',
@@ -853,8 +830,8 @@ const Patients = () => {
         {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
-            <button 
-              onClick={() => navigate(-1)} 
+            <button
+              onClick={() => navigate(-1)}
               className="p-1 hover:bg-gray-200 rounded transition-colors"
               aria-label="Go back"
             >
@@ -875,8 +852,7 @@ const Patients = () => {
 
         {/* Search and Filter */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            {/* ✅ Search Bar - Client-side search with patientNumber support */}
+          <div className="flex flex-1 gap-3 w-full lg:w-auto items-start">
             <div className="flex-1 max-w-sm">
               <SearchBar
                 placeholder="Search by name, mobile, email, ID, or Patient Number..."
@@ -887,51 +863,42 @@ const Patients = () => {
               />
             </div>
 
-            {/* ✅ Gender Filter - Client-side */}
-            <select
+            {/* ✅ Replaced native select (Gender) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={genderFilter}
-              onChange={(e) => {
-                setGenderFilter(e.target.value);
+              options={genderFilterOptions}
+              onChange={(value) => {
+                setGenderFilter(value);
                 setCurrentPage(1);
               }}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-              aria-label="Filter by gender"
-            >
-              {genderOptions.map(gender => (
-                <option key={gender} value={gender}>
-                  {gender === 'All' ? 'All Genders' : gender}
-                </option>
-              ))}
-            </select>
+              className={SELECT_FILTER_CLASS}
+            />
 
-            {/* ✅ Status Filter - Client-side */}
-            <select
+            {/* ✅ Replaced native select (Status) with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+              options={STATUS_FILTER_OPTIONS}
+              onChange={(value) => {
+                setStatusFilter(value);
                 setCurrentPage(1);
               }}
-              className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-              aria-label="Filter by status"
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Blacklisted">Blacklisted</option>
-            </select>
+              className={SELECT_FILTER_CLASS}
+            />
           </div>
 
           <div className="flex gap-2 flex-wrap items-center">
             <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-              <button 
-                onClick={() => setViewMode('grid')} 
+              <button
+                onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="Grid view"
               >
                 <LayoutGrid size={16} />
               </button>
-              <button 
-                onClick={() => setViewMode('list')} 
+              <button
+                onClick={() => setViewMode('list')}
                 className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
                 aria-label="List view"
               >
@@ -939,8 +906,8 @@ const Patients = () => {
               </button>
             </div>
 
-            <button 
-              onClick={handleRefresh} 
+            <button
+              onClick={handleRefresh}
               className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
               disabled={isFetching}
               aria-label="Refresh"
@@ -955,9 +922,8 @@ const Patients = () => {
               className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             />
 
-            {/* New Patient Button with Permission Check */}
-            <Button 
-              onClick={handleAddPatient} 
+            <Button
+              onClick={handleAddPatient}
               className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <Plus size={16} /> New Patient
@@ -974,7 +940,7 @@ const Patients = () => {
               {isDoctor ? 'No patients found for your hospital' : 'Try adjusting your search or filters'}
             </p>
             {(searchTerm || genderFilter !== 'All' || statusFilter !== 'All') && (
-              <button 
+              <button
                 onClick={() => {
                   setSearchTerm('');
                   setGenderFilter('All');
@@ -996,20 +962,19 @@ const Patients = () => {
                 const isBlacklisted = patient.isDelete;
                 const patientStatus = getPatientStatus(patient);
                 const dbId = getPatientDbId(patient);
-                
+
                 return (
-                  <div 
-                    key={dbId} 
+                  <div
+                    key={dbId}
                     className="bg-white rounded-lg border border-gray-100 p-5 relative flex flex-col items-center shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="w-full flex justify-between items-start mb-4">
                       <Badge variant="info" className="text-[10px]">
-                        {/* ✅ Use patientNumber for display */}
                         {getPatientDisplayId(patient)}
                       </Badge>
                       <div className="relative menu-container">
-                        <button 
-                          onClick={(e) => toggleMenu(dbId, e)} 
+                        <button
+                          onClick={(e) => toggleMenu(dbId, e)}
                           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                           aria-label="Actions menu"
                         >
@@ -1026,7 +991,7 @@ const Patients = () => {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="relative mb-3">
                       <Avatar className="w-16 h-16">
                         <AvatarImage
@@ -1047,10 +1012,9 @@ const Patients = () => {
                         }`}
                       />
                     </div>
-                    
-                    <h3 
+
+                    <h3
                       onClick={() => {
-                        // Check VIEW permission before opening details
                         if (!hasPermission(PERMISSIONS.VIEW)) {
                           setPermissionDeniedMessage('You do not have permission to view patient details.');
                           setShowPermissionDenied(true);
@@ -1059,7 +1023,7 @@ const Patients = () => {
                         if (!isBlacklisted) {
                           handleViewDetails(patient);
                         }
-                      }} 
+                      }}
                       className={`text-[14px] font-bold text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                     >
                       {getPatientName(patient)}
@@ -1067,7 +1031,7 @@ const Patients = () => {
                     <p className="text-[11px] text-gray-500 mb-4">
                       {patient.age || 'N/A'} years • {patient.gender || 'N/A'}
                     </p>
-                    
+
                     <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-50 pt-4 mb-4">
                       <div className="text-center">
                         <p className="text-[9px] text-gray-400 uppercase font-bold">Type</p>
@@ -1082,34 +1046,31 @@ const Patients = () => {
                         </p>
                       </div>
                     </div>
-                    
-                    {/* Quick Action Button */}
+
                     {isBlacklisted ? (
-                      <button 
+                      <button
                         onClick={() => {
-                          // Check DELETE permission for recover
                           if (!hasPermission(PERMISSIONS.DELETE)) {
                             setPermissionDeniedMessage('You do not have permission to recover patient.');
                             setShowPermissionDenied(true);
                             return;
                           }
                           handleRecoverPatient(patient);
-                        }} 
+                        }}
                         className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
                       >
                         <RotateCcw className="w-4 h-4" /> Recover
                       </button>
                     ) : (
-                      <button 
+                      <button
                         onClick={() => {
-                          // Check CREATE permission for appointment
                           if (!hasPermission(PERMISSIONS.CREATE)) {
                             setPermissionDeniedMessage('You do not have permission to create appointment.');
                             setShowPermissionDenied(true);
                             return;
                           }
                           handleAddAppointmentModal(patient);
-                        }} 
+                        }}
                         className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
                       >
                         <Calendar className="w-4 h-4" /> Appointment
@@ -1120,7 +1081,6 @@ const Patients = () => {
               })}
             </div>
 
-            {/* Pagination for Grid View */}
             {filteredTotalPages > 1 && (
               <div className="mt-6 flex justify-center">
                 <Pagination
@@ -1169,11 +1129,10 @@ const Patients = () => {
                       const isBlacklisted = patient.isDelete;
                       const patientStatus = getPatientStatus(patient);
                       const dbId = getPatientDbId(patient);
-                      
+
                       return (
                         <tr key={dbId} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-6 py-4 text-[#1C62A0] font-medium">
-                            {/* ✅ Use patientNumber for display */}
                             {getPatientDisplayId(patient)}
                           </td>
                           <td className="px-6 py-4">
@@ -1187,9 +1146,8 @@ const Patients = () => {
                                   {(patient.name?.[0] || "P").toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span 
+                              <span
                                 onClick={() => {
-                                  // Check VIEW permission before opening details
                                   if (!hasPermission(PERMISSIONS.VIEW)) {
                                     setPermissionDeniedMessage('You do not have permission to view patient details.');
                                     setShowPermissionDenied(true);
@@ -1198,7 +1156,7 @@ const Patients = () => {
                                   if (!isBlacklisted) {
                                     handleViewDetails(patient);
                                   }
-                                }} 
+                                }}
                                 className={`font-medium text-gray-800 ${!isBlacklisted ? 'cursor-pointer hover:text-[#1C62A0] transition-colors' : ''}`}
                               >
                                 {getPatientName(patient)}
@@ -1229,8 +1187,8 @@ const Patients = () => {
                           </td>
                           <td className="px-6 py-4 text-right relative menu-container">
                             <div className="flex justify-end">
-                              <button 
-                                onClick={(e) => toggleMenu(dbId, e)} 
+                              <button
+                                onClick={(e) => toggleMenu(dbId, e)}
                                 className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 text-xl font-bold transition-colors"
                                 aria-label="Actions menu"
                               >
@@ -1254,7 +1212,6 @@ const Patients = () => {
                 </table>
               </div>
 
-              {/* Pagination - Sticks to bottom */}
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
                   currentPage={currentPage}

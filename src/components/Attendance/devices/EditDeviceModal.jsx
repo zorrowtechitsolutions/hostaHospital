@@ -17,6 +17,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../../ui/button';
+import { CustomSelect } from '../../ui'; // ✅ added CustomSelect
 import {
   useUpdateDeviceMutation,
   useGetDeviceByIdQuery,
@@ -89,20 +90,17 @@ const EditableField = ({ label, name, value, onChange, placeholder, required, hi
 
 const EditableSelect = ({ label, name, value, onChange, options, required, hint }) => (
   <div className="mb-4 min-w-0">
-    <label className="block text-xs font-medium text-gray-600 mb-1">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <select
-      name={name}
+    {/* ✅ Reuses CustomSelect, keeps the same label/hint look */}
+    <CustomSelect
+      label={label}
       value={value}
-      onChange={onChange}
+      options={options}
+      onChange={(newValue) => {
+        onChange({ target: { name, value: newValue } });
+      }}
+      placeholder={`Select ${label.toLowerCase()}`}
       required={required}
-      className="w-full min-w-0 border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-gray-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]/30 focus:border-[#1C62A0] transition-all cursor-pointer"
-    >
-      {options.map(({ value: v, label: l }) => (
-        <option key={v} value={v}>{l}</option>
-      ))}
-    </select>
+    />
     {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
   </div>
 );
@@ -123,7 +121,7 @@ const ReadOnlyField = ({ label, value, mono, required }) => (
 );
 
 /* ------------------------------------------------------------------ */
-/* ImagePanel — large image on top, buttons underneath                 */
+/* ImagePanel                                                          */
 /* ------------------------------------------------------------------ */
 const ImagePanel = ({
   preview,

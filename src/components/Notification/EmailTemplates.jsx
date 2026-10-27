@@ -18,6 +18,7 @@ import {
 } from "../../../app/service/emailtemplate";
 import { Button } from "../ui/button";
 import { Pagination } from "../ui/Pagination";
+import CustomSelect from "../ui/CustomSelect";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 // ✅ Shared Delete confirmation modal (same as Device / PatientDetails)
@@ -29,7 +30,27 @@ import {
   unregisterEmailTemplateEvents,
 } from "../../socket/emailTemplateEvents";
 
-// Remove TypeScript type annotations
+// ✅ Options for the Category filter — "All Categories" is a real value (default + reset)
+const CATEGORY_FILTER_OPTIONS = [
+  { value: "All Categories", label: "All Categories" },
+  { value: "General", label: "General" },
+  { value: "Alert", label: "Alert" },
+  { value: "Training", label: "Training" },
+  { value: "Information", label: "Information" },
+];
+
+// ✅ Options for the Status filter — "All Statuses" is a real value
+const STATUS_FILTER_OPTIONS = [
+  { value: "All Statuses", label: "All Statuses" },
+  { value: "Active", label: "Active" },
+  { value: "Inactive", label: "Inactive" },
+  { value: "Draft", label: "Draft" },
+];
+
+// Styling override so CustomSelect matches the h-10 / border-slate-200 filter inputs
+const SELECT_FILTER_CLASS =
+  "w-44 [&>button]:h-10 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-600 [&>button]:px-4 [&>button]:focus:ring-indigo-400 [&>button]:focus:border-indigo-400";
+
 const categoryStyles = {
   General: "bg-indigo-50 text-indigo-600",
   Alert: "bg-red-50 text-red-500",
@@ -199,10 +220,6 @@ const EmailTemplates = () => {
 
   /* ============================================================
      ✅ REAL-TIME EMAIL TEMPLATE EVENTS
-     Backend emits on `hospital_<id>` and `staff_<createdBy>`
-     with event name `template_event`.
-     Deduped because the backend both emits directly AND through
-     the RabbitMQ handler.
      ============================================================ */
   useEffect(() => {
     let lastEventKey = "";
@@ -326,17 +343,15 @@ const EmailTemplates = () => {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-white p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p className="text-sm text-red-500">
-            {error?.data?.message ||
-              "Failed to load email templates."}
+      <div className="min-h-screen bg-white p-6 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
+          <p className="text-sm text-red-500 mb-4 text-center">
+            {error?.data?.message || "Failed to load email templates."}
           </p>
           <Button
             variant="primary"
             size="sm"
             onClick={() => refetch()}
-            className="mt-3"
           >
             Retry
           </Button>
@@ -374,7 +389,7 @@ const EmailTemplates = () => {
 
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
 
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
           {/* Search */}
           <div className="relative flex-1 max-w-sm">
             <Search
@@ -386,67 +401,27 @@ const EmailTemplates = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search templates by name or subject..."
-              className="
-                w-full h-10 pl-10 pr-4
-                border border-slate-200
-                rounded-lg
-                text-sm
-                text-slate-700
-                placeholder:text-slate-400
-                outline-none
-                focus:border-indigo-400
-                focus:ring-2
-                focus:ring-indigo-100
-              "
+              className="w-full h-10 pl-10 pr-4 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
           </div>
 
-          {/* Category Filter */}
-          <select
+          {/* ✅ Replaced native (Category) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="
-              h-10
-              w-44
-              px-4
-              border border-slate-200
-              rounded-lg
-              bg-white
-              text-sm
-              text-slate-600
-              outline-none
-              focus:border-indigo-400
-            "
-          >
-            <option>All Categories</option>
-            <option>General</option>
-            <option>Alert</option>
-            <option>Training</option>
-            <option>Information</option>
-          </select>
+            options={CATEGORY_FILTER_OPTIONS}
+            onChange={(value) => setCategory(value)}
+            className={SELECT_FILTER_CLASS}
+          />
 
-          {/* Status Filter */}
-          <select
+          {/* ✅ Replaced native  (Status) with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="
-              h-10
-              w-44
-              px-4
-              border border-slate-200
-              rounded-lg
-              bg-white
-              text-sm
-              text-slate-600
-              outline-none
-              focus:border-indigo-400
-            "
-          >
-            <option value="All Statuses">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Draft">Draft</option>
-          </select>
+            options={STATUS_FILTER_OPTIONS}
+            onChange={(value) => setStatus(value)}
+            className={SELECT_FILTER_CLASS}
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -512,14 +487,7 @@ const EmailTemplates = () => {
                       {/* Template Name */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`
-                              w-9 h-9
-                              rounded-lg
-                              flex items-center justify-center
-                              ${iconStyles.bg}
-                            `}
-                          >
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconStyles.bg}`}>
                             <Icon size={18} className={iconStyles.color} />
                           </div>
                           <div>
@@ -539,14 +507,7 @@ const EmailTemplates = () => {
                       {/* Category */}
                       <td className="px-6 py-4">
                         <span
-                          className={`
-                            inline-flex
-                            px-2.5 py-1
-                            rounded-full
-                            text-[11px]
-                            font-medium
-                            ${categoryStyles[template.category] || "bg-slate-50 text-slate-500"}
-                          `}
+                          className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium ${categoryStyles[template.category] || "bg-slate-50 text-slate-500"}`}
                         >
                           {template.category || "General"}
                         </span>
@@ -571,25 +532,18 @@ const EmailTemplates = () => {
                       {/* Status */}
                       <td className="px-6 py-4">
                         <span
-                          className={`
-                            inline-flex
-                            px-2.5 py-1
-                            rounded-full
-                            text-[11px]
-                            font-medium
-                            ${
-                              template.status === "Active" || 
-                              template.status === "active"
-                                ? "bg-emerald-50 text-emerald-600"
-                                : template.status === "Inactive" || 
-                                  template.status === "inactive"
-                                ? "bg-slate-100 text-slate-500"
-                                : template.status === "Draft" || 
-                                  template.status === "draft"
-                                ? "bg-amber-50 text-amber-500"
-                                : "bg-gray-50 text-gray-500"
-                            }
-                          `}
+                          className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                            template.status === "Active" ||
+                            template.status === "active"
+                              ? "bg-emerald-50 text-emerald-600"
+                              : template.status === "Inactive" ||
+                                template.status === "inactive"
+                              ? "bg-slate-100 text-slate-500"
+                              : template.status === "Draft" ||
+                                template.status === "draft"
+                              ? "bg-amber-50 text-amber-500"
+                              : "bg-gray-50 text-gray-500"
+                          }`}
                         >
                           {template.status || "Draft"}
                         </span>

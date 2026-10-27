@@ -1,13 +1,20 @@
 // src/components/Reviews/ReviewTable.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Star, User, Calendar, ThumbsUp, MessageCircle } from "lucide-react";
 import { Badge, Loader } from "../ui";
+import CustomSelect from "../ui/CustomSelect";
 import { useGetReviewsQuery } from "../../../app/service/review";
 import { socket } from '../../socket/socket';
 import { registerRatingEvents, unregisterRatingEvents } from '../../socket/ratingEvents';
 import { registerReviewEvents, unregisterReviewEvents } from '../../socket/reviewEvents';
 import { getHospitalId } from "../../utils/auth";
 
+const SORT_OPTIONS = [
+  { value: 'recent',  label: 'Most Recent' },
+  { value: 'oldest',  label: 'Oldest' },
+  { value: 'highest', label: 'Highest Rating' },
+  { value: 'lowest',  label: 'Lowest Rating' },
+];
 
 const ReviewCard = ({ review }) => {
   const renderStars = (rating) => {
@@ -15,8 +22,8 @@ const ReviewCard = ({ review }) => {
       <Star
         key={index}
         className={`h-4 w-4 ${
-          index < Math.floor(rating) 
-            ? "fill-yellow-400 text-yellow-400" 
+          index < Math.floor(rating)
+            ? "fill-yellow-400 text-yellow-400"
             : "text-gray-300"
         }`}
       />
@@ -51,7 +58,7 @@ const ReviewCard = ({ review }) => {
                 </Badge>
               )}
             </div>
-            
+
             <div className="flex items-center gap-1 mt-1">
               {renderStars(review.rating)}
               <span className="text-sm text-gray-600 ml-1">
@@ -99,22 +106,19 @@ const ReviewTable = ({
   const [filterRating, setFilterRating] = useState("all");
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
+  const {
+    data: reviewsResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useGetReviewsQuery(
+    isHospitalReview
+      ? { hospitalId: getHospitalId() }
+      : { doctorId }
+  );
 
-const {
-  data: reviewsResponse,
-  isLoading,
-  error,
-  refetch,
-} = useGetReviewsQuery(
-  isHospitalReview
-    ? { hospitalId: getHospitalId() }
-    : { doctorId }
-);
-
-
-const reviews = reviewsResponse?.data || [];
-const totalReviews = reviews.length;
-
+  const reviews = reviewsResponse?.data || [];
+  const totalReviews = reviews.length;
 
   const registerEvents = (refetchFn) => {
     registerRatingEvents({
@@ -168,7 +172,7 @@ const totalReviews = reviews.length;
     };
   }, [refetch, eventsRegistered]);
 
-  const averageRating = totalReviews > 0 
+  const averageRating = totalReviews > 0
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews)
     : 0;
 
@@ -177,10 +181,41 @@ const totalReviews = reviews.length;
     count: reviews.filter(r => Math.floor(r.rating) === star).length
   }));
 
+  // ✅ Apply sortBy + filterRating so the controls actually do something
+  const visibleReviews = useMemo(() => {
+    let list = [...reviews];
+
+    if (filterRating !== "all") {
+      const starFilter = Number(filterRating);
+      list = list.filter(r => Math.floor(r.rating) === starFilter);
+    }
+
+    switch (sortBy) {
+      case "oldest":
+        list.sort((a, b) =>
+          new Date(a.createdAt || a.date || 0) - new Date(b.createdAt || b.date || 0)
+        );
+        break;
+      case "highest":
+        list.sort((a, b) => b.rating - a.rating);
+        break;
+      case "lowest":
+        list.sort((a, b) => a.rating - b.rating);
+        break;
+      case "recent":
+      default:
+        list.sort((a, b) =>
+          new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0)
+        );
+    }
+
+    return list;
+  }, [reviews, sortBy, filterRating]);
+
   const renderRatingStars = (rating) => {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating - fullStars >= 0.5;
-    
+
     return (
       <div className="flex items-center">
         {[...Array(5)].map((_, index) => {
@@ -216,8 +251,8 @@ const totalReviews = reviews.length;
       <div className="text-center py-8">
         <MessageCircle className="h-12 w-12 mx-auto text-gray-400 mb-3" />
         <p className="text-red-500">Error loading reviews</p>
-        <button 
-          onClick={() => refetch()} 
+        <button
+          onClick={() => refetch()}
           className="mt-2 text-blue-500 hover:underline text-sm"
         >
           Retry
@@ -253,12 +288,12 @@ const totalReviews = reviews.length;
                   <span className="text-sm text-gray-600 w-6">{star}</span>
                   <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-yellow-400 rounded-full transition-all duration-500"
-                      style={{ 
-                        width: totalReviews > 0 
-                          ? `${(count / totalReviews) * 100}%` 
-                          : '0%' 
+                      style={{
+                        width: totalReviews > 0
+                          ? `${(count / totalReviews) * 100}%`
+                          : '0%'
                       }}
                     />
                   </div>
@@ -274,18 +309,16 @@ const totalReviews = reviews.length;
 
       {totalReviews > 0 && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3">
             <label className="text-sm text-gray-600">Sort by:</label>
-            <select
+            {/* ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              hideLabel
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="recent">Most Recent</option>
-              <option value="oldest">Oldest</option>
-              <option value="highest">Highest Rating</option>
-              <option value="lowest">Lowest Rating</option>
-            </select>
+              options={SORT_OPTIONS}
+              onChange={(value) => setSortBy(value)}
+              className="w-48"
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -311,9 +344,17 @@ const totalReviews = reviews.length;
 
       {totalReviews > 0 ? (
         <div className="space-y-4">
-          {reviews.map((review, index) => (
-            <ReviewCard key={review.id || index} review={review} />
-          ))}
+          {visibleReviews.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-gray-500 text-sm">
+                No {filterRating}-star reviews to show.
+              </p>
+            </div>
+          ) : (
+            visibleReviews.map((review, index) => (
+              <ReviewCard key={review.id || index} review={review} />
+            ))
+          )}
         </div>
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
@@ -331,7 +372,7 @@ const totalReviews = reviews.length;
 
       {totalReviews > 0 && (
         <div className="text-sm text-gray-500 text-center pt-4 border-t border-gray-200">
-          Showing {totalReviews} {totalReviews === 1 ? "review" : "reviews"}
+          Showing {visibleReviews.length} of {totalReviews} {totalReviews === 1 ? "review" : "reviews"}
           {filterRating !== "all" && ` with ${filterRating} star rating`}
         </div>
       )}

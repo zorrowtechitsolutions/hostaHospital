@@ -1,5 +1,17 @@
 import React, { useState } from "react";
 import { X } from "lucide-react";
+import CustomSelect from "../ui/CustomSelect";
+
+// ✅ Options for the Unit Type CustomSelect — "Unit" (empty string) is the default/reset
+const UNIT_OPTIONS = [
+  { value: "", label: "Unit" },
+  { value: "mg", label: "mg" },
+  { value: "ml", label: "ml" },
+];
+
+// Styling override so CustomSelect matches the modal's tiny "text-xs border-gray-300" inputs
+const UNIT_SELECT_CLASS =
+  "w-full [&>button]:border-gray-300 [&>button]:text-xs [&>button]:px-2 [&>button]:py-1.5 [&>button]:rounded";
 
 const AddProduct = ({ isOpen, onClose, onAdd }) => {
   const [form, setForm] = useState({
@@ -48,7 +60,8 @@ const AddProduct = ({ isOpen, onClose, onAdd }) => {
     else if (new Date(form.expiry) <= new Date(form.purchase))
       err.expiry = "Expiry must be after purchase";
 
-    if (!form.unit) err.unit = "Select unit";
+    // ✅ FIX: was checking form.unit (undefined) → always errored → submit never worked
+    if (!form.unitType) err.unitType = "Select unit";
 
     if (!form.stock) err.stock = "Stock required";
     else if (isNaN(form.stock) || Number(form.stock) < 0)
@@ -82,7 +95,8 @@ const AddProduct = ({ isOpen, onClose, onAdd }) => {
       offer: "",
       purchase: "",
       expiry: "",
-      unit: "",
+      unitValue: "",
+      unitType: "", // ✅ FIX: was "unit" (dead key), now correctly resets unitType
       stock: "",
       desc: "",
     });
@@ -91,169 +105,171 @@ const AddProduct = ({ isOpen, onClose, onAdd }) => {
   };
 
   return (
-<div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-    <div className="bg-white w-full max-w-lg rounded-xl shadow-xl animate-fadeIn">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white w-full max-w-lg rounded-xl shadow-xl animate-fadeIn">
 
-    {/* HEADER */}
-    <div className="flex items-center justify-between px-4 py-3 ">
-      <h2 className="text-sm font-semibold text-gray-800">
-        Add New Product
-      </h2>
-      <button
-        onClick={onClose}
-        className="w-5 h-5 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200"
-      >
-        <X size={12} />
-      </button>
+        {/* HEADER */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <h2 className="text-sm font-semibold text-gray-800">
+            Add New Product
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-5 h-5 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        {/* BODY */}
+        <div className="p-4 space-y-3">
+
+          {/* ID */}
+          <div>
+            <label className="text-xs text-gray-500">ID</label>
+            <div className="mt-1 bg-gray-100 text-gray-600 px-2 py-1.5 rounded text-xs">
+              #PR00011
+            </div>
+          </div>
+
+          {/* NAME */}
+          <div>
+            <label className="text-xs text-gray-700">Name</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
+                errors.name ? "border-red-500" : "border-gray-300"
+              }`}
+            />
+            <p className="text-red-500 text-[10px]">{errors.name}</p>
+          </div>
+
+          {/* PRICE */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs">Price</label>
+              <input
+                name="price"
+                value={form.price}
+                onChange={handleChange}
+                className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
+                  errors.price ? "border-red-500" : "border-gray-300"
+                }`}
+              />
+              <p className="text-red-500 text-[10px]">{errors.price}</p>
+            </div>
+
+            <div>
+              <label className="text-xs">Offer Price</label>
+              <input
+                name="offer"
+                value={form.offer}
+                onChange={handleChange}
+                className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
+                  errors.offer ? "border-red-500" : "border-gray-300"
+                }`}
+              />
+              <p className="text-red-500 text-[10px]">{errors.offer}</p>
+            </div>
+          </div>
+
+          {/* DATES */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs">Purchase</label>
+              <input
+                type="date"
+                name="purchase"
+                value={form.purchase}
+                onChange={handleChange}
+                className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
+                  errors.purchase ? "border-red-500" : "border-gray-300"
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs">Expire</label>
+              <input
+                type="date"
+                name="expiry"
+                value={form.expiry}
+                onChange={handleChange}
+                className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
+                  errors.expiry ? "border-red-500" : "border-gray-300"
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* UNIT + STOCK */}
+          <div className="grid grid-cols-3 gap-2">
+            {/* Unit Amount */}
+            <input
+              name="unitValue"
+              placeholder="Amount"
+              value={form.unitValue}
+              onChange={handleChange}
+              className="border px-2 py-1.5 rounded text-xs border-gray-300"
+            />
+
+            {/* Unit Type — ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={form.unitType}
+              options={UNIT_OPTIONS}
+              onChange={(value) => handleChange({ target: { name: "unitType", value } })}
+              className={UNIT_SELECT_CLASS}
+            />
+
+            {/* Stock */}
+            <input
+              name="stock"
+              placeholder="Stock"
+              value={form.stock}
+              onChange={handleChange}
+              className="border px-2 py-1.5 rounded text-xs border-gray-300"
+            />
+          </div>
+
+          {/* ✅ FIX: previously errors.unitType was set but never rendered */}
+          {errors.unitType && (
+            <p className="text-red-500 text-[10px] -mt-2">{errors.unitType}</p>
+          )}
+
+          {/* DESCRIPTION */}
+          <textarea
+            name="desc"
+            value={form.desc}
+            onChange={handleChange}
+            rows={2}
+            placeholder="Description"
+            className={`w-full border px-2 py-1.5 rounded text-xs ${
+              errors.desc ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+        </div>
+
+        {/* FOOTER */}
+        <div className="flex justify-end gap-2 px-4 py-3">
+          <button
+            onClick={onClose}
+            className="px-3 py-1 text-xs border rounded"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="px-3 py-1 text-xs bg-[#1C62A0] text-white rounded"
+          >
+            Add Product
+          </button>
+        </div>
+      </div>
     </div>
-
-    {/* BODY */}
-    <div className="p-4 space-y-3">
-
-      {/* ID */}
-      <div>
-        <label className="text-xs text-gray-500">ID</label>
-        <div className="mt-1 bg-gray-100 text-gray-600 px-2 py-1.5 rounded text-xs">
-          #PR00011
-        </div>
-      </div>
-
-      {/* NAME */}
-      <div>
-        <label className="text-xs text-gray-700">Name</label>
-        <input
-          name="name"
-          value={form.name}
-          onChange={handleChange}
-          className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
-            errors.name ? "border-red-500" : "border-gray-300"
-          }`}
-        />
-        <p className="text-red-500 text-[10px]">{errors.name}</p>
-      </div>
-
-      {/* PRICE */}
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs">Price</label>
-          <input
-            name="price"
-            value={form.price}
-            onChange={handleChange}
-            className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
-              errors.price ? "border-red-500" : "border-gray-300"
-            }`}
-          />
-          <p className="text-red-500 text-[10px]">{errors.price}</p>
-        </div>
-
-        <div>
-          <label className="text-xs">Offer Price</label>
-          <input
-            name="offer"
-            value={form.offer}
-            onChange={handleChange}
-            className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
-              errors.offer ? "border-red-500" : "border-gray-300"
-            }`}
-          />
-          <p className="text-red-500 text-[10px]">{errors.offer}</p>
-        </div>
-      </div>
-
-      {/* DATES */}
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs">Purchase</label>
-          <input
-            type="date"
-            name="purchase"
-            value={form.purchase}
-            onChange={handleChange}
-            className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
-              errors.purchase ? "border-red-500" : "border-gray-300"
-            }`}
-          />
-        </div>
-
-        <div>
-          <label className="text-xs">Expire</label>
-          <input
-            type="date"
-            name="expiry"
-            value={form.expiry}
-            onChange={handleChange}
-            className={`w-full mt-1 border px-2 py-1.5 rounded text-xs ${
-              errors.expiry ? "border-red-500" : "border-gray-300"
-            }`}
-          />
-        </div>
-      </div>
-
-      {/* UNIT + STOCK */}
-<div className="grid grid-cols-3 gap-2">
-  {/* Unit Amount */}
-  <input
-    name="unitValue"
-    placeholder="Amount"
-    value={form.unitValue}
-    onChange={handleChange}
-    className="border px-2 py-1.5 rounded text-xs border-gray-300"
-  />
-
-  {/* Unit Type */}
-  <select
-    name="unitType"
-    value={form.unitType}
-    onChange={handleChange}
-    className="border px-2 py-1.5 rounded text-xs border-gray-300"
-  >
-    <option value="">Unit</option>
-    <option value="mg">mg</option>
-    <option value="ml">ml</option>
-  </select>
-
-  {/* Stock */}
-  <input
-    name="stock"
-    placeholder="Stock"
-    value={form.stock}
-    onChange={handleChange}
-    className="border px-2 py-1.5 rounded text-xs border-gray-300"
-  />
-</div>
-      {/* DESCRIPTION */}
-      <textarea
-        name="desc"
-        value={form.desc}
-        onChange={handleChange}
-        rows={2}
-        placeholder="Description"
-        className={`w-full border px-2 py-1.5 rounded text-xs ${
-          errors.desc ? "border-red-500" : "border-gray-300"
-        }`}
-      />
-    </div>
-
-    {/* FOOTER */}
-    <div className="flex justify-end gap-2 px-4 py-3 ">
-      <button
-        onClick={onClose}
-        className="px-3 py-1 text-xs border rounded"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleSubmit}
-        className="px-3 py-1 text-xs bg-[#1C62A0] text-white rounded"
-      >
-        Add Product
-      </button>
-    </div>
-  </div>
-</div>
-
-);
+  );
 };
 
 export default AddProduct;

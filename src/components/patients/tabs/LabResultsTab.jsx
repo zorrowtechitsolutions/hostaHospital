@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Eye, Trash2, Upload, X, Edit2, Beaker, Download, User, Search, FileText, AlertTriangle, Image as ImageIcon, RotateCcw } from "lucide-react";
 import { Button, Pagination, Badge } from "../../ui";
-import { 
+import CustomSelect from "../../ui/CustomSelect";
+import {
   showSuccessToast,
   showErrorToast,
   showWarningToast,
 } from "../../ui/Toast";
-import { 
+import {
   useGetLabResultsQuery,
   useDeleteLabResultMutation,
   useCreateLabResultMutation,
@@ -22,6 +23,28 @@ import LaboratoryReportModal from "../modals/LaboratoryReportModal";
 
 // ✅ NEW: socket event helpers
 import { registerLabEvents, unregisterLabEvents } from "../../../socket/labEvents";
+
+// ✅ Options for the ADD modal status dropdown
+// (label ≠ value: backend keys → user-facing labels)
+const ADD_STATUS_OPTIONS = [
+  { value: "pending",   label: "Pending" },
+  { value: "received",  label: "Received" },
+  { value: "progress",  label: "In Progress" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+// ✅ Options for the EDIT modal status dropdown — has one extra "completed" option
+const EDIT_STATUS_OPTIONS = [
+  { value: "pending",   label: "Pending" },
+  { value: "received",  label: "Received" },
+  { value: "progress",  label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+// Styling override so CustomSelect matches the modal's border-gray-300 / ring-[#1C62A0] inputs
+const MODAL_SELECT_CLASS =
+  "w-full [&>button]:border-gray-300 [&>button]:text-sm [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -125,10 +148,10 @@ const LabResultsSkeleton = () => (
 // DOCTOR SEARCH DROPDOWN
 // ========================
 
-const DoctorSearchDropdown = ({ 
-  value, 
-  onChange, 
-  onSelect, 
+const DoctorSearchDropdown = ({
+  value,
+  onChange,
+  onSelect,
   placeholder = "Search for a doctor...",
   disabled = false,
   required = false,
@@ -148,7 +171,7 @@ const DoctorSearchDropdown = ({
   const filteredDoctors = useMemo(() => {
     if (!searchTerm.trim()) return doctors;
     const term = searchTerm.toLowerCase();
-    return doctors.filter(doc => 
+    return doctors.filter(doc =>
       (doc.displayName?.toLowerCase().includes(term) ||
        doc.firstName?.toLowerCase().includes(term) ||
        doc.lastName?.toLowerCase().includes(term) ||
@@ -211,7 +234,7 @@ const DoctorSearchDropdown = ({
           <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         )}
       </div>
-      
+
       {isOpen && !isLoadingDoctors && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredDoctors.length > 0 ? (
@@ -246,7 +269,7 @@ const DoctorSearchDropdown = ({
           )}
         </div>
       )}
-      
+
       {isOpen && isLoadingDoctors && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           <div className="flex items-center justify-center gap-2">
@@ -272,16 +295,15 @@ const LabResultsTab = ({ patient }) => {
   const [editingLabResult, setEditingLabResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  
+
   // Delete confirmation states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingLabResult, setDeletingLabResult] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   // Store deleted IDs in localStorage to persist across refreshes
   const STORAGE_KEY = `deleted_lab_results_${patient?.id || 'unknown'}`;
-  
-  // Load deleted IDs from localStorage on mount
+
   const loadDeletedIds = useCallback(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -295,7 +317,6 @@ const LabResultsTab = ({ patient }) => {
     return new Set();
   }, [STORAGE_KEY]);
 
-  // Save deleted IDs to localStorage
   const saveDeletedIds = useCallback((ids) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
@@ -304,13 +325,10 @@ const LabResultsTab = ({ patient }) => {
     }
   }, [STORAGE_KEY]);
 
-  // Initialize deletedIds from localStorage
   const [deletedIds, setDeletedIds] = useState(() => loadDeletedIds());
-  
-  // Force refresh counter
+
   const [refreshCounter, setRefreshCounter] = useState(0);
-  
-  // Required form fields
+
   const [testName, setTestName] = useState("");
   const [status, setStatus] = useState("pending");
   const [department, setDepartment] = useState("");
@@ -318,8 +336,7 @@ const LabResultsTab = ({ patient }) => {
   const [doctorName, setDoctorName] = useState("");
   const [labName, setLabName] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  
-  // Edit form fields
+
   const [editTestName, setEditTestName] = useState("");
   const [editStatus, setEditStatus] = useState("pending");
   const [editDepartment, setEditDepartment] = useState("");
@@ -328,14 +345,11 @@ const LabResultsTab = ({ patient }) => {
   const [editLabName, setEditLabName] = useState("");
   const [editFile, setEditFile] = useState(null);
   const [editFilePreview, setEditFilePreview] = useState(null);
-  
+
   const itemsPerPage = 5;
 
-  // ✅ CHANGE 1: hospitalId must come from authUser.hospitalId — NOT authUser.id
   const authUser = getAuthUser();
 
-  // IMPORTANT: hospitalId must come from authUser.hospitalId
-  // Do not use authUser.id as hospitalId.
   const hospitalId = authUser?.hospitalId || null;
 
   const hospitalName =
@@ -346,7 +360,6 @@ const LabResultsTab = ({ patient }) => {
 
   const patientUserId = patient?.userId;
 
-  // ✅ CHANGE 2: Send hospitalId to the API query
   const {
     data: labResultsData,
     isLoading: isLoadingLabResults,
@@ -401,7 +414,6 @@ const LabResultsTab = ({ patient }) => {
     return fileType === 'application/pdf';
   };
 
-  // Check if item is blacklisted (deleted)
   const isBlacklisted = (item) => {
     const id = String(item.id || item._id);
     return deletedIds.has(id);
@@ -423,17 +435,17 @@ const LabResultsTab = ({ patient }) => {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      return { 
-        valid: false, 
-        error: "Only Images (PNG, JPEG, WEBP) and PDF files are allowed." 
+      return {
+        valid: false,
+        error: "Only Images (PNG, JPEG, WEBP) and PDF files are allowed."
       };
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      return { 
-        valid: false, 
-        error: "File size must be less than 10MB" 
+      return {
+        valid: false,
+        error: "File size must be less than 10MB"
       };
     }
 
@@ -511,11 +523,11 @@ const LabResultsTab = ({ patient }) => {
 
       const createResult = await createLabResult(labResultData).unwrap();
 
-      const labResultId = 
-        createResult?.data?.id ||      
-        createResult?.id ||            
-        createResult?.data?._id ||     
-        createResult?._id ||           
+      const labResultId =
+        createResult?.data?.id ||
+        createResult?.id ||
+        createResult?.data?._id ||
+        createResult?._id ||
         createResult?.data?.labResultId ||
         createResult?.labResultId;
 
@@ -558,21 +570,21 @@ const LabResultsTab = ({ patient }) => {
 
       setUploadProgress(100);
 
-      showSuccessToast(`✅ Lab Result "${testName}" created successfully!`);
-      
+      showSuccessToast(` Lab Result "${testName}" created successfully!`);
+
       resetAddForm();
       await forceRefresh();
-      
+
     } catch (error) {
       console.error("❌ Create failed:", error);
-      
+
       let errorMessage = "Unknown error";
       if (error.data?.message) {
         errorMessage = error.data.message;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       showErrorToast(`❌ Failed to create lab result: ${errorMessage}`);
     } finally {
       setUploading(false);
@@ -608,7 +620,7 @@ const LabResultsTab = ({ patient }) => {
     }
 
     setEditFile(file);
-    
+
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = () => {
@@ -620,8 +632,6 @@ const LabResultsTab = ({ patient }) => {
     }
   };
 
-  // ✅ CHANGE 4: Safer edit — preserves existing hospital/user/date
-  // and only replaces file fields when a new file is selected
   const handleUpdateLabResult = async () => {
     if (!editTestName.trim()) {
       showWarningToast("Please enter a test name");
@@ -664,8 +674,6 @@ const LabResultsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // Keep the existing hospital/patient information.
-      // Only update the fields changed in the edit form.
       let updateData = {
         patientId: patient.id,
         patientName:
@@ -678,8 +686,6 @@ const LabResultsTab = ({ patient }) => {
           editingLabResult.userId ||
           patientUserId,
 
-        // IMPORTANT:
-        // Preserve the existing hospitalId.
         hospitalId:
           editingLabResult.hospitalId ||
           hospitalId ||
@@ -706,14 +712,12 @@ const LabResultsTab = ({ patient }) => {
           editingLabResult.labName ||
           null,
 
-        // Don't change the original date during edit.
         date:
           editingLabResult.date ||
           editingLabResult.createdAt ||
           undefined,
       };
 
-      // Only replace the existing file if the user selected a new file.
       if (editFile) {
         const timestamp = Date.now();
 
@@ -752,7 +756,6 @@ const LabResultsTab = ({ patient }) => {
         };
       }
 
-
       await updateLabResult({
         id: String(labResultId),
         updateData,
@@ -766,7 +769,6 @@ const LabResultsTab = ({ patient }) => {
 
       resetEditForm();
 
-      // Refresh API data after update.
       await refetchLabResults();
 
       setRefreshCounter((prev) => prev + 1);
@@ -806,20 +808,19 @@ const LabResultsTab = ({ patient }) => {
 
     try {
       const id = deletingLabResult.id;
-      
-      // IMMEDIATE UI UPDATE: Add to deleted IDs and save to localStorage
+
       setDeletedIds(prev => {
         const newSet = new Set(prev);
         newSet.add(id);
         saveDeletedIds(newSet);
         return newSet;
       });
-      
+
       setShowDeleteModal(false);
-      
+
       try {
         await deleteLabResult(id).unwrap();
-        showSuccessToast(`✅ Lab Result "${deletingLabResult.name}" deleted successfully!`);
+        showSuccessToast(` Lab Result "${deletingLabResult.name}" deleted successfully!`);
       } catch (error) {
         if (error.status === 404 || error.data?.message === 'Lab result not found') {
           showWarningToast("Lab result was already deleted.");
@@ -833,10 +834,10 @@ const LabResultsTab = ({ patient }) => {
           throw error;
         }
       }
-      
+
       await refetchLabResults();
       setRefreshCounter(prev => prev + 1);
-      
+
     } catch (error) {
       console.error("❌ Delete failed:", error);
       showErrorToast(`❌ Failed to delete: ${error.message || error.data?.message || "Unknown error"}`);
@@ -846,31 +847,28 @@ const LabResultsTab = ({ patient }) => {
     }
   };
 
-  // Handle recover lab result
   const handleRecoverLabResult = async (labResult) => {
     const id = String(labResult.id || labResult._id);
-    
+
     try {
-      // Remove from deleted IDs immediately
       setDeletedIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(id);
         saveDeletedIds(newSet);
         return newSet;
       });
-      
-      showSuccessToast(`✅ Lab Result "${labResult.testName || labResult.name}" recovered successfully!`);
-      
-      // Try to call API if endpoint exists
+
+      showSuccessToast(` Lab Result "${labResult.testName || labResult.name}" recovered successfully!`);
+
       try {
         await recoverLabResult(id).unwrap();
       } catch (error) {
         console.warn("Recover API not available, using local recovery only:", error);
       }
-      
+
       await refetchLabResults();
       setRefreshCounter(prev => prev + 1);
-      
+
     } catch (error) {
       console.error("❌ Recover failed:", error);
       showErrorToast(`❌ Failed to recover: ${error.message || "Unknown error"}`);
@@ -929,7 +927,6 @@ const LabResultsTab = ({ patient }) => {
     }
   }, [patient?.id, loadDeletedIds, forceRefresh]);
 
-  // ✅ CHANGE 3: Reset pagination when the patient changes
   useEffect(() => {
     setCurrentPage(1);
   }, [patient?.id]);
@@ -938,8 +935,6 @@ const LabResultsTab = ({ patient }) => {
   // SOCKET EVENT LISTENERS
   // ========================
 
-  // Stable ref so the socket handler always calls the freshest refetch
-  // without needing to re-register the listener on every render.
   const refetchRef = useRef(refetchLabResults);
   useEffect(() => {
     refetchRef.current = refetchLabResults;
@@ -950,8 +945,6 @@ const LabResultsTab = ({ patient }) => {
 
     const currentPatientId = String(patient.id);
 
-    // Handler shared by every lab event type EXCEPT delete/recover,
-    // because those need special treatment for the local blacklist.
     const handleGenericLabEvent = ({ data }) => {
       if (data?.patientId && String(data.patientId) !== currentPatientId) {
         return;
@@ -960,8 +953,6 @@ const LabResultsTab = ({ patient }) => {
       setRefreshCounter((prev) => prev + 1);
     };
 
-    // DELETE handler — also blacklists the item locally so the row
-    // instantly greys out even before the refetch lands.
     const handleDeleteEvent = ({ data }) => {
       if (data?.patientId && String(data.patientId) !== currentPatientId) {
         return;
@@ -981,8 +972,6 @@ const LabResultsTab = ({ patient }) => {
       setRefreshCounter((prev) => prev + 1);
     };
 
-    // ✅ NEW: RECOVER handler — removes the id from the local blacklist
-    // so the row instantly reverts to its normal (non-greyed) state.
     const handleRecoverEvent = ({ data }) => {
       if (data?.patientId && String(data.patientId) !== currentPatientId) {
         return;
@@ -991,7 +980,7 @@ const LabResultsTab = ({ patient }) => {
       if (data?.id) {
         const id = String(data.id);
         setDeletedIds((prev) => {
-          if (!prev.has(id)) return prev; // nothing to do
+          if (!prev.has(id)) return prev;
           const next = new Set(prev);
           next.delete(id);
           saveDeletedIds(next);
@@ -1007,7 +996,7 @@ const LabResultsTab = ({ patient }) => {
       onRegistered:       handleGenericLabEvent,
       onUpdated:          handleGenericLabEvent,
       onDeleted:          handleDeleteEvent,
-      onRecovered:        handleRecoverEvent,   // ✅ NEW
+      onRecovered:        handleRecoverEvent,
       onTestRegistered:   handleGenericLabEvent,
       onReportRegistered: handleGenericLabEvent,
       onReportUpdated:    handleGenericLabEvent,
@@ -1049,10 +1038,9 @@ const LabResultsTab = ({ patient }) => {
   };
 
   // ========================
-  // PAGINATION - SHOW ALL ITEMS INCLUDING BLACKLISTED
+  // PAGINATION
   // ========================
 
-  // ✅ CHANGE 5: List logic unchanged — API already filters by patientId
   const labResultsList = useMemo(() => {
     const list = labResultsData?.data || [];
 
@@ -1099,11 +1087,9 @@ const LabResultsTab = ({ patient }) => {
   // RENDER
   // ========================
 
-  // ============ SKELETON LOADING STATE ============
   if (isLoadingLabResults) {
     return <LabResultsSkeleton />;
   }
-  // ============ END SKELETON LOADING STATE ============
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
@@ -1118,7 +1104,7 @@ const LabResultsTab = ({ patient }) => {
             <span className="ml-2 inline-block animate-spin rounded-full h-3 w-3 border-2 border-[#1C62A0] border-t-transparent"></span>
           )}
         </h2>
-        
+
         <button
           onClick={() => setShowAddModal(true)}
           className="px-4 py-2 bg-[#1C62A0] text-white rounded-lg cursor-pointer hover:bg-[#154f7a] transition-colors flex items-center gap-2 text-sm"
@@ -1204,17 +1190,15 @@ const LabResultsTab = ({ patient }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
                 </label>
-                <select
+                {/* ✅ Replaced native  with CustomSelect (ADD modal) */}
+                <CustomSelect
+                  hideLabel
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  options={ADD_STATUS_OPTIONS}
+                  onChange={(value) => setStatus(value)}
                   disabled={uploading}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="received">Received</option>
-                  <option value="progress">In Progress</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  className={MODAL_SELECT_CLASS}
+                />
               </div>
 
               {/* File Upload */}
@@ -1393,18 +1377,15 @@ const LabResultsTab = ({ patient }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
                 </label>
-                <select
+                {/* ✅ Replaced native  with CustomSelect (EDIT modal) */}
+                <CustomSelect
+                  hideLabel
                   value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                  options={EDIT_STATUS_OPTIONS}
+                  onChange={(value) => setEditStatus(value)}
                   disabled={uploading}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="received">Received</option>
-                  <option value="progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  className={MODAL_SELECT_CLASS}
+                />
               </div>
 
               {/* Current File */}
@@ -1412,9 +1393,9 @@ const LabResultsTab = ({ patient }) => {
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
                     {isImageFile(editingLabResult.fileType || editingLabResult.type) ? (
-                      <img 
-                        src={getS3ImageUrl(editingLabResult.fileKey)} 
-                        alt="Current" 
+                      <img
+                        src={getS3ImageUrl(editingLabResult.fileKey)}
+                        alt="Current"
                         className="h-12 w-12 object-cover rounded"
                       />
                     ) : isPDFFile(editingLabResult.fileType || editingLabResult.type) ? (
@@ -1470,9 +1451,9 @@ const LabResultsTab = ({ patient }) => {
                 <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                   <div className="flex items-center gap-3">
                     {editFile.type.startsWith('image/') ? (
-                      <img 
-                        src={editFilePreview} 
-                        alt="Preview" 
+                      <img
+                        src={editFilePreview}
+                        alt="Preview"
                         className="h-12 w-12 object-cover rounded"
                       />
                     ) : editFile.type === 'application/pdf' ? (

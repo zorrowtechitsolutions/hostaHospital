@@ -17,6 +17,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../../ui/button';
+import { CustomSelect } from '../../ui'; // ✅ added CustomSelect
 import { useRegisterDeviceMutation } from '../../../../app/service/device';
 import { getAuthUser } from '../../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
@@ -80,26 +81,17 @@ const EditableField = ({ label, name, value, onChange, placeholder, required, hi
 
 const EditableSelect = ({ label, name, value, onChange, options, required, hint }) => (
   <div className="mb-4 min-w-0">
-    <label
-      htmlFor={name}
-      className="block text-xs font-medium text-gray-600 mb-1"
-    >
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <select
-      id={name}
-      name={name}
+    {/* ✅ Reuses CustomSelect — same label/hint UX as the native select */}
+    <CustomSelect
+      label={label}
       value={value ?? ''}
-      onChange={onChange}
+      options={options}
+      onChange={(newValue) => {
+        onChange({ target: { name, value: newValue } });
+      }}
+      placeholder={`Select ${label.toLowerCase()}`}
       required={required}
-      className="w-full min-w-0 border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-gray-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]/30 focus:border-[#1C62A0] transition-all cursor-pointer"
-    >
-      {options.map(({ value: v, label: l }) => (
-        <option key={v} value={v} style={{ color: '#111' }}>
-          {l}
-        </option>
-      ))}
-    </select>
+    />
     {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
   </div>
 );
@@ -206,7 +198,6 @@ const RegisterDevicePage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [credentials, setCredentials] = useState(null);
 
-  // Kept for local preview UX only — not sent to backend (JSON contract)
   const [readerImageFile, setReaderImageFile] = useState(null);
   const [readerImagePreview, setReaderImagePreview] = useState(null);
   const [locationImageFile, setLocationImageFile] = useState(null);
@@ -291,7 +282,6 @@ const RegisterDevicePage = () => {
     }
 
     try {
-      // JSON payload (backend contract is JSON, not multipart)
       const payload = {
         hospitalId: Number(formData.hospitalId),
         deviceId: formData.deviceId.trim(),
@@ -300,7 +290,6 @@ const RegisterDevicePage = () => {
         deviceType: formData.deviceType,
       };
 
-      // Only include description if backend supports it
       if (formData.description?.trim()) {
         payload.description = formData.description.trim();
       }
@@ -333,7 +322,6 @@ const RegisterDevicePage = () => {
   if (credentials) {
     return (
       <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
-        {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <button
@@ -374,7 +362,6 @@ const RegisterDevicePage = () => {
 
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -519,7 +506,6 @@ const RegisterDevicePage = () => {
               <CardHeader icon={MapPin} title="Device Location" />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                {/* Location details */}
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Location</p>
@@ -540,7 +526,6 @@ const RegisterDevicePage = () => {
                   </p>
                 </div>
 
-                {/* Location image */}
                 <div className="min-w-0">
                   <input
                     ref={locationInputRef}

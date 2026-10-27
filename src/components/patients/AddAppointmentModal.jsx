@@ -4,6 +4,7 @@ import { Calendar, FileText } from "lucide-react";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import { Modal, Button, Avatar, Badge, Loader } from "../ui";
+import CustomSelect from "../ui/CustomSelect";
 import { showWarningToast } from "../ui/Toast";
 import { useGetDoctorsQuery } from "../../../app/service/doctorApi";
 
@@ -32,19 +33,15 @@ const toDisplayDate = (isoDate) => {
 
 /* =====================================================
    Helper: hide ONLY next-month cells
-   - Keeps all real current-month dates visible & clickable
-   - Hides trailing "1, 2, 3..." from the next month
    ===================================================== */
 const hideNextMonthCells = (instance) => {
   const container = instance?.calendarContainer;
   if (!container) return;
 
-  // Clear any previous hiding
   container
     .querySelectorAll(".flatpickr-day.hidden-next-month-row")
     .forEach((el) => el.classList.remove("hidden-next-month-row"));
 
-  // Hide every next-month cell individually
   container
     .querySelectorAll(".flatpickr-day.nextMonthDay")
     .forEach((el) => el.classList.add("hidden-next-month-row"));
@@ -107,6 +104,16 @@ const AddAppointmentModal = ({
         : [],
     }));
   }, [doctorsResponse]);
+
+  // ✅ Options for the doctor CustomSelect — string values for strict === match
+  const doctorOptions = useMemo(
+    () =>
+      doctorsList.map((doctor) => ({
+        value: String(doctor.id),
+        label: `${doctor.name} - ${doctor.department}`,
+      })),
+    [doctorsList]
+  );
 
   /* =====================================================
      Check if the selected doctor works on a given date
@@ -206,6 +213,8 @@ const AddAppointmentModal = ({
     });
   };
 
+  const isLoadingDocs = isLoadingDoctors || isFetchingDoctors;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -255,25 +264,19 @@ const AddAppointmentModal = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Doctor <span className="text-red-500">*</span>
             </label>
-            <select
-              required
-              value={formData.doctorId || ""}
-              onChange={handleDoctorSelect}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={isLoadingDoctors || isFetchingDoctors}
-            >
-              <option value="">
-                {isLoadingDoctors || isFetchingDoctors
-                  ? "Loading doctors..."
-                  : "Select Doctor"}
-              </option>
-              {doctorsList.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>
-                  {doctor.name} - {doctor.department}
-                </option>
-              ))}
-            </select>
-            {(isLoadingDoctors || isFetchingDoctors) && (
+            {/* ✅ Replaced native  with CustomSelect */}
+            <CustomSelect
+              hideLabel
+              value={formData.doctorId != null ? String(formData.doctorId) : ""}
+              options={doctorOptions}
+              placeholder={
+                isLoadingDocs ? "Loading doctors..." : "Select Doctor"
+              }
+              disabled={isLoadingDocs}
+              onChange={(value) => handleDoctorSelect({ target: { value } })}
+              className="[&>button]:border-gray-300 [&>button]:focus:ring-blue-500 [&>button]:focus:border-blue-500"
+            />
+            {isLoadingDocs && (
               <div className="mt-2 flex items-center gap-2">
                 <Loader size="small" />
                 <span className="text-xs text-gray-500">

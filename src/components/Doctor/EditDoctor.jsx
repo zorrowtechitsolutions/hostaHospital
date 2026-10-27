@@ -1,14 +1,15 @@
 // src/components/Doctor/EditDoctor.jsx - Complete Fixed Version with authId/hospitalId and password change
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  User, Mail, Phone, Calendar, MapPin, Lock, Image, 
+import {
+  User, Mail, Phone, Calendar, MapPin, Lock, Image,
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
   Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield
 } from 'lucide-react';
-import { 
-  Button, Input, Select, Textarea, Card, Alert, Loader 
+import {
+  Button, Input, Select, Textarea, Card, Alert, Loader
 } from '../ui';
+import CustomSelect from '../ui/CustomSelect'; // ✅ direct default import
 import DatePicker from '../ui/DatePicker';
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 import {
@@ -23,18 +24,26 @@ import { getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
 import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
 
+// ✅ Gender options — capitalized to match EditDoctor's existing submit convention
+// (handleSubmit does formData.gender?.toLowerCase())
+const GENDER_OPTIONS = [
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' }
+];
+
 // Helper function to get hospital ID
 const getHospitalId = () => {
   const storedHospitalId = localStorage.getItem('hospitalId');
   if (storedHospitalId) {
     return storedHospitalId;
   }
-  
+
   const authUser = getAuthUser();
   if (authUser?.hospitalId) {
     return authUser.hospitalId;
   }
-  
+
   return null;
 };
 
@@ -47,11 +56,11 @@ const getAuthId = () => {
 // Helper function to get full image URL with cache-busting
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  
+
   if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
     return `${imageKey}?t=${Date.now()}`;
   }
-  
+
   return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
 };
 
@@ -154,12 +163,12 @@ const ProfileSectionSkeleton = () => (
 );
 
 // SearchableDropdown Component with Lazy Loading
-const SearchableDropdownComponent = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdownComponent = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -226,14 +235,14 @@ const SearchableDropdownComponent = ({
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -248,7 +257,7 @@ const SearchableDropdownComponent = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No departments found
@@ -408,7 +417,7 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
         <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-          <Power className="h-5 w-5 text-blue-600" /> 
+          <Power className="h-5 w-5 text-blue-600" />
           Doctor Status
         </h3>
       </div>
@@ -419,8 +428,8 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
               {isActive ? 'Active' : 'Inactive'}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {isActive 
-                ? 'Doctor is currently active and can receive appointments' 
+              {isActive
+                ? 'Doctor is currently active and can receive appointments'
                 : 'Doctor is inactive and will not appear in search results'}
             </p>
           </div>
@@ -450,16 +459,16 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
 const EditDoctor = () => {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
-  
+
   const doctorId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
-  
+
   const hospitalId = getHospitalId();
   const authUser = getAuthUser();
   const authId = getAuthId();
   const hospitalName = authUser?.name || '';
 
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
+
   const {
     data: rolesData,
     isLoading: rolesLoading,
@@ -469,14 +478,24 @@ const EditDoctor = () => {
   }, {
     skip: !hospitalId
   });
-  
-  const rolesList = [
+
+  const rolesList = useMemo(() => [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
-  ];
-  
+  ], [rolesData, hospitalId]);
+
+  // ✅ Options for role CustomSelect — normalized to strings for strict ===
+  const roleOptions = useMemo(
+    () =>
+      rolesList.map(role => ({
+        value: String(role.id),
+        label: role.name || role.roleName || 'Unnamed role'
+      })),
+    [rolesList]
+  );
+
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
-  
+
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
@@ -486,7 +505,7 @@ const EditDoctor = () => {
       label: spec.name.toUpperCase()
     }));
   }, [specialitiesData]);
-  
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('basic');
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -497,9 +516,9 @@ const EditDoctor = () => {
   const [formInitialized, setFormInitialized] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
-  
+
   const [changeDoctorPassword] = useChangeDoctorPasswordMutation();
-  
+
   const [formData, setFormData] = useState({
     profileImage: null,
     imageUrl: null,
@@ -545,7 +564,7 @@ const EditDoctor = () => {
   const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
   });
-  
+
   const [updateDoctor] = useUpdateDoctorMutation();
 
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
@@ -617,7 +636,7 @@ const EditDoctor = () => {
 
   useEffect(() => {
     setFormInitialized(false);
-    
+
     setFormData({
       profileImage: null,
       imageUrl: null,
@@ -657,16 +676,16 @@ const EditDoctor = () => {
       bookingOpen: true,
       isActive: true
     });
-    
+
     setPreviewImage(null);
     setImageLoaded(false);
     setImageRefreshKey(Date.now());
     setErrors({});
-    
+
     if (doctorId) {
       refetch();
     }
-    
+
     return () => {
       setFormInitialized(false);
     };
@@ -674,23 +693,23 @@ const EditDoctor = () => {
 
   useEffect(() => {
     if (doctor && doctor.id && !formInitialized) {
-      const imageKey = 
+      const imageKey =
         doctor?.imageUrl ||
         doctor?.profileImage ||
         doctor?.image ||
         null;
-      
-      const country = countries.find(c => 
+
+      const country = countries.find(c =>
         c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
       );
-      
+
       const stateList = State.getStatesOfCountry(country?.isoCode || '');
-      const state = stateList.find(s => 
+      const state = stateList.find(s =>
         s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
       );
-      
+
       const schedule = getDefaultSchedule();
-      
+
       if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
         doctor.consultingOne.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -705,7 +724,7 @@ const EditDoctor = () => {
           }
         });
       }
-      
+
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
         doctor.consultingTwo.forEach(item => {
           const dayKey = item.day?.toLowerCase();
@@ -722,7 +741,7 @@ const EditDoctor = () => {
           }
         });
       }
-      
+
       const newFormData = {
         profileImage: imageKey,
         imageUrl: imageKey,
@@ -754,7 +773,8 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
-        roleId: doctor.roleId || "",
+        // ✅ keep roleId as a string throughout the form state
+        roleId: doctor.roleId != null ? String(doctor.roleId) : "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
         outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
@@ -762,21 +782,21 @@ const EditDoctor = () => {
         bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
         isActive: doctor.isActive ?? true
       };
-      
+
       setFormData(newFormData);
-      
+
       if (imageKey) {
         setPreviewImage(getFullImageUrl(imageKey));
         setImageRefreshKey(Date.now());
       }
-      
+
       if (country?.isoCode) {
         setAvailableStates(State.getStatesOfCountry(country.isoCode));
         if (state?.isoCode) {
           setAvailableCities(City.getCitiesOfState(country.isoCode, state.isoCode));
         }
       }
-      
+
       setFormInitialized(true);
     }
   }, [doctor, formInitialized, countries]);
@@ -793,42 +813,42 @@ const EditDoctor = () => {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     const imageError = validateImage(file);
     if (imageError) {
       setErrors(prev => ({ ...prev, profileImage: imageError }));
       showWarningToast(imageError, 3000);
       return;
     }
-    
+
     setErrors(prev => ({ ...prev, profileImage: '' }));
     setUploadProgress(10);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       setUploadProgress(30);
-      
+
       const uploaded = await uploadToS3(
-        file, 
+        file,
         formData.imageKey || null,
         Number(doctorId),
         "doctor"
       );
-      
+
       setUploadProgress(100);
-      
+
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
+
       setImageRefreshKey(Date.now());
-      
+
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 3000);
     } catch (error) {
@@ -949,7 +969,7 @@ const EditDoctor = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!hospitalId) {
       showErrorToast('❌ Hospital ID not found. Please log in again.');
       return;
@@ -1027,8 +1047,8 @@ const EditDoctor = () => {
         updatedDoctorData.appoimentCount = Number(formData.appointmentCount);
       }
 
-      if (formData.outDoorConsultingOpen && 
-          formData.outDoorConsultingClose && 
+      if (formData.outDoorConsultingOpen &&
+          formData.outDoorConsultingClose &&
           formData.outDoorConsultingPlace) {
         updatedDoctorData.outDoorConsulting = {
           time: {
@@ -1064,7 +1084,7 @@ const EditDoctor = () => {
             }
           ]
         };
-        
+
         await assignPermissions(payload).unwrap();
       }
 
@@ -1079,14 +1099,14 @@ const EditDoctor = () => {
 
     } catch (error) {
       console.error("Update Error:", error);
-      
+
       if (error.status === 409) {
         showErrorToast('Email already exists! Please use a different email address.');
       } else if (error.data?.error?.details?.length) {
         const validationMessages = error.data.error.details
           .map(detail => detail.message)
           .filter(Boolean);
-        
+
         showErrorToast(`❌ ${validationMessages.join(', ')}`);
       } else if (error.data?.error?.message) {
         showErrorToast(`❌ ${error.data.error.message}`);
@@ -1216,16 +1236,16 @@ const EditDoctor = () => {
                       <div className="relative">
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                           {previewImage ? (
-                            <img 
+                            <img
                               key={imageRefreshKey}
-                              src={previewImage} 
-                              alt="Profile" 
+                              src={previewImage}
+                              alt="Profile"
                               className="w-full h-full object-cover rounded-full"
                               onLoad={() => setImageLoaded(true)}
                               onError={() => setImageLoaded(false)}
                             />
                           ) : (
-                            <LazyProfileImage 
+                            <LazyProfileImage
                               key={imageRefreshKey}
                               imageKey={formData.profileImage}
                               firstName={formData.firstName}
@@ -1236,9 +1256,9 @@ const EditDoctor = () => {
                           )}
                         </div>
                         {(previewImage || formData.profileImage) && (
-                          <button 
-                            type="button" 
-                            onClick={removeImage} 
+                          <button
+                            type="button"
+                            onClick={removeImage}
                             className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
                           >
                             <X className="h-3 w-3" />
@@ -1281,23 +1301,23 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="First Name" 
-                      name="firstName" 
-                      icon={User} 
-                      placeholder="Enter first name" 
-                      value={formData.firstName} 
-                      onChange={(e) => handleFieldChange('firstName', e.target.value)} 
-                      required 
+                    <Input
+                      label="First Name"
+                      name="firstName"
+                      icon={User}
+                      placeholder="Enter first name"
+                      value={formData.firstName}
+                      onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                      required
                     />
-                    <Input 
-                      label="Last Name" 
-                      name="lastName" 
-                      icon={User} 
-                      placeholder="Enter last name" 
-                      value={formData.lastName} 
-                      onChange={(e) => handleFieldChange('lastName', e.target.value)} 
-                      required 
+                    <Input
+                      label="Last Name"
+                      name="lastName"
+                      icon={User}
+                      placeholder="Enter last name"
+                      value={formData.lastName}
+                      onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                      required
                     />
                   </div>
 
@@ -1318,14 +1338,14 @@ const EditDoctor = () => {
                         />
                       </div>
                     </div>
-                    <Input 
-                      label="Experience (years)" 
-                      name="experience" 
-                      icon={Briefcase} 
-                      placeholder="e.g., 5" 
-                      value={formData.experience} 
-                      onChange={(e) => handleFieldChange('experience', e.target.value)} 
-                      required 
+                    <Input
+                      label="Experience (years)"
+                      name="experience"
+                      icon={Briefcase}
+                      placeholder="e.g., 5"
+                      value={formData.experience}
+                      onChange={(e) => handleFieldChange('experience', e.target.value)}
+                      required
                     />
                   </div>
 
@@ -1347,37 +1367,32 @@ const EditDoctor = () => {
                       getOptionValue={(option) => option.value}
                       optionKey={(option) => option.id}
                     />
-                    
-                    <Input 
-                      label="Specialist" 
-                      name="specialist" 
-                      icon={IdCard} 
-                      placeholder="e.g., Cardiologist (Optional)" 
-                      value={formData.specialist} 
-                      onChange={(e) => handleFieldChange('specialist', e.target.value)} 
+
+                    <Input
+                      label="Specialist"
+                      name="specialist"
+                      icon={IdCard}
+                      placeholder="e.g., Cardiologist (Optional)"
+                      value={formData.specialist}
+                      onChange={(e) => handleFieldChange('specialist', e.target.value)}
                     />
                   </div>
 
+                  {/* ✅ Assign Role — CustomSelect */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Assign Role <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                      <select
-                        name="roleId"
-                        value={formData.roleId}
-                        onChange={(e) => handleFieldChange('roleId', e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                      >
-                        <option value="">Select a role</option>
-                        {rolesList.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name || role.roleName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <CustomSelect
+                      label="Assign Role"
+                      icon={Shield}
+                      value={
+                        formData.roleId !== null && formData.roleId !== undefined
+                          ? String(formData.roleId)
+                          : ''
+                      }
+                      options={roleOptions}
+                      onChange={(value) => handleFieldChange('roleId', value)}
+                      placeholder="Select a role"
+                      required
+                    />
                     {formData.roleId && (
                       <div className="mt-2">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
@@ -1388,50 +1403,50 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Qualification" 
-                      name="qualification" 
-                      icon={GraduationCap} 
-                      placeholder="e.g., MBBS, MD" 
-                      value={formData.qualification} 
-                      onChange={(e) => handleFieldChange('qualification', e.target.value)} 
-                      required 
+                    <Input
+                      label="Qualification"
+                      name="qualification"
+                      icon={GraduationCap}
+                      placeholder="e.g., MBBS, MD"
+                      value={formData.qualification}
+                      onChange={(e) => handleFieldChange('qualification', e.target.value)}
+                      required
                     />
-                    <Input 
-                      label="Fees ($)" 
-                      name="fees" 
-                      type="number" 
-                      icon={DollarSign} 
-                      placeholder="0.00" 
-                      value={formData.fees} 
-                      onChange={(e) => handleFieldChange('fees', e.target.value)} 
-                      required 
+                    <Input
+                      label="Fees ($)"
+                      name="fees"
+                      type="number"
+                      icon={DollarSign}
+                      placeholder="0.00"
+                      value={formData.fees}
+                      onChange={(e) => handleFieldChange('fees', e.target.value)}
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Phone Number" 
-                      name="phoneNumber" 
-                      icon={Phone} 
-                      placeholder="+1 234 567 8900" 
-                      value={formData.phoneNumber} 
-                      onChange={(e) => handleFieldChange('phoneNumber', e.target.value)} 
-                      required 
+                    <Input
+                      label="Phone Number"
+                      name="phoneNumber"
+                      icon={Phone}
+                      placeholder="+1 234 567 8900"
+                      value={formData.phoneNumber}
+                      onChange={(e) => handleFieldChange('phoneNumber', e.target.value)}
+                      required
                     />
-                    <Input 
-                      label="Email Address" 
-                      name="email" 
-                      type="email" 
-                      icon={Mail} 
-                      placeholder="doctor@example.com" 
-                      value={formData.email} 
-                      onChange={(e) => handleFieldChange('email', e.target.value)} 
-                      required 
+                    <Input
+                      label="Email Address"
+                      name="email"
+                      type="email"
+                      icon={Mail}
+                      placeholder="doctor@example.com"
+                      value={formData.email}
+                      onChange={(e) => handleFieldChange('email', e.target.value)}
+                      required
                     />
                   </div>
 
-                  {/* Date of Birth & Gender — DatePicker for DOB */}
+                  {/* Date of Birth & Gender — DatePicker for DOB, CustomSelect for Gender */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1448,25 +1463,26 @@ const EditDoctor = () => {
                         />
                       </div>
                     </div>
-                    <Select 
-                      label="Gender" 
-                      name="gender" 
-                      options={['Male', 'Female', 'Other']} 
-                      placeholder="Select Gender" 
-                      value={formData.gender} 
-                      onChange={(value) => handleFieldChange('gender', value)} 
-                      required 
+                    {/* ✅ Replaced shared Select with CustomSelect */}
+                    <CustomSelect
+                      label="Gender"
+                      icon={Users}
+                      value={formData.gender}
+                      options={GENDER_OPTIONS}
+                      onChange={(value) => handleFieldChange('gender', value)}
+                      placeholder="Select Gender"
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Registration Number" 
-                      name="registrationNumber" 
-                      icon={IdCard} 
-                      placeholder="Medical license number" 
-                      value={formData.registrationNumber} 
-                      onChange={(e) => handleFieldChange('registrationNumber', e.target.value)} 
+                    <Input
+                      label="Registration Number"
+                      name="registrationNumber"
+                      icon={IdCard}
+                      placeholder="Medical license number"
+                      value={formData.registrationNumber}
+                      onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
                     />
                   </div>
 
@@ -1474,7 +1490,7 @@ const EditDoctor = () => {
                     <label className="block text-sm font-medium text-gray-700">
                       Known Languages <span className="text-red-500">*</span>
                     </label>
-                    
+
                     {formData.knownLanguages.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {formData.knownLanguages.map(lang => (
@@ -1487,7 +1503,7 @@ const EditDoctor = () => {
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="relative">
                       <button
                         type="button"
@@ -1499,7 +1515,7 @@ const EditDoctor = () => {
                         </span>
                         <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       {isLanguageDropdownOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setIsLanguageDropdownOpen(false)} />
@@ -1521,13 +1537,13 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  <Textarea 
-                    label="About" 
-                    name="about" 
-                    rows={3} 
-                    placeholder="Write a brief description..." 
-                    value={formData.about} 
-                    onChange={(e) => handleFieldChange('about', e.target.value)} 
+                  <Textarea
+                    label="About"
+                    name="about"
+                    rows={3}
+                    placeholder="Write a brief description..."
+                    value={formData.about}
+                    onChange={(e) => handleFieldChange('about', e.target.value)}
                   />
 
                   <div className="mt-6 pt-4 border-t border-gray-200">
@@ -1542,7 +1558,7 @@ const EditDoctor = () => {
                         icon={MapPin}
                         required={true}
                       />
-                      
+
                       <SearchableDropdownComponent
                         label="State"
                         options={availableStates}
@@ -1568,19 +1584,19 @@ const EditDoctor = () => {
                       />
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <Input 
-                          label="Place" 
-                          name="place" 
-                          placeholder="Place/Locality" 
-                          value={formData.place} 
-                          onChange={(e) => handleFieldChange('place', e.target.value)} 
+                        <Input
+                          label="Place"
+                          name="place"
+                          placeholder="Place/Locality"
+                          value={formData.place}
+                          onChange={(e) => handleFieldChange('place', e.target.value)}
                         />
-                        <Input 
-                          label="Pincode" 
-                          name="pincode" 
-                          placeholder="Postal code" 
-                          value={formData.pincode} 
-                          onChange={(e) => handleFieldChange('pincode', e.target.value)} 
+                        <Input
+                          label="Pincode"
+                          name="pincode"
+                          placeholder="Postal code"
+                          value={formData.pincode}
+                          onChange={(e) => handleFieldChange('pincode', e.target.value)}
                         />
                       </div>
                     </div>
@@ -1589,39 +1605,39 @@ const EditDoctor = () => {
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <Input 
-                        label="Display Name" 
-                        name="displayName" 
-                        icon={User} 
-                        placeholder="How name appears on profile" 
-                        value={formData.displayName} 
-                        onChange={(e) => handleFieldChange('displayName', e.target.value)} 
+                      <Input
+                        label="Display Name"
+                        name="displayName"
+                        icon={User}
+                        placeholder="How name appears on profile"
+                        value={formData.displayName}
+                        onChange={(e) => handleFieldChange('displayName', e.target.value)}
                       />
-                      
+
                       <div className="relative">
-                        <Input 
-                          label="New Password" 
-                          name="password" 
-                          type={showPassword ? "text" : "password"} 
-                          icon={Lock} 
-                          placeholder="Leave blank to keep current" 
-                          value={formData.password} 
-                          onChange={(e) => handleFieldChange('password', e.target.value)} 
+                        <Input
+                          label="New Password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          icon={Lock}
+                          placeholder="Leave blank to keep current"
+                          value={formData.password}
+                          onChange={(e) => handleFieldChange('password', e.target.value)}
                         />
                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                           {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
                       </div>
-                      
+
                       <div className="relative">
-                        <Input 
-                          label="Confirm New Password" 
-                          name="confirmPassword" 
-                          type={showConfirmPassword ? "text" : "password"} 
-                          icon={Lock} 
-                          placeholder="Confirm new password" 
-                          value={formData.confirmPassword} 
-                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)} 
+                        <Input
+                          label="Confirm New Password"
+                          name="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          icon={Lock}
+                          placeholder="Confirm new password"
+                          value={formData.confirmPassword}
+                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
                         />
                         <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                           {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -1631,8 +1647,8 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-gray-200">
-                    <StatusToggle 
-                      status={formData.isActive} 
+                    <StatusToggle
+                      status={formData.isActive}
                       onToggle={toggleDoctorStatus}
                       disabled={isSubmitting}
                     />
@@ -1643,7 +1659,7 @@ const EditDoctor = () => {
               {activeTab === 'professional' && (
                 <div className="p-6 space-y-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
-                  
+
                   <div className="space-y-4">
                     {weekDays.map((day) => (
                       <DayScheduleRowComponent
@@ -1655,11 +1671,11 @@ const EditDoctor = () => {
                     ))}
                   </div>
 
-                  {/* OUT DOOR CONSULTING SECTION - FIXED */}
+                  {/* OUT DOOR CONSULTING SECTION */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Home className="h-5 w-5" /> Out Door Consulting
                   </h3>
-                  
+
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Consulting Time Section */}
@@ -1714,7 +1730,7 @@ const EditDoctor = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Video className="h-5 w-5" /> Booking Status
                   </h3>
-                  
+
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>

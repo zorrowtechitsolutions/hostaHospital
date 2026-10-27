@@ -1,7 +1,7 @@
 // src/components/super-admin/hospitals/HospitalAmbulancesList.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
+import {
   Plus,
   Download,
   Eye,
@@ -20,10 +20,11 @@ import DeleteModal from '../../patients/DeleteModel';
 import AddAmbulanceModal from '../../Ambulance/AddAmbulanceModal';
 import EditAmbulanceModal from '../../Ambulance/EditAmbulanceModal';
 import ViewAmbulanceModal from '../../Ambulance/ViewAmbulanceModal';
-import { 
+import {
   Badge
 } from '../../ui';
-import { 
+import CustomSelect from '../../ui/CustomSelect';
+import {
   useGetAmbulanceQuery,
   useCreateAmbulanceMutation,
   useUpdateAmbulanceMutation,
@@ -31,18 +32,21 @@ import {
 } from '../../../../app/service/ambulance';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 
-// Import socket
 import { socket } from '../../../socket/socket';
 import { registerAmbulanceEvents, unregisterAmbulanceEvents } from '../../../socket/ambulanceEvents';
 
+// Styling override so CustomSelect matches the border-gray-200 rounded-md / text-sm filter look
+const FILTER_SELECT_CLASS =
+  "w-auto min-w-[180px] [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:text-gray-600 [&>button]:focus:ring-1 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
+
 // ================= PAGINATION COMPONENT =================
-const Pagination = ({ 
-  currentPage, 
-  totalPages, 
-  onPageChange, 
-  totalItems, 
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
   itemsPerPage,
-  isLoading 
+  isLoading
 }) => {
   if (totalPages <= 1) return null;
 
@@ -56,7 +60,7 @@ const Pagination = ({
         <span className="font-medium text-gray-700">{endItem}</span> of{' '}
         <span className="font-medium text-gray-700">{totalItems}</span> ambulances
       </div>
-      
+
       <div className="flex items-center gap-2">
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -103,6 +107,12 @@ const ambulanceTypes = [
   "Motorcycle Ambulance",
   "Boat Ambulance",
   "Emergency Response Vehicle"
+];
+
+// ✅ Options for the Vehicle Type CustomSelect — "all" is the sentinel
+const VEHICLE_TYPE_OPTIONS = [
+  { value: 'all', label: 'All Vehicle Types' },
+  ...ambulanceTypes.map((type) => ({ value: type, label: type })),
 ];
 
 // Skeleton Loading Component
@@ -161,59 +171,52 @@ const AmbulanceSkeleton = () => {
 
 const HospitalAmbulancesList = () => {
   const navigate = useNavigate();
-  const { id } = useParams(); // ✅ Get hospital ID from URL params
+  const { id } = useParams();
   const fileInputRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('grid'); 
+  const [viewMode, setViewMode] = useState('grid');
   const [typeFilter, setTypeFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
-  
-  // Modal States
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
-  
-  // Menu state for grid view
+
   const [activeMenu, setActiveMenu] = useState(null);
-  
-  // ✅ Pagination state - server-side
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('ambulanceViewMode', viewMode);
   }, [viewMode]);
 
-  // Helper function to format ambulance ID for display only
   const formatAmbulanceId = (ambulanceId) => {
     if (!ambulanceId) return '#AMB0000';
     const numericId = parseInt(ambulanceId) || 0;
     return `#AMB${String(numericId).padStart(4, '0')}`;
   };
 
-  // ✅ API Hooks - Passing hospitalId, pagination and filter parameters
-  const { 
-    data: ambulancesResponse, 
-    isLoading: loading, 
+  const {
+    data: ambulancesResponse,
+    isLoading: loading,
     refetch,
     isFetching
   } = useGetAmbulanceQuery({
-    hospitalId: id, // ✅ Pass the hospital ID from URL params
+    hospitalId: id,
     page: currentPage,
     limit: itemsPerPage,
     search_query: searchTerm?.trim() || undefined,
     vehicleType: typeFilter !== 'all' ? typeFilter : undefined,
     country: countryFilter || undefined,
   });
-  
+
   const [createAmbulance] = useCreateAmbulanceMutation();
   const [updateAmbulance] = useUpdateAmbulanceMutation();
   const [deleteAmbulance] = useDeleteAmbulanceMutation();
 
-  // Register socket event listeners
   useEffect(() => {
     registerAmbulanceEvents({
       onRegistered: async (data) => {
@@ -235,7 +238,6 @@ const HospitalAmbulancesList = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       registerAmbulanceEvents({
@@ -265,10 +267,9 @@ const HospitalAmbulancesList = () => {
     };
   }, [refetch]);
 
-  // Transform API response - SEPARATE display ID from database ID
   const transformAmbulanceData = (ambulanceList) => {
     if (!ambulanceList || !Array.isArray(ambulanceList)) return [];
-    
+
     return ambulanceList.map((ambulance, index) => ({
       id: ambulance.id,
       formattedId: formatAmbulanceId(ambulance.id || index + 1),
@@ -282,19 +283,15 @@ const HospitalAmbulancesList = () => {
     }));
   };
 
-  // ✅ No client-side filtering - use data directly from API
   const ambulancesData = transformAmbulanceData(ambulancesResponse?.data || []);
-  
-  // ✅ Get pagination from API response
+
   const totalItems = ambulancesResponse?.pagination?.totalItems || 0;
   const totalPages = ambulancesResponse?.pagination?.totalPages || 1;
 
-  // ✅ Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, countryFilter]);
 
-  // Handle click outside for menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (activeMenu !== null && !event.target.closest('.menu-container')) {
@@ -305,7 +302,6 @@ const HospitalAmbulancesList = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
 
-  // CRUD Handlers with API
   const handleAddAmbulance = async (newAmbulance) => {
     try {
       const ambulanceToAdd = {
@@ -313,11 +309,11 @@ const HospitalAmbulancesList = () => {
         phone: newAmbulance.phone,
         vehicleType: newAmbulance.vehicleType,
         address: newAmbulance.address,
-        hospitalId: Number(id), // ✅ Pass hospital ID
+        hospitalId: Number(id),
       };
-      
+
       await createAmbulance(ambulanceToAdd).unwrap();
-      
+
       showSuccessToast(`${newAmbulance.serviceName} has been added successfully!`, 3000);
       await refetch();
       setShowAddModal(false);
@@ -333,14 +329,14 @@ const HospitalAmbulancesList = () => {
         phone: updatedAmbulance.phone,
         vehicleType: updatedAmbulance.vehicleType,
         address: updatedAmbulance.address,
-        hospitalId: Number(id), // ✅ Pass hospital ID
+        hospitalId: Number(id),
       };
-      
-      await updateAmbulance({ 
-        id: updatedAmbulance.id, 
-        data: updateData 
+
+      await updateAmbulance({
+        id: updatedAmbulance.id,
+        data: updateData
       }).unwrap();
-      
+
       showSuccessToast(`${updatedAmbulance.serviceName} has been updated successfully!`, 3000);
       await refetch();
       setShowEditModal(false);
@@ -354,7 +350,7 @@ const HospitalAmbulancesList = () => {
     if (selectedAmbulance) {
       try {
         await deleteAmbulance(selectedAmbulance.id).unwrap();
-        
+
         showSuccessToast(`${selectedAmbulance.serviceName} has been deleted successfully!`, 3000);
         await refetch();
         setShowDeleteModal(false);
@@ -365,7 +361,6 @@ const HospitalAmbulancesList = () => {
     }
   };
 
-  // Menu handlers
   const toggleMenu = (ambulanceId, e) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === ambulanceId ? null : ambulanceId);
@@ -402,11 +397,11 @@ const HospitalAmbulancesList = () => {
       'Created At': amb.createdAt,
       'Last Updated': amb.lastUpdated
     }));
-    
+
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const exportFileDefaultName = `ambulances_export_${new Date().toISOString().split('T')[0]}.json`;
-    
+
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
@@ -424,7 +419,7 @@ const HospitalAmbulancesList = () => {
         const importedData = JSON.parse(e.target.result);
         let successCount = 0;
         let errorCount = 0;
-        
+
         for (const amb of importedData) {
           try {
             await createAmbulance({
@@ -438,26 +433,25 @@ const HospitalAmbulancesList = () => {
                 place: amb.Place || amb.address?.place,
                 pincode: amb.Pincode || amb.address?.pincode
               },
-              hospitalId: Number(id), // ✅ Pass hospital ID
+              hospitalId: Number(id),
             }).unwrap();
             successCount++;
           } catch (error) {
             errorCount++;
           }
         }
-        
+
         showSuccessToast(`Successfully imported ${successCount} ambulances! ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`, 4000);
         refetch();
       } catch (error) {
         showErrorToast('Error parsing JSON file. Please make sure it\'s a valid JSON file.', 3000);
       }
     };
-    
+
     reader.readAsText(file);
     event.target.value = '';
   };
 
-  // ✅ Loading state with skeleton
   if (loading) {
     return <AmbulanceSkeleton />;
   }
@@ -488,7 +482,7 @@ const HospitalAmbulancesList = () => {
 
       {/* Search, Filters and Action Buttons Row */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap">
+        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
           <div className="relative flex-1 max-w-sm">
             <input
               type="text"
@@ -512,37 +506,35 @@ const HospitalAmbulancesList = () => {
             </button>
           </div>
 
-          <select
+          {/* ✅ Replaced native  with CustomSelect */}
+          <CustomSelect
+            hideLabel
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0]"
-          >
-            <option value="all">All Vehicle Types</option>
-            {ambulanceTypes.map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
+            options={VEHICLE_TYPE_OPTIONS}
+            onChange={(value) => setTypeFilter(value)}
+            className={FILTER_SELECT_CLASS}
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
           <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button 
-              onClick={() => setViewMode('grid')} 
+            <button
+              onClick={() => setViewMode('grid')}
               className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
             >
               <LayoutGrid size={16} />
             </button>
-            <button 
-              onClick={() => setViewMode('list')} 
+            <button
+              onClick={() => setViewMode('list')}
               className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
             >
               <List size={16} />
             </button>
           </div>
 
-          <button 
-            onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+          <button
+            onClick={handleRefresh}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             title="Refresh"
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
@@ -557,8 +549,8 @@ const HospitalAmbulancesList = () => {
             <Download size={16} />
           </button>
 
-          <button 
-            onClick={() => setShowAddModal(true)} 
+          <button
+            onClick={() => setShowAddModal(true)}
             className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Plus size={16} /> Add Ambulance
@@ -566,7 +558,7 @@ const HospitalAmbulancesList = () => {
         </div>
       </div>
 
-      {/* ✅ GRID VIEW - Using server-side paginated data */}
+      {/* ✅ GRID VIEW */}
       {viewMode === 'grid' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -625,7 +617,7 @@ const HospitalAmbulancesList = () => {
             ))}
           </div>
 
-          {/* ✅ Pagination for Grid View - Using server-side totalPages */}
+          {/* ✅ Pagination for Grid View */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -637,7 +629,7 @@ const HospitalAmbulancesList = () => {
         </>
       )}
 
-      {/* ✅ LIST VIEW - Using server-side paginated data */}
+      {/* ✅ LIST VIEW */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
@@ -673,8 +665,8 @@ const HospitalAmbulancesList = () => {
                           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                             <Truck className="w-4 h-4 text-[#1C62A0]" />
                           </div>
-                          <span 
-                            onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }} 
+                          <span
+                            onClick={() => { setSelectedAmbulance(ambulance); setShowViewModal(true); }}
                             className="font-medium text-gray-800 cursor-pointer hover:text-[#1C62A0]"
                           >
                             {ambulance.serviceName}

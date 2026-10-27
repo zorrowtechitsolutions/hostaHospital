@@ -12,7 +12,34 @@ import {
   useCreateFingerprintEnrollmentMutation,
 } from '../../../../../app/service/fingerprint';
 import { useGetDevicesQuery } from '../../../../../app/service/device';
+import CustomSelect from '../../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
+
+// ✅ Static Finger Position options — value is kebab-case, label is Title Case
+// (IMPORTANT: this file's API uses kebab-case values, unlike FingerprintEditModal which uses Title Case)
+const FINGER_POSITION_OPTIONS = [
+  { value: 'right-thumb', label: 'Right Thumb' },
+  { value: 'left-thumb', label: 'Left Thumb' },
+  { value: 'right-index', label: 'Right Index' },
+  { value: 'left-index', label: 'Left Index' },
+  { value: 'right-middle', label: 'Right Middle' },
+  { value: 'left-middle', label: 'Left Middle' },
+  { value: 'right-ring', label: 'Right Ring' },
+  { value: 'left-ring', label: 'Left Ring' },
+  { value: 'right-little', label: 'Right Little' },
+  { value: 'left-little', label: 'Left Little' },
+];
+
+// ✅ Static Quality options
+const QUALITY_OPTIONS = [
+  { value: 'Good', label: 'Good' },
+  { value: 'Fair', label: 'Fair' },
+  { value: 'Poor', label: 'Poor' },
+];
+
+// Styling override so CustomSelect matches the inputCls (h-11 border-gray-200 rounded-lg focus:ring-blue-500/40)
+const FORM_SELECT_CLASS =
+  "w-full [&>button]:h-11 [&>button]:border-gray-200 [&>button]:rounded-lg [&>button]:px-3.5 [&>button]:text-sm [&>button]:text-gray-800 [&>button]:focus:ring-2 [&>button]:focus:ring-blue-500/40 [&>button]:focus:border-blue-400";
 
 const STEPS = [
   { id: 1, label: 'Employee Details' },
@@ -255,6 +282,22 @@ const FingerprintEnrollmentModal = () => {
     [devicesResponse]
   );
 
+  // ✅ Options for the Device CustomSelect — "" sentinel + dynamic devices
+  const deviceSelectOptions = useMemo(() => {
+    let placeholder;
+    if (devicesLoading) placeholder = 'Loading fingerprint devices...';
+    else if (fingerprintDevices.length === 0) placeholder = 'No fingerprint devices available';
+    else placeholder = 'Select fingerprint device';
+
+    return [
+      { value: '', label: placeholder },
+      ...fingerprintDevices.map((d) => ({
+        value: String(d.deviceId),
+        label: `${d.deviceName} — ${d.location}`,
+      })),
+    ];
+  }, [devicesLoading, fingerprintDevices]);
+
   const resolvedMember = useMemo(() => {
     if (stateMember) return stateMember;
     if (!parsedKey) return null;
@@ -476,54 +519,37 @@ const FingerprintEnrollmentModal = () => {
               </Field>
 
               <Field label="Device" required>
-                <select
-                  value={form.device}
-                  onChange={update('device')}
-                  className={inputCls}
+                {/* ✅ Replaced native  with CustomSelect */}
+                <CustomSelect
+                  hideLabel
+                  value={form.device ? String(form.device) : ''}
+                  options={deviceSelectOptions}
+                  onChange={(value) => update('device')({ target: { value } })}
                   disabled={devicesLoading}
-                >
-                  <option value="">
-                    {devicesLoading ? 'Loading fingerprint devices...'
-                      : fingerprintDevices.length === 0 ? 'No fingerprint devices available'
-                      : 'Select fingerprint device'}
-                  </option>
-                  {fingerprintDevices.map((d) => (
-                    <option key={d.id ?? d._id ?? d.deviceId} value={d.deviceId}>
-                      {d.deviceName} — {d.location}
-                    </option>
-                  ))}
-                </select>
+                  className={FORM_SELECT_CLASS}
+                />
               </Field>
 
               <Field label="Finger Position" required>
-                <select
+                {/* ✅ Replaced native  with CustomSelect */}
+                <CustomSelect
+                  hideLabel
                   value={fingerPosition}
-                  onChange={(e) => setFingerPosition(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="right-thumb">Right Thumb</option>
-                  <option value="left-thumb">Left Thumb</option>
-                  <option value="right-index">Right Index</option>
-                  <option value="left-index">Left Index</option>
-                  <option value="right-middle">Right Middle</option>
-                  <option value="left-middle">Left Middle</option>
-                  <option value="right-ring">Right Ring</option>
-                  <option value="left-ring">Left Ring</option>
-                  <option value="right-little">Right Little</option>
-                  <option value="left-little">Left Little</option>
-                </select>
+                  options={FINGER_POSITION_OPTIONS}
+                  onChange={(value) => setFingerPosition(value)}
+                  className={FORM_SELECT_CLASS}
+                />
               </Field>
 
               <Field label="Quality">
-                <select
+                {/* ✅ Replaced native  with CustomSelect */}
+                <CustomSelect
+                  hideLabel
                   value={quality}
-                  onChange={(e) => setQuality(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="Good">Good</option>
-                  <option value="Fair">Fair</option>
-                  <option value="Poor">Poor</option>
-                </select>
+                  options={QUALITY_OPTIONS}
+                  onChange={(value) => setQuality(value)}
+                  className={FORM_SELECT_CLASS}
+                />
               </Field>
             </div>
 

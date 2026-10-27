@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Button, Loader } from '../ui';
+import CustomSelect from '../ui/CustomSelect';
 import {
   showAddToast,
   showUpdateToast,
@@ -73,25 +74,36 @@ const PageHeader = ({ title, subtitle, onBack }) => (
 
 const FormField = ({ field, value, onChange, onBlur, error, touched }) => {
   const { label, name, type, placeholder, required, options, gridCols } = field;
-  
+
+  // ✅ Select branch uses CustomSelect (renders its own label + error internally)
+  if (type === 'select') {
+    const normalizedOptions = (options || [])
+      .filter(opt => opt !== '')
+      .map(opt => ({ value: opt, label: opt }));
+
+    return (
+      <div className={gridCols || ""}>
+        <CustomSelect
+          label={label}
+          required={required}
+          value={value}
+          options={normalizedOptions}
+          placeholder={`Select ${label}`}
+          onChange={(val) => onChange({ target: { name, value: val } })}
+          onBlur={() => onBlur({ target: { name, value } })}
+          error={error}
+          touched={touched}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={gridCols || ""}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      {type === 'select' ? (
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          onBlur={onBlur}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt || `Select ${label}`}</option>
-          ))}
-        </select>
-      ) : type === 'textarea' ? (
+      {type === 'textarea' ? (
         <textarea
           name={name}
           rows={3}
@@ -152,7 +164,7 @@ const AddEditLabResults = () => {
       setIsLoading(true);
       const existingResults = getStorageData(STORAGE_KEY, []);
       const result = existingResults.find(r => r.id === id);
-      
+
       if (result) {
         setFormData({
           testId: result.testId || "",
@@ -194,7 +206,7 @@ const AddEditLabResults = () => {
         if (!phoneRegex.test(value)) return 'Please enter a valid mobile number';
         return '';
       case 'email':
-        if (value && !/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value)) 
+        if (value && !/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(value))
           return 'Please enter a valid email address';
         return '';
       case 'testName':
@@ -206,7 +218,7 @@ const AddEditLabResults = () => {
         if (!isPositiveNumber(value)) return 'Amount must be a positive number';
         return '';
       case 'age':
-        if (value && (isNaN(value) || value <= 0 || value > 120)) 
+        if (value && (isNaN(value) || value <= 0 || value > 120))
           return 'Age must be between 1-120 years';
         return '';
       default:
@@ -220,7 +232,7 @@ const AddEditLabResults = () => {
     const paid = parseFloat(updatedFormData.paid) || 0;
     const grandTotal = amount - discount;
     const balance = grandTotal - paid;
-    
+
     return {
       grandTotal: grandTotal.toFixed(2),
       balance: balance.toFixed(2)
@@ -230,14 +242,14 @@ const AddEditLabResults = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     const updatedData = { ...formData, [name]: value };
-    
+
     if (['amount', 'discount', 'paid'].includes(name)) {
       const totals = calculateTotals(updatedData);
       setFormData({ ...updatedData, ...totals });
     } else {
       setFormData(updatedData);
     }
-    
+
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -263,10 +275,10 @@ const AddEditLabResults = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const touchedFields = Object.fromEntries(REQUIRED_FIELDS.map(field => [field, true]));
     setTouched(touchedFields);
-    
+
     if (!validateForm()) {
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
@@ -276,11 +288,11 @@ const AddEditLabResults = () => {
     }
 
     setIsSubmitting(true);
-    
+
     try {
       const existingResults = getStorageData(STORAGE_KEY, []);
       const newIndex = existingResults.length;
-      
+
       const newLabResult = {
         id: isEditMode ? id : generateId('LAB-', newIndex + 1),
         testId: isEditMode ? formData.testId : generateId('LDH', newIndex + 1),
@@ -290,7 +302,7 @@ const AddEditLabResults = () => {
         referredBy: formData.referredBy,
         testName: formData.testName,
         status: formData.status,
-        patientId: isEditMode 
+        patientId: isEditMode
           ? (existingResults.find(r => r.id === id)?.patientId || generateId('PT', newIndex + 1))
           : generateId('PT', newIndex + 1),
         age: formData.age,
@@ -311,17 +323,17 @@ const AddEditLabResults = () => {
         discount: parseFloat(formData.discount) || 0,
         paid: parseFloat(formData.paid) || 0,
         balance: parseFloat(formData.balance) || 0,
-        investigations: formData.resultValue 
-          ? [{ 
-              name: formData.testName, 
-              result: formData.resultValue, 
-              refLow: formData.referenceRange?.split('-')[0] || 0, 
-              refHigh: formData.referenceRange?.split('-')[1] || 0, 
-              unit: formData.unit 
-            }] 
+        investigations: formData.resultValue
+          ? [{
+              name: formData.testName,
+              result: formData.resultValue,
+              refLow: formData.referenceRange?.split('-')[0] || 0,
+              refHigh: formData.referenceRange?.split('-')[1] || 0,
+              unit: formData.unit
+            }]
           : []
       };
-      
+
       if (isEditMode) {
         const updatedResults = existingResults.map(r => r.id === id ? newLabResult : r);
         setStorageData(STORAGE_KEY, updatedResults);
@@ -346,7 +358,7 @@ const AddEditLabResults = () => {
           }
         );
       }
-      
+
       navigate('/lab/results');
     } catch (error) {
       showErrorToast('Failed to save lab result. Please try again.', 3000);
@@ -359,7 +371,7 @@ const AddEditLabResults = () => {
 
   if (isLoading) return <Loader centered text="Loading lab result data..." />;
 
-  // Form Fields Configuration
+  // Form Fields Configuration — unchanged: options are still plain strings
   const formFields = [
     { label: "Patient Name", name: "patientName", type: "text", placeholder: "Enter patient name", required: true, gridCols: "md:col-span-2" },
     { label: "Age", name: "age", type: "number", placeholder: "Enter age" },
@@ -398,7 +410,7 @@ const AddEditLabResults = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Patient & Test Information */}
-          <SectionCard 
+          <SectionCard
             icon={
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -422,7 +434,7 @@ const AddEditLabResults = () => {
           </SectionCard>
 
           {/* Test Results */}
-          <SectionCard 
+          <SectionCard
             icon={
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -444,7 +456,7 @@ const AddEditLabResults = () => {
           </SectionCard>
 
           {/* Payment Details */}
-          <SectionCard 
+          <SectionCard
             icon={
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -464,7 +476,7 @@ const AddEditLabResults = () => {
                   touched={touched[field.name]}
                 />
               ))}
-              
+
               {/* Calculated Totals */}
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <div className="space-y-2">
@@ -500,11 +512,11 @@ const AddEditLabResults = () => {
           {/* Form Actions */}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-            <Button 
-              type="submit" 
-              variant="primary" 
-              disabled={isSubmitting} 
-              loading={isSubmitting} 
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isSubmitting}
+              loading={isSubmitting}
               icon={Save}
             >
               {isSubmitting ? 'Saving...' : (isEditMode ? 'Update Lab Result' : 'Save Lab Result')}

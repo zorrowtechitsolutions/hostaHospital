@@ -14,6 +14,7 @@ import {
 import { useGetDevicesQuery } from '../../../../app/service/device';
 import { getAuthUser } from '../../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
+import { CustomSelect } from '../../ui'; // ✅ added CustomSelect
 
 // ------------------------------------------------------------
 // Step indicator
@@ -256,7 +257,6 @@ const FingerprintEnrollmentModal = () => {
   const hospitalId =
     auth?.hospitalId || localStorage.getItem('hospitalId') || null;
 
-  // Fallback fetch (skipped if member came from route state)
   const { data: doctorsResponse, isLoading: doctorsLoading } = useGetDoctorsQuery(
     { page: 1, limit: 1000 },
     { skip: !!stateMember }
@@ -266,13 +266,11 @@ const FingerprintEnrollmentModal = () => {
     { skip: !!stateMember }
   );
 
-  // Enrollment lookup (to find the enrollment by employee)
   const { data: enrollmentsResponse } = useGetAllFingerprintEnrollmentsQuery(
     { hospitalId, status: 'Active', limit: 1000 },
     { skip: !hospitalId || !!stateMember }
   );
 
-  // Fetch all active devices for this hospital
   const { data: devicesResponse, isLoading: devicesLoading } = useGetDevicesQuery(
     {
       hospitalId,
@@ -283,7 +281,6 @@ const FingerprintEnrollmentModal = () => {
     }
   );
 
-  // Client-side filter: keep only fingerprint devices
   const fingerprintDevices = useMemo(() => {
     return (devicesResponse?.data || []).filter(
       (device) =>
@@ -437,17 +434,7 @@ const FingerprintEnrollmentModal = () => {
     setStatus('scanning');
 
     try {
-      // -------------------------------------------------
-      // ⚠️ Replace this mock with your real fingerprint
-      // scanner SDK call. The real flow should be:
-      //
-      //   1. fingerprintSDK.startCapture({ deviceId: form.device })
-      //   2. fingerprintSDK.extractTemplate(result.image)
-      //   3. use the returned template string below
-      //
-      // The placeholder string here is NOT a real template —
-      // it's just so you can test the request shape end-to-end.
-      // -------------------------------------------------
+      // Replace this mock with your real fingerprint scanner SDK call.
       const fingerprintTemplate =
         'MOCK_TEMPLATE::' + Date.now(); // replace with real SDK template
 
@@ -459,13 +446,12 @@ const FingerprintEnrollmentModal = () => {
         employeeType: resolvedMember.type,
         employeeName: resolvedMember.name,
         department: resolvedMember.department,
-        deviceId: form.device,               // e.g. "FIN-FLOOR-02"
-        fingerPosition: fingerPosition,      // e.g. "right-thumb"
+        deviceId: form.device,
+        fingerPosition: fingerPosition,
         fingerprintTemplate: fingerprintTemplate,
-        quality: quality,                    // "Good" | "Fair" | "Poor"
+        quality: quality,
         attempts: 1,
       };
-
 
       await createEnrollment(payload).unwrap();
 
@@ -495,9 +481,6 @@ const FingerprintEnrollmentModal = () => {
       ? status === 'complete'
       : false;
 
-  // ----------------------------------------------------------
-  // Loading / not found
-  // ----------------------------------------------------------
   if (isLoadingMember) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex items-center justify-center">
@@ -512,7 +495,6 @@ const FingerprintEnrollmentModal = () => {
   if (!resolvedMember) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6">
-        {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <button
@@ -557,12 +539,8 @@ const FingerprintEnrollmentModal = () => {
     );
   }
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -595,7 +573,6 @@ const FingerprintEnrollmentModal = () => {
         </p>
       </div>
 
-      {/* Card wrapper */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-6xl mx-auto">
         <Stepper currentStep={step} />
 
@@ -630,64 +607,67 @@ const FingerprintEnrollmentModal = () => {
                 <input type="text" value={form.department} readOnly className={readonlyCls} placeholder="—" />
               </Field>
 
+              {/* ✅ Device — CustomSelect */}
               <Field label="Device" required>
-                <select
+                <CustomSelect
+                  label=""
                   value={form.device}
-                  onChange={update('device')}
-                  className={inputCls}
-                  disabled={devicesLoading}
-                >
-                  <option value="">
-                    {devicesLoading
+                  options={fingerprintDevices.map((device) => ({
+                    value: device.deviceId,
+                    label: `${device.deviceName} — ${device.location}`
+                  }))}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, device: value }))
+                  }
+                  placeholder={
+                    devicesLoading
                       ? 'Loading fingerprint devices...'
                       : fingerprintDevices.length === 0
                       ? 'No fingerprint devices available'
-                      : 'Select fingerprint device'}
-                  </option>
-
-                  {fingerprintDevices.map((device) => (
-                    <option
-                      key={device.id ?? device._id ?? device.deviceId}
-                      value={device.deviceId}
-                    >
-                      {device.deviceName} — {device.location}
-                    </option>
-                  ))}
-                </select>
+                      : 'Select fingerprint device'
+                  }
+                  disabled={devicesLoading}
+                />
               </Field>
 
+              {/* ✅ Finger Position — CustomSelect */}
               <Field label="Finger Position" required>
-                <select
+                <CustomSelect
+                  label=""
                   value={fingerPosition}
-                  onChange={(e) => setFingerPosition(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="right-thumb">Right Thumb</option>
-                  <option value="left-thumb">Left Thumb</option>
-                  <option value="right-index">Right Index</option>
-                  <option value="left-index">Left Index</option>
-                  <option value="right-middle">Right Middle</option>
-                  <option value="left-middle">Left Middle</option>
-                  <option value="right-ring">Right Ring</option>
-                  <option value="left-ring">Left Ring</option>
-                  <option value="right-little">Right Little</option>
-                  <option value="left-little">Left Little</option>
-                </select>
+                  options={[
+                    { value: 'right-thumb', label: 'Right Thumb' },
+                    { value: 'left-thumb', label: 'Left Thumb' },
+                    { value: 'right-index', label: 'Right Index' },
+                    { value: 'left-index', label: 'Left Index' },
+                    { value: 'right-middle', label: 'Right Middle' },
+                    { value: 'left-middle', label: 'Left Middle' },
+                    { value: 'right-ring', label: 'Right Ring' },
+                    { value: 'left-ring', label: 'Left Ring' },
+                    { value: 'right-little', label: 'Right Little' },
+                    { value: 'left-little', label: 'Left Little' }
+                  ]}
+                  onChange={(value) => setFingerPosition(value)}
+                  placeholder="Select finger position"
+                />
               </Field>
 
+              {/* ✅ Quality — CustomSelect */}
               <Field
                 label="Quality"
                 hint="Estimated capture quality from the scanner"
               >
-                <select
+                <CustomSelect
+                  label=""
                   value={quality}
-                  onChange={(e) => setQuality(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="Good">Good</option>
-                  <option value="Fair">Fair</option>
-                  <option value="Poor">Poor</option>
-                </select>
+                  options={[
+                    { value: 'Good', label: 'Good' },
+                    { value: 'Fair', label: 'Fair' },
+                    { value: 'Poor', label: 'Poor' }
+                  ]}
+                  onChange={(value) => setQuality(value)}
+                  placeholder="Select quality"
+                />
               </Field>
             </div>
 

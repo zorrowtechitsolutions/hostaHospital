@@ -1,7 +1,8 @@
 // EmailComposer.js
 // Complete email composer with enhanced draft workflow UI/UX and rich text editor
+// + Real-time email events
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Bold,
@@ -18,7 +19,7 @@ import { getHospitalId } from '../../utils/auth';
 import { useGetDoctorsQuery } from '../../../app/service/doctorApi';
 import { useGetStaffQuery } from '../../../app/service/staffApi';
 import { useGetTemplatesQuery } from '../../../app/service/emailtemplate';
-import { 
+import {
   useSendEmailMutation,
   useSaveDraftMutation,
   useSendDraftMutation,
@@ -30,7 +31,14 @@ import {
   useUnarchiveEmailMutation,
 } from '../../../app/service/emailnotification';
 import { showErrorToast, showSuccessToast, showInfoToast } from '../ui/Toast';
-import { Button } from '../ui/button'; // Import Button component
+import { Button } from '../ui/button';
+import CustomSelect from '../ui/CustomSelect';
+
+// ✅ Real-time email notification events
+import {
+  registerEmailNotificationEvents,
+  unregisterEmailNotificationEvents,
+} from '../../socket/emailNotificationEvents';
 
 // ============================================
 // SKELETON LOADING COMPONENTS
@@ -237,42 +245,42 @@ const EmailComposer = () => {
 
   const hospitalId = getHospitalId();
 
-  const { 
-    data: doctorsData, 
+  const {
+    data: doctorsData,
     isLoading: doctorsLoading,
     error: doctorsError,
-    refetch: refetchDoctors 
-  } = useGetDoctorsQuery({ 
+    refetch: refetchDoctors
+  } = useGetDoctorsQuery({
     hospitalId: hospitalId,
-    limit: 100 
+    limit: 100
   });
 
-  const { 
-    data: staffData, 
+  const {
+    data: staffData,
     isLoading: staffLoading,
     error: staffError,
-    refetch: refetchStaff 
-  } = useGetStaffQuery({ 
+    refetch: refetchStaff
+  } = useGetStaffQuery({
     hospitalId: hospitalId,
-    limit: 100 
+    limit: 100
   });
 
-  const { 
-    data: rolesData, 
+  const {
+    data: rolesData,
     isLoading: rolesLoading,
     error: rolesError,
-    refetch: refetchRoles 
+    refetch: refetchRoles
   } = useGetRolesQuery({
     hospitalId: hospitalId,
     page: 1,
     limit: 100,
   });
 
-  const { 
-    data: templatesData, 
+  const {
+    data: templatesData,
     isLoading: templatesLoading,
     error: templatesError,
-    refetch: refetchTemplates 
+    refetch: refetchTemplates
   } = useGetTemplatesQuery({
     hospitalId: hospitalId,
     status: 'Active',
@@ -289,6 +297,43 @@ const EmailComposer = () => {
   const [archiveEmailApi] = useArchiveEmailMutation();
   const [unarchiveEmailApi] = useUnarchiveEmailMutation();
 
+  /* ============================================================
+     ✅ REAL-TIME EMAIL NOTIFICATION EVENTS
+     ============================================================ */
+  useEffect(() => {
+    registerEmailNotificationEvents({
+      onDraftSaved: ({ message: msg }) => {
+        // Don't toast our own save — handleSaveDraft already does that.
+      },
+
+      onDraftSent: ({ message: msg }) => {
+        if (msg) showSuccessToast(msg, 3000);
+      },
+
+      onQueued: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 3000);
+      },
+
+      onSending: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 3000);
+      },
+
+      onSuccess: ({ message: msg }) => {
+        if (msg) showSuccessToast(msg, 3000);
+      },
+
+      onPartial: ({ message: msg }) => {
+        if (msg) showInfoToast(msg, 4000);
+      },
+
+      onFailed: ({ message: msg }) => {
+        if (msg) showErrorToast(msg, 4000);
+      },
+    });
+
+    return () => unregisterEmailNotificationEvents();
+  }, []);
+
   const isLoading = doctorsLoading || staffLoading || rolesLoading || templatesLoading;
 
   // Define doctors and staff after the queries
@@ -296,6 +341,21 @@ const EmailComposer = () => {
   const staff = staffData?.data || staffData || [];
   const roles = rolesData?.data || rolesData?.admin || [];
   const templates = templatesData?.data || templatesData || [];
+
+  // ✅ Options for the template CustomSelect — built from `templates` (dynamic)
+  const templateOptions = useMemo(
+    () =>
+      templates.map((t) => {
+        const id = t.id || t._id;
+        return {
+          value: String(id),
+          label: t.category
+            ? `${t.templateName} (${t.category})`
+            : t.templateName,
+        };
+      }),
+    [templates]
+  );
 
   // Save and restore selection functions
   const saveSelection = () => {
@@ -374,7 +434,6 @@ const EmailComposer = () => {
     setMessage(email.message || '');
     setSelectedTemplateId(email.templateId || '');
 
-    // Update editor content
     requestAnimationFrame(() => {
       if (editorRef.current) {
         editorRef.current.innerHTML = email.message || '';
@@ -423,7 +482,6 @@ const EmailComposer = () => {
 
     loadEmailForEditing(emailToEdit);
 
-    // Remove the navigation state so refresh/back doesn't reopen the draft
     navigate(location.pathname, {
       replace: true,
       state: null,
@@ -460,13 +518,13 @@ const EmailComposer = () => {
     if (person.roleId) return Number(person.roleId);
     if (person.role?.id) return Number(person.role.id);
     if (person.role?._id) return Number(person.role._id);
-    
-    const roleName = person.roleName || person.role?.name || person.role?.roleName || 
+
+    const roleName = person.roleName || person.role?.name || person.role?.roleName ||
                      person.position || person.designation || person.specialty || '';
-    
+
     if (roleName && roles.length > 0) {
       const foundRole = roles.find(
-        role => String(role.name || role.roleName || '').toLowerCase() === 
+        role => String(role.name || role.roleName || '').toLowerCase() ===
                 String(roleName).toLowerCase()
       );
       if (foundRole) return Number(foundRole.id || foundRole._id);
@@ -549,20 +607,19 @@ const EmailComposer = () => {
     const value = e.target.value;
     const templateId = value ? Number(value) : '';
     setSelectedTemplateId(templateId);
-    
+
     if (!templateId) return;
-    
+
     const selectedTemplate = templates.find(
       t => Number(t.id || t._id) === templateId
     );
-    
+
     if (selectedTemplate) {
       if (selectedTemplate.subject) {
         setSubject(selectedTemplate.subject);
       }
       if (selectedTemplate.message) {
         setMessage(selectedTemplate.message);
-        // Update editor content
         requestAnimationFrame(() => {
           if (editorRef.current) {
             editorRef.current.innerHTML = selectedTemplate.message;
@@ -670,13 +727,13 @@ const EmailComposer = () => {
       await sendDraftApi({
         id: id,
       }).unwrap();
-      
+
       showSuccessToast('Email sent successfully!');
-      
+
       if (isCurrentDraft) {
         resetAll();
       }
-      
+
     } catch (error) {
       const errorMessage = error?.data?.message || error?.message || 'Failed to send draft.';
       showErrorToast(errorMessage);
@@ -769,11 +826,11 @@ const EmailComposer = () => {
 
   const handleDeleteDraft = async (id) => {
     if (!window.confirm('Are you sure you want to delete this draft?')) return;
-    
+
     try {
       await deleteDraftApi(id).unwrap();
       showSuccessToast('Draft deleted successfully!');
-      
+
       if (draftId === id) {
         resetAll();
       }
@@ -786,7 +843,7 @@ const EmailComposer = () => {
     try {
       const result = await duplicateEmailApi(id).unwrap();
       showSuccessToast('Email duplicated successfully!');
-      
+
       if (result.data && result.data.status === 'draft') {
         loadEmailForEditing(result.data);
       }
@@ -833,7 +890,7 @@ const EmailComposer = () => {
       <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-2xl mx-auto mt-8">
         <p className="text-red-600 font-medium">Failed to load data</p>
         <p className="text-sm text-red-500 mt-1">Please check your connection and try again</p>
-        <button 
+        <button
           onClick={() => {
             refetchDoctors();
             refetchStaff();
@@ -874,7 +931,6 @@ const EmailComposer = () => {
         </div>
       </div>
 
-      {/* Navigation Bar - Compose Only with View History Button */}
       <div className="flex items-center justify-between mb-6 border-b border-slate-200">
         <button
           onClick={() => navigate('/email-history')}
@@ -884,10 +940,8 @@ const EmailComposer = () => {
         </button>
       </div>
 
-      {/* Compose Content */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-8 space-y-6">
-          {/* Recipients Selection */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-200 bg-slate-50/50">
               <div className="flex items-center gap-2">
@@ -1109,7 +1163,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Compose Email */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-200 bg-slate-50/50">
               <div className="flex items-center gap-2">
@@ -1123,72 +1176,41 @@ const EmailComposer = () => {
               </div>
             </div>
 
-            {/* Email content area with proper p-5 wrapper */}
             <div className="p-5 space-y-4">
-              {/* Email Template */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Email Template
                 </label>
 
+                {/* ✅ Replaced native with CustomSelect.
+                    flex-1 wrapper keeps the "Applied" badge aligned to the right. */}
                 <div className="flex items-center gap-3">
-                  <select
-                    value={selectedTemplateId}
-                    onChange={handleTemplateSelect}
-                    className="
-                      w-full
-                      border border-slate-300
-                      rounded-lg
-                      px-4 py-2.5
-                      text-sm
-                      text-slate-700
-                      bg-white
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-indigo-400
-                      focus:border-transparent
-                    "
-                  >
-                    <option value="">-- Select Template --</option>
-
-                    {templates.length > 0 ? (
-                      templates.map((template) => {
-                        const id = template.id || template._id;
-
-                        return (
-                          <option key={id} value={id}>
-                            {template.templateName}
-                            {template.category
-                              ? ` (${template.category})`
-                              : ""}
-                          </option>
-                        );
-                      })
-                    ) : (
-                      <option value="" disabled>
-                        No templates available
-                      </option>
-                    )}
-                  </select>
+                  <div className="flex-1">
+                    <CustomSelect
+                      hideLabel
+                      value={selectedTemplateId ? String(selectedTemplateId) : ''}
+                      options={templateOptions}
+                      placeholder={
+                        templates.length === 0
+                          ? 'No templates available'
+                          : '-- Select Template --'
+                      }
+                      disabled={templates.length === 0}
+                      onChange={(value) =>
+                        handleTemplateSelect({ target: { value } })
+                      }
+                      className="[&>button]:border-slate-300 [&>button]:py-2.5 [&>button]:focus:ring-indigo-400 [&>button]:focus:border-indigo-400"
+                    />
+                  </div>
 
                   {selectedTemplateId && (
-                    <span className="
-                      shrink-0
-                      text-xs
-                      text-emerald-600
-                      bg-emerald-50
-                      border border-emerald-200
-                      px-2.5 py-1.5
-                      rounded-full
-                      whitespace-nowrap
-                    ">
+                    <span className="shrink-0 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-full whitespace-nowrap">
                       Applied: {getSelectedTemplateName()}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Subject */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Subject <span className="text-red-500">*</span>
@@ -1198,31 +1220,18 @@ const EmailComposer = () => {
                   type="text"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="
-                    w-full
-                    border border-slate-300
-                    rounded-lg
-                    px-4 py-2.5
-                    text-sm
-                    focus:outline-none
-                    focus:ring-2
-                    focus:ring-indigo-400
-                    focus:border-transparent
-                  "
+                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                   placeholder="Enter subject..."
                   required
                 />
               </div>
 
-              {/* Message */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Message <span className="text-red-500">*</span>
                 </label>
 
-                {/* Rich Text Editor */}
                 <div className="border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-400">
-                  {/* Rich Text Toolbar */}
                   <div className="h-11 px-3 flex items-center gap-4 border-b border-slate-200 bg-slate-50">
                     <span className="text-xs font-medium text-slate-600">Paragraph</span>
                     <ChevronDown size={14} className="text-slate-400" />
@@ -1330,7 +1339,6 @@ const EmailComposer = () => {
                     />
                   </div>
 
-                  {/* Rich Text Editor */}
                   <div
                     ref={editorRef}
                     contentEditable
@@ -1382,7 +1390,6 @@ const EmailComposer = () => {
         </div>
 
         <div className="col-span-12 lg:col-span-4 space-y-5">
-          {/* Email Summary */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Email Summary</h3>
@@ -1429,7 +1436,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Selected Recipients */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
               <h3 className="text-sm font-semibold text-slate-700">Selected Recipients</h3>
@@ -1475,7 +1481,6 @@ const EmailComposer = () => {
             </div>
           </div>
 
-          {/* Email Preview */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Email Preview</h3>
@@ -1530,13 +1535,11 @@ const EmailComposer = () => {
             </div>
           )}
 
-          {/* Actions */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/50">
               <h3 className="text-sm font-semibold text-slate-700">Actions</h3>
             </div>
             <div className="p-4 space-y-3">
-              {/* Send Email Button - Using Button component with green gradient */}
               <Button
                 onClick={sendEmail}
                 variant="primary"
@@ -1555,7 +1558,6 @@ const EmailComposer = () => {
                 {isEditingDraft ? 'Send Draft' : 'Send Email'}
               </Button>
 
-              {/* Save Draft Button */}
               <button
                 onClick={saveDraft}
                 disabled={isSavingDraft || totalRecipients === 0 || !subject.trim() || !message.trim()}
@@ -1624,8 +1626,8 @@ const EmailComposer = () => {
               </button>
 
               <div className="text-xs text-slate-400 text-center pt-1">
-                {totalRecipients > 0 
-                  ? `${totalRecipients} recipient(s) ready${isEditingDraft ? ' (editing draft)' : ''}` 
+                {totalRecipients > 0
+                  ? `${totalRecipients} recipient(s) ready${isEditingDraft ? ' (editing draft)' : ''}`
                   : 'No recipients selected'}
               </div>
             </div>

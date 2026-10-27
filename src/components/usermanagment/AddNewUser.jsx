@@ -19,6 +19,8 @@ import {
   Card
 } from '../ui';
 
+import CustomSelect from '../ui/CustomSelect'; // ✅ Added import
+
 import {
   showSuccessToast,
   showErrorToast,
@@ -87,6 +89,20 @@ const AddNewUser = () => {
     )
   ];
 
+  // ✅ Build options for CustomSelect
+  const userTypeOptions = [
+    { value: 'doctor', label: 'Doctor' },
+    { value: 'staff', label: 'Staff' },
+  ];
+
+  const roleOptions = [
+    { value: '', label: 'Select a role' },
+    ...rolesList.map((role) => ({
+      value: String(role.id),
+      label: role.name || role.roleName,
+    })),
+  ];
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target)) {
@@ -114,8 +130,8 @@ const AddNewUser = () => {
     }
   };
 
-  const handleRoleTypeChange = (e) => {
-    const type = e.target.value;
+  // ✅ Updated to accept value directly (from CustomSelect)
+  const handleRoleTypeChange = (type) => {
     setSelectedRoleType(type);
     setFormData(prev => ({
       ...prev,
@@ -124,6 +140,20 @@ const AddNewUser = () => {
     }));
     setSelectedDoctors([]);
     setSelectedStaff([]);
+  };
+
+  // ✅ Updated to accept value directly (from CustomSelect)
+  const handleRoleChange = (roleId) => {
+    setFormData(prev => ({
+      ...prev,
+      roleId: roleId
+    }));
+    if (errors.roleId) {
+      setErrors(prev => ({
+        ...prev,
+        roleId: ''
+      }));
+    }
   };
 
   const handleDoctorCheckbox = (doctorId) => {
@@ -348,60 +378,34 @@ const AddNewUser = () => {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* User Type Select */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  User Type <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedRoleType}
-                    onChange={handleRoleTypeChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white appearance-none"
-                  >
-                    <option value="doctor">Doctor</option>
-                    <option value="staff">Staff</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    {selectedRoleType === 'doctor' ? (
-                      <Stethoscope size={18} className="text-gray-400" />
-                    ) : (
-                      <Briefcase size={18} className="text-gray-400" />
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* User Type Select - CustomSelect */}
+              <CustomSelect
+                label="User Type"
+                value={selectedRoleType}
+                options={userTypeOptions}
+                onChange={handleRoleTypeChange}
+                placeholder="Select user type"
+                required
+              />
 
-              {/* Assign Role */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assign Role <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <select
-                    name="roleId"
-                    value={formData.roleId}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                  >
-                    <option value="">Select a role</option>
-                    {rolesList.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name || role.roleName}
-                      </option>
-                    ))}
-                  </select>
+              {/* Assign Role - CustomSelect */}
+              <CustomSelect
+                label="Assign Role"
+                value={formData.roleId}
+                options={roleOptions}
+                onChange={handleRoleChange}
+                placeholder="Select a role"
+                error={errors.roleId}
+                touched={!!errors.roleId}
+                required
+              />
+              {formData.roleId && (
+                <div className="-mt-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                    {getRoleNameById(formData.roleId)}
+                  </span>
                 </div>
-                {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
-                {formData.roleId && (
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
-                      {getRoleNameById(formData.roleId)}
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Select Doctors / Staff */}
               <div>

@@ -21,6 +21,7 @@ export { Checkbox } from './CheckBox';
 export { RadioGroup } from './RadioGroup';
 export { Pagination } from './Pagination';
 export { default as DatePicker } from "./DatePicker"; 
+export { default as CustomSelect } from "./CustomSelect";
 
 
 // ---------- Fixed lines: source files use "export default" ----------

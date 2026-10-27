@@ -7,6 +7,7 @@ import {
   RefreshCcw, Ban, CheckCircle2, Calendar, Clock,
 } from 'lucide-react';
 import { Button } from '../../../ui';
+import CustomSelect from '../../../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../../app/service/S3';
@@ -20,6 +21,16 @@ import {
   useActivateRfidCardAssignmentMutation,
 } from '../../../../../app/service/accesscard';
 import { useGetDevicesQuery } from '../../../../../app/service/device';
+
+// ✅ Static Card Status options — labels preserve the emoji prefix from the original
+const CARD_STATUS_OPTIONS = [
+  { value: 'Active', label: '🟢 Active' },
+  { value: 'Inactive', label: '🔴 Inactive' },
+];
+
+// Styling override so CustomSelect matches the h-11 / border-gray-200 / rounded-lg form fields
+const FORM_SELECT_CLASS =
+  "w-full [&>button]:h-11 [&>button]:border-gray-200 [&>button]:rounded-lg [&>button]:pl-4 [&>button]:pr-10 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
 const resolveDoctorName = (doc) => {
   if (!doc) return 'N/A';
@@ -212,6 +223,29 @@ const AssignAccessCard = () => {
       setDeviceId(existingAssignment.deviceId || '');
     }
   }, [existingAssignment]);
+
+  // ✅ Options for the RFID Device CustomSelect — "" is a real selectable option (no device)
+  const deviceSelectOptions = useMemo(() => {
+    let placeholder;
+    if (!hospitalId) placeholder = 'Hospital context missing';
+    else if (devicesLoading) placeholder = 'Loading RFID devices…';
+    else if (rfidDevices.length === 0) placeholder = 'No RFID devices available';
+    else placeholder = 'Select RFID device (optional)';
+
+    return [
+      { value: '', label: placeholder },
+      ...rfidDevices.map((device) => ({
+        value: String(device.deviceId),
+        label: `${device.deviceName} — ${device.location}`,
+      })),
+    ];
+  }, [hospitalId, devicesLoading, rfidDevices]);
+
+  // ✅ Options for the read-only Hospital CustomSelect (single option)
+  const hospitalOptions = useMemo(
+    () => [{ value: hospitalName, label: hospitalName }],
+    [hospitalName]
+  );
 
   const validate = () => {
     const next = {};
@@ -465,30 +499,15 @@ const AssignAccessCard = () => {
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">RFID Device</label>
-              <div className="relative">
-                <select
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
-                  disabled={devicesLoading || !hospitalId}
-                  className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {!hospitalId
-                      ? 'Hospital context missing'
-                      : devicesLoading
-                      ? 'Loading RFID devices…'
-                      : rfidDevices.length === 0
-                      ? 'No RFID devices available'
-                      : 'Select RFID device (optional)'}
-                  </option>
-                  {rfidDevices.map((device) => (
-                    <option key={device.id ?? device._id ?? device.deviceId} value={device.deviceId}>
-                      {device.deviceName} — {device.location}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDownIcon />
-              </div>
+              {/* ✅ Replaced native  with CustomSelect */}
+              <CustomSelect
+                hideLabel
+                value={deviceId ? String(deviceId) : ''}
+                options={deviceSelectOptions}
+                onChange={(value) => setDeviceId(value)}
+                disabled={devicesLoading || !hospitalId}
+                className={FORM_SELECT_CLASS}
+              />
               {!devicesLoading && hospitalId && rfidDevices.length === 0 && (
                 <p className="text-xs text-gray-400 mt-1">
                   No RFID devices found for this hospital. Register one from the hospital's Devices page first.
@@ -499,33 +518,29 @@ const AssignAccessCard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Card Status</label>
-                <div className="relative">
-                  <select
-                    value={cardStatus}
-                    onChange={(e) => setCardStatus(e.target.value)}
-                    className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none"
-                  >
-                    <option value="Active">🟢 Active</option>
-                    <option value="Inactive">🔴 Inactive</option>
-                  </select>
-                  <ChevronDownIcon />
-                </div>
+                {/* ✅ Replaced native  with CustomSelect */}
+                <CustomSelect
+                  hideLabel
+                  value={cardStatus}
+                  options={CARD_STATUS_OPTIONS}
+                  onChange={(value) => setCardStatus(value)}
+                  className={FORM_SELECT_CLASS}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                   Hospital <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={hospitalName}
-                    onChange={() => {}}
-                    className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none"
-                  >
-                    <option value={hospitalName}>{hospitalName}</option>
-                  </select>
-                  <ChevronDownIcon />
-                </div>
+                {/* ✅ Replaced read-only single-option  with disabled CustomSelect */}
+                <CustomSelect
+                  hideLabel
+                  value={hospitalName}
+                  options={hospitalOptions}
+                  onChange={() => {}}
+                  disabled
+                  className={FORM_SELECT_CLASS}
+                />
               </div>
             </div>
 
@@ -624,15 +639,6 @@ const DetailRow = ({ icon, label, value }) => (
   </div>
 );
 
-const ChevronDownIcon = () => (
-  <svg
-    className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
+// NOTE: ChevronDownIcon helper removed — CustomSelect renders its own caret
 
 export default AssignAccessCard;

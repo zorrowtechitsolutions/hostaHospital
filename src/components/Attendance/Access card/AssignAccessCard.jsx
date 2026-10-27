@@ -6,7 +6,7 @@ import {
   Mail, Phone, Briefcase, Trash2, IdCard, AlertCircle,
   RefreshCcw, Ban, CheckCircle2, Calendar, Clock,
 } from 'lucide-react';
-import { Button } from '../../ui';
+import { Button, CustomSelect } from '../../ui'; // ✅ added CustomSelect
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import {
   Avatar as ShadcnAvatar,
@@ -126,7 +126,6 @@ const AssignAccessCard = () => {
   const [deactivateCard, { isLoading: isDeactivating }] = useDeactivateRfidCardAssignmentMutation();
   const [activateCard, { isLoading: isActivating }] = useActivateRfidCardAssignmentMutation();
 
-  // Fetch existing card assignment for this member
   const {
     data: existingAssignments,
     isLoading: isLoadingAssignments,
@@ -142,9 +141,6 @@ const AssignAccessCard = () => {
 
   const existingAssignment = existingAssignments?.data?.[0] || null;
 
-  // ----------------------------------------------------------
-  // Device query — fetch active devices, keep only RFID
-  // ----------------------------------------------------------
   const { data: devicesResponse, isLoading: devicesLoading } =
     useGetDevicesQuery(
       {
@@ -163,9 +159,6 @@ const AssignAccessCard = () => {
     );
   }, [devicesResponse]);
 
-  // ----------------------------------------------------------
-  // Fallback: fetch lists if member not passed through state
-  // ----------------------------------------------------------
   const { data: doctorsResponse } = useGetDoctorsQuery(
     { page: 1, limit: 1000 },
     { skip: !!passedMember }
@@ -233,7 +226,6 @@ const AssignAccessCard = () => {
     }
   }, [memberKey, passedMember, doctorsResponse, staffResponse, hospitalId]);
 
-  // Pre-fill card UID, status and device if existing assignment
   useEffect(() => {
     if (existingAssignment?.cardNumber) {
       setCardUid(existingAssignment.cardNumber);
@@ -278,7 +270,6 @@ const AssignAccessCard = () => {
     setSaving(true);
     try {
       if (existingAssignment) {
-        // Update existing assignment
         await updateRfidCard({
           id: existingAssignment.id,
           body: {
@@ -293,7 +284,6 @@ const AssignAccessCard = () => {
           2500
         );
       } else {
-        // Create new assignment
         await assignRfidCard({
           hospitalId: member.hospitalId || hospitalId,
           employeeId: member.id,
@@ -370,9 +360,6 @@ const AssignAccessCard = () => {
 
   const handleCancel = () => navigate(-1);
 
-  // ----------------------------------------------------------
-  // Loading / empty guard
-  // ----------------------------------------------------------
   if (!member) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center p-6">
@@ -396,9 +383,6 @@ const AssignAccessCard = () => {
   const hasExistingCard = Boolean(existingAssignment);
   const isCardActive = existingAssignment?.status === 'Active';
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Header */}
@@ -529,7 +513,6 @@ const AssignAccessCard = () => {
           </div>
 
           <div className="p-5 space-y-5">
-            {/* Existing Card Info */}
             {hasExistingCard && (
               <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -603,37 +586,25 @@ const AssignAccessCard = () => {
               )}
             </div>
 
-            {/* Device Selection — RFID only */}
+            {/* ✅ Device Selection — RFID only (CustomSelect) */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                RFID Device
-              </label>
-              <div className="relative">
-                <select
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
-                  disabled={devicesLoading}
-                  className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {devicesLoading
-                      ? 'Loading RFID devices…'
-                      : rfidDevices.length === 0
-                      ? 'No RFID devices available'
-                      : 'Select RFID device (optional)'}
-                  </option>
-
-                  {rfidDevices.map((device) => (
-                    <option
-                      key={device.id ?? device._id ?? device.deviceId}
-                      value={device.deviceId}
-                    >
-                      {device.deviceName} — {device.location}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDownIcon />
-              </div>
+              <CustomSelect
+                label="RFID Device"
+                value={deviceId}
+                options={rfidDevices.map((device) => ({
+                  value: device.deviceId,
+                  label: `${device.deviceName} — ${device.location}`
+                }))}
+                onChange={(value) => setDeviceId(value)}
+                placeholder={
+                  devicesLoading
+                    ? 'Loading RFID devices…'
+                    : rfidDevices.length === 0
+                    ? 'No RFID devices available'
+                    : 'Select RFID device (optional)'
+                }
+                disabled={devicesLoading}
+              />
 
               {!devicesLoading && rfidDevices.length === 0 && (
                 <p className="text-xs text-gray-400 mt-1">
@@ -643,37 +614,31 @@ const AssignAccessCard = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ✅ Card Status — CustomSelect */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Card Status
-                </label>
-                <div className="relative">
-                  <select
-                    value={cardStatus}
-                    onChange={(e) => setCardStatus(e.target.value)}
-                    className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none"
-                  >
-                    <option value="Active">🟢 Active</option>
-                    <option value="Inactive">🔴 Inactive</option>
-                  </select>
-                  <ChevronDownIcon />
-                </div>
+                <CustomSelect
+                  label="Card Status"
+                  value={cardStatus}
+                  options={[
+                    { value: 'Active', label: '🟢 Active' },
+                    { value: 'Inactive', label: '🔴 Inactive' }
+                  ]}
+                  onChange={(value) => setCardStatus(value)}
+                  placeholder="Select status"
+                />
               </div>
 
+              {/* ✅ Hospital — CustomSelect (single read-only option) */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Hospital <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={hospitalName}
-                    onChange={() => {}}
-                    className="w-full h-11 pl-4 pr-10 border border-gray-200 rounded-lg outline-none text-gray-700 text-sm bg-white cursor-pointer focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none"
-                  >
-                    <option value={hospitalName}>{hospitalName}</option>
-                  </select>
-                  <ChevronDownIcon />
-                </div>
+                <CustomSelect
+                  label="Hospital"
+                  value={hospitalName}
+                  options={[{ value: hospitalName, label: hospitalName }]}
+                  onChange={() => {}}
+                  placeholder={hospitalName}
+                  required
+                  disabled
+                />
               </div>
             </div>
 
@@ -699,7 +664,6 @@ const AssignAccessCard = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
               <div className="flex items-center gap-2">
                 {hasExistingCard && (
@@ -784,6 +748,7 @@ const DetailRow = ({ icon, label, value }) => (
   </div>
 );
 
+// (ChevronDownIcon no longer used — safe to remove)
 const ChevronDownIcon = () => (
   <svg
     className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"

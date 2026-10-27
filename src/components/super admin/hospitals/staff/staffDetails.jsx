@@ -3,19 +3,11 @@ import React from 'react';
 import { Modal, Badge, Button } from '../../../ui';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl } from "../../../../../app/service/S3";
+
 const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
   if (!staff) return null;
-
-  // Helper function for S3 images
-  const getS3ImageUrl = (imageUrl) => {
-    if (!imageUrl) return '';
-    // If using S3, transform the URL here
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return imageUrl;
-    }
-    const S3_BASE_URL = 'https://hostahealthcare.s3.eu-north-1.amazonaws.com';
-    return `${S3_BASE_URL}/${encodeURIComponent(imageUrl)}`;
-  };
 
   // Format date helper
   const formatDate = (date) => {
@@ -195,7 +187,7 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           </div>
         )}
 
-        {/* Address (full width) - USING THE FIXED FORMATTER */}
+        {/* Address (full width) */}
         <div className="col-span-2">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Address

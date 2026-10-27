@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { Button, SearchBar } from "../../ui";
+import CustomSelect from "../../ui/CustomSelect";
 import { useGetSessionHistoryQuery } from "../../../../app/service/sessionHistoryApi";
 import { showSuccessToast, showErrorToast } from "../../ui/Toast";
 import { exportToExcel } from "../../../utils/excelExport";
@@ -40,52 +41,45 @@ const GlobalPagination = ({
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
-  // Generate page numbers
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    
+
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // Always show first page
       pages.push(1);
-      
+
       let startPage = Math.max(2, currentPage - 1);
       let endPage = Math.min(totalPages - 1, currentPage + 1);
-      
-      // Adjust if at beginning
+
       if (currentPage <= 3) {
         endPage = Math.min(totalPages - 1, 4);
       }
-      
-      // Adjust if at end
+
       if (currentPage >= totalPages - 2) {
         startPage = Math.max(2, totalPages - 3);
       }
-      
-      // Add ellipsis if needed
+
       if (startPage > 2) {
         pages.push("...");
       }
-      
+
       for (let i = startPage; i <= endPage; i++) {
         pages.push(i);
       }
-      
-      // Add ellipsis if needed
+
       if (endPage < totalPages - 1) {
         pages.push("...");
       }
-      
-      // Always show last page
+
       if (totalPages > 1) {
         pages.push(totalPages);
       }
     }
-    
+
     return pages;
   };
 
@@ -93,16 +87,13 @@ const GlobalPagination = ({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border-t border-gray-200 rounded-b-xl">
-      {/* Items info */}
       <div className="text-sm text-gray-600 order-2 sm:order-1">
         Showing <span className="font-medium">{startItem}</span> to{" "}
         <span className="font-medium">{endItem}</span> of{" "}
         <span className="font-medium">{totalItems}</span> {itemLabel}
       </div>
 
-      {/* Pagination controls */}
       <div className="flex items-center gap-1 order-1 sm:order-2">
-        {/* Previous button */}
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
@@ -116,7 +107,6 @@ const GlobalPagination = ({
           <ChevronLeft size={18} />
         </button>
 
-        {/* Page numbers */}
         <div className="flex items-center gap-1">
           {getPageNumbers().map((page, index) => (
             <React.Fragment key={index}>
@@ -138,7 +128,6 @@ const GlobalPagination = ({
           ))}
         </div>
 
-        {/* Next button */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
@@ -174,6 +163,21 @@ const RISK_OPTIONS = [
   "HIGH",
   "CRITICAL",
 ];
+
+// ✅ Static filter options for CustomSelect — "" is the "no filter" sentinel
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All Status" },
+  ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+];
+
+const RISK_FILTER_OPTIONS = [
+  { value: "", label: "All Risk Levels" },
+  ...RISK_OPTIONS.map((r) => ({ value: r, label: r })),
+];
+
+// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter inputs
+const FILTER_SELECT_CLASS =
+  "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-4 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
 // ============================================================
 // Helpers
@@ -265,7 +269,7 @@ const getRiskBadgeClass = (riskLevel) => {
 
 const getActionIcon = (action) => {
   const normalized = safeToString(action).toLowerCase();
-  
+
   if (normalized.includes("login") || normalized.includes("signin")) {
     return <CheckCircle size={16} className="text-green-500" />;
   }
@@ -492,29 +496,24 @@ const RowActionMenu = ({ session, onView }) => {
 // ============================================================
 
 const SuperAdminAuditLog = () => {
-  // Search state with debounce
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [hospitalIdFilter, setHospitalIdFilter] = useState("");
-  
-  // Date filters
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
-  // Pagination
+
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSession, setSelectedSession] = useState(null);
 
   const itemsPerPage = 10;
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim());
@@ -524,17 +523,13 @@ const SuperAdminAuditLog = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch data with backend filters
   const {
     data: sessionResponse,
     isLoading,
     isFetching,
     refetch,
   } = useGetSessionHistoryQuery({
-    // Search: for searching name/details
     search: debouncedSearch || undefined,
-    
-    // Independent filters
     role: roleFilter || undefined,
     riskLevel: riskFilter || undefined,
     status: statusFilter || undefined,
@@ -546,12 +541,10 @@ const SuperAdminAuditLog = () => {
     limit: itemsPerPage,
   });
 
-  // Use backend response values
   const sessions = sessionResponse?.data ?? [];
   const totalItems = sessionResponse?.count ?? 0;
   const totalPages = sessionResponse?.totalPages ?? 0;
 
-  // Get unique values for filters from current page data
   const departments = useMemo(
     () =>
       [...new Set(sessions.map((session) => session.department).filter(Boolean))].sort(),
@@ -564,7 +557,23 @@ const SuperAdminAuditLog = () => {
     [sessions]
   );
 
-  // Count active filters
+  // ✅ Options for the Role and Department CustomSelects
+  const roleFilterOptions = useMemo(
+    () => [
+      { value: "", label: "All Roles" },
+      ...roles.map((role) => ({ value: role, label: role })),
+    ],
+    [roles]
+  );
+
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: "", label: "All Departments" },
+      ...departments.map((dept) => ({ value: dept, label: dept })),
+    ],
+    [departments]
+  );
+
   const activeFilterCount =
     (roleFilter ? 1 : 0) +
     (statusFilter ? 1 : 0) +
@@ -649,7 +658,6 @@ const SuperAdminAuditLog = () => {
     }
   };
 
-  // Handle page change with smooth scroll
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
@@ -852,7 +860,7 @@ const SuperAdminAuditLog = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-            {/* Hospital ID Filter (Super Admin Only) */}
+            {/* Hospital ID Filter (Super Admin Only) — remains a number input */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">
                 Hospital ID
@@ -871,100 +879,72 @@ const SuperAdminAuditLog = () => {
               />
             </div>
 
-            {/* Role Filter */}
+            {/* Role Filter — ✅ Replaced native  with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">
                 Role
               </label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={roleFilter}
-                onChange={(event) => {
-                  setRoleFilter(event.target.value);
+                options={roleFilterOptions}
+                onChange={(value) => {
+                  setRoleFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl
-                           outline-none focus:ring-2 focus:ring-[#1C62A0]
-                           focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Roles</option>
-                {roles.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Status Filter */}
+            {/* Status Filter — ✅ Replaced native  with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">
                 Status
               </label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value);
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setStatusFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl
-                           outline-none focus:ring-2 focus:ring-[#1C62A0]
-                           focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Status</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Risk Level Filter */}
+            {/* Risk Level Filter — ✅ Replaced native  with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">
                 Risk Level
               </label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={riskFilter}
-                onChange={(event) => {
-                  setRiskFilter(event.target.value);
+                options={RISK_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setRiskFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl
-                           outline-none focus:ring-2 focus:ring-[#1C62A0]
-                           focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Risk Levels</option>
-                {RISK_OPTIONS.map((risk) => (
-                  <option key={risk} value={risk}>
-                    {risk}
-                  </option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
-            {/* Department Filter */}
+            {/* Department Filter — ✅ Replaced native  with CustomSelect */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-600">
                 Department
               </label>
-              <select
+              <CustomSelect
+                hideLabel
                 value={departmentFilter}
-                onChange={(event) => {
-                  setDepartmentFilter(event.target.value);
+                options={departmentFilterOptions}
+                onChange={(value) => {
+                  setDepartmentFilter(value);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl
-                           outline-none focus:ring-2 focus:ring-[#1C62A0]
-                           focus:border-[#1C62A0] bg-white text-gray-700"
-              >
-                <option value="">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+                className={FILTER_SELECT_CLASS}
+              />
             </div>
 
             {/* Start Date Filter */}
@@ -1048,7 +1028,7 @@ const SuperAdminAuditLog = () => {
                 <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
               )}
             </h2>
-            
+
             <div className="text-xs text-gray-400">
               Showing {sessions.length} of {totalItems}
             </div>
@@ -1078,7 +1058,6 @@ const SuperAdminAuditLog = () => {
                       key={session.id || index}
                       className="hover:bg-gray-50 border-b border-gray-100"
                     >
-                      {/* User */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3 min-w-[190px]">
                           <div className="w-9 h-9 rounded-full bg-blue-50 text-[#1C62A0] flex items-center justify-center text-xs font-semibold">
@@ -1096,14 +1075,12 @@ const SuperAdminAuditLog = () => {
                         </div>
                       </td>
 
-                      {/* Role */}
                       <td className="px-6 py-4">
                         <span className="font-medium text-gray-800">
                           {session.role || "N/A"}
                         </span>
                       </td>
 
-                      {/* Action */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {getActionIcon(session.action || session.loginMethod)}
@@ -1113,7 +1090,6 @@ const SuperAdminAuditLog = () => {
                         </div>
                       </td>
 
-                      {/* Device */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 min-w-[170px]">
                           <Monitor size={16} className="text-gray-400" />
@@ -1130,36 +1106,30 @@ const SuperAdminAuditLog = () => {
                         </div>
                       </td>
 
-                      {/* IP */}
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
                         {session.ipAddress || "N/A"}
                       </td>
 
-                      {/* Login Time */}
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
                         {formatDateTime(session.loginTime)}
                       </td>
 
-                      {/* Last Activity */}
                       <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
                         {formatDateTime(session.lastActivity)}
                       </td>
 
-                      {/* Risk */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={getRiskBadgeClass(session.riskLevel)}>
                           {session.riskLevel || "N/A"}
                         </span>
                       </td>
 
-                      {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={getStatusBadgeClass(session.status)}>
                           {session.status || "N/A"}
                         </span>
                       </td>
 
-                      {/* Actions */}
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end">
                           <RowActionMenu

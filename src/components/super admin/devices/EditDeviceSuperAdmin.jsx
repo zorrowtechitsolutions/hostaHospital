@@ -17,6 +17,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../../ui/button';
+import CustomSelect from '../../ui/CustomSelect';
 import {
   useUpdateDeviceMutation,
   useGetDeviceByIdQuery,
@@ -27,6 +28,10 @@ import {
   deleteFromS3,
   getS3ImageUrl,
 } from '../../../../app/service/S3';
+
+// Styling override so CustomSelect matches the editable form field look
+const EDITABLE_SELECT_CLASS =
+  "w-full [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:px-3 [&>button]:py-2 [&>button]:text-sm [&>button]:text-gray-800 [&>button]:bg-gray-50/60 [&>button]:focus:bg-white [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0]/30 [&>button]:focus:border-[#1C62A0]";
 
 /* ------------------------------------------------------------------ */
 /* Option lists                                                        */
@@ -86,22 +91,20 @@ const EditableField = ({ label, name, value, onChange, placeholder, required, hi
   </div>
 );
 
+// ✅ Replaced native inside EditableSelect with CustomSelect
 const EditableSelect = ({ label, name, value, onChange, options, required, hint }) => (
   <div className="mb-4 min-w-0">
     <label className="block text-xs font-medium text-gray-600 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
-    <select
-      name={name}
+    <CustomSelect
+      hideLabel
       value={value}
-      onChange={onChange}
+      options={options}
+      onChange={(val) => onChange({ target: { name, value: val } })}
       required={required}
-      className="w-full min-w-0 border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-gray-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1C62A0]/30 focus:border-[#1C62A0] transition-all cursor-pointer"
-    >
-      {options.map(({ value: v, label: l }) => (
-        <option key={v} value={v}>{l}</option>
-      ))}
-    </select>
+      className={EDITABLE_SELECT_CLASS}
+    />
     {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
   </div>
 );
@@ -198,7 +201,6 @@ const EditDeviceSuperAdmin = () => {
   const location = useLocation();
   const { id: routeId } = useParams();
 
-  // Hospital context (optional) — passed from the device list page
   const routeHospitalId = location.state?.hospitalId || null;
   const stateHospitalName = location.state?.hospitalName || null;
 
@@ -237,7 +239,6 @@ const EditDeviceSuperAdmin = () => {
 
   const device = detailResponse?.data ?? null;
 
-  // Super Admin: hospital comes from the device record itself
   const hospitalName =
     device?.hospital?.name ||
     device?.hospitalName ||
@@ -254,7 +255,6 @@ const EditDeviceSuperAdmin = () => {
   const displayDeviceId = device?.deviceId ?? '-';
   const deviceId = device?.id ?? device?._id ?? routeId;
 
-  // ✅ Where to go "back" to
   const backTarget = hospitalIdForNav
     ? `/super-admin/hospitals/${hospitalIdForNav}/devices`
     : '/super-admin/devices';
@@ -456,7 +456,6 @@ const EditDeviceSuperAdmin = () => {
         showSuccessToast(`Device "${payload.deviceName}" updated successfully.`);
       }
 
-      // ✅ Return to the correct devices list for Super Admin
       goBack();
     } catch (err) {
       console.error('Update device failed:', err);
@@ -472,7 +471,6 @@ const EditDeviceSuperAdmin = () => {
 
   const isBusy = isSubmitting || uploadingReader || uploadingLocation;
 
-  /* ---------------- Loading ---------------- */
   if (isLoadingDevice) {
     return (
       <div className="w-full min-h-screen bg-[#F8FAFC] p-4 md:p-6 flex items-center justify-center">
@@ -484,7 +482,6 @@ const EditDeviceSuperAdmin = () => {
     );
   }
 
-  /* ---------------- Error / Not found ---------------- */
   if (isError || !device) {
     return (
       <div className="w-full min-h-screen bg-[#F8FAFC] p-4 md:p-6">
@@ -526,7 +523,6 @@ const EditDeviceSuperAdmin = () => {
     );
   }
 
-  /* ---------------- Main form ---------------- */
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
       {/* Header */}

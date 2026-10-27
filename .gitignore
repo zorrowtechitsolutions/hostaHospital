@@ -94,3 +94,5 @@ storybook-static
 tmp
 temp
 
+.vercel
+.env*

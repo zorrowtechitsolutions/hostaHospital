@@ -362,7 +362,7 @@ const Map = () => {
               </div>
               <Button variant="primary" onClick={handleEditClick} className={ACTION_BUTTON_CLASS}>
                 <EditIcon />
-                Edit Location
+                Edit 
               </Button>
             </div>
           </div>

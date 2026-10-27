@@ -21,8 +21,8 @@ import {
 
 const baseQuery = fetchBaseQuery({
   baseUrl:
-    import.meta.env.VITE_API_URL ||
-    "http://192.168.1.39:3000/api",
+    import.meta.env.VITE_API_URL,
+   
 
   /*
    * IMPORTANT:
@@ -381,6 +381,9 @@ export const api = createApi({
     "Device",
     "AccessCard",
     "Fingerprint",
+    "Holiday",
+    "LeaveRequest",
+    "LeaveTemplate",
  ],
 
   endpoints: () => ({}),

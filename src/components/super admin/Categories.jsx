@@ -534,7 +534,7 @@ const Categories = () => {
           }
         });
         
-        showSuccessToast(`✅ Category "${toTitleCase(formData.name)}" updated successfully!`);
+        showSuccessToast(` Category "${toTitleCase(formData.name)}" updated successfully!`);
       } else {
         const response = await createCategory(categoryData).unwrap();
         const newId = getCategoryId(response.data) || response.id;
@@ -549,7 +549,7 @@ const Categories = () => {
           }
         });
         
-        showSuccessToast(`✅ Category "${toTitleCase(formData.name)}" created successfully!`);
+        showSuccessToast(` Category "${toTitleCase(formData.name)}" created successfully!`);
       }
       
       // Reset image states
@@ -609,7 +609,7 @@ const Categories = () => {
         }
       });
       
-      showSuccessToast(`✅ Category "${toTitleCase(categoryToDelete.name)}" deleted successfully!`);
+      showSuccessToast(`Category "${toTitleCase(categoryToDelete.name)}" deleted successfully!`);
       setIsDeleteModalOpen(false);
       setCategoryToDelete(null);
       refetch();
@@ -657,7 +657,7 @@ const Categories = () => {
         }
       });
       
-      showSuccessToast(`✅ Category "${toTitleCase(category.name)}" ${action}d successfully!`);
+      showSuccessToast(` Category "${toTitleCase(category.name)}" ${action}d successfully!`);
       refetch();
     } catch (error) {
       console.error("❌ Toggle status error:", error);

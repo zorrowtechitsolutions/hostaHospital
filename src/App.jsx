@@ -87,6 +87,15 @@ import EditDeviceModal from "./components/Attendance/devices/EditDeviceModal";
 import FingerprintEnrollmentModal from "./components/Attendance/Fingerprint/FingerprintEnrollmentModal";
 import ViewFingerprintDetails from "./components/Attendance/Fingerprint/ViewFingerprintDetails";
 import FingerprintEditModal from "./components/Attendance/Fingerprint/FingerprintEditModal";
+import HolidayManagement from "./components/Attendance/HolidayManagement";
+import ManualAttendance from "./components/Attendance/ManualAttendance";
+import LeaveRequests from "./components/LeaveRequests/LeaveRequest";
+import MyLeaveRequests from "./components/LeaveRequests/MyLeaveRequests";
+import AddLeaveRequest from "./components/LeaveRequests/AddLeaveRequest";
+import LeaveTemplates from "./components/LeaveRequests/LeaveTemplates";
+import CreateLeaveTemplate from "./components/LeaveRequests/CreateLeaveTemplate";
+import EditLeaveTemplate from "./components/LeaveRequests/EditLeaveTemplate";
+import ViewLeaveTemplate from "./components/LeaveRequests/ViewLeaveTemplate";
 
 // Loading fallback component
 const PageLoader = () => (
@@ -100,7 +109,12 @@ const PageLoader = () => (
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // ✅ FIX 1: Start closed on small screens, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true
+  );
+
   const [theme, setTheme] = useState("light");
   const location = useLocation();
   const [booking, setBooking] = useState(null);
@@ -108,12 +122,8 @@ function App() {
 
   // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
   useEffect(() => {
-    // ✅ Initialize socket connection when app loads
     const socketInstance = initSocket();
-
-    // ✅ Cleanup on unmount
     return () => {
-      // Optionally disconnect, but you might want to keep it connected
       // disconnectSocket();
     };
   }, []);
@@ -150,10 +160,8 @@ function App() {
     initNotifications();
 
     const unsubscribe = listenMessages((payload) => {
-
       const title = payload?.notification?.title || payload?.data?.title;
       const body = payload?.notification?.body || payload?.data?.body;
-
       setBooking({ title, body });
     });
 
@@ -176,18 +184,15 @@ function App() {
       navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
     }
 
-    // Also check URL params for when app was closed
     const urlParams = new URLSearchParams(location.search);
     const action = urlParams.get('action');
     const modal = urlParams.get('modal');
 
     if (action === 'approve' && modal === 'approve') {
       setShowApproveModal(true);
-      // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     } else if (action === 'reject' && modal === 'reject') {
       setShowRejectModal(true);
-      // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
 
@@ -198,10 +203,6 @@ function App() {
     };
   }, [location.search]);
 
-  // Log auth state for debugging
-  useEffect(() => {
-  }, [isAuthenticated, location.pathname, loading, isSuperAdmin]);
-
   if (loading) {
     return <PageLoader />;
   }
@@ -211,7 +212,6 @@ function App() {
     return (
       <ToastProvider>
         <Routes>
-          {/* Home page for non-authenticated users */}
           <Route path="/" element={<HospitalHomePage />} />
           <Route path="/register" element={<Register />} />
           <Route path="/sign-in" element={<Login />} />
@@ -222,7 +222,7 @@ function App() {
     );
   }
 
-  // SUPER ADMIN RENDERING - If Super Admin, render Super Admin layout only
+  // SUPER ADMIN RENDERING
   if (isSuperAdmin) {
     return (
       <ToastProvider>
@@ -235,7 +235,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Redirect root to super admin dashboard */}
           <Route path="/" element={<Navigate to="/super-admin/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/super-admin/dashboard" replace />} />
         </Routes>
@@ -249,10 +248,18 @@ function App() {
       <div className="flex h-screen bg-gray-50 font-sans">
         <Sidebar sidebarOpen={sidebarOpen} />
 
-        {/* ✅ FIX 1: Added min-w-0 to allow content to shrink properly */}
+        {/* ✅ FIX: Mobile backdrop — tapping outside closes the sidebar */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-10 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* ✅ FIX: Content pushes only on lg+; overlays on mobile */}
         <div
-          className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
-            sidebarOpen ? "ml-64" : "ml-20"
+          className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ml-0 ${
+            sidebarOpen ? "lg:ml-64" : "lg:ml-20"
           }`}
         >
           <TopBar
@@ -268,7 +275,6 @@ function App() {
                 <h3 className="text-lg font-semibold mb-2">{booking.title}</h3>
                 <p className="text-gray-500 mb-4">{booking.body}</p>
 
-                {/* ✅ Using the global reusable Button component */}
                 <div className="flex gap-3 justify-center">
                   <Button
                     variant="secondary"
@@ -342,317 +348,185 @@ function App() {
               <Route path="/help" element={<HelpSupport />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route
-              path="/audit-login"
-              element={
-                <ProtectedRoute permissionId={111}>
-                  <SessionHistory />
-                </ProtectedRoute>
-              } />
+                path="/audit-login"
+                element={
+                  <ProtectedRoute permissionId={106}>
+                    <SessionHistory />
+                  </ProtectedRoute>
+                } />
               <Route
-              path="/email-notifications"
-              element={
-              <ProtectedRoute permissionId={104}>
-              <EmailComposer />
-              </ProtectedRoute>} />
-              <Route path="/email-history" element={<EmailHistory/>} />
+                path="/email-notifications"
+                element={
+                  <ProtectedRoute permissionId={99}>
+                    <EmailComposer />
+                  </ProtectedRoute>} />
+              <Route path="/email-history" element={<EmailHistory />} />
               <Route path="/email-templates/edit/:id" element={
-                <ProtectedRoute permissionId={109}>
-                  <EditEmailTemplate/>
+                <ProtectedRoute permissionId={104}>
+                  <EditEmailTemplate />
                 </ProtectedRoute>
               } />
               <Route path="/email-templates/create" element={
-                <ProtectedRoute permissionId={107}>
+                <ProtectedRoute permissionId={102}>
                   <CreateEmailTemplate />
                 </ProtectedRoute>
               } />
-              <Route path="/email-templates/view/:id"element={
-                <ProtectedRoute permissionId={108}>
+              <Route path="/email-templates/view/:id" element={
+                <ProtectedRoute permissionId={103}>
                   <ViewEmailTemplate />
                 </ProtectedRoute>
-              }/>
+              } />
               <Route path="/email-templates" element={
-                <ProtectedRoute permissionId={108}>
-                  <EmailTemplates/>
+                <ProtectedRoute permissionId={103}>
+                  <EmailTemplates />
                 </ProtectedRoute>
               } />
 
               <Route path="/calendar" element={<CalendarPage />} />
 
               {/* Attendance routes */}
-              <Route path="/attendance" element={<Attendance/>} />
-              <Route path="/attendance/sheet" element={<AttendanceSheet/>} />
+              <Route path="/attendance" element={<Attendance />} />
+              <Route path="/attendance/sheet" element={<AttendanceSheet />} />
               <Route path="/attendance/employee/:id" element={<EmployeeAttendance />} />
-              <Route path="/attendance/device" element={<Device/>} />
+              <Route path="/attendance/device" element={<Device />} />
               <Route path="/devices/register" element={<RegisterDeviceModal />} />
-              <Route path="/devices/edit/:id" element={<EditDeviceModal />} /> 
-              <Route path="/attendance/access-card" element={<AssignAccessCardList/>} />
-              <Route path="/attendance/access-card/assign/:memberKey" element={<AssignAccessCard/>} />
-              <Route path="/attendance/access-card/view/:memberKey" element={<ViewAccessCardDetails />}/>
+              <Route path="/devices/edit/:id" element={<EditDeviceModal />} />
+              <Route path="/attendance/access-card" element={<AssignAccessCardList />} />
+              <Route path="/attendance/access-card/assign/:memberKey" element={<AssignAccessCard />} />
+              <Route path="/attendance/access-card/view/:memberKey" element={<ViewAccessCardDetails />} />
               <Route path="/attendance/fingerprint" element={<AssignFingerprintList />} />
-              <Route path="/attendance/fingerprint/enroll/:key" element={<FingerprintEnrollmentModal />}/>
-              <Route path="/attendance/fingerprint/view/:memberKey" element={<ViewFingerprintDetails />}/>
-              <Route path="/attendance/fingerprint/edit/:key" element={<FingerprintEditModal />}/>
+              <Route path="/attendance/fingerprint/enroll/:key" element={<FingerprintEnrollmentModal />} />
+              <Route path="/attendance/fingerprint/view/:memberKey" element={<ViewFingerprintDetails />} />
+              <Route path="/attendance/fingerprint/edit/:key" element={<FingerprintEditModal />} />
+              <Route path="/attendance/manual" element={<ManualAttendance />} />
 
-              {/* PayRoll routes  */}
+              {/* PayRoll routes (commented out) */}
               {/* <Route path="/payroll/payslips" element={<Payslips/>} />
               <Route path="/salary-slip/template" element={<SalarySlipTemplate/>} /> */}
 
-              {/* Doctor routes with permission checks - IDs from CSV: doctor module (1-4) */}
-              <Route
-                path="/doctors"
-                element={
-                  <ProtectedRoute permissionId={2}> {/* view */}
-                    <Doctors />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/add-doctor"
-                element={
-                  <ProtectedRoute permissionId={1}> {/* create */}
-                    <AddDoctor />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-doctor/:id"
-                element={
-                  <ProtectedRoute permissionId={3}> {/* edit */}
-                    <EditDoctor />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/doctor/:id"
-                element={
-                  <ProtectedRoute permissionId={2}> {/* view */}
-                    <ViewDoctor />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Doctor routes */}
+              <Route path="/doctors" element={
+                <ProtectedRoute permissionId={2}><Doctors /></ProtectedRoute>
+              } />
+              <Route path="/add-doctor" element={
+                <ProtectedRoute permissionId={1}><AddDoctor /></ProtectedRoute>
+              } />
+              <Route path="/edit-doctor/:id" element={
+                <ProtectedRoute permissionId={3}><EditDoctor /></ProtectedRoute>
+              } />
+              <Route path="/doctor/:id" element={
+                <ProtectedRoute permissionId={2}><ViewDoctor /></ProtectedRoute>
+              } />
 
-              {/* Patient routes with permission checks - IDs from CSV: patient module (13-16) */}
-              <Route
-                path="/patients"
-                element={
-                  <ProtectedRoute permissionId={14}> {/* view */}
-                    <Patients />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/add-patient"
-                element={
-                  <ProtectedRoute permissionId={13}> {/* create */}
-                    <AddPatient />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-patient/:id"
-                element={
-                  <ProtectedRoute permissionId={15}> {/* edit */}
-                    <EditPatientModal />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/patients/:id"
-                element={
-                  <ProtectedRoute permissionId={14}> {/* view */}
-                    <PatientDetails />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Patient routes */}
+              <Route path="/patients" element={
+                <ProtectedRoute permissionId={14}><Patients /></ProtectedRoute>
+              } />
+              <Route path="/add-patient" element={
+                <ProtectedRoute permissionId={13}><AddPatient /></ProtectedRoute>
+              } />
+              <Route path="/edit-patient/:id" element={
+                <ProtectedRoute permissionId={15}><EditPatientModal /></ProtectedRoute>
+              } />
+              <Route path="/patients/:id" element={
+                <ProtectedRoute permissionId={14}><PatientDetails /></ProtectedRoute>
+              } />
 
-              {/* Staff routes with permission checks - IDs from CSV: staff module (9-12) */}
-              <Route
-                path="/staffs"
-                element={
-                  <ProtectedRoute permissionId={10}> {/* view */}
-                    <Staffs />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/add-staff"
-                element={
-                  <ProtectedRoute permissionId={9}> {/* create */}
-                    <AddStaff />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-staff/:id"
-                element={
-                  <ProtectedRoute permissionId={11}> {/* edit */}
-                    <EditStaff />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Staff routes */}
+              <Route path="/staffs" element={
+                <ProtectedRoute permissionId={10}><Staffs /></ProtectedRoute>
+              } />
+              <Route path="/add-staff" element={
+                <ProtectedRoute permissionId={9}><AddStaff /></ProtectedRoute>
+              } />
+              <Route path="/edit-staff/:id" element={
+                <ProtectedRoute permissionId={11}><EditStaff /></ProtectedRoute>
+              } />
 
-              {/* Lab routes with permission checks - IDs from CSV: lab module (21-24) and labresult module (81-84) */}
-              <Route
-                path="/lab/results"
-                element={
-                  <ProtectedRoute permissionId={82}> {/* labresult view */}
-                    <AllLabResults />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/lab/tests"
-                element={
-                  <ProtectedRoute permissionId={82}> {/* labresult view */}
-                    <LabTests />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/lab/results/add"
-                element={
-                  <ProtectedRoute permissionId={81}> {/* labresult create */}
-                    <AddEditLabResults />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/lab/results/edit/:id"
-                element={
-                  <ProtectedRoute permissionId={83}> {/* labresult edit */}
-                    <AddEditLabResults />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/laboratory"
-                element={
-                  <ProtectedRoute permissionId={22}> {/* lab view */}
-                    <LaboratoryRegistrationForm />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Lab routes */}
+              <Route path="/lab/results" element={
+                <ProtectedRoute permissionId={82}><AllLabResults /></ProtectedRoute>
+              } />
+              <Route path="/lab/tests" element={
+                <ProtectedRoute permissionId={82}><LabTests /></ProtectedRoute>
+              } />
+              <Route path="/lab/results/add" element={
+                <ProtectedRoute permissionId={81}><AddEditLabResults /></ProtectedRoute>
+              } />
+              <Route path="/lab/results/edit/:id" element={
+                <ProtectedRoute permissionId={83}><AddEditLabResults /></ProtectedRoute>
+              } />
+              <Route path="/laboratory" element={
+                <ProtectedRoute permissionId={22}><LaboratoryRegistrationForm /></ProtectedRoute>
+              } />
 
-              {/* Ambulance route - IDs from CSV: ambulance module (29-32) */}
-              <Route
-                path="/ambulance"
-                element={
-                  <ProtectedRoute permissionId={30}> {/* ambulance view */}
-                    <Ambulance />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Ambulance route */}
+              <Route path="/ambulance" element={
+                <ProtectedRoute permissionId={30}><Ambulance /></ProtectedRoute>
+              } />
 
-              {/* Blood Bank route - IDs from CSV: blood_bank module (25-28) */}
-              <Route
-                path="/blood"
-                element={
-                  <ProtectedRoute permissionId={26}> {/* blood_bank view */}
-                    <BloodBank />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Blood Bank route */}
+              <Route path="/blood" element={
+                <ProtectedRoute permissionId={26}><BloodBank /></ProtectedRoute>
+              } />
 
-              {/* Pharmacy route - IDs from CSV: pharmacy module (53-56) */}
-              <Route
-                path="/pharmacy"
-                element={
-                  <ProtectedRoute permissionId={54}> {/* pharmacy view */}
-                    <Pharmacy />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/product/:id"
-                element={
-                  <ProtectedRoute permissionId={54}> {/* pharmacy view */}
-                    <ViewProduct />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Pharmacy route */}
+              <Route path="/pharmacy" element={
+                <ProtectedRoute permissionId={54}><Pharmacy /></ProtectedRoute>
+              } />
+              <Route path="/product/:id" element={
+                <ProtectedRoute permissionId={54}><ViewProduct /></ProtectedRoute>
+              } />
 
-              {/* Appointment/Consultation routes - IDs from CSV: booking module (33-36) */}
-              <Route
-                path="/appointments/consultation"
-                element={
-                  <ProtectedRoute permissionId={34}> {/* booking view */}
-                    <Consultation />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/appointments/medical-history"
-                element={
-                  <ProtectedRoute permissionId={34}> {/* booking view */}
-                    <ViewMedicalHistory />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/appointments"
-                element={
-                  <ProtectedRoute permissionId={34}> {/* booking view */}
-                    <Appointments />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Appointment/Consultation routes */}
+              <Route path="/appointments/consultation" element={
+                <ProtectedRoute permissionId={34}><Consultation /></ProtectedRoute>
+              } />
+              <Route path="/appointments/medical-history" element={
+                <ProtectedRoute permissionId={34}><ViewMedicalHistory /></ProtectedRoute>
+              } />
+              <Route path="/appointments" element={
+                <ProtectedRoute permissionId={34}><Appointments /></ProtectedRoute>
+              } />
 
-              {/* Role & Permission routes - IDs from CSV: role module (57-60) and permission module (61-64) */}
-              <Route
-                path="/roles"
-                element={
-                  <ProtectedRoute permissionId={58}> {/* role view */}
-                    <UserPermissions/>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/permissions/:roleId"
-                element={
-                  <ProtectedRoute permissionId={58}> {/* role view */}
-                    <PermissionList />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Role & Permission routes */}
+              <Route path="/roles" element={
+                <ProtectedRoute permissionId={58}><UserPermissions /></ProtectedRoute>
+              } />
+              <Route path="/permissions/:roleId" element={
+                <ProtectedRoute permissionId={58}><PermissionList /></ProtectedRoute>
+              } />
 
-              {/* User management routes - IDs from CSV: users module (77-80) */}
-              <Route
-                path="/users"
-                element={
-                  <ProtectedRoute permissionId={58}> {/* users view */}
-                    <Users />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/add-user"
-                element={
-                  <ProtectedRoute permissionId={58}> {/* users create */}
-                    <AddNewUser />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-user/:id"
-                element={
-                  <ProtectedRoute permissionId={58}> {/* users edit */}
-                    <EditUser />
-                  </ProtectedRoute>
-                }
-              />
+              {/* User management routes */}
+              <Route path="/users" element={
+                <ProtectedRoute permissionId={58}><Users /></ProtectedRoute>
+              } />
+              <Route path="/add-user" element={
+                <ProtectedRoute permissionId={58}><AddNewUser /></ProtectedRoute>
+              } />
+              <Route path="/edit-user/:id" element={
+                <ProtectedRoute permissionId={58}><EditUser /></ProtectedRoute>
+              } />
 
-              {/* Visits - IDs from CSV: visits module */}
-              <Route
-                path="/visits"
-                element={
-                  <ProtectedRoute permissionId={34}> {/* booking view */}
-                    <Visits />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Visits */}
+              <Route path="/visits" element={
+                <ProtectedRoute permissionId={34}><Visits /></ProtectedRoute>
+              } />
 
-              {/* Requests - No specific permission needed */}
+              {/* Requests */}
               <Route path="/requests" element={<RequestsTable />} />
+
+              {/* Leave Requests */}
+              <Route path="/leave-requests" element={<LeaveRequests />} />
+              <Route path="/my-leave-requests" element={<MyLeaveRequests />} />
+              <Route path="/leave/add" element={<AddLeaveRequest />} />
+              <Route path="/leave-templates" element={<LeaveTemplates />} />
+              <Route path="/leave-templates/create" element={<CreateLeaveTemplate />} />
+              <Route path="/leave-templates/edit/:id" element={<EditLeaveTemplate />} />
+              <Route path="/leave-templates/view/:id" element={<ViewLeaveTemplate />} />
+
+              {/* Holiday management routes */}
+              <Route path="/attendance/holidays" element={<HolidayManagement />} />
 
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

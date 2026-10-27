@@ -3,13 +3,15 @@ import React from "react";
 import { X, Download, FileText, ExternalLink } from "lucide-react";
 import { Button, Badge } from "../../ui";
 
-const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl } from "../../../../app/service/S3";
 
 const LaboratoryReportModal = ({ isOpen, onClose, labResult, patient }) => {
   if (!isOpen) return null;
 
   const imageUrl = labResult?.imageUrl || labResult?.fileKey || labResult?.fileUrl || "";
-  const fileUrl = imageUrl ? `${S3_BASE_URL}/${imageUrl}` : null;
+  // ✅ Use shared helper — returns full URL or the raw key if env missing
+  const fileUrl = imageUrl ? getS3ImageUrl(imageUrl) : null;
 
   const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(imageUrl);
   const isPDF = /\.pdf$/i.test(imageUrl);

@@ -116,6 +116,23 @@ const normalizeStatus = (rawStatus) => {
 };
 
 // ============================================================
+// 🎯 EMPLOYEE TYPE RESOLVER  (single source of truth)
+// ============================================================
+const getEmployeeType = (att) => {
+  if (att?.employeeType) return att.employeeType;
+  if (att?.doctorId) return "Doctor";
+  if (att?.staffId) return "Staff";
+  return "Staff";
+};
+
+// Stable composite key: "Doctor:12" / "Staff:12"
+const getEmployeeKey = (att) => {
+  const id = att?.employeeId || att?.roleId;
+  if (!id) return null;
+  return `${getEmployeeType(att)}:${id}`;
+};
+
+// ============================================================
 // COMPONENT
 // ============================================================
 const AttendanceSheet = () => {
@@ -186,17 +203,24 @@ const AttendanceSheet = () => {
   }, [isFetching]);
 
   // ============================================================
-  // EMPLOYEES
+  // EMPLOYEES  (type-aware key so Doctor 1 ≠ Staff 1)
   // ============================================================
   const employees = useMemo(() => {
     const map = new Map();
     if (!Array.isArray(attendanceData)) return [];
 
     attendanceData.forEach((att) => {
-      const id = att.employeeId || att.roleId;
-      if (id && !map.has(id)) {
-        map.set(id, {
-          id,
+      const key = getEmployeeKey(att);
+      if (!key) return;
+
+      const employeeId = att.employeeId || att.roleId;
+      const employeeType = getEmployeeType(att);
+
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,               // composite — used for React keys & routing
+          employeeId,            // raw numeric id (used to fetch detail page)
+          employeeType,          // "Doctor" | "Staff"
           name: att.name || att.employeeName || "Unknown",
         });
       }
@@ -208,15 +232,15 @@ const AttendanceSheet = () => {
   }, [attendanceData]);
 
   // ============================================================
-  // GROUP BY USER + DAY
+  // GROUP BY USER + DAY  (type-aware key)
   // ============================================================
   const attendanceByUserAndDate = useMemo(() => {
     const map = new Map();
     if (!Array.isArray(attendanceData)) return map;
 
     attendanceData.forEach((att) => {
-      const userId = att.employeeId || att.roleId;
-      if (!userId) return;
+      const userKey = getEmployeeKey(att);
+      if (!userKey) return;
 
       const dateSrc = att.date || att.createdAt || att.timestamp;
       if (!dateSrc) return;
@@ -229,7 +253,7 @@ const AttendanceSheet = () => {
       const day = d.getDate();
 
       if (year === parseInt(selectedYear) && month === parseInt(selectedMonth)) {
-        const key = `${userId}_${day}`;
+        const key = `${userKey}_${day}`;
         const normalized =
           normalizeStatus(att.status) || normalizeStatus(att.type);
 
@@ -249,8 +273,11 @@ const AttendanceSheet = () => {
     return map;
   }, [attendanceData, selectedYear, selectedMonth]);
 
-  const getAttendanceStatus = (employeeId, day) => {
-    const found = attendanceByUserAndDate.get(`${employeeId}_${day}`);
+  // Accepts an employee object so we can use both type + id
+  const getAttendanceStatus = (employee, day) => {
+    if (!employee) return null;
+    const key = `${employee.id}_${day}`;
+    const found = attendanceByUserAndDate.get(key);
     return found?.status || null;
   };
 
@@ -351,9 +378,12 @@ const AttendanceSheet = () => {
     if (!filteredEmployees.length) return;
 
     const exportData = filteredEmployees.map((emp) => {
-      const row = { "Employee Name": emp.name };
+      const row = {
+        "Employee Name": emp.name,
+        Type: emp.employeeType,
+      };
       for (let day = 1; day <= daysInMonth; day++) {
-        const status = getAttendanceStatus(emp.id, day);
+        const status = getAttendanceStatus(emp, day);
         row[`Day ${day}`] = status || "";
       }
       return row;
@@ -669,7 +699,7 @@ const AttendanceSheet = () => {
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-gray-100 sticky top-0">
                   <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-left sticky left-0 bg-gray-100 z-20 min-w-[180px] font-semibold text-gray-700 text-xs uppercase">
+                    <th className="px-4 py-3 text-left bg-gray-100 min-w-[180px] lg:sticky lg:left-0 lg:z-20 font-semibold text-gray-700 text-xs uppercase">
                       Employee Name
                     </th>
                     {calendarDays.map(
@@ -699,7 +729,7 @@ const AttendanceSheet = () => {
                       }`}
                     >
                       <td
-                        className="px-4 py-3 font-medium sticky left-0 bg-white z-30 border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                        className="px-4 py-3 font-medium bg-white border-r border-gray-100 lg:sticky lg:left-0 lg:z-20"
                         style={{
                           minWidth: "180px",
                           maxWidth: "220px",
@@ -711,8 +741,11 @@ const AttendanceSheet = () => {
                         <button
                           type="button"
                           onClick={() =>
-                            navigate(`/attendance/employee/${employee.id}`, {
-                              state: { employeeName: employee.name },
+                            navigate(`/attendance/employee/${employee.employeeId}`, {
+                              state: {
+                                employeeName: employee.name,
+                                employeeType: employee.employeeType,
+                              },
                             })
                           }
                           className="break-words whitespace-normal text-left text-gray-800 hover:text-[#1C62A0] hover:underline transition-colors cursor-pointer w-full"
@@ -720,10 +753,13 @@ const AttendanceSheet = () => {
                         >
                           {employee.name}
                         </button>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          {employee.employeeType}
+                        </div>
                       </td>
                       {calendarDays.map((day, index) => {
                         if (!day) return null;
-                        const status = getAttendanceStatus(employee.id, day);
+                        const status = getAttendanceStatus(employee, day);
 
                         return (
                           <td

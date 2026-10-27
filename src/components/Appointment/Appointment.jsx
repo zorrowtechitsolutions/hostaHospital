@@ -7,7 +7,7 @@ import {
   PlayCircle, Check, X
 } from 'lucide-react';
 import {
-  Button, Pagination, SearchBar, FilterBar
+  Button, Pagination, SearchBar, FilterBar, CustomSelect
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
@@ -808,8 +808,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     if (!appointment) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-        <div className="bg-white w-[520px] rounded-xl shadow-lg">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white w-[calc(100vw-2rem)] max-w-[520px] rounded-xl shadow-lg">
           <div className="flex items-center justify-between px-5 py-4 border-b">
             <div>
               <h2 className="text-lg font-semibold">Appointment Details</h2>
@@ -1110,51 +1110,39 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Status */}
+            {/* ✅ Status — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-              <select
+              <CustomSelect
+                label="Status"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" || e.key === "Delete") {
-                    e.preventDefault();
-                    setStatusFilter("all");
-                  }
-                }}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="all">All Status</option>
-                <option value="accepted">Accepted</option>
-                <option value="pending">Pending</option>
-                <option value="declined">Declined</option>
-                <option value="completed">Completed</option>
-                <option value="cancel">Cancelled</option>
-              </select>
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'accepted', label: 'Accepted' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'declined', label: 'Declined' },
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'cancel', label: 'Cancelled' }
+                ]}
+                onChange={(value) => setStatusFilter(value)}
+                placeholder="All Status"
+              />
             </div>
 
-            {/* Department */}
+            {/* ✅ Department — CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-              <select
+              <CustomSelect
+                label="Department"
                 value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" || e.key === "Delete") {
-                    e.preventDefault();
-                    setDepartmentFilter("");
-                  }
-                }}
-                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white cursor-pointer"
-              >
-                <option value="">All Departments</option>
-                {getAllDepartments().map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All Departments' },
+                  ...getAllDepartments().map(dept => ({ value: dept, label: dept }))
+                ]}
+                onChange={(value) => setDepartmentFilter(value)}
+                placeholder="All Departments"
+              />
             </div>
 
-            {/* Appointment Date */}
+            {/* Appointment Date (unchanged — native date input is fine) */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
               <input

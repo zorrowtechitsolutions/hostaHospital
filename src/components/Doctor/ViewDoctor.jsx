@@ -29,6 +29,9 @@ import ReviewTable from "../Doctor/ReviewTable";
 import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+// ✅ Import shared S3 helper (env-driven base URL)
+import { getS3ImageUrl } from "../../../app/service/S3";
+
 // ============ SKELETON LOADING COMPONENTS ============
 
 const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
@@ -131,13 +134,6 @@ const ViewDoctorSkeleton = () => (
 );
 
 // ============ END SKELETON LOADING COMPONENTS ============
-
-const getS3ImageUrl = (imageKey) => {
-  if (!imageKey) return "";
-  if (imageKey.startsWith("http")) return imageKey;
-  const S3_BASE_URL = "https://hostahealthcare.s3.eu-north-1.amazonaws.com";
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}`;
-};
 
 const TABS = [
   { id: "basic", label: "Basic Information" },
@@ -360,13 +356,13 @@ const ViewDoctor = () => {
             <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
             <div className="flex gap-3 justify-center mt-6">
               <div className="flex items-center justify-center mt-6">
-  <Button
-    variant="primary"
-    onClick={() => navigate('/doctors')}
-  >
-    Back to Doctor
-  </Button>
-</div>
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/doctors')}
+                >
+                  Back to Doctor
+                </Button>
+              </div>
             </div>
           </div>
         </div>
