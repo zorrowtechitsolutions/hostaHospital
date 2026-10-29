@@ -27,13 +27,13 @@ import { registerCategoryEvents, unregisterCategoryEvents } from '../../socket/c
 import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../app/service/S3';
 
 // ================= PAGINATION COMPONENT =================
-const Pagination = ({ 
-  currentPage, 
-  totalPages, 
-  onPageChange, 
-  totalItems, 
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
   itemsPerPage,
-  isLoading 
+  isLoading,
 }) => {
   if (totalPages <= 1) return null;
 
@@ -47,7 +47,7 @@ const Pagination = ({
         <span className="font-medium text-gray-700">{endItem}</span> of{' '}
         <span className="font-medium text-gray-700">{totalItems}</span> categories
       </div>
-      
+
       <div className="flex items-center gap-2">
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -85,18 +85,16 @@ const Pagination = ({
 
 // ================= HELPER FUNCTIONS =================
 
-// Convert string to Title Case (capitalize every word)
-const toTitleCase = (text = "") => {
-  if (!text) return "";
+const toTitleCase = (text = '') => {
+  if (!text) return '';
   return text.replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-// Get random color based on name
 const getInitialColor = (name) => {
   const colors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
     '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA',
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -105,25 +103,32 @@ const getInitialColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Get S3 image URL with cache busting
-const getImageUrlWithCache = (imageUrl) => {
-  if (!imageUrl) return null;
+// Get S3 image URL with cache busting + logging
+const getImageUrlWithCache = (imageUrl, context = 'category') => {
+  if (!imageUrl) {
+    console.log(`[${context}] No imageUrl → using initial fallback`);
+    return null;
+  }
   const url = getS3ImageUrl(imageUrl);
-  if (!url) return null;
-  // Add cache busting timestamp
+  if (!url) {
+    console.warn(`[${context}] getS3ImageUrl returned null for key:`, imageUrl);
+    return null;
+  }
   const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+  const finalUrl = `${url}${separator}_t=${Date.now()}`;
+  console.log(`[${context}] Cache-busted URL:`, finalUrl);
+  return finalUrl;
 };
 
 // ================= IMAGE UPLOAD COMPONENT =================
 
-const ImageUpload = ({ 
-  imageUrl, 
-  onImageChange, 
-  onImageRemove, 
+const ImageUpload = ({
+  imageUrl,
+  onImageChange,
+  onImageRemove,
   isUploading,
-  label = "Category Image",
-  disabled = false
+  label = 'Category Image',
+  disabled = false,
 }) => {
   const fileInputRef = useRef(null);
 
@@ -131,17 +136,21 @@ const ImageUpload = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       showErrorToast('Please select an image file', 3000);
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast('Image size should be less than 5MB', 3000);
       return;
     }
+
+    console.log('[ImageUpload] File selected:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
 
     onImageChange(file);
   };
@@ -149,9 +158,8 @@ const ImageUpload = ({
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-gray-700">{label}</label>
-      
+
       <div className="flex items-start gap-4">
-        {/* Image Preview */}
         <div className="relative w-24 h-24 flex-shrink-0">
           {imageUrl ? (
             <div className="relative w-full h-full">
@@ -159,6 +167,9 @@ const ImageUpload = ({
                 src={imageUrl}
                 alt="Category"
                 className="w-full h-full object-cover rounded-lg border border-gray-200"
+                onError={(e) => {
+                  console.error('[ImageUpload] Preview image failed to load:', e.target.src);
+                }}
               />
               <button
                 type="button"
@@ -176,7 +187,6 @@ const ImageUpload = ({
           )}
         </div>
 
-        {/* Upload Button */}
         <div className="flex-1">
           <input
             ref={fileInputRef}
@@ -230,8 +240,9 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, categoryName, isDeleti
         </div>
 
         <p className="text-gray-600 mb-6">
-          Are you sure you want to delete "<span className="font-semibold">{categoryName}</span>"? 
-          This will permanently remove the category and all associated data.
+          Are you sure you want to delete "
+          <span className="font-semibold">{categoryName}</span>"? This will
+          permanently remove the category and all associated data.
         </p>
 
         <div className="flex gap-3">
@@ -270,44 +281,60 @@ const Categories = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
-  
-  // ✅ Pagination state
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
-  
+
   const [eventsRegistered, setEventsRegistered] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     isActive: true,
-    imageUrl: null
+    imageUrl: null,
   });
 
-  // Image upload states
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
-  // ✅ Added limit: 1000 to fetch all categories
-  const { 
-    data: categoriesData, 
-    isLoading, 
-    error, 
+  const {
+    data: categoriesData,
+    isLoading,
+    error,
     refetch,
-    isFetching
+    isFetching,
   } = useGetCategoryQuery({
     search_query: searchTerm || undefined,
     sortBy: 'name',
     sortOrder: 'asc',
-    limit: 1000 // ✅ Set limit to 1000 to get all categories
+    limit: 1000,
   });
 
   const [createCategory, { isLoading: isCreating }] = useCreateCategoryMutation();
   const [updateCategory, { isLoading: isUpdating }] = useUpdateCategoryMutation();
   const [deleteCategory, { isLoading: isDeleting }] = useDeleteCategoryMutation();
 
-  // Register socket event listeners
+  // Log raw API response once
+  useEffect(() => {
+    if (categoriesData) {
+      console.log('[Category] API response received:', categoriesData);
+      const list = categoriesData?.data && Array.isArray(categoriesData.data)
+        ? categoriesData.data
+        : [];
+      console.log('[Category] Parsed list length:', list.length);
+      list.forEach((cat, idx) => {
+        console.log(`[Category] #${idx}:`, {
+          id: cat.id || cat._id,
+          name: cat.name,
+          rawImageUrl: cat.imageUrl,
+          isActive: cat.isActive,
+        });
+      });
+    }
+  }, [categoriesData]);
+
+  // Register socket events
   useEffect(() => {
     registerCategoryEvents({
       onCategoryRegistered: (data) => {
@@ -321,7 +348,7 @@ const Categories = () => {
       onCategoryDeleted: () => {
         showSuccessToast(`Category deleted!`, 3000);
         refetch();
-      }
+      },
     });
 
     setEventsRegistered(true);
@@ -332,7 +359,6 @@ const Categories = () => {
     };
   }, [refetch]);
 
-  // Listen for socket connection
   useEffect(() => {
     const handleConnect = () => {
       if (!eventsRegistered) {
@@ -348,20 +374,19 @@ const Categories = () => {
           onCategoryDeleted: () => {
             showSuccessToast(`Category deleted!`, 3000);
             refetch();
-          }
+          },
         });
         setEventsRegistered(true);
       }
     };
 
-    socket.on("connect", handleConnect);
+    socket.on('connect', handleConnect);
 
     return () => {
-      socket.off("connect", handleConnect);
+      socket.off('connect', handleConnect);
     };
   }, [refetch, eventsRegistered]);
 
-  // Click outside handler using class-based approach
   useEffect(() => {
     const handleClickOutside = (event) => {
       const menuContainer = event.target.closest('.category-menu-container');
@@ -369,26 +394,24 @@ const Categories = () => {
         setOpenMenuId(null);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ✅ Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const categories = categoriesData?.data && Array.isArray(categoriesData.data) 
-    ? categoriesData.data 
-    : [];
+  const categories =
+    categoriesData?.data && Array.isArray(categoriesData.data)
+      ? categoriesData.data
+      : [];
 
-  // ✅ Client-side filtering and pagination
-  const filteredCategories = categories.filter(category => 
+  const filteredCategories = categories.filter((category) =>
     category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ✅ Client-side pagination
   const paginatedCategories = filteredCategories.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -396,7 +419,6 @@ const Categories = () => {
   const totalItems = filteredCategories.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // Helper to get category ID (handles both `id` and `_id`)
   const getCategoryId = (category) => {
     if (!category) return null;
     return category.id || category._id || null;
@@ -404,11 +426,7 @@ const Categories = () => {
 
   const handleOpenCreateModal = () => {
     setEditingCategory(null);
-    setFormData({
-      name: '',
-      isActive: true,
-      imageUrl: null
-    });
+    setFormData({ name: '', isActive: true, imageUrl: null });
     setImageFile(null);
     setImagePreview(null);
     setRemoveExistingImage(false);
@@ -417,20 +435,26 @@ const Categories = () => {
 
   const handleOpenEditModal = (category) => {
     const categoryId = getCategoryId(category);
-    
+
     if (!categoryId) {
-      showErrorToast("❌ Invalid category ID", 3000);
+      showErrorToast('❌ Invalid category ID', 3000);
       return;
     }
-    
-    // Use cache-busted URL for preview
-    const existingImageUrl = category.imageUrl ? getImageUrlWithCache(category.imageUrl) : null;
-    
+
+    console.log('[Category] Opening edit modal:', {
+      id: categoryId,
+      rawImageUrl: category.imageUrl,
+    });
+
+    const existingImageUrl = category.imageUrl
+      ? getImageUrlWithCache(category.imageUrl, 'Category-edit')
+      : null;
+
     setEditingCategory(category);
     setFormData({
       name: category.name || '',
       isActive: category.isActive !== undefined ? category.isActive : true,
-      imageUrl: category.imageUrl || null
+      imageUrl: category.imageUrl || null,
     });
     setImagePreview(existingImageUrl);
     setImageFile(null);
@@ -442,11 +466,7 @@ const Categories = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingCategory(null);
-    setFormData({
-      name: '',
-      isActive: true,
-      imageUrl: null
-    });
+    setFormData({ name: '', isActive: true, imageUrl: null });
     setImageFile(null);
     setImagePreview(null);
     setRemoveExistingImage(false);
@@ -456,173 +476,183 @@ const Categories = () => {
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setRemoveExistingImage(false);
+    console.log('[Category] New image staged:', file.name);
   };
 
   const handleImageRemove = () => {
     if (formData.imageUrl) {
       setRemoveExistingImage(true);
       setImagePreview(null);
+      console.log('[Category] Existing image marked for removal');
     } else {
       setImageFile(null);
       setImagePreview(null);
+      console.log('[Category] Staged image cleared');
     }
   };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
-      // Only handle image upload if editing (has imageFile or removeExistingImage)
       let finalImageUrl = formData.imageUrl;
       const categoryId = editingCategory ? getCategoryId(editingCategory) : null;
 
       if (editingCategory) {
-        // Handle image removal
         if (removeExistingImage && formData.imageUrl) {
-          await deleteFromS3(formData.imageUrl, categoryId, "category");
+          console.log('[Category] Deleting existing image from S3:', formData.imageUrl);
+          await deleteFromS3(formData.imageUrl, categoryId, 'category');
           finalImageUrl = null;
         }
 
-        // Upload new image if selected
         if (imageFile) {
-          // Delete existing image if it exists (and not already removed)
           if (formData.imageUrl && !removeExistingImage) {
-            await deleteFromS3(formData.imageUrl, categoryId, "category");
+            console.log('[Category] Replacing existing image:', formData.imageUrl);
+            await deleteFromS3(formData.imageUrl, categoryId, 'category');
           }
-          
+
           setIsUploading(true);
+          console.log('[Category] Uploading new image…');
           const uploadResult = await uploadToS3(
             imageFile,
             null,
             categoryId,
-            "category"
+            'category'
           );
           finalImageUrl = uploadResult.key;
+          console.log('[Category] Upload complete:', uploadResult);
         }
       }
 
       const categoryData = {
         name: formData.name,
         isActive: formData.isActive,
-        ...(editingCategory && { imageUrl: finalImageUrl }) // Only include imageUrl for edit
+        ...(editingCategory && { imageUrl: finalImageUrl }),
       };
+
+      console.log('[Category] Submitting payload:', categoryData);
 
       if (editingCategory) {
         const id = getCategoryId(editingCategory);
-        
-        await updateCategory({
-          id: id,
-          data: categoryData
-        }).unwrap();
-        
-        socket.emit("category_event", {
-          event: "CATEGORY_UPDATED",
+
+        await updateCategory({ id, data: categoryData }).unwrap();
+
+        socket.emit('category_event', {
+          event: 'CATEGORY_UPDATED',
           data: {
             categoryId: id,
             name: formData.name,
             isActive: formData.isActive,
             imageUrl: finalImageUrl,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
-        
-        showSuccessToast(` Category "${toTitleCase(formData.name)}" updated successfully!`);
+
+        showSuccessToast(
+          `Category "${toTitleCase(formData.name)}" updated successfully!`
+        );
       } else {
         const response = await createCategory(categoryData).unwrap();
         const newId = getCategoryId(response.data) || response.id;
-        
-        socket.emit("category_event", {
-          event: "CATEGORY_REGISTERED",
+
+        socket.emit('category_event', {
+          event: 'CATEGORY_REGISTERED',
           data: {
             categoryId: newId,
             name: formData.name,
             isActive: formData.isActive,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
-        
-        showSuccessToast(` Category "${toTitleCase(formData.name)}" created successfully!`);
+
+        showSuccessToast(
+          `Category "${toTitleCase(formData.name)}" created successfully!`
+        );
       }
-      
-      // Reset image states
+
       setImageFile(null);
       setImagePreview(null);
       setRemoveExistingImage(false);
-      
+
       handleCloseModal();
-      
-      // Force refetch with cache busting
+
+      // Small delay so the backend commits the new imageUrl before refetch
+      await new Promise((r) => setTimeout(r, 300));
       await refetch();
-      
     } catch (error) {
-      console.error("❌ Submit error:", error);
-      const errorMessage = error.data?.message || 'Failed to save category. Please try again.';
+      console.error('[Category] Submit error:', error);
+      const errorMessage =
+        error.data?.message || 'Failed to save category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Open delete confirmation modal
   const handleDeleteClick = (category) => {
     setOpenMenuId(null);
     setCategoryToDelete(category);
     setIsDeleteModalOpen(true);
   };
 
-  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!categoryToDelete) return;
 
-    
     try {
       const categoryId = getCategoryId(categoryToDelete);
-      
+
       if (!categoryId) {
-        showErrorToast("❌ Invalid category ID", 3000);
+        showErrorToast('❌ Invalid category ID', 3000);
         setIsDeleteModalOpen(false);
         setCategoryToDelete(null);
         return;
       }
-      
-      // Delete image from S3 if exists
-      if (categoryToDelete.imageUrl) {
-        await deleteFromS3(categoryToDelete.imageUrl, categoryId, "category");
-      }
-      
-      await deleteCategory(categoryId).unwrap();
-      
-      socket.emit("category_event", {
-        event: "CATEGORY_DELETED",
-        data: {
-          categoryId: categoryId,
-          name: categoryToDelete.name,
-          timestamp: new Date().toISOString()
-        }
+
+      console.log('[Category] Deleting:', {
+        id: categoryId,
+        name: categoryToDelete.name,
+        imageUrl: categoryToDelete.imageUrl,
       });
-      
-      showSuccessToast(`Category "${toTitleCase(categoryToDelete.name)}" deleted successfully!`);
+
+      if (categoryToDelete.imageUrl) {
+        await deleteFromS3(categoryToDelete.imageUrl, categoryId, 'category');
+      }
+
+      await deleteCategory(categoryId).unwrap();
+
+      socket.emit('category_event', {
+        event: 'CATEGORY_DELETED',
+        data: {
+          categoryId,
+          name: categoryToDelete.name,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      showSuccessToast(
+        `Category "${toTitleCase(categoryToDelete.name)}" deleted successfully!`
+      );
       setIsDeleteModalOpen(false);
       setCategoryToDelete(null);
       refetch();
     } catch (error) {
-      console.error("❌ Delete error:", error);
-      const errorMessage = error.data?.message || 'Failed to delete category. Please try again.';
+      console.error('[Category] Delete error:', error);
+      const errorMessage =
+        error.data?.message || 'Failed to delete category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
       setIsDeleteModalOpen(false);
       setCategoryToDelete(null);
     }
   };
 
-  // Cancel delete
   const handleCancelDelete = () => {
     setIsDeleteModalOpen(false);
     setCategoryToDelete(null);
@@ -630,38 +660,41 @@ const Categories = () => {
 
   const handleToggleStatus = async (category) => {
     setOpenMenuId(null);
-    
+
     const newStatus = !category.isActive;
     const action = newStatus ? 'activate' : 'deactivate';
 
     try {
       const categoryId = getCategoryId(category);
-      
+
       if (!categoryId) {
-        showErrorToast("❌ Invalid category ID", 3000);
+        showErrorToast('❌ Invalid category ID', 3000);
         return;
       }
-      
+
       await updateCategory({
         id: categoryId,
-        data: { isActive: newStatus }
+        data: { isActive: newStatus },
       }).unwrap();
-      
-      socket.emit("category_event", {
-        event: "CATEGORY_UPDATED",
+
+      socket.emit('category_event', {
+        event: 'CATEGORY_UPDATED',
         data: {
-          categoryId: categoryId,
+          categoryId,
           name: category.name,
           isActive: newStatus,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
-      
-      showSuccessToast(` Category "${toTitleCase(category.name)}" ${action}d successfully!`);
+
+      showSuccessToast(
+        `Category "${toTitleCase(category.name)}" ${action}d successfully!`
+      );
       refetch();
     } catch (error) {
-      console.error("❌ Toggle status error:", error);
-      const errorMessage = error.data?.message || `Failed to ${action} category. Please try again.`;
+      console.error('[Category] Toggle status error:', error);
+      const errorMessage =
+        error.data?.message || `Failed to ${action} category. Please try again.`;
       showErrorToast(`❌ ${errorMessage}`);
     }
   };
@@ -676,8 +709,12 @@ const Categories = () => {
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Categories Management</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage medical categories across the platform</p>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Categories Management
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage medical categories across the platform
+            </p>
           </div>
           <button
             onClick={handleOpenCreateModal}
@@ -692,7 +729,10 @@ const Categories = () => {
       {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder="Search categories..."
@@ -703,7 +743,7 @@ const Categories = () => {
         </div>
       </div>
 
-      {/* Loading State */}
+      {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 size={40} className="animate-spin text-[#154A7D]" />
@@ -711,13 +751,16 @@ const Categories = () => {
         </div>
       )}
 
-      {/* Error State */}
+      {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
           <AlertCircle className="text-red-500" size={24} />
           <div>
             <p className="text-red-700 font-medium">Error loading categories</p>
-            <p className="text-red-600 text-sm">{error.data?.message || 'Failed to load categories. Please try again.'}</p>
+            <p className="text-red-600 text-sm">
+              {error.data?.message ||
+                'Failed to load categories. Please try again.'}
+            </p>
             <button
               onClick={() => refetch()}
               className="mt-2 text-sm text-red-700 underline hover:text-red-900"
@@ -728,11 +771,13 @@ const Categories = () => {
         </div>
       )}
 
-      {/* No Categories State */}
+      {/* Empty state */}
       {!isLoading && !error && categories.length === 0 && !searchTerm && (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <div className="text-6xl mb-4">📂</div>
-          <h3 className="text-lg font-medium text-gray-700 mb-2">No Categories Found</h3>
+          <h3 className="text-lg font-medium text-gray-700 mb-2">
+            No Categories Found
+          </h3>
           <p className="text-gray-500 mb-4">Start by adding your first category</p>
           <button
             onClick={handleOpenCreateModal}
@@ -743,30 +788,38 @@ const Categories = () => {
         </div>
       )}
 
-      {/* No Results for Search */}
-      {!isLoading && !error && categories.length > 0 && filteredCategories.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-6xl mb-4">🔍</div>
-          <h3 className="text-lg font-medium text-gray-700 mb-2">No Results Found</h3>
-          <p className="text-gray-500">No categories match your search term "{searchTerm}"</p>
-        </div>
-      )}
+      {/* No results for search */}
+      {!isLoading &&
+        !error &&
+        categories.length > 0 &&
+        filteredCategories.length === 0 && (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-lg font-medium text-gray-700 mb-2">
+              No Results Found
+            </h3>
+            <p className="text-gray-500">
+              No categories match your search term "{searchTerm}"
+            </p>
+          </div>
+        )}
 
-      {/* Categories Grid */}
+      {/* Categories grid */}
       {!isLoading && !error && filteredCategories.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {paginatedCategories.map((category) => {
-              // Use cache-busted URL for image
-              const imageUrl = category.imageUrl ? getImageUrlWithCache(category.imageUrl) : null;
               const categoryId = getCategoryId(category);
-              
+              const imageUrl = category.imageUrl
+                ? getImageUrlWithCache(category.imageUrl, `Category-${categoryId}`)
+                : null;
+
               return (
                 <div
                   key={categoryId || Math.random().toString()}
                   className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative"
                 >
-                  {/* Three-Dot Menu - Top Right */}
+                  {/* Three-dot menu */}
                   <div className="absolute top-3 right-3 category-menu-container">
                     <button
                       onClick={(e) => {
@@ -779,10 +832,8 @@ const Categories = () => {
                       <MoreVertical size={18} className="text-gray-600" />
                     </button>
 
-                    {/* Dropdown Menu */}
                     {openMenuId === categoryId && (
                       <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 category-menu-dropdown">
-                        {/* Edit */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -794,7 +845,6 @@ const Categories = () => {
                           <span>Edit</span>
                         </button>
 
-                        {/* Delete */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -810,24 +860,33 @@ const Categories = () => {
                   </div>
 
                   <div className="flex flex-col items-center mt-4">
-                    {/* Category Image or Initial */}
                     {imageUrl ? (
                       <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
-                        <img 
-                          src={imageUrl} 
-                          alt={category.name} 
+                        <img
+                          src={imageUrl}
+                          alt={category.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // If image fails to load, try without cache busting
+                            console.error(
+                              `[Category-${categoryId}] Image load failed:`,
+                              e.target.src,
+                              '\nRaw key was:',
+                              category.imageUrl
+                            );
+                            // Fallback: try without cache-busting
                             const fallbackUrl = getS3ImageUrl(category.imageUrl);
                             if (fallbackUrl && e.target.src !== fallbackUrl) {
+                              console.log(
+                                `[Category-${categoryId}] Trying fallback:`,
+                                fallbackUrl
+                              );
                               e.target.src = fallbackUrl;
                             }
                           }}
                         />
                       </div>
                     ) : (
-                      <div 
+                      <div
                         className="w-32 h-32 rounded-full flex items-center justify-center mb-4 text-5xl font-bold text-white"
                         style={{ backgroundColor: getInitialColor(category.name) }}
                       >
@@ -835,18 +894,18 @@ const Categories = () => {
                       </div>
                     )}
 
-                    {/* Category Name - Title Case */}
                     <h3 className="text-xl font-semibold text-gray-800 text-center mb-1">
                       {toTitleCase(category.name)}
                     </h3>
 
-                    {/* Status Badge */}
                     <div className="mt-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        category.isActive 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          category.isActive
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
                         {category.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
@@ -856,7 +915,6 @@ const Categories = () => {
             })}
           </div>
 
-          {/* ✅ Pagination - Simplified with < Prev 1 Next > */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -868,12 +926,11 @@ const Categories = () => {
         </>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create / Edit modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              {/* Modal Header */}
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-900">
                   {editingCategory ? 'Edit Category' : 'Add New Category'}
@@ -886,9 +943,7 @@ const Categories = () => {
                 </button>
               </div>
 
-              {/* Modal Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Image Upload - Only show when editing */}
                 {editingCategory && (
                   <ImageUpload
                     imageUrl={imagePreview}
@@ -899,7 +954,6 @@ const Categories = () => {
                   />
                 )}
 
-                {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category Name <span className="text-red-500">*</span>
@@ -915,7 +969,6 @@ const Categories = () => {
                   />
                 </div>
 
-                {/* Status */}
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -924,12 +977,9 @@ const Categories = () => {
                     onChange={handleInputChange}
                     className="w-4 h-4 text-[#154A7D] border-gray-300 rounded focus:ring-[#154A7D]"
                   />
-                  <label className="text-sm text-gray-700">
-                    Active
-                  </label>
+                  <label className="text-sm text-gray-700">Active</label>
                 </div>
 
-                {/* Form Actions */}
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
@@ -946,7 +996,11 @@ const Categories = () => {
                     {(isCreating || isUpdating || isUploading) && (
                       <Loader2 size={18} className="animate-spin" />
                     )}
-                    {isUploading ? 'Uploading...' : editingCategory ? 'Update' : 'Create'}
+                    {isUploading
+                      ? 'Uploading...'
+                      : editingCategory
+                      ? 'Update'
+                      : 'Create'}
                   </button>
                 </div>
               </form>
@@ -955,7 +1009,6 @@ const Categories = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={handleCancelDelete}

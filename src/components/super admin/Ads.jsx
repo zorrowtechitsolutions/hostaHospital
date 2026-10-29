@@ -23,6 +23,9 @@ import { getS3ImageUrl, uploadToS3 } from '../../../app/service/S3';
 import { socket } from '../../socket/socket';
 import { registerAdEvents, unregisterAdEvents } from '../../socket/adEvents';
 
+// ---------- LOG TAG ----------
+const LOG = '[Ads]';
+
 // Styling override so CustomSelect matches the "border-gray-300 rounded-lg focus:ring-[#1C62A0]" inputs
 const HOSPITAL_SELECT_CLASS =
   "w-full [&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
@@ -46,7 +49,23 @@ const formatDate = (date) => {
   });
 };
 
+// Resolve an ad image key to a displayable URL (with logging)
+const resolveAdImageUrl = (rawImageUrl, ctx = 'ad') => {
+  if (!rawImageUrl) {
+    console.log(`${LOG} [${ctx}] no imageUrl → null`);
+    return null;
+  }
+  const resolved = getS3ImageUrl(rawImageUrl);
+  console.log(`${LOG} [${ctx}] imageUrl resolve:`, {
+    raw: rawImageUrl,
+    resolved,
+  });
+  return resolved || rawImageUrl;
+};
+
+// ===================
 // Add Ad Modal
+// ===================
 const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   const [formData, setFormData] = useState({
     imageUrl: '',
@@ -67,16 +86,30 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
   const hospitalOptions = toHospitalOptions(hospitals);
 
+  useEffect(() => {
+    if (isOpen) {
+      console.log(`${LOG} AddAdModal opened. Hospital options:`, hospitalOptions);
+    }
+  }, [isOpen, hospitalOptions]);
+
   const handleImageUpload = async (file) => {
     if (!file) return;
 
+    console.log(`${LOG} AddAdModal file selected:`, {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+
     if (file.size > 5 * 1024 * 1024) {
+      console.warn(`${LOG} AddAdModal file too large (>5MB)`);
       showErrorToast('Image size must be less than 5MB', 3000);
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
+      console.warn(`${LOG} AddAdModal invalid type:`, file.type);
       showErrorToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
       return;
     }
@@ -86,6 +119,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewImage(reader.result);
+      console.log(`${LOG} AddAdModal preview set (local object URL)`);
     };
     reader.readAsDataURL(file);
 
@@ -98,6 +132,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   };
 
   const removeImage = () => {
+    console.log(`${LOG} AddAdModal removeImage`);
     setPreviewImage(null);
     setUploadedImageKey(null);
     setSelectedFile(null);
@@ -113,6 +148,8 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   };
 
   const handleSubmit = () => {
+    console.log(`${LOG} AddAdModal submit. formData:`, formData, 'hasFile:', !!selectedFile);
+
     if (!formData.hospitalId) {
       showErrorToast('Hospital is required', 3000);
       return;
@@ -126,7 +163,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       return;
     }
 
-    onSave({
+    const payload = {
       imageUrl: null,
       imageKey: null,
       imageFile: selectedFile,
@@ -135,7 +172,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       endDate: formData.endDate,
       kilometer: formData.kilometer,
       isActive: formData.isActive
-    });
+    };
+    console.log(`${LOG} AddAdModal onSave payload:`, payload);
+    onSave(payload);
 
     setFormData({
       imageUrl: '',
@@ -154,12 +193,15 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
   const handleHospitalChange = (e) => {
     const hospitalId = e.target.value;
+    console.log(`${LOG} AddAdModal hospital changed to:`, hospitalId);
+
     setFormData(prev => ({
       ...prev,
       hospitalId: hospitalId
     }));
 
     if (uploadedImageKey) {
+      console.log(`${LOG} AddAdModal clearing image (hospital changed)`);
       setUploadedImageKey(null);
       setPreviewImage(null);
       setSelectedFile(null);
@@ -199,6 +241,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
                   src={previewImage}
                   alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    console.error(`${LOG} AddAdModal preview <img> failed:`, e.target.src);
+                  }}
                 />
                 <button
                   type="button"
@@ -251,7 +296,7 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Hospital Selection — ✅ Replaced native  with CustomSelect */}
+        {/* Hospital Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Hospital * <span className="text-red-500">Select first before uploading image</span>
@@ -307,7 +352,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   );
 };
 
+// ===================
 // Edit Ad Modal
+// ===================
 const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const [formData, setFormData] = useState({
     imageUrl: '',
@@ -330,6 +377,16 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 
   useEffect(() => {
     if (ad) {
+      console.log(`${LOG} EditAdModal populated with ad:`, {
+        id: ad.id,
+        hospitalId: ad.hospitalId,
+        rawImageUrl: ad.imageUrl,
+        rawImageKey: ad.imageKey,
+        startDate: ad.startDate,
+        endDate: ad.endDate,
+        kilometer: ad.kilometer,
+        isActive: ad.isActive,
+      });
       setFormData({
         imageUrl: ad.imageUrl || '',
         imageKey: ad.imageKey || '',
@@ -339,13 +396,24 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
         kilometer: ad.kilometer || 5,
         isActive: ad.isActive !== undefined ? ad.isActive : true
       });
-      setPreviewImage(ad.imageUrl ? getS3ImageUrl(ad.imageUrl) : null);
+      const resolved = ad.imageUrl ? getS3ImageUrl(ad.imageUrl) : null;
+      console.log(`${LOG} EditAdModal preview resolve:`, {
+        raw: ad.imageUrl,
+        resolved,
+      });
+      setPreviewImage(resolved);
       setUploadedImageKey(ad.imageKey || null);
     }
   }, [ad]);
 
   const handleImageUpload = async (file) => {
     if (!file) return;
+
+    console.log(`${LOG} EditAdModal file selected:`, {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
 
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast('Image size must be less than 5MB', 3000);
@@ -375,6 +443,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   };
 
   const removeImage = () => {
+    console.log(`${LOG} EditAdModal removeImage`);
     setPreviewImage(null);
     setUploadedImageKey(null);
     setSelectedFile(null);
@@ -403,7 +472,7 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       return;
     }
 
-    onSave({
+    const payload = {
       ...ad,
       ...formData,
       imageFile: selectedFile,
@@ -413,17 +482,31 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       imageUrl: selectedFile
         ? null
         : (uploadedImageKey || formData.imageKey || null)
+    };
+    console.log(`${LOG} EditAdModal onSave payload:`, {
+      id: payload.id,
+      hospitalId: payload.hospitalId,
+      hasNewFile: !!payload.imageFile,
+      imageKey: payload.imageKey,
+      imageUrl: payload.imageUrl,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      kilometer: payload.kilometer,
+      isActive: payload.isActive,
     });
+    onSave(payload);
   };
 
   const handleHospitalChange = (e) => {
     const hospitalId = e.target.value;
+    console.log(`${LOG} EditAdModal hospital changed to:`, hospitalId);
     setFormData(prev => ({
       ...prev,
       hospitalId: hospitalId
     }));
 
     if (uploadedImageKey) {
+      console.log(`${LOG} EditAdModal clearing image (hospital changed)`);
       setUploadedImageKey(null);
       setPreviewImage(null);
       setSelectedFile(null);
@@ -449,7 +532,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Image Upload Section */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
@@ -463,6 +545,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
                   src={previewImage}
                   alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    console.error(`${LOG} EditAdModal preview <img> failed:`, e.target.src);
+                  }}
                 />
                 <button
                   type="button"
@@ -512,7 +597,6 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           </div>
         </div>
 
-        {/* Hospital Selection — ✅ Replaced native  with CustomSelect */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Hospital *
@@ -567,9 +651,13 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   );
 };
 
+// ===================
 // View Ad Modal
+// ===================
 const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
   if (!ad) return null;
+
+  const viewUrl = ad.imageUrl ? resolveAdImageUrl(ad.imageUrl, 'ViewAd') : null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ad Details" size="md">
@@ -577,10 +665,14 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
         {ad.imageUrl && (
           <div className="flex justify-center mb-4">
             <img
-              src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl}
+              src={viewUrl || ad.imageUrl}
               alt={ad.id}
               className="w-full max-h-48 object-cover rounded-lg"
               onError={(e) => {
+                console.error(`${LOG} ViewAdModal image failed:`, {
+                  src: e.target.src,
+                  rawImageUrl: ad.imageUrl,
+                });
                 e.target.src = 'https://placehold.co/400x200?text=No+Image';
               }}
             />
@@ -627,7 +719,9 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
   );
 };
 
-// Skeleton Loading Component
+// ===================
+// Skeleton
+// ===================
 const AdsSkeleton = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -659,6 +753,9 @@ const AdsSkeleton = () => {
   );
 };
 
+// ===================
+// Main Component
+// ===================
 const Ads = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -722,17 +819,48 @@ const Ads = () => {
     return hospitalMap.get(hospitalId) || `Hospital ID: ${hospitalId}`;
   };
 
+  // ---------- LOGS: ads data + hospitals once they arrive ----------
   useEffect(() => {
+    if (adsResponse) {
+      console.log(`${LOG} adsResponse received:`, {
+        dataLength: ads?.length,
+        totalPages,
+        totalItems,
+        raw: adsResponse,
+      });
+      ads.forEach((ad, idx) => {
+        console.log(`${LOG} ad #${idx}:`, {
+          id: ad.id,
+          hospitalId: ad.hospitalId,
+          rawImageUrl: ad.imageUrl,
+          rawImageKey: ad.imageKey,
+          isActive: ad.isActive,
+        });
+      });
+    }
+  }, [adsResponse]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (hospitalsData) {
+      console.log(`${LOG} hospitalsData received. count:`, hospitals.length);
+    }
+  }, [hospitalsData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    console.log(`${LOG} registering socket ad events`);
     registerAdEvents({
       onAdCreated: () => {
+        console.log(`${LOG} socket: AD created`);
         showSuccessToast(`New ad created!`, 3000);
         refetch();
       },
       onAdUpdated: () => {
+        console.log(`${LOG} socket: AD updated`);
         showSuccessToast(`Ad updated successfully!`, 3000);
         refetch();
       },
       onAdDeleted: () => {
+        console.log(`${LOG} socket: AD deleted`);
         showSuccessToast(`Ad deleted!`, 3000);
         refetch();
       }
@@ -741,6 +869,7 @@ const Ads = () => {
     setEventsRegistered(true);
 
     return () => {
+      console.log(`${LOG} unregistering socket ad events`);
       unregisterAdEvents();
       setEventsRegistered(false);
     };
@@ -748,6 +877,7 @@ const Ads = () => {
 
   useEffect(() => {
     const handleConnect = () => {
+      console.log(`${LOG} socket connected`);
       if (!eventsRegistered) {
         registerAdEvents({
           onAdCreated: () => {
@@ -789,6 +919,15 @@ const Ads = () => {
   }, [activeMenu]);
 
   const handleAddAd = async (newAd) => {
+    console.log(`${LOG} handleAddAd start. payload:`, {
+      hospitalId: newAd.hospitalId,
+      hasImageFile: !!newAd.imageFile,
+      startDate: newAd.startDate,
+      endDate: newAd.endDate,
+      kilometer: newAd.kilometer,
+      isActive: newAd.isActive,
+    });
+
     try {
       const result = await createAd({
         imageUrl: null,
@@ -800,6 +939,8 @@ const Ads = () => {
         isActive: newAd.isActive
       }).unwrap();
 
+      console.log(`${LOG} createAd API result:`, result);
+
       const createdAd = result.ad || result.data || result;
 
       if (!createdAd?.id) {
@@ -807,20 +948,25 @@ const Ads = () => {
       }
 
       if (newAd.imageFile) {
+        console.log(`${LOG} uploading image for new ad id:`, createdAd.id);
         const uploaded = await uploadToS3(
           newAd.imageFile,
           null,
           Number(createdAd.id),
           "ad"
         );
+        console.log(`${LOG} S3 upload done for new ad:`, uploaded);
 
-        await updateAd({
+        const upd = await updateAd({
           id: createdAd.id,
           data: {
             imageUrl: uploaded.key,
             imageKey: uploaded.key
           }
         }).unwrap();
+        console.log(`${LOG} ad image persisted:`, upd);
+      } else {
+        console.log(`${LOG} new ad created without image`);
       }
 
       socket.emit("ad_event", {
@@ -841,7 +987,7 @@ const Ads = () => {
       setShowAddModal(false);
 
     } catch (error) {
-      console.error("❌ Create ad error:", error);
+      console.error(`${LOG} handleAddAd error:`, error);
       showErrorToast(
         error?.data?.message ||
         error?.message ||
@@ -852,42 +998,50 @@ const Ads = () => {
   };
 
   const handleEditAd = async (updatedAd) => {
+    console.log(`${LOG} handleEditAd start. ad id:`, updatedAd.id, 'hasFile:', !!updatedAd.imageFile);
+
     try {
+      const firstPayload = {
+        hospitalId: updatedAd.hospitalId,
+        startDate: updatedAd.startDate,
+        endDate: updatedAd.endDate,
+        kilometer: updatedAd.kilometer,
+        isActive: updatedAd.isActive,
+        ...(updatedAd.imageFile
+          ? {
+              imageUrl: null,
+              imageKey: null
+            }
+          : {
+              imageUrl: updatedAd.imageUrl || null,
+              imageKey: updatedAd.imageKey || null
+            })
+      };
+      console.log(`${LOG} updateAd (pre-image) payload:`, firstPayload);
+
       await updateAd({
         id: updatedAd.id,
-        data: {
-          hospitalId: updatedAd.hospitalId,
-          startDate: updatedAd.startDate,
-          endDate: updatedAd.endDate,
-          kilometer: updatedAd.kilometer,
-          isActive: updatedAd.isActive,
-          ...(updatedAd.imageFile
-            ? {
-                imageUrl: null,
-                imageKey: null
-              }
-            : {
-                imageUrl: updatedAd.imageUrl || null,
-                imageKey: updatedAd.imageKey || null
-              })
-        }
+        data: firstPayload
       }).unwrap();
 
       if (updatedAd.imageFile) {
+        console.log(`${LOG} uploading new image for ad id:`, updatedAd.id);
         const uploaded = await uploadToS3(
           updatedAd.imageFile,
           null,
           Number(updatedAd.id),
           "ad"
         );
+        console.log(`${LOG} S3 upload done for edit:`, uploaded);
 
-        await updateAd({
+        const second = await updateAd({
           id: updatedAd.id,
           data: {
             imageUrl: uploaded.key,
             imageKey: uploaded.key
           }
         }).unwrap();
+        console.log(`${LOG} ad image persisted after edit:`, second);
       }
 
       socket.emit("ad_event", {
@@ -910,7 +1064,7 @@ const Ads = () => {
       setSelectedAd(null);
 
     } catch (error) {
-      console.error("❌ Edit ad error:", error);
+      console.error(`${LOG} handleEditAd error:`, error);
       showErrorToast(
         error?.data?.message ||
         error?.message ||
@@ -921,6 +1075,7 @@ const Ads = () => {
   };
 
   const handleToggleStatus = async (ad) => {
+    console.log(`${LOG} handleToggleStatus for ad:`, ad.id, 'current:', ad.isActive);
     try {
       const newStatus = !ad.isActive;
       await updateAd({
@@ -943,12 +1098,14 @@ const Ads = () => {
       showSuccessToast(`Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
       refetch();
     } catch (error) {
+      console.error(`${LOG} handleToggleStatus error:`, error);
       showErrorToast(error?.data?.message || 'Failed to update ad status', 3000);
     }
   };
 
   const handleDeleteAd = async () => {
     if (selectedAd) {
+      console.log(`${LOG} handleDeleteAd for ad:`, selectedAd.id, 'imageUrl:', selectedAd.imageUrl);
       try {
         await deleteAd(selectedAd.id).unwrap();
 
@@ -967,6 +1124,7 @@ const Ads = () => {
         setShowDeleteModal(false);
         setSelectedAd(null);
       } catch (error) {
+        console.error(`${LOG} handleDeleteAd error:`, error);
         showErrorToast(error?.data?.message || 'Failed to delete ad', 3000);
       }
     }
@@ -978,6 +1136,7 @@ const Ads = () => {
   };
 
   const handleRefresh = () => {
+    console.log(`${LOG} refresh clicked`);
     setSearchTerm("");
     setCurrentPage(1);
     refetch();
@@ -985,6 +1144,7 @@ const Ads = () => {
   };
 
   const handleExport = () => {
+    console.log(`${LOG} exporting ${ads.length} ads`);
     const exportData = ads.map(ad => ({
       'ID': ad.id,
       'Hospital Name': getHospitalName(ad.hospitalId),
@@ -1059,70 +1219,80 @@ const Ads = () => {
       {/* Ads Grid */}
       {ads.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {ads.map((ad) => (
-            <Card key={ad.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="relative">
-                {ad.imageUrl ? (
-                  <img
-                    src={getS3ImageUrl(ad.imageUrl) || ad.imageUrl}
-                    alt={`Ad ${ad.id}`}
-                    className="w-full h-48 object-cover"
-                    onError={(e) => {
-                      e.target.src = 'https://placehold.co/400x200?text=No+Image';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
-                    <Image className="w-12 h-12 text-gray-400" />
-                  </div>
-                )}
-                <div className="absolute top-2 right-2 menu-container">
-                  <button onClick={(e) => toggleMenu(ad.id, e)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100">
-                    <MoreVertical size={16} className="text-gray-600" />
-                  </button>
-                  {activeMenu === ad.id && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                      <button onClick={() => { setSelectedAd(ad); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                        <Eye size={16} /> View Details
-                      </button>
-                      <button onClick={() => { setSelectedAd(ad); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                        <Edit size={16} /> Edit
-                      </button>
-                      <button onClick={() => handleToggleStatus(ad)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                        <RefreshCcw size={16} /> {ad.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <div className="border-t border-gray-100 my-1"></div>
-                      <button onClick={() => { setSelectedAd(ad); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                        <Trash2 size={16} /> Delete
-                      </button>
+          {ads.map((ad) => {
+            const cardUrl = ad.imageUrl
+              ? resolveAdImageUrl(ad.imageUrl, `Card-${ad.id}`)
+              : null;
+            return (
+              <Card key={ad.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <div className="relative">
+                  {ad.imageUrl ? (
+                    <img
+                      src={cardUrl || ad.imageUrl}
+                      alt={`Ad ${ad.id}`}
+                      className="w-full h-48 object-cover"
+                      onError={(e) => {
+                        console.error(`${LOG} card image failed:`, {
+                          adId: ad.id,
+                          src: e.target.src,
+                          rawImageUrl: ad.imageUrl,
+                        });
+                        e.target.src = 'https://placehold.co/400x200?text=No+Image';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+                      <Image className="w-12 h-12 text-gray-400" />
                     </div>
                   )}
-                </div>
-                <div className="absolute top-2 left-2">
-                  <Badge variant={ad.isActive ? 'success' : 'danger'}>
-                    {ad.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500">ID: #{ad.id}</p>
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <MapPin size={12} />
-                    <span>{ad.kilometer} km radius</span>
+                  <div className="absolute top-2 right-2 menu-container">
+                    <button onClick={(e) => toggleMenu(ad.id, e)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100">
+                      <MoreVertical size={16} className="text-gray-600" />
+                    </button>
+                    {activeMenu === ad.id && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                        <button onClick={() => { setSelectedAd(ad); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Eye size={16} /> View Details
+                        </button>
+                        <button onClick={() => { setSelectedAd(ad); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Edit size={16} /> Edit
+                        </button>
+                        <button onClick={() => handleToggleStatus(ad)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <RefreshCcw size={16} /> {ad.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <div className="border-t border-gray-100 my-1"></div>
+                        <button onClick={() => { setSelectedAd(ad); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
+                          <Trash2 size={16} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute top-2 left-2">
+                    <Badge variant={ad.isActive ? 'success' : 'danger'}>
+                      {ad.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
-                  <Building size={12} />
-                  <span className="truncate">{getHospitalName(ad.hospitalId)}</span>
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500">ID: #{ad.id}</p>
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <MapPin size={12} />
+                      <span>{ad.kilometer} km radius</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
+                    <Building size={12} />
+                    <span className="truncate">{getHospitalName(ad.hospitalId)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                    <Calendar size={12} />
+                    <span>{formatDate(ad.startDate)} - {formatDate(ad.endDate)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                  <Calendar size={12} />
-                  <span>{formatDate(ad.startDate)} - {formatDate(ad.endDate)}</span>
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
