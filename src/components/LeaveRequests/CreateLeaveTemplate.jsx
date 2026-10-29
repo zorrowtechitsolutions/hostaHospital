@@ -35,7 +35,6 @@ const CreateLeaveTemplate = () => {
         isRecommended: false,
       };
 
-      console.log("CREATE LEAVE TEMPLATE PAYLOAD:", payload);
 
       await createLeaveTemplate(payload).unwrap();
 
