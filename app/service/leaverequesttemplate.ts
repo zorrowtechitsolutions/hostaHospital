@@ -300,10 +300,7 @@ export const leaveTemplateApi = api.injectEndpoints({
           isRecommended: body.isRecommended ?? false,
         };
 
-        console.log(
-          "FINAL CREATE LEAVE TEMPLATE REQUEST:",
-          finalPayload
-        );
+       
 
         return {
           url: "/leave-templates",

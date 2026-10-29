@@ -158,8 +158,6 @@ export const holidayApi = api.injectEndpoints({
           }
         }
 
-        console.log("Creating holiday with hospitalId:", hospitalId);
-        console.log("HOLIDAY AUTH:", auth);
 
         return {
           url: "/holidays",
@@ -221,7 +219,6 @@ export const holidayApi = api.injectEndpoints({
           }
         }
 
-        console.log("Updating holiday with hospitalId:", hospitalId);
 
         return {
           url: `/holidays/${id}`,

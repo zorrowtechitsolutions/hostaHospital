@@ -103,20 +103,17 @@ const getInitialColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Get S3 image URL with cache busting + logging
-const getImageUrlWithCache = (imageUrl, context = 'category') => {
+// Get S3 image URL with cache busting
+const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) {
-    console.log(`[${context}] No imageUrl → using initial fallback`);
     return null;
   }
   const url = getS3ImageUrl(imageUrl);
   if (!url) {
-    console.warn(`[${context}] getS3ImageUrl returned null for key:`, imageUrl);
     return null;
   }
   const separator = url.includes('?') ? '&' : '?';
   const finalUrl = `${url}${separator}_t=${Date.now()}`;
-  console.log(`[${context}] Cache-busted URL:`, finalUrl);
   return finalUrl;
 };
 
@@ -146,12 +143,6 @@ const ImageUpload = ({
       return;
     }
 
-    console.log('[ImageUpload] File selected:', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-
     onImageChange(file);
   };
 
@@ -167,9 +158,6 @@ const ImageUpload = ({
                 src={imageUrl}
                 alt="Category"
                 className="w-full h-full object-cover rounded-lg border border-gray-200"
-                onError={(e) => {
-                  console.error('[ImageUpload] Preview image failed to load:', e.target.src);
-                }}
               />
               <button
                 type="button"
@@ -315,25 +303,6 @@ const Categories = () => {
   const [updateCategory, { isLoading: isUpdating }] = useUpdateCategoryMutation();
   const [deleteCategory, { isLoading: isDeleting }] = useDeleteCategoryMutation();
 
-  // Log raw API response once
-  useEffect(() => {
-    if (categoriesData) {
-      console.log('[Category] API response received:', categoriesData);
-      const list = categoriesData?.data && Array.isArray(categoriesData.data)
-        ? categoriesData.data
-        : [];
-      console.log('[Category] Parsed list length:', list.length);
-      list.forEach((cat, idx) => {
-        console.log(`[Category] #${idx}:`, {
-          id: cat.id || cat._id,
-          name: cat.name,
-          rawImageUrl: cat.imageUrl,
-          isActive: cat.isActive,
-        });
-      });
-    }
-  }, [categoriesData]);
-
   // Register socket events
   useEffect(() => {
     registerCategoryEvents({
@@ -441,13 +410,8 @@ const Categories = () => {
       return;
     }
 
-    console.log('[Category] Opening edit modal:', {
-      id: categoryId,
-      rawImageUrl: category.imageUrl,
-    });
-
     const existingImageUrl = category.imageUrl
-      ? getImageUrlWithCache(category.imageUrl, 'Category-edit')
+      ? getImageUrlWithCache(category.imageUrl)
       : null;
 
     setEditingCategory(category);
@@ -476,18 +440,15 @@ const Categories = () => {
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setRemoveExistingImage(false);
-    console.log('[Category] New image staged:', file.name);
   };
 
   const handleImageRemove = () => {
     if (formData.imageUrl) {
       setRemoveExistingImage(true);
       setImagePreview(null);
-      console.log('[Category] Existing image marked for removal');
     } else {
       setImageFile(null);
       setImagePreview(null);
-      console.log('[Category] Staged image cleared');
     }
   };
 
@@ -508,19 +469,16 @@ const Categories = () => {
 
       if (editingCategory) {
         if (removeExistingImage && formData.imageUrl) {
-          console.log('[Category] Deleting existing image from S3:', formData.imageUrl);
           await deleteFromS3(formData.imageUrl, categoryId, 'category');
           finalImageUrl = null;
         }
 
         if (imageFile) {
           if (formData.imageUrl && !removeExistingImage) {
-            console.log('[Category] Replacing existing image:', formData.imageUrl);
             await deleteFromS3(formData.imageUrl, categoryId, 'category');
           }
 
           setIsUploading(true);
-          console.log('[Category] Uploading new image…');
           const uploadResult = await uploadToS3(
             imageFile,
             null,
@@ -528,7 +486,6 @@ const Categories = () => {
             'category'
           );
           finalImageUrl = uploadResult.key;
-          console.log('[Category] Upload complete:', uploadResult);
         }
       }
 
@@ -537,8 +494,6 @@ const Categories = () => {
         isActive: formData.isActive,
         ...(editingCategory && { imageUrl: finalImageUrl }),
       };
-
-      console.log('[Category] Submitting payload:', categoryData);
 
       if (editingCategory) {
         const id = getCategoryId(editingCategory);
@@ -588,7 +543,6 @@ const Categories = () => {
       await new Promise((r) => setTimeout(r, 300));
       await refetch();
     } catch (error) {
-      console.error('[Category] Submit error:', error);
       const errorMessage =
         error.data?.message || 'Failed to save category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
@@ -616,12 +570,6 @@ const Categories = () => {
         return;
       }
 
-      console.log('[Category] Deleting:', {
-        id: categoryId,
-        name: categoryToDelete.name,
-        imageUrl: categoryToDelete.imageUrl,
-      });
-
       if (categoryToDelete.imageUrl) {
         await deleteFromS3(categoryToDelete.imageUrl, categoryId, 'category');
       }
@@ -644,7 +592,6 @@ const Categories = () => {
       setCategoryToDelete(null);
       refetch();
     } catch (error) {
-      console.error('[Category] Delete error:', error);
       const errorMessage =
         error.data?.message || 'Failed to delete category. Please try again.';
       showErrorToast(`❌ ${errorMessage}`);
@@ -692,7 +639,6 @@ const Categories = () => {
       );
       refetch();
     } catch (error) {
-      console.error('[Category] Toggle status error:', error);
       const errorMessage =
         error.data?.message || `Failed to ${action} category. Please try again.`;
       showErrorToast(`❌ ${errorMessage}`);
@@ -811,7 +757,7 @@ const Categories = () => {
             {paginatedCategories.map((category) => {
               const categoryId = getCategoryId(category);
               const imageUrl = category.imageUrl
-                ? getImageUrlWithCache(category.imageUrl, `Category-${categoryId}`)
+                ? getImageUrlWithCache(category.imageUrl)
                 : null;
 
               return (
@@ -867,19 +813,9 @@ const Categories = () => {
                           alt={category.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            console.error(
-                              `[Category-${categoryId}] Image load failed:`,
-                              e.target.src,
-                              '\nRaw key was:',
-                              category.imageUrl
-                            );
                             // Fallback: try without cache-busting
                             const fallbackUrl = getS3ImageUrl(category.imageUrl);
                             if (fallbackUrl && e.target.src !== fallbackUrl) {
-                              console.log(
-                                `[Category-${categoryId}] Trying fallback:`,
-                                fallbackUrl
-                              );
                               e.target.src = fallbackUrl;
                             }
                           }}
