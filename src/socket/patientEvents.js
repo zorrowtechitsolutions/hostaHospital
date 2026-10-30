@@ -1,33 +1,34 @@
-// src/socket/patientEvents.js
-import { socket } from "./socket";
-
 export const registerPatientEvents = (handlers = {}) => {
-  socket.on("patient_events", (payload) => {
-    const { event, message, data } = payload;
+  const handleEvent = (payload) => {
+    // Supports both wrapped payload { event, message, data } and direct payload
+    const event = payload?.event || payload?.type;
+    const data = payload?.data || payload;
+    const message = payload?.message || "";
 
     switch (event) {
       case "PATIENT_REGISTERED":
         handlers.onRegistered?.({ message, data });
         break;
-
       case "PATIENT_UPDATED":
         handlers.onUpdated?.({ message, data });
         break;
-
       case "PATIENT_DELETED":
         handlers.onDeleted?.({ message, data });
         break;
-
       case "PATIENT_RECOVERED":
         handlers.onRecovered?.({ message, data });
         break;
-
       default:
         break;
     }
-  });
-};
+  };
 
-export const unregisterPatientEvents = () => {
-  socket.off("patient_events");
+  // Listen to the wrapper event from notification-service
+  socket.on("patient_event", handleEvent);
+
+  // Also listen to direct events from user-service
+  socket.on("PATIENT_REGISTERED", (data) => handleEvent({ event: "PATIENT_REGISTERED", data }));
+  socket.on("PATIENT_UPDATED", (data) => handleEvent({ event: "PATIENT_UPDATED", data }));
+  socket.on("PATIENT_DELETED", (data) => handleEvent({ event: "PATIENT_DELETED", data }));
+  socket.on("PATIENT_RECOVERED", (data) => handleEvent({ event: "PATIENT_RECOVERED", data }));
 };
