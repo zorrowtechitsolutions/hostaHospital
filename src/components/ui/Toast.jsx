@@ -1,6 +1,8 @@
 // src/components/ui/Toast.jsx
 import React, { useEffect, useState } from 'react';
 
+const APP_ENV = import.meta.env.VITE_APP_ENV;
+
 const Toast = ({ message, type = 'success', duration = 4000, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
 
