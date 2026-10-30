@@ -2,7 +2,7 @@
 import { socket } from "./socket";
 
 export const registerPatientEvents = (handlers = {}) => {
-  socket.on("patient_event", (payload) => {
+  socket.on("patient_events", (payload) => {
     const { event, message, data } = payload;
 
     switch (event) {
@@ -29,5 +29,5 @@ export const registerPatientEvents = (handlers = {}) => {
 };
 
 export const unregisterPatientEvents = () => {
-  socket.off("patient_event");
+  socket.off("patient_events");
 };
