@@ -1,9 +1,8 @@
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
 
-const SOCKET_URL = "https://zorrowtek.in";
+const SOCKET_URL =import.meta.env.VITE_SOCKET_URL;;
 
-console.log(SOCKET_URL, "RTYUI");
 
 
 export const socket = io(SOCKET_URL, {
