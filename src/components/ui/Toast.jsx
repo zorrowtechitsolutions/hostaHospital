@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 
 const APP_ENV = import.meta.env.VITE_APP_ENV;
+console.log('APP_ENV:', APP_ENV);
 
 const Toast = ({ message, type = 'success', duration = 4000, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
@@ -173,8 +174,16 @@ const Toast = ({ message, type = 'success', duration = 4000, onClose }) => {
 
 // Global Toast Container
 let toastContainer = null;
-
 export const showToast = (message, type = 'success', duration = 4000) => {
+  console.log('🚨 TOAST CALLED', {
+    message,
+    type,
+    APP_ENV,
+    socket: import.meta.env.VITE_SOCKET_URL,
+    api: import.meta.env.VITE_API_URL,
+    stack: new Error().stack,
+  });
+
   if (toastContainer) {
     toastContainer(message, type, duration);
   }
