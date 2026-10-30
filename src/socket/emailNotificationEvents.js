@@ -21,7 +21,7 @@ import { socket } from "./socket";
  *   - EMAIL_FAILED
  */
 export const registerEmailNotificationEvents = (handlers = {}) => {
-  socket.on("email_event", (payload) => {
+  socket.on("email_events", (payload) => {
     const { event, message, data } = payload || {};
 
     switch (event) {
@@ -60,5 +60,5 @@ export const registerEmailNotificationEvents = (handlers = {}) => {
 };
 
 export const unregisterEmailNotificationEvents = () => {
-  socket.off("email_event");
+  socket.off("email_events");
 };
