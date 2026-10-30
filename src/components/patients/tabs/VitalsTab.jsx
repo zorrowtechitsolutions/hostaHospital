@@ -1,10 +1,14 @@
 // src/components/patients/tabs/VitalsTab.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { MoreVertical, Eye, Trash2, Activity } from "lucide-react";
 import { Button, Pagination } from "../../ui";
 import { useGetDoctorsQuery } from "../../../../app/service/doctorApi";
 import { useGetBookingsQuery } from "../../../../app/service/request";
 import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
+import {
+  registerPatientVitalsEvents,
+  unregisterPatientVitalsEvents,
+} from "../../../../socket/vitalEvent";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -90,12 +94,13 @@ const VitalsSkeleton = () => (
 
 // ============ END SKELETON LOADING COMPONENTS ============
 
-const VitalsTab = ({ 
-  patient, 
-  handleViewVitalDetails, 
-  handleDeleteClick, 
-  openMenu, 
-  setOpenMenu
+const VitalsTab = ({
+  patient,
+  handleViewVitalDetails,
+  handleDeleteClick,
+  openMenu,
+  setOpenMenu,
+  onVitalsChanged,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -105,10 +110,55 @@ const VitalsTab = ({
   const { data: prescriptionsResponse, isLoading: prescriptionsLoading } = useGetPrescriptionsQuery({});
 
   const vitalsList = patient?.vitalsList || [];
-  
+
+  // ============ SOCKET EVENT LISTENERS ============
+  // Keep a stable ref to the latest callback so we don't re-register on every render
+  const onVitalsChangedRef = useRef(onVitalsChanged);
+  useEffect(() => {
+    onVitalsChangedRef.current = onVitalsChanged;
+  }, [onVitalsChanged]);
+
+  const patientIdRef = useRef(patient?.id || patient?._id);
+  useEffect(() => {
+    patientIdRef.current = patient?.id || patient?._id;
+  }, [patient?.id, patient?._id]);
+
+  useEffect(() => {
+    registerPatientVitalsEvents({
+      onRegistered: ({ title, type, message, data }) => {
+        console.log("Vitals registered:", title, message, data);
+        // Only refresh if the event is for this patient
+        const eventPatientId = data?.patientId;
+        if (!eventPatientId || String(eventPatientId) === String(patientIdRef.current)) {
+          onVitalsChangedRef.current?.();
+        }
+      },
+      onUpdated: ({ title, type, message, data }) => {
+        console.log("Vitals updated:", title, message, data);
+        const eventPatientId = data?.patientId;
+        if (!eventPatientId || String(eventPatientId) === String(patientIdRef.current)) {
+          onVitalsChangedRef.current?.();
+        }
+      },
+      onDeleted: ({ title, type, message, data }) => {
+        console.log("Vitals deleted:", title, message, data);
+        const eventPatientId = data?.patientId;
+        if (!eventPatientId || String(eventPatientId) === String(patientIdRef.current)) {
+          onVitalsChangedRef.current?.();
+        }
+      },
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unregisterPatientVitalsEvents();
+    };
+  }, []);
+  // ============ END SOCKET EVENT LISTENERS ============
+
   const bookingsList = useMemo(() => {
     if (!bookingResponse) return [];
-    
+
     if (Array.isArray(bookingResponse)) {
       return bookingResponse;
     } else if (bookingResponse.data && Array.isArray(bookingResponse.data)) {
@@ -120,13 +170,13 @@ const VitalsTab = ({
     } else if (bookingResponse.data?.result && Array.isArray(bookingResponse.data?.result)) {
       return bookingResponse.data.result;
     }
-    
+
     return [];
   }, [bookingResponse]);
-  
+
   const doctorsList = useMemo(() => {
     if (!doctorsData) return [];
-    
+
     if (Array.isArray(doctorsData)) {
       return doctorsData;
     } else if (doctorsData.data && Array.isArray(doctorsData.data)) {
@@ -136,13 +186,13 @@ const VitalsTab = ({
     } else if (doctorsData.result && Array.isArray(doctorsData.result)) {
       return doctorsData.result;
     }
-    
+
     return [];
   }, [doctorsData]);
 
   const prescriptionsList = useMemo(() => {
     if (!prescriptionsResponse) return [];
-    
+
     if (Array.isArray(prescriptionsResponse)) {
       return prescriptionsResponse;
     } else if (prescriptionsResponse.data && Array.isArray(prescriptionsResponse.data)) {
@@ -152,23 +202,23 @@ const VitalsTab = ({
     } else if (prescriptionsResponse.result && Array.isArray(prescriptionsResponse.result)) {
       return prescriptionsResponse.result;
     }
-    
+
     return [];
   }, [prescriptionsResponse]);
 
   const getNestedValue = (obj, path, defaultValue = null) => {
     if (!obj) return defaultValue;
-    
+
     const keys = path.split('.');
     let current = obj;
-    
+
     for (const key of keys) {
       if (current === null || current === undefined || typeof current !== 'object') {
         return defaultValue;
       }
       current = current[key];
     }
-    
+
     return current !== undefined && current !== null ? current : defaultValue;
   };
 
@@ -179,7 +229,7 @@ const VitalsTab = ({
       let doctor = null;
       let doctorName = null;
       let doctorSpecialization = null;
-      
+
       const possibleDoctorIds = [
         item.doctorId,
         item.doctor_id,
@@ -194,11 +244,11 @@ const VitalsTab = ({
         getNestedValue(item, 'appointment.doctorId'),
         getNestedValue(item, 'appointment.doctor_id'),
       ];
-      
-      const validDoctorIds = possibleDoctorIds.filter(id => 
+
+      const validDoctorIds = possibleDoctorIds.filter(id =>
         id !== null && id !== undefined && id !== "" && id !== "null" && id !== "undefined"
       );
-      
+
       const possibleDoctorNames = [
         item.doctorName,
         item.doctor_name,
@@ -214,7 +264,7 @@ const VitalsTab = ({
         getNestedValue(item, 'appointment.doctorName'),
         getNestedValue(item, 'appointment.doctor_name'),
       ];
-      
+
       const validDoctorNames = possibleDoctorNames.filter(
         name =>
           name &&
@@ -222,7 +272,7 @@ const VitalsTab = ({
           name !== "null" &&
           name !== "undefined"
       );
-      
+
       const possibleSpecializations = [
         item.specialization,
         item.department,
@@ -239,12 +289,12 @@ const VitalsTab = ({
         getNestedValue(item, 'appointment.specialization'),
         getNestedValue(item, 'appointment.department'),
       ];
-      
-      const validSpecializations = possibleSpecializations.filter(spec => 
-        spec !== null && spec !== undefined && spec !== "" && 
+
+      const validSpecializations = possibleSpecializations.filter(spec =>
+        spec !== null && spec !== undefined && spec !== "" &&
         spec !== "null" && spec !== "undefined"
       );
-      
+
       // Strategy 1: Find doctor by ID
       if (validDoctorIds.length > 0 && doctorsList.length > 0) {
         for (const id of validDoctorIds) {
@@ -252,33 +302,33 @@ const VitalsTab = ({
             const docId = doc.id || doc._id || doc.doctorId;
             return String(docId) === String(id);
           });
-          
+
           if (foundDoctor) {
             doctor = foundDoctor;
             break;
           }
         }
       }
-      
+
       // Strategy 2: Find doctor by name
       if (!doctor && validDoctorNames.length > 0 && doctorsList.length > 0) {
         for (const name of validDoctorNames) {
           const searchName = String(name).toLowerCase().trim();
-          
+
           const foundDoctor = doctorsList.find(doc => {
             const docName1 = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
             const docName2 = (doc.fullName || "").toLowerCase().trim();
-            
+
             return docName1 === searchName || docName2 === searchName;
           });
-          
+
           if (foundDoctor) {
             doctor = foundDoctor;
             break;
           }
         }
       }
-      
+
       // Strategy 3: Find from booking
       if (!doctor) {
         const bookingIds = [
@@ -291,46 +341,46 @@ const VitalsTab = ({
           getNestedValue(item, 'appointment.bookingId'),
           getNestedValue(item, 'appointment.booking_id'),
         ];
-        
-        const validBookingIds = bookingIds.filter(id => 
+
+        const validBookingIds = bookingIds.filter(id =>
           id !== null && id !== undefined && id !== "" && id !== "null" && id !== "undefined"
         );
-        
+
         if (validBookingIds.length > 0 && bookingsList.length > 0) {
           for (const bookingId of validBookingIds) {
             const booking = bookingsList.find(b => {
               const bId = b.id || b._id || b.bookingId || b.booking_id;
               return String(bId) === String(bookingId);
             });
-            
+
             if (booking) {
-              const bookingDoctorName = booking.doctor_name || 
-                                       booking.doctorName || 
-                                       booking.displayName || 
+              const bookingDoctorName = booking.doctor_name ||
+                                       booking.doctorName ||
+                                       booking.displayName ||
                                        getNestedValue(booking, 'doctor.name') ||
                                        getNestedValue(booking, 'doctor.displayName');
-              
-              const bookingDoctorSpecialization = booking.department || 
-                                                  booking.specialization || 
+
+              const bookingDoctorSpecialization = booking.department ||
+                                                  booking.specialization ||
                                                   booking.doctor_department ||
                                                   getNestedValue(booking, 'doctor.specialization') ||
                                                   getNestedValue(booking, 'doctor.department');
-              
+
               if (bookingDoctorName && doctorsList.length > 0) {
                 const searchName = String(bookingDoctorName).toLowerCase().trim();
                 const foundDoctor = doctorsList.find(doc => {
                   const docName = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
-                  return docName === searchName || 
-                         docName.includes(searchName) || 
+                  return docName === searchName ||
+                         docName.includes(searchName) ||
                          searchName.includes(docName);
                 });
-                
+
                 if (foundDoctor) {
                   doctor = foundDoctor;
                   break;
                 }
               }
-              
+
               if (!doctor && bookingDoctorName) {
                 doctorName = bookingDoctorName;
                 doctorSpecialization = bookingDoctorSpecialization;
@@ -340,66 +390,66 @@ const VitalsTab = ({
           }
         }
       }
-      
+
       // Strategy 4: Find from consultation data
       if (!doctor && !doctorName) {
         const consultation = item.consultation || getNestedValue(item, 'fullData.consultation');
         if (consultation) {
-          const consultationDoctorName = consultation.doctorName || 
-                                        consultation.doctor_name || 
+          const consultationDoctorName = consultation.doctorName ||
+                                        consultation.doctor_name ||
                                         getNestedValue(consultation, 'doctor.name') ||
                                         getNestedValue(consultation, 'doctor.displayName');
-          
-          const consultationSpecialization = consultation.specialization || 
+
+          const consultationSpecialization = consultation.specialization ||
                                              consultation.department;
-          
+
           if (consultationDoctorName && doctorsList.length > 0) {
             const searchName = String(consultationDoctorName).toLowerCase().trim();
             const foundDoctor = doctorsList.find(doc => {
               const docName = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
-              return docName === searchName || 
-                     docName.includes(searchName) || 
+              return docName === searchName ||
+                     docName.includes(searchName) ||
                      searchName.includes(docName);
             });
-            
+
             if (foundDoctor) {
               doctor = foundDoctor;
             }
           }
-          
+
           if (!doctor && consultationDoctorName) {
             doctorName = consultationDoctorName;
             doctorSpecialization = consultationSpecialization || "General Medicine";
           }
         }
       }
-      
+
       // Strategy 5: Find from prescription
       if (!doctor && !doctorName) {
         const prescription = item.prescription || getNestedValue(item, 'fullData.prescription');
         if (prescription) {
-          const prescriptionDoctorName = prescription.doctorName || 
-                                        prescription.doctor_name || 
+          const prescriptionDoctorName = prescription.doctorName ||
+                                        prescription.doctor_name ||
                                         prescription.prescribedBy;
-          
-          const prescriptionSpecialization = prescription.specialization || 
+
+          const prescriptionSpecialization = prescription.specialization ||
                                              prescription.department;
-          
+
           if (prescriptionDoctorName) {
             if (doctorsList.length > 0) {
               const searchName = String(prescriptionDoctorName).toLowerCase().trim();
               const foundDoctor = doctorsList.find(doc => {
                 const docName = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
-                return docName === searchName || 
-                       docName.includes(searchName) || 
+                return docName === searchName ||
+                       docName.includes(searchName) ||
                        searchName.includes(docName);
               });
-              
+
               if (foundDoctor) {
                 doctor = foundDoctor;
               }
             }
-            
+
             if (!doctor) {
               doctorName = prescriptionDoctorName;
               doctorSpecialization = prescriptionSpecialization || "General Medicine";
@@ -410,7 +460,7 @@ const VitalsTab = ({
 
       // Strategy 6: Find from prescription by ID
       if (!doctor && !doctorName) {
-        const prescriptionId = 
+        const prescriptionId =
           item.prescriptionId ||
           item.prescription_id ||
           getNestedValue(item, 'fullData.prescriptionId') ||
@@ -427,7 +477,7 @@ const VitalsTab = ({
           );
 
           if (prescription) {
-            const prescriptionDoctorName = 
+            const prescriptionDoctorName =
               prescription.doctorName ||
               prescription.doctor_name ||
               prescription.prescribedBy ||
@@ -441,7 +491,7 @@ const VitalsTab = ({
               getNestedValue(prescription, 'doctor.fullName') ||
               getNestedValue(prescription, 'doctorName.name');
 
-            const prescriptionSpecialization = 
+            const prescriptionSpecialization =
               prescription.doctorSpecialization ||
               prescription.specialization ||
               prescription.department ||
@@ -458,11 +508,11 @@ const VitalsTab = ({
                 const searchName = String(prescriptionDoctorName).toLowerCase().trim();
                 const foundDoctor = doctorsList.find(doc => {
                   const docName = (doc.displayName || doc.name || doc.doctorName || "").toLowerCase().trim();
-                  return docName === searchName || 
-                         docName.includes(searchName) || 
+                  return docName === searchName ||
+                         docName.includes(searchName) ||
                          searchName.includes(docName);
                 });
-                
+
                 if (foundDoctor) {
                   doctor = foundDoctor;
                 }
@@ -473,7 +523,7 @@ const VitalsTab = ({
                 doctorSpecialization = prescriptionSpecialization || "General Medicine";
               }
             } else {
-              const prescriptionDoctorId = 
+              const prescriptionDoctorId =
                 prescription.doctorId ||
                 prescription.doctor_id ||
                 prescription.doctor?.id ||
@@ -485,7 +535,7 @@ const VitalsTab = ({
                   const docId = doc.id || doc._id || doc.doctorId;
                   return String(docId) === String(prescriptionDoctorId);
                 });
-                
+
                 if (foundDoctor) {
                   doctor = foundDoctor;
                 }
@@ -494,14 +544,14 @@ const VitalsTab = ({
           }
         }
       }
-      
+
       if (doctor) {
         doctorName = doctor.displayName || doctor.name || doctor.doctorName || "Dr. Unknown";
         doctorSpecialization = doctor.specialization || doctor.department || "General Medicine";
       } else if (!doctorName) {
         const fallbackName = validDoctorNames.length > 0 ? validDoctorNames[0] : "Dr. Unknown";
         const fallbackSpecialization = validSpecializations.length > 0 ? validSpecializations[0] : "General Medicine";
-        
+
         doctorName = fallbackName;
         doctorSpecialization = fallbackSpecialization;
       }
@@ -536,11 +586,11 @@ const VitalsTab = ({
       getNestedValue(item, 'fullData.recordedDate'),
       getNestedValue(item, 'createdAt'),
     ];
-    
-    const validDate = dateSources.find(d => 
+
+    const validDate = dateSources.find(d =>
       d !== null && d !== undefined && d !== "" && d !== "null" && d !== "undefined"
     );
-    
+
     if (validDate) {
       try {
         const dateObj = new Date(validDate);
@@ -554,7 +604,7 @@ const VitalsTab = ({
       } catch (e) {}
       return validDate;
     }
-    
+
     return "Date not available";
   };
 
@@ -567,11 +617,11 @@ const VitalsTab = ({
       getNestedValue(item, 'fullData.recordedTime'),
       getNestedValue(item, 'createdAt'),
     ];
-    
-    const validTime = timeSources.find(t => 
+
+    const validTime = timeSources.find(t =>
       t !== null && t !== undefined && t !== "" && t !== "null" && t !== "undefined"
     );
-    
+
     if (validTime) {
       try {
         const dateObj = new Date(validTime);
@@ -586,7 +636,7 @@ const VitalsTab = ({
       } catch (e) {}
       return validTime;
     }
-    
+
     return null;
   };
 
@@ -652,7 +702,7 @@ const VitalsTab = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        
+
                         <span className="font-medium text-gray-800">
                           {item.doctorName}
                         </span>
@@ -667,8 +717,8 @@ const VitalsTab = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setOpenMenu(openMenu === `vitals-${item.id || item._id}` ? null : `vitals-${item.id || item._id}`);
                         }}
                         className="p-2"
@@ -678,8 +728,8 @@ const VitalsTab = ({
                       {openMenu === `vitals-${item.id || item._id}` && (
                         <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
                           <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleViewVitalDetails(item);
                               setOpenMenu(null);
                             }}
@@ -688,8 +738,8 @@ const VitalsTab = ({
                             <Eye size={15} /> View Details
                           </button>
                           <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleDeleteClick('vital', item.id || item._id, `vitals from ${formatDate(item)}`);
                               setOpenMenu(null);
                             }}
