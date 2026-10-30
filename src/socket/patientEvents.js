@@ -55,3 +55,15 @@ export const registerPatientEvents = (handlers = {}) => {
     handleEvent({ event: "PATIENT_UNREGISTERED", data })
   );
 };
+
+export const unregisterPatientEvents = () => {
+  // Remove wrapper event listener
+  socket.off("patient_event");
+
+  // Remove direct event listeners
+  socket.off("PATIENT_REGISTERED");
+  socket.off("PATIENT_UPDATED");
+  socket.off("PATIENT_DELETED");
+  socket.off("PATIENT_RECOVERED");
+  socket.off("PATIENT_UNREGISTERED");
+};
