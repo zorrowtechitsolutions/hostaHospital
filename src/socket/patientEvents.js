@@ -1,3 +1,6 @@
+import { socket } from "./socket";
+
+
 export const registerPatientEvents = (handlers = {}) => {
   const handleEvent = (payload) => {
     // Supports both wrapped payload { event, message, data } and direct payload
