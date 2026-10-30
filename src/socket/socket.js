@@ -1,20 +1,27 @@
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+const SOCKET_URL = "https://zorrowtek.in";
+
+console.log(SOCKET_URL, "RTYUI");
+
 
 export const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
-  autoConnect: true,
+  timeout: 10000, // 10 seconds
+  // autoConnect: true,
 });
 
 export const initSocket = () => {
   if (!socket.connected) {
     socket.connect();
+    console.log("Socket connecting...");
   }
 
   const handleConnect = () => {
     const authUser = getAuthUser();
+
+    console.log("Socket connected, joining rooms for user:", authUser);
 
 
     if (!authUser) {
@@ -57,13 +64,16 @@ export const initSocket = () => {
   socket.on("connect", handleConnect);
 
   socket.on("disconnect", (reason) => {
+    console.log("Socket disconnected:", reason);
   });
 
   socket.on("connect_error", (error) => {
+    console.error("Socket connection error:", error);
   });
 
   // If already connected when initSocket() is called, run handler immediately
   if (socket.connected) {
+    console.log("Socket already connected, joining rooms...");
     handleConnect();
   }
 
