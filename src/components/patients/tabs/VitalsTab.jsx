@@ -8,7 +8,7 @@ import { useGetPrescriptionsQuery } from "../../../../app/service/prescription";
 import {
   registerPatientVitalsEvents,
   unregisterPatientVitalsEvents,
-} from "../../../../socket/vitalEvent";
+} from "../../../socket/vitalEvent";
 
 // ============ SKELETON LOADING COMPONENTS ============
 
