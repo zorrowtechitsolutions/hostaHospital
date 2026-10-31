@@ -235,7 +235,6 @@ export const bloodBankApi = api.injectEndpoints({
           url: `/blood-banks/${id}`,
           method: "PUT",
           body: {
-            bloodGroup: data.bloodGroup,
             count: data.count,
             hospitalId: hospitalId,
           },
