@@ -20,7 +20,7 @@ import {
   Mail,
   History,
   FileText,
-  // 👇 HRM icons
+  // 👇 HRM icons (kept for when HRM section is re-enabled)
   CalendarCheck,
   MonitorSmartphone,
   CreditCard,
@@ -76,7 +76,8 @@ const menu = [
     items: [{ label: "Staffs", icon: UserCog, path: "/staffs", permissionId: 10 }],
   },
 
-  // 👇 HRM section with dropdowns: Attendance, Leave Management, Device, Payroll
+  // 👇 HRM section — COMMENTED OUT
+  /*
   {
     title: "HRM",
     items: [
@@ -86,88 +87,33 @@ const menu = [
         hasDropdown: true,
         permissionId: 120,
         dropdownItems: [
-          {
-            label: "Today Attendance",
-            icon: Clock,
-            path: "/attendance",
-            permissionId: 120,
-          },
-          {
-            label: "Attendance Sheet",
-            icon: Table,
-            path: "/attendance/sheet",
-            permissionId: 120,
-          },
-          {
-            label: "Manual Attendance",
-            icon: UserCheck,
-            path: "/attendance/manual",
-            permissionId: 120,
-          },
-          {
-            label: "Holiday Management",
-            icon: CalendarDays,
-            path: "/attendance/holidays",
-            permissionId: 124,
-          },
+          { label: "Today Attendance", icon: Clock, path: "/attendance", permissionId: 120 },
+          { label: "Attendance Sheet", icon: Table, path: "/attendance/sheet", permissionId: 120 },
+          { label: "Manual Attendance", icon: UserCheck, path: "/attendance/manual", permissionId: 120 },
+          { label: "Holiday Management", icon: CalendarDays, path: "/attendance/holidays", permissionId: 124 },
         ],
       },
-
-      // ✅ Leave Management dropdown
       {
         label: "Leave Management",
         icon: ClipboardList,
         hasDropdown: true,
         dropdownItems: [
-          {
-            label: "Leave Request",
-            icon: FileText,
-            path: "/leave-requests",
-            permissionId: 128,
-          },
-          {
-            label: "My Leave Request",
-            icon: UserCheck,
-            path: "/my-leave-requests",
-            permissionId: 127,
-          },
-          {
-            label: "Leave Templates",
-            icon: FileText,
-            path: "/leave-templates",
-            permissionId: 132,
-          },
+          { label: "Leave Request", icon: FileText, path: "/leave-requests", permissionId: 128 },
+          { label: "My Leave Request", icon: UserCheck, path: "/my-leave-requests", permissionId: 127 },
+          { label: "Leave Templates", icon: FileText, path: "/leave-templates", permissionId: 132 },
         ],
       },
-
       {
         label: "Device",
         icon: HardDrive,
         hasDropdown: true,
         permissionId: 108,
         dropdownItems: [
-          {
-            label: "Attendance Device",
-            icon: MonitorSmartphone,
-            path: "/attendance/device",
-          },
-          {
-            label: "Access Card",
-            icon: CreditCard,
-            path: "/attendance/access-card",
-            permissionId: 112,
-          },
-          {
-            label: "Fingerprint",
-            icon: Fingerprint,
-            path: "/attendance/fingerprint",
-            permissionId: 116,
-          },
+          { label: "Attendance Device", icon: MonitorSmartphone, path: "/attendance/device" },
+          { label: "Access Card", icon: CreditCard, path: "/attendance/access-card", permissionId: 112 },
+          { label: "Fingerprint", icon: Fingerprint, path: "/attendance/fingerprint", permissionId: 116 },
         ],
       },
-
-      // 👇 PAYROLL SECTION - COMMENTED OUT
-      /*
       {
         label: "Payroll",
         icon: Wallet,
@@ -185,9 +131,9 @@ const menu = [
           { label: "Payroll Reports", icon: FileSpreadsheet, path: "/payroll/reports" },
         ],
       },
-      */
     ],
   },
+  */
 
   {
     title: "SYSTEM",
