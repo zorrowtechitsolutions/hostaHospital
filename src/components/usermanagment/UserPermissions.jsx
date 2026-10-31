@@ -320,15 +320,12 @@ const UserPermissions = () => {
   useEffect(() => {
     registerRoleEvents({
       onRoleRegistered: async () => {
-        showSuccessToast(`New role registered!`, 3000);
         await refetch();
       },
       onRoleUpdated: async () => {
-        showSuccessToast(`Role updated!`, 3000);
         await refetch();
       },
       onRoleDeleted: async () => {
-        showSuccessToast(`Role deleted!`, 3000);
         await refetch();
       }
     });
@@ -347,15 +344,12 @@ const UserPermissions = () => {
       if (!eventsRegistered) {
         registerRoleEvents({
           onRoleRegistered: async () => {
-            showSuccessToast(`New role registered!`, 3000);
             await refetch();
           },
           onRoleUpdated: async () => {
-            showSuccessToast(`Role updated!`, 3000);
             await refetch();
           },
           onRoleDeleted: async () => {
-            showSuccessToast(`Role deleted!`, 3000);
             await refetch();
           }
         });

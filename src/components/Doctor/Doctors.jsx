@@ -394,29 +394,23 @@ const Doctors = () => {
   useEffect(() => {
     registerDoctorEvents({
       onDoctorRegistered: () => {
-        showSuccessToast(`New doctor registered!`, 3000);
         refetch();
       },
       onDoctorUpdated: () => {
-        showSuccessToast(`Doctor updated!`, 3000);
         refetch();
       },
       onDoctorDeleted: () => {
-        showSuccessToast(`Doctor deleted!`, 3000);
         refetch();
       },
       onDoctorRecovered: () => {
-        showSuccessToast(`Doctor recovered successfully!`, 3000);
+
         refetch();
       },
       onDoctorPasswordReset: () => {
-        showSuccessToast(`Doctor password reset initiated!`, 3000);
       },
       onDoctorPasswordChanged: () => {
-        showSuccessToast(`Doctor password changed successfully!`, 3000);
       },
       onDoctorPasswordChangedByAdmin: () => {
-        showSuccessToast(`Doctor password changed by admin!`, 3000);
       }
     });
 

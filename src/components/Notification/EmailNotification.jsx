@@ -307,27 +307,21 @@ const EmailComposer = () => {
       },
 
       onDraftSent: ({ message: msg }) => {
-        if (msg) showSuccessToast(msg, 3000);
       },
 
       onQueued: ({ message: msg }) => {
-        if (msg) showInfoToast(msg, 3000);
       },
 
       onSending: ({ message: msg }) => {
-        if (msg) showInfoToast(msg, 3000);
       },
 
       onSuccess: ({ message: msg }) => {
-        if (msg) showSuccessToast(msg, 3000);
       },
 
       onPartial: ({ message: msg }) => {
-        if (msg) showInfoToast(msg, 4000);
       },
 
       onFailed: ({ message: msg }) => {
-        if (msg) showErrorToast(msg, 4000);
       },
     });
 

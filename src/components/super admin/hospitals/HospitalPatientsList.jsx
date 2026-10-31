@@ -351,19 +351,15 @@ const HospitalPatientsList = () => {
   useEffect(() => {
     registerPatientEvents({
       onPatientRegistered: () => {
-        showSuccessToast(`New patient registered!`, 3000);
         refetch();
       },
       onPatientUpdated: () => {
-        showSuccessToast(`Patient updated!`, 3000);
         refetch();
       },
       onPatientDeleted: () => {
-        showSuccessToast(`Patient deleted!`, 3000);
         refetch();
       },
       onPatientRecovered: () => {
-        showSuccessToast(`Patient recovered!`, 3000);
         refetch();
       }
     });
@@ -382,19 +378,15 @@ const HospitalPatientsList = () => {
       if (!eventsRegistered) {
         registerPatientEvents({
           onPatientRegistered: () => {
-            showSuccessToast(`New patient registered!`, 3000);
             refetch();
           },
           onPatientUpdated: () => {
-            showSuccessToast(`Patient updated!`, 3000);
             refetch();
           },
           onPatientDeleted: () => {
-            showSuccessToast(`Patient deleted!`, 3000);
             refetch();
           },
           onPatientRecovered: () => {
-            showSuccessToast(`Patient recovered!`, 3000);
             refetch();
           }
         });

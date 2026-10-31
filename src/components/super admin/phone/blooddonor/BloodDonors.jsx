@@ -364,11 +364,9 @@ const BloodDonors = () => {
   useEffect(() => {
     registerBloodDonorEvents({
       onDonorRegistered: (data) => {
-        showSuccessToast(`🩸 New donor registered: ${data.donorId}`, 3000);
         refetch();
       },
       onDonorUpdated: (data) => {
-        showSuccessToast(`🔄 Donor ${data.donorId} updated successfully`, 3000);
         refetch();
       },
       onDonorDeleted: (data) => {

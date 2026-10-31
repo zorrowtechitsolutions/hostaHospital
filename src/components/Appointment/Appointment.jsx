@@ -222,38 +222,28 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   useEffect(() => {
     const cleanup = registerBookingEvents({
       onBookingRegistered: async (data) => {
-        showSuccessToast("New booking received!", 3000);
         await refetch();
       },
       onBookingUpdated: async (data) => {
-        showSuccessToast("Booking updated!", 3000);
+        // showSuccessToast("Booking updated!", 3000);
         await refetch();
       },
       onBookingCancelled: async (data) => {
-        showWarningToast("Booking cancelled!", 3000);
+        // showWarningToast("Booking cancelled!", 3000);
         await refetch();
       },
       onBookingAccepted: async (data) => {
-        showSuccessToast("Booking accepted!", 3000);
+        // showSuccessToast("Booking accepted!", 3000);
         await refetch();
       },
       onBookingCompleted: async (data) => {
-        showSuccessToast("Booking completed!", 3000);
+        // showSuccessToast("Booking completed!", 3000);
         await refetch();
       },
 
       // ✅ ADDED: Handle real-time deletion from other clients
       onBookingDeleted: async (data) => {
-
-        const deletedId = data?.bookingNumber
-          ? `#BK${String(data.bookingNumber).padStart(5, "0")}`
-          : "An appointment";
-
-        showSuccessToast(
-          `${deletedId} was deleted.`,
-          3000
-        );
-
+      
         await refetch();
       },
     });

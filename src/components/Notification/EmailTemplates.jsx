@@ -241,19 +241,16 @@ const EmailTemplates = () => {
     registerEmailTemplateEvents({
       onCreated: (payload) =>
         handleEvent(({ message }) => {
-          if (message) showSuccessToast(message, 3000);
           refetch();
         }, payload),
 
       onUpdated: (payload) =>
         handleEvent(({ message }) => {
-          if (message) showSuccessToast(message, 3000);
           refetch();
         }, payload),
 
       onDeleted: (payload) =>
         handleEvent(({ message }) => {
-          if (message) showSuccessToast(message, 3000);   // ✅ success toast, not warning
           refetch();
         }, payload),
     });

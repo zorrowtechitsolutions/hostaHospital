@@ -372,15 +372,12 @@ const BloodBank = () => {
   useEffect(() => {
     registerBloodBankEvents({
       onStockCreated: async () => {
-        showSuccessToast(`New blood stock created!`, 3000);
         await refetch();
       },
       onStockUpdated: async () => {
-        showSuccessToast(`Blood stock updated!`, 3000);
         await refetch();
       },
       onStockDeleted: async () => {
-        showSuccessToast(`Blood stock deleted!`, 3000);
         await refetch();
       }
     });
@@ -394,15 +391,12 @@ const BloodBank = () => {
     const handleConnect = () => {
       registerBloodBankEvents({
         onStockCreated: async () => {
-          showSuccessToast(`New blood stock created!`, 3000);
           await refetch();
         },
         onStockUpdated: async () => {
-          showSuccessToast(`Blood stock updated!`, 3000);
           await refetch();
         },
         onStockDeleted: async () => {
-          showSuccessToast(`Blood stock deleted!`, 3000);
           await refetch();
         }
       });

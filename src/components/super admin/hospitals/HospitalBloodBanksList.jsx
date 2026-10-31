@@ -61,15 +61,12 @@ const HospitalBloodBanksList = () => {
   useEffect(() => {
     registerBloodBankEvents({
       onStockCreated: () => {
-        showSuccessToast(`New blood stock added!`, 3000);
         refetch();
       },
       onStockUpdated: () => {
-        showSuccessToast(`Blood stock updated!`, 3000);
         refetch();
       },
       onStockDeleted: () => {
-        showSuccessToast(`Blood stock deleted!`, 3000);
         refetch();
       }
     });
@@ -88,15 +85,12 @@ const HospitalBloodBanksList = () => {
       if (!eventsRegistered) {
         registerBloodBankEvents({
           onStockCreated: () => {
-            showSuccessToast(`New blood stock added!`, 3000);
             refetch();
           },
           onStockUpdated: () => {
-            showSuccessToast(`Blood stock updated!`, 3000);
             refetch();
           },
           onStockDeleted: () => {
-            showSuccessToast(`Blood stock deleted!`, 3000);
             refetch();
           }
         });

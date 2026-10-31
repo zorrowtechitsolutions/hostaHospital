@@ -143,7 +143,6 @@ const HospitalProfile = () => {
   
   const handleHospitalUpdated = (data) => {
     if (data && data.id === hospitalId) {
-      showSuccessToast('Hospital profile updated in real-time!');
       refetch();
       
       if (data.name || data.email || data.phone) {
@@ -164,12 +163,10 @@ const HospitalProfile = () => {
   };
 
   const handleHospitalRegistered = (data) => {
-    showSuccessToast('New hospital registered!');
   };
 
   const handleHospitalDeleted = (data) => {
     if (data && data.id === hospitalId) {
-      showWarningToast('Your hospital profile has been deleted.');
       setTimeout(() => {
         logout();
         navigate('/sign-in');
@@ -179,7 +176,6 @@ const HospitalProfile = () => {
 
   const handleHospitalBlacklisted = (data) => {
     if (data && data.id === hospitalId) {
-      showErrorToast('Your hospital has been blacklisted. Please contact support.');
       setTimeout(() => {
         logout();
         navigate('/sign-in');
@@ -189,7 +185,6 @@ const HospitalProfile = () => {
 
   const handleHospitalRecovered = (data) => {
     if (data && data.id === hospitalId) {
-      showSuccessToast('Your hospital has been recovered!');
       refetch();
     }
   };

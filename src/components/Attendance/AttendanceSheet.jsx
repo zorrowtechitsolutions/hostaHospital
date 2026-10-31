@@ -172,15 +172,12 @@ const AttendanceSheet = () => {
   useEffect(() => {
     registerAttendanceEvents({
       onRegistered: ({ message }) => {
-        if (message) showSuccessToast(message, 3000);
         refetch();
       },
       onUpdated: ({ message }) => {
-        if (message) showSuccessToast(message, 3000);
         refetch();
       },
       onDeleted: ({ message }) => {
-        if (message) showWarningToast(message, 3000);
         refetch();
       },
     });

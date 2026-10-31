@@ -68,7 +68,6 @@ const HospitalNotificationList = () => {
     registerNotificationEvents({
       onNotificationCreated: () => {
         refetchAll();
-        showSuccessToast("New notification received!", 2000);
       },
       onNotificationRead: () => {
         refetchAll();
@@ -90,7 +89,6 @@ const HospitalNotificationList = () => {
         registerNotificationEvents({
           onNotificationCreated: () => {
             refetchAll();
-            showSuccessToast("New notification received!", 2000);
           },
           onNotificationRead: () => {
             refetchAll();

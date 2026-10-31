@@ -432,27 +432,21 @@ const HospitalStaffList = () => {
   useEffect(() => {
     registerStaffEvents({
       onStaffRegistered: () => {
-        showSuccessToast(`New staff registered!`, 3000);
         refetch();
       },
       onStaffUpdated: () => {
-        showSuccessToast(`Staff updated!`, 3000);
         refetch();
       },
       onStaffDeleted: () => {
-        showSuccessToast(`Staff deleted!`, 3000);
         refetch();
       },
       onStaffRecovered: () => {
-        showSuccessToast(`Staff recovered!`, 3000);
         refetch();
       },
       onStaffPasswordReset: () => {
-        showSuccessToast(`Staff password reset!`, 3000);
         refetch();
       },
       onStaffPasswordChanged: () => {
-        showSuccessToast(`Staff password changed!`, 3000);
         refetch();
       }
     });
@@ -471,27 +465,21 @@ const HospitalStaffList = () => {
       if (!eventsRegistered) {
         registerStaffEvents({
           onStaffRegistered: () => {
-            showSuccessToast(`New staff registered!`, 3000);
             refetch();
           },
           onStaffUpdated: () => {
-            showSuccessToast(`Staff updated!`, 3000);
             refetch();
           },
           onStaffDeleted: () => {
-            showSuccessToast(`Staff deleted!`, 3000);
             refetch();
           },
           onStaffRecovered: () => {
-            showSuccessToast(`Staff recovered!`, 3000);
             refetch();
           },
           onStaffPasswordReset: () => {
-            showSuccessToast(`Staff password reset!`, 3000);
             refetch();
           },
           onStaffPasswordChanged: () => {
-            showSuccessToast(`Staff password changed!`, 3000);
             refetch();
           }
         });

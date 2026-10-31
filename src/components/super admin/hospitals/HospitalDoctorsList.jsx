@@ -109,27 +109,21 @@ const HospitalDoctorsList = () => {
   useEffect(() => {
     registerDoctorEvents({
       onDoctorRegistered: () => {
-        showSuccessToast(`New doctor registered!`, 3000);
         refetch();
       },
       onDoctorUpdated: () => {
-        showSuccessToast(`Doctor updated!`, 3000);
         refetch();
       },
       onDoctorDeleted: () => {
-        showSuccessToast(`Doctor deleted!`, 3000);
         refetch();
       },
       onDoctorRecovered: () => {
-        showSuccessToast(`Doctor recovered!`, 3000);
         refetch();
       },
       onDoctorPasswordReset: () => {
-        showSuccessToast(`Doctor password reset!`, 3000);
         refetch();
       },
       onDoctorPasswordChanged: () => {
-        showSuccessToast(`Doctor password changed!`, 3000);
         refetch();
       }
     });
@@ -148,27 +142,21 @@ const HospitalDoctorsList = () => {
       if (!eventsRegistered) {
         registerDoctorEvents({
           onDoctorRegistered: () => {
-            showSuccessToast(`New doctor registered!`, 3000);
             refetch();
           },
           onDoctorUpdated: () => {
-            showSuccessToast(`Doctor updated!`, 3000);
             refetch();
           },
           onDoctorDeleted: () => {
-            showSuccessToast(`Doctor deleted!`, 3000);
             refetch();
           },
           onDoctorRecovered: () => {
-            showSuccessToast(`Doctor recovered!`, 3000);
             refetch();
           },
           onDoctorPasswordReset: () => {
-            showSuccessToast(`Doctor password reset!`, 3000);
             refetch();
           },
           onDoctorPasswordChanged: () => {
-            showSuccessToast(`Doctor password changed!`, 3000);
             refetch();
           }
         });

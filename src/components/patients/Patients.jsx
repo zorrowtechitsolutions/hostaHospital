@@ -377,19 +377,15 @@ const Patients = () => {
   useEffect(() => {
     registerPatientEvents({
       onPatientRegistered: () => {
-        showSuccessToast(`New patient registered!`, 3000);
         refetchPatients();
       },
       onPatientUpdated: () => {
-        showSuccessToast(`Patient updated!`, 3000);
         refetchPatients();
       },
       onPatientDeleted: () => {
-        showSuccessToast(`Patient deleted!`, 3000);
         refetchPatients();
       },
       onPatientRecovered: () => {
-        showSuccessToast(`Patient recovered successfully!`, 3000);
         refetchPatients();
       }
     });

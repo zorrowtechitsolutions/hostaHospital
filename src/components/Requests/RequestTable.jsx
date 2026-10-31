@@ -245,27 +245,22 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   useEffect(() => {
     const cleanup = registerBookingEvents({
       onBookingRegistered: () => {
-        showSuccessToast("New booking registered!", TOAST_DURATION);
         refetch();
       },
 
       onBookingUpdated: () => {
-        showSuccessToast("Booking updated!", TOAST_DURATION);
         refetch();
       },
 
       onBookingCancelled: () => {
-        showSuccessToast("Booking cancelled!", TOAST_DURATION);
         refetch();
       },
 
       onBookingAccepted: () => {
-        showSuccessToast("Booking accepted!", TOAST_DURATION);
         refetch();
       },
 
       onBookingCompleted: () => {
-        showSuccessToast("Booking completed!", TOAST_DURATION);
         refetch();
       },
     });

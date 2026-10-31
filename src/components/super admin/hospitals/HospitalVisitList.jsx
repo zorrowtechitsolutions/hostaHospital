@@ -148,23 +148,18 @@ const HospitalVisitList = () => {
   useEffect(() => {
     registerBookingEvents({
       onBookingRegistered: () => {
-        showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
       onBookingUpdated: () => {
-        showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
       onBookingCancelled: () => {
-        showWarningToast(`Booking cancelled!`, 3000);
         refetch();
       },
       onBookingAccepted: () => {
-        showSuccessToast(`New visit added!`, 3000);
         refetch();
       },
       onBookingCompleted: () => {
-        showSuccessToast(`Visit completed!`, 3000);
         refetch();
       }
     });
@@ -183,23 +178,18 @@ const HospitalVisitList = () => {
       if (!eventsRegistered) {
         registerBookingEvents({
           onBookingRegistered: () => {
-            showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
           onBookingUpdated: () => {
-            showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
           onBookingCancelled: () => {
-            showWarningToast(`Booking cancelled!`, 3000);
             refetch();
           },
           onBookingAccepted: () => {
-            showSuccessToast(`New visit added!`, 3000);
             refetch();
           },
           onBookingCompleted: () => {
-            showSuccessToast(`Visit completed!`, 3000);
             refetch();
           }
         });

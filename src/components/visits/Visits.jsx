@@ -111,11 +111,9 @@ const Visits = () => {
   useEffect(() => {
     registerBookingEvents({
       onBookingRegistered: (data) => {
-        showSuccessToast(`New booking received!`, 3000);
         refetch();
       },
       onBookingUpdated: (data) => {
-        showSuccessToast(`Booking updated!`, 3000);
         refetch();
       },
       onBookingCancelled: (data) => {
@@ -123,11 +121,9 @@ const Visits = () => {
         refetch();
       },
       onBookingAccepted: (data) => {
-        showSuccessToast(`New visit added: ${data.patientName || 'Patient'}`, 3000);
         refetch();
       },
       onBookingCompleted: (data) => {
-        showSuccessToast(`Visit completed!`, 3000);
         refetch();
       }
     });
@@ -146,11 +142,9 @@ const Visits = () => {
       if (!eventsRegistered) {
         registerBookingEvents({
           onBookingRegistered: (data) => {
-            showSuccessToast(`New booking received!`, 3000);
             refetch();
           },
           onBookingUpdated: (data) => {
-            showSuccessToast(`Booking updated!`, 3000);
             refetch();
           },
           onBookingCancelled: (data) => {
@@ -158,11 +152,9 @@ const Visits = () => {
             refetch();
           },
           onBookingAccepted: (data) => {
-            showSuccessToast(`New visit added!`, 3000);
             refetch();
           },
           onBookingCompleted: (data) => {
-            showSuccessToast(`Visit completed!`, 3000);
             refetch();
           }
         });

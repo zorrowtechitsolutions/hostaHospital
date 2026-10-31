@@ -291,23 +291,18 @@ const Hospitals = () => {
   useEffect(() => {
     registerHospitalEvents({
       onHospitalRegistered: (data) => {
-        showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
         refetch();
       },
       onHospitalUpdated: (data) => {
-        showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
         refetch();
       },
       onHospitalDeleted: () => {
-        showSuccessToast(`Hospital deleted!`, 3000);
         refetch();
       },
       onHospitalBlacklisted: () => {
-        showSuccessToast(`Hospital blacklisted!`, 3000);
         refetch();
       },
       onHospitalRecovered: () => {
-        showSuccessToast(`Hospital recovered successfully!`, 3000);
         refetch();
       }
     });
@@ -326,23 +321,18 @@ const Hospitals = () => {
       if (!eventsRegistered) {
         registerHospitalEvents({
           onHospitalRegistered: (data) => {
-            showSuccessToast(`New hospital registered: ${data.hospitalName || 'Hospital'}`, 3000);
             refetch();
           },
           onHospitalUpdated: (data) => {
-            showSuccessToast(`Hospital ${data.hospitalName || 'Hospital'} updated successfully!`, 3000);
             refetch();
           },
           onHospitalDeleted: () => {
-            showSuccessToast(`Hospital deleted!`, 3000);
             refetch();
           },
           onHospitalBlacklisted: () => {
-            showSuccessToast(`Hospital blacklisted!`, 3000);
             refetch();
           },
           onHospitalRecovered: () => {
-            showSuccessToast(`Hospital recovered successfully!`, 3000);
             refetch();
           }
         });

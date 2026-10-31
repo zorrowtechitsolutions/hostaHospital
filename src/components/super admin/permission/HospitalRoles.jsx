@@ -45,15 +45,12 @@ const HospitalRoles = () => {
   useEffect(() => {
     registerRoleEvents({
       onRoleRegistered: () => {
-        showSuccessToast(`New role created!`, 3000);
         refetch();
       },
       onRoleUpdated: () => {
-        showSuccessToast(`Role updated!`, 3000);
         refetch();
       },
       onRoleDeleted: () => {
-        showSuccessToast(`Role deleted!`, 3000);
         refetch();
       }
     });
@@ -72,15 +69,12 @@ const HospitalRoles = () => {
       if (!eventsRegistered) {
         registerRoleEvents({
           onRoleRegistered: () => {
-            showSuccessToast(`New role created!`, 3000);
             refetch();
           },
           onRoleUpdated: () => {
-            showSuccessToast(`Role updated!`, 3000);
             refetch();
           },
           onRoleDeleted: () => {
-            showSuccessToast(`Role deleted!`, 3000);
             refetch();
           }
         });
