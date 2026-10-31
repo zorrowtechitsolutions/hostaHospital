@@ -98,71 +98,16 @@
 
 import { socket } from "./socket";
 
-// Hospital dashboard receives hospital_event
-export const registerHospitalPatientEvents = (handlers = {}) => {
-  const listener = (payload) => {
-    if (!payload) return;
-
-    console.log("=================================");
-    console.log("[SOCKET] CHANNEL: hospital_event");
-    console.log("[SOCKET] EVENT:", payload.event);
-    console.log("[SOCKET] FULL PAYLOAD:", payload);
-    console.log("=================================");
-
-    const eventData = {
-      event: payload.event,
-      title: payload.title,
-      type: payload.type,
-      message: payload.message,
-      data: payload.data,
-    };
-
-    switch (payload.event) {
-      case "PATIENT_REGISTERED":
-        console.log("[hospital_event] PATIENT_REGISTERED");
-        handlers.onRegistered?.(eventData);
-        break;
-
-      case "PATIENT_UPDATED":
-        console.log("[hospital_event] PATIENT_UPDATED");
-        handlers.onUpdated?.(eventData);
-        break;
-
-      case "PATIENT_DELETED":
-        console.log("[hospital_event] PATIENT_DELETED");
-        handlers.onDeleted?.(eventData);
-        break;
-
-      case "PATIENT_RECOVERED":
-        console.log("[hospital_event] PATIENT_RECOVERED");
-        handlers.onRecovered?.(eventData);
-        break;
-
-      default:
-        console.log("[hospital_event] UNKNOWN EVENT:", payload.event);
-        handlers.onUnknown?.(eventData);
-        break;
-    }
-  };
-
-  socket.on("hospital_event", listener);
-
-  return () => {
-    socket.off("hospital_event", listener);
-  };
-};
-
-
-// Patient portal receives patient_event
 export const registerPatientEvents = (handlers = {}) => {
-  const listener = (payload) => {
-    if (!payload) return;
+  console.log("[PATIENT EVENTS] Registering patient_event listener");
 
-    console.log("=================================");
-    console.log("[SOCKET] CHANNEL: patient_event");
-    console.log("[SOCKET] EVENT:", payload.event);
-    console.log("[SOCKET] FULL PAYLOAD:", payload);
-    console.log("=================================");
+  const listener = (payload) => {
+    console.log("[PATIENT EVENTS] patient_event RECEIVED:", payload);
+
+    if (!payload) {
+      console.warn("[PATIENT EVENTS] Empty payload");
+      return;
+    }
 
     const eventData = {
       event: payload.event,
@@ -174,44 +119,44 @@ export const registerPatientEvents = (handlers = {}) => {
 
     switch (payload.event) {
       case "PATIENT_REGISTERED":
-        console.log("[patient_event] PATIENT_REGISTERED");
+        console.log("[PATIENT EVENTS] PATIENT_REGISTERED");
         handlers.onRegistered?.(eventData);
         break;
 
       case "PATIENT_UPDATED":
-        console.log("[patient_event] PATIENT_UPDATED");
-        console.log("[patient_event] DATA:", eventData);
-
+        console.log("[PATIENT EVENTS] PATIENT_UPDATED");
         handlers.onUpdated?.(eventData);
         break;
 
       case "PATIENT_DELETED":
-        console.log("[patient_event] PATIENT_DELETED");
+        console.log("[PATIENT EVENTS] PATIENT_DELETED");
         handlers.onDeleted?.(eventData);
         break;
 
       case "PATIENT_RECOVERED":
-        console.log("[patient_event] PATIENT_RECOVERED");
+        console.log("[PATIENT EVENTS] PATIENT_RECOVERED");
         handlers.onRecovered?.(eventData);
         break;
 
       default:
-        console.log("[patient_event] UNKNOWN EVENT:", payload.event);
+        console.warn(
+          "[PATIENT EVENTS] Unknown event:",
+          payload.event
+        );
         handlers.onUnknown?.(eventData);
-        break;
     }
   };
 
   socket.on("patient_event", listener);
 
+  console.log(
+    "[PATIENT EVENTS] Listener registered:",
+    socket.listeners("patient_event").length
+  );
+
   return () => {
+    console.log("[PATIENT EVENTS] Cleaning up listener");
+
     socket.off("patient_event", listener);
   };
-};
-
-
-// Removes ALL "patient_event" listeners
-export const unregisterPatientEvents = () => {
-  console.log("[SOCKET] Removing ALL patient_event listeners");
-  socket.off("patient_event");
 };

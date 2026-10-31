@@ -374,30 +374,32 @@ const Patients = () => {
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
   // ✅ Register socket event listeners
- useEffect(() => {
+useEffect(() => {
+  console.log("[PATIENTS] Setting up patient socket events");
+
   const cleanup = registerPatientEvents({
     onRegistered: (eventData) => {
-      console.log("[PATIENT SOCKET] REGISTERED:", eventData);
+      console.log("[PATIENTS] REGISTERED:", eventData);
       refetchPatients();
     },
 
     onUpdated: (eventData) => {
-      console.log("[PATIENT SOCKET] UPDATED:", eventData);
+      console.log("[PATIENTS] UPDATED:", eventData);
       refetchPatients();
     },
 
     onDeleted: (eventData) => {
-      console.log("[PATIENT SOCKET] DELETED:", eventData);
+      console.log("[PATIENTS] DELETED:", eventData);
       refetchPatients();
     },
 
     onRecovered: (eventData) => {
-      console.log("[PATIENT SOCKET] RECOVERED:", eventData);
+      console.log("[PATIENTS] RECOVERED:", eventData);
       refetchPatients();
     },
 
     onUnknown: (eventData) => {
-      console.log("[PATIENT SOCKET] UNKNOWN EVENT:", eventData);
+      console.log("[PATIENTS] UNKNOWN:", eventData);
     },
   });
 

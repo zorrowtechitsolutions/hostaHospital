@@ -14,7 +14,7 @@ import {
 } from '../../../../app/service/patients';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
-import { registerPatientEvents, unregisterPatientEvents } from '../../../socket/patientEvents';
+import { registerPatientEvents} from '../../../socket/patientEvents';
 import DeleteModal from '../../patients/DeleteModel';
 import AddAppointmentModal from '../../patients/AddAppointmentModal';
 import ApproveRequestModal from '../../Requests/ApproveRequestModel';
@@ -349,28 +349,36 @@ const HospitalPatientsList = () => {
 
   // Register socket event listeners
   useEffect(() => {
-    registerPatientEvents({
-      onPatientRegistered: () => {
-        refetch();
-      },
-      onPatientUpdated: () => {
-        refetch();
-      },
-      onPatientDeleted: () => {
-        refetch();
-      },
-      onPatientRecovered: () => {
-        refetch();
-      }
-    });
+  console.log("[PATIENTS] Setting up patient socket events");
 
-    setEventsRegistered(true);
+  const cleanup = registerPatientEvents({
+    onRegistered: (eventData) => {
+      console.log("[PATIENTS] REGISTERED:", eventData);
+      refetchPatients();
+    },
 
-    return () => {
-      unregisterPatientEvents();
-      setEventsRegistered(false);
-    };
-  }, [refetch]);
+    onUpdated: (eventData) => {
+      console.log("[PATIENTS] UPDATED:", eventData);
+      refetchPatients();
+    },
+
+    onDeleted: (eventData) => {
+      console.log("[PATIENTS] DELETED:", eventData);
+      refetchPatients();
+    },
+
+    onRecovered: (eventData) => {
+      console.log("[PATIENTS] RECOVERED:", eventData);
+      refetchPatients();
+    },
+
+    onUnknown: (eventData) => {
+      console.log("[PATIENTS] UNKNOWN:", eventData);
+    },
+  });
+
+  return cleanup;
+}, [refetchPatients]);
 
   // Listen for socket connection
   useEffect(() => {
