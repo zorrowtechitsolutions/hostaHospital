@@ -255,15 +255,21 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }
 
         {/* ✅ Blood Group — CustomSelect */}
         <div>
-          <CustomSelect
-            label="Blood Group"
-            value={formData.bloodGroup}
-            options={BLOOD_GROUPS.map(group => ({ value: group, label: group }))}
-            onChange={(value) => setFormData({ ...formData, bloodGroup: value })}
-            placeholder="Select blood group"
-            required
-          />
-        </div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Blood Group
+  </label>
+
+  <input
+    type="text"
+    value={formData.bloodGroup}
+    disabled
+    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+  />
+
+  <p className="text-xs text-gray-400 mt-1">
+    Blood group cannot be changed after stock is created.
+  </p>
+</div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
