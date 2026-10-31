@@ -166,6 +166,8 @@ export const registerPatientEvents = (handlers = {}) => {
 
       case "PATIENT_UPDATED":
         handlers.onUpdated?.(eventData);
+        console.log("patient_updated",eventData);
+        
         break;
 
       case "PATIENT_DELETED":
