@@ -188,3 +188,9 @@ export const registerPatientEvents = (handlers = {}) => {
     socket.off("patient_event", listener);
   };
 };
+
+
+// Removes ALL "patient_event" listeners
+export const unregisterPatientEvents = () => {
+  socket.off("patient_event");
+};
