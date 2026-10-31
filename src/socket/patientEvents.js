@@ -103,7 +103,11 @@ export const registerHospitalPatientEvents = (handlers = {}) => {
   const listener = (payload) => {
     if (!payload) return;
 
-    console.log("[SOCKET] Hospital patient event received:", payload);
+    console.log("=================================");
+    console.log("[SOCKET] CHANNEL: hospital_event");
+    console.log("[SOCKET] EVENT:", payload.event);
+    console.log("[SOCKET] FULL PAYLOAD:", payload);
+    console.log("=================================");
 
     const eventData = {
       event: payload.event,
@@ -115,22 +119,27 @@ export const registerHospitalPatientEvents = (handlers = {}) => {
 
     switch (payload.event) {
       case "PATIENT_REGISTERED":
+        console.log("[hospital_event] PATIENT_REGISTERED");
         handlers.onRegistered?.(eventData);
         break;
 
       case "PATIENT_UPDATED":
+        console.log("[hospital_event] PATIENT_UPDATED");
         handlers.onUpdated?.(eventData);
         break;
 
       case "PATIENT_DELETED":
+        console.log("[hospital_event] PATIENT_DELETED");
         handlers.onDeleted?.(eventData);
         break;
 
       case "PATIENT_RECOVERED":
+        console.log("[hospital_event] PATIENT_RECOVERED");
         handlers.onRecovered?.(eventData);
         break;
 
       default:
+        console.log("[hospital_event] UNKNOWN EVENT:", payload.event);
         handlers.onUnknown?.(eventData);
         break;
     }
@@ -149,7 +158,11 @@ export const registerPatientEvents = (handlers = {}) => {
   const listener = (payload) => {
     if (!payload) return;
 
-    console.log("[SOCKET] Patient event received:", payload);
+    console.log("=================================");
+    console.log("[SOCKET] CHANNEL: patient_event");
+    console.log("[SOCKET] EVENT:", payload.event);
+    console.log("[SOCKET] FULL PAYLOAD:", payload);
+    console.log("=================================");
 
     const eventData = {
       event: payload.event,
@@ -161,24 +174,29 @@ export const registerPatientEvents = (handlers = {}) => {
 
     switch (payload.event) {
       case "PATIENT_REGISTERED":
+        console.log("[patient_event] PATIENT_REGISTERED");
         handlers.onRegistered?.(eventData);
         break;
 
       case "PATIENT_UPDATED":
+        console.log("[patient_event] PATIENT_UPDATED");
+        console.log("[patient_event] DATA:", eventData);
+
         handlers.onUpdated?.(eventData);
-        console.log("patient_updated",eventData);
-        
         break;
 
       case "PATIENT_DELETED":
+        console.log("[patient_event] PATIENT_DELETED");
         handlers.onDeleted?.(eventData);
         break;
 
       case "PATIENT_RECOVERED":
+        console.log("[patient_event] PATIENT_RECOVERED");
         handlers.onRecovered?.(eventData);
         break;
 
       default:
+        console.log("[patient_event] UNKNOWN EVENT:", payload.event);
         handlers.onUnknown?.(eventData);
         break;
     }
@@ -194,5 +212,6 @@ export const registerPatientEvents = (handlers = {}) => {
 
 // Removes ALL "patient_event" listeners
 export const unregisterPatientEvents = () => {
+  console.log("[SOCKET] Removing ALL patient_event listeners");
   socket.off("patient_event");
 };
