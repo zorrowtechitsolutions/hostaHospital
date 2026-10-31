@@ -947,7 +947,7 @@ const Register = () => {
             <Input label="Email" type="email" placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Mobile Number" placeholder="Enter mobile number" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-              <Input label="Emergency Number" placeholder="Emergency contact (optional)" value={emergencyNumber} onChange={(e) => setEmergencyNumber(e.target.value)} icon={Phone} />
+              <Input label="Emergency Number" placeholder="Emergency contact" value={emergencyNumber} onChange={(e) => setEmergencyNumber(e.target.value)} icon={Phone} />
             </div>
           </div>
 
