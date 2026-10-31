@@ -29,7 +29,7 @@ import SuperAdminLayout from "./components/super admin/SuperAdminLayout";
 import HospitalHomePage from "./Authentication/HospitalHomePage";
 
 // Import socket
-import { initSocket } from './socket/socket';
+import { initSocket, logoutSocket } from "./socket/socket";
 import EmailComposer from "./components/Notification/EmailNotification";
 import EditEmailTemplate from "./components/Notification/EditEmailTemplate";
 import CreateEmailTemplate from "./components/Notification/CreateEmailTemplate";
@@ -120,13 +120,17 @@ function App() {
   const [booking, setBooking] = useState(null);
   const navigate = useNavigate();
 
-  // ✅ STEP 3 — CONNECT SOCKET ONCE ONLY
+  // Connect Socket.IO only after authentication is ready.
+  // Disconnect when the user logs out.
   useEffect(() => {
-    const socketInstance = initSocket();
-    return () => {
-      // disconnectSocket();
-    };
-  }, []);
+    if (isAuthenticated) {
+      console.log("[APP] User authenticated. Initializing socket...");
+      initSocket();
+    } else {
+      console.log("[APP] User not authenticated. Disconnecting socket...");
+      logoutSocket();
+    }
+  }, [isAuthenticated]);
 
   // State for modals from Chrome notifications
   const [showApproveModal, setShowApproveModal] = useState(false);
