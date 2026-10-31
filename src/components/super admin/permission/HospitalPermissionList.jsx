@@ -65,22 +65,18 @@ const HospitalPermissionList = () => {
     
     registerPermissionEvents({
       onPermissionRegistered: () => {
-        showSuccessToast(`New permission created!`, 3000);
         refetchPermissions();
       },
       onPermissionUpdated: () => {
-        showSuccessToast(`Permission updated!`, 3000);
         refetchPermissions();
       },
       onPermissionDeleted: () => {
-        showSuccessToast(`Permission deleted!`, 3000);
         refetchPermissions();
       }
     });
 
     registerRolePermissionEvents({
       onRolePermissionUpdated: () => {
-        showSuccessToast(`Role permissions updated!`, 3000);
         refetchRolePermissions();
         refetchPermissions();
       }
@@ -101,21 +97,17 @@ const HospitalPermissionList = () => {
       if (!eventsRegistered) {
         registerPermissionEvents({
           onPermissionRegistered: () => {
-            showSuccessToast(`New permission created!`, 3000);
             refetchPermissions();
           },
           onPermissionUpdated: () => {
-            showSuccessToast(`Permission updated!`, 3000);
             refetchPermissions();
           },
           onPermissionDeleted: () => {
-            showSuccessToast(`Permission deleted!`, 3000);
             refetchPermissions();
           }
         });
         registerRolePermissionEvents({
           onRolePermissionUpdated: () => {
-            showSuccessToast(`Role permissions updated!`, 3000);
             refetchRolePermissions();
             refetchPermissions();
           }

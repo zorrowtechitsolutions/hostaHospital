@@ -348,31 +348,25 @@ const Staffs = () => {
   useEffect(() => {
     registerStaffEvents({
       onStaffRegistered: async () => {
-        showSuccessToast(`New staff registered!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
       onStaffUpdated: async () => {
-        showSuccessToast(`Staff updated!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
       onStaffDeleted: async () => {
-        showSuccessToast(`Staff deleted!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
       onStaffRecovered: async () => {
-        showSuccessToast(`Staff recovered successfully!`, 3000);
         await refetch();
         setImageRefreshKey(Date.now());
       },
       onStaffPasswordReset: async () => {
-        showSuccessToast(`Staff password reset!`, 3000);
         await refetch();
       },
       onStaffPasswordChanged: async () => {
-        showSuccessToast(`Staff password changed!`, 3000);
         await refetch();
       }
     });
@@ -391,31 +385,25 @@ const Staffs = () => {
       if (!eventsRegistered) {
         registerStaffEvents({
           onStaffRegistered: async () => {
-            showSuccessToast(`New staff registered!`, 3000);
             await refetch();
             setImageRefreshKey(Date.now());
           },
           onStaffUpdated: async () => {
-            showSuccessToast(`Staff updated!`, 3000);
             await refetch();
             setImageRefreshKey(Date.now());
           },
           onStaffDeleted: async () => {
-            showSuccessToast(`Staff deleted!`, 3000);
             await refetch();
             setImageRefreshKey(Date.now());
           },
           onStaffRecovered: async () => {
-            showSuccessToast(`Staff recovered successfully!`, 3000);
             await refetch();
             setImageRefreshKey(Date.now());
           },
           onStaffPasswordReset: async () => {
-            showSuccessToast(`Staff password reset!`, 3000);
             await refetch();
           },
           onStaffPasswordChanged: async () => {
-            showSuccessToast(`Staff password changed!`, 3000);
             await refetch();
           }
         });

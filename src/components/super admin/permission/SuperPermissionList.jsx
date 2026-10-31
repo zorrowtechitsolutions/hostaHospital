@@ -129,22 +129,18 @@ const SuperPermissionList = () => {
   useEffect(() => {
     registerPermissionEvents({
       onPermissionRegistered: () => {
-        showSuccessToast(`New permission created!`, 3000);
         refetchPermissions();
       },
       onPermissionUpdated: () => {
-        showSuccessToast(`Permission updated!`, 3000);
         refetchPermissions();
       },
       onPermissionDeleted: () => {
-        showSuccessToast(`Permission deleted!`, 3000);
         refetchPermissions();
       }
     });
 
     registerRolePermissionEvents({
       onRolePermissionUpdated: () => {
-        showSuccessToast(`Role permissions updated!`, 3000);
         refetchRolePermissions();
         refetchPermissions();
       }
@@ -165,21 +161,17 @@ const SuperPermissionList = () => {
       if (!eventsRegistered) {
         registerPermissionEvents({
           onPermissionRegistered: () => {
-            showSuccessToast(`New permission created!`, 3000);
             refetchPermissions();
           },
           onPermissionUpdated: () => {
-            showSuccessToast(`Permission updated!`, 3000);
             refetchPermissions();
           },
           onPermissionDeleted: () => {
-            showSuccessToast(`Permission deleted!`, 3000);
             refetchPermissions();
           }
         });
         registerRolePermissionEvents({
           onRolePermissionUpdated: () => {
-            showSuccessToast(`Role permissions updated!`, 3000);
             refetchRolePermissions();
             refetchPermissions();
           }

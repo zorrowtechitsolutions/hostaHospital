@@ -1,96 +1,139 @@
 // import { io } from "socket.io-client";
 // import { getAuthUser } from "../utils/auth";
 
-// const SOCKET_URL =import.meta.env.VITE_SOCKET_URL;;
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
-
+// if (!SOCKET_URL) {
+//   console.error("[SOCKET] VITE_SOCKET_URL is not configured");
+// }
 
 // export const socket = io(SOCKET_URL, {
+//   autoConnect: false,
 //   transports: ["websocket", "polling"],
-//   timeout: 10000, // 10 seconds
-//   // autoConnect: true,
+//   timeout: 10000,
+//   reconnection: true,
+//   reconnectionAttempts: Infinity,
+//   reconnectionDelay: 1000,
+//   reconnectionDelayMax: 5000,
+// });
+
+// const joinUserRooms = () => {
+//   const authUser = getAuthUser();
+
+//   if (!authUser) {
+//     console.warn("[SOCKET] No authenticated user found");
+//     return;
+//   }
+
+// const rooms = new Set();
+
+//   if (authUser.doctorId) {
+//     rooms.add(`doctor_${authUser.doctorId}`);
+//   }
+
+//   if (authUser.staffId) {
+//     rooms.add(`staff_${authUser.staffId}`);
+//   }
+
+//   if (authUser.hospitalId) {
+//     rooms.add(`hospital_${authUser.hospitalId}`);
+//   }
+
+//   if (
+//     authUser.role === "superadmin" ||
+//     Number(authUser.roleId) === 1
+//   ) {
+//     rooms.add("role_1");
+//   }
+
+//   if (authUser.id) {
+//     rooms.add(`user_${authUser.id}`);
+//   }
+
+//   if (rooms.size === 0) {
+//     console.warn("[SOCKET] No rooms found for user");
+//     return;
+//   }
+
+//   for (const room of rooms) {
+//     console.log("[SOCKET] Joining room:", room);
+//     socket.emit("join-room", room);
+//   }
+// };
+
+// socket.on("connect", () => {
+//   console.log("[SOCKET] Connected:", socket.id);
+
+//   joinUserRooms();
+// });
+
+// socket.on("room-joined", (data) => {
+//   console.log("[SOCKET] Room joined:", data);
+// });
+
+// socket.on("disconnect", (reason) => {
+//   console.warn("[SOCKET] Disconnected:", reason);
+// });
+
+// socket.on("connect_error", (error) => {
+//   console.error(
+//     "[SOCKET] Connection error:",
+//     error.message
+//   );
+// });
+
+// socket.on("reconnect_attempt", (attempt) => {
+//   console.log(
+//     "[SOCKET] Reconnection attempt:",
+//     attempt
+//   );
 // });
 
 // export const initSocket = () => {
-//   if (!socket.connected) {
-//     socket.connect();
-//     console.log("Socket connecting...");
+//   const authUser = getAuthUser();
+
+//   if (!authUser) {
+//     console.warn(
+//       "[SOCKET] No authenticated user. Not connecting."
+//     );
+
+//     return socket;
 //   }
 
-//   const handleConnect = () => {
-//     const authUser = getAuthUser();
-
-//     console.log("Socket connected, joining rooms for user:", authUser);
-
-
-//     if (!authUser) {
-//       console.warn(":warning: No authenticated user found");
-//       return;
-//     }
-
-//     // Doctor's own room
-//     if (authUser.doctorId) {
-//       const room = `doctor_${authUser.doctorId}`;
-//       socket.emit("join-room", room);
-//     }
-
-//     // Staff room
-//     if (authUser.staffId) {
-//       const room = `staff_${authUser.staffId}`;
-//       socket.emit("join-room", room);
-//     }
-
-//     // Hospital room — where most booking events go
-//     if (authUser.hospitalId) {
-//       const room = `hospital_${authUser.hospitalId}`;
-//       socket.emit("join-room", room);
-//     }
-
-//     // Super-admin broadcast room (literal "role_1" — matches backend)
-//     if (authUser.role === "superadmin" || authUser.roleId === 1) {
-//       socket.emit("join-room", "role_1");
-//     }
-
-//     // Personal user room — for booking_alert / blood_stock_alert
-//     if (authUser.id) {
-//       const room = `user_${authUser.id}`;
-//       socket.emit("join-room", room);
-//     }
-//   };
-
-//   // Prevent duplicate listeners on hot reload
-//   socket.off("connect", handleConnect);
-//   socket.on("connect", handleConnect);
-
-//   socket.on("disconnect", (reason) => {
-//     console.log("Socket disconnected:", reason);
-//   });
-
-//   socket.on("connect_error", (error) => {
-//     console.error("Socket connection error:", error);
-//   });
-
-//   // If already connected when initSocket() is called, run handler immediately
-//   if (socket.connected) {
-//     console.log("Socket already connected, joining rooms...");
-//     handleConnect();
+//   if (!socket.connected) {
+//     console.log("[SOCKET] Connecting...");
+//     socket.connect();
+//   } else {
+//     console.log("[SOCKET] Already connected");
+//     joinUserRooms();
 //   }
 
 //   return socket;
 // };
 
 // export const logoutSocket = () => {
-//   socket.emit("leave-all-rooms");
-//   socket.disconnect();
+//   console.log("[SOCKET] Logging out");
+
+//   if (socket.connected) {
+//     socket.disconnect();
+//   }
+// };
+
+// export const reconnectSocket = () => {
+//   console.log("[SOCKET] Reconnecting...");
+
+//   if (socket.connected) {
+//     socket.disconnect();
+//   }
+
+//   const authUser = getAuthUser();
+
+//   if (authUser) {
+//     socket.connect();
+//   }
 // };
 
 
-
-
-
-
-
-// src/socket/socket.js
 
 import { io } from "socket.io-client";
 import { getAuthUser } from "../utils/auth";
@@ -98,7 +141,7 @@ import { getAuthUser } from "../utils/auth";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 if (!SOCKET_URL) {
-  console.error("VITE_SOCKET_URL is not configured");
+  console.error("[SOCKET] VITE_SOCKET_URL is not configured");
 }
 
 export const socket = io(SOCKET_URL, {
@@ -111,99 +154,135 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelayMax: 5000,
 });
 
+/**
+ * Join all rooms belonging to the authenticated user
+ */
 const joinUserRooms = () => {
   const authUser = getAuthUser();
 
   if (!authUser) {
-    console.warn("No authenticated user found. Cannot join rooms.");
+    console.warn("[SOCKET] No authenticated user found");
     return;
   }
 
- 
+  const rooms = new Set();
 
-  const rooms = [];
+  // Hospital room
+  if (authUser.hospitalId) {
+    rooms.add(`hospital_${authUser.hospitalId}`);
+  }
+
+  // User / patient room
+  const userId = authUser.id ?? authUser.userId;
+
+  if (userId) {
+    rooms.add(`user_${userId}`);
+  }
 
   // Doctor room
   if (authUser.doctorId) {
-    rooms.push(`doctor_${authUser.doctorId}`);
+    rooms.add(`doctor_${authUser.doctorId}`);
   }
 
   // Staff room
   if (authUser.staffId) {
-    rooms.push(`staff_${authUser.staffId}`);
+    rooms.add(`staff_${authUser.staffId}`);
   }
 
-  // Hospital room
-  if (authUser.hospitalId) {
-    rooms.push(`hospital_${authUser.hospitalId}`);
-  }
-
-  // Super-admin room
+  // Superadmin room
   if (
     authUser.role === "superadmin" ||
     Number(authUser.roleId) === 1
   ) {
-    rooms.push("role_1");
+    rooms.add("role_1");
   }
 
-  // Personal user room
-  if (authUser.id) {
-    rooms.push(`user_${authUser.id}`);
+  if (rooms.size === 0) {
+    console.warn("[SOCKET] No rooms found for authenticated user");
+    return;
   }
 
-  // Join all applicable rooms
-  [...new Set(rooms)].forEach((room) => {
+  rooms.forEach((room) => {
+
     socket.emit("join-room", room);
   });
-
-  if (rooms.length === 0) {
-    console.warn("No valid Socket.IO rooms found for this user.");
-  }
 };
 
-// Register connection listeners only once
-socket.on("connect", joinUserRooms);
+/**
+ * Socket connected
+ */
+socket.on("connect", () => {
 
+  joinUserRooms();
+});
+
+/**
+ * Room successfully joined
+ */
+socket.on("room-joined", (data) => {
+});
+
+
+
+/**
+ * Socket disconnected
+ */
 socket.on("disconnect", (reason) => {
-  console.warn("Socket disconnected:", reason);
+  console.warn("[SOCKET] Disconnected:", reason);
 });
 
+/**
+ * Connection error
+ */
 socket.on("connect_error", (error) => {
-  console.error("Socket connection error:", error.message);
+  console.error("[SOCKET] Connection error:", error.message);
 });
 
-socket.on("reconnect_attempt", (attempt) => {
+/**
+ * Reconnection attempt
+ */
+socket.io.on("reconnect_attempt", (attempt) => {
 });
 
-socket.on("reconnect", () => {
-});
-
-// Initialize socket connection
+/**
+ * Initialize socket connection
+ */
 export const initSocket = () => {
+  const authUser = getAuthUser();
+
+  if (!authUser) {
+    console.warn("[SOCKET] No authenticated user. Not connecting.");
+    return socket;
+  }
+
   if (!socket.connected) {
+
     socket.connect();
   } else {
+
+    // Make sure rooms are joined
     joinUserRooms();
   }
 
   return socket;
 };
 
-// Logout
+/**
+ * Logout / disconnect socket
+ */
 export const logoutSocket = () => {
-  // Disconnecting automatically removes this connection
-  // from its joined server-side rooms.
+
   socket.disconnect();
 };
 
-// Optional: manually reconnect after login
+/**
+ * Manually reconnect socket
+ */
 export const reconnectSocket = () => {
-  if (socket.connected) {
-    socket.disconnect();
+
+  socket.disconnect();
+
+  if (getAuthUser()) {
+    socket.connect();
   }
-
-  socket.connect();
 };
-
-
-

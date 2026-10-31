@@ -444,20 +444,15 @@ const Settings = () => {
   useEffect(() => {
     registerHospitalEvents({
       onHospitalRegistered: () => {
-        showSuccessToast(`New hospital registered!`, 3000);
       },
       onHospitalUpdated: () => {
-        showSuccessToast(`Hospital updated successfully!`, 3000);
         refetch();
       },
       onHospitalDeleted: () => {
-        showSuccessToast(`Hospital deleted!`, 3000);
       },
       onHospitalBlacklisted: () => {
-        showSuccessToast(`Hospital blacklisted!`, 3000);
       },
       onHospitalRecovered: () => {
-        showSuccessToast(`Hospital recovered successfully!`, 3000);
       }
     });
 
@@ -474,20 +469,20 @@ const Settings = () => {
       if (!eventsRegistered) {
         registerHospitalEvents({
           onHospitalRegistered: () => {
-            showSuccessToast(`New hospital registered!`, 3000);
+            
           },
           onHospitalUpdated: () => {
-            showSuccessToast(`Hospital updated successfully!`, 3000);
+         
             refetch();
           },
           onHospitalDeleted: () => {
-            showSuccessToast(`Hospital deleted!`, 3000);
+          
           },
           onHospitalBlacklisted: () => {
-            showSuccessToast(`Hospital blacklisted!`, 3000);
+          
           },
           onHospitalRecovered: () => {
-            showSuccessToast(`Hospital recovered successfully!`, 3000);
+           
           }
         });
         setEventsRegistered(true);

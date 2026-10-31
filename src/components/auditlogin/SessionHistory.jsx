@@ -396,9 +396,6 @@ const SessionHistory = () => {
           return;
         }
 
-        if (message) {
-          showSuccessToast(message, 4000);
-        }
 
         refetch();
       },

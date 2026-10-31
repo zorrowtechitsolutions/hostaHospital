@@ -166,15 +166,12 @@ const Ambulance = () => {
   useEffect(() => {
     registerAmbulanceEvents({
       onRegistered: async (data) => {
-        showSuccessToast(`New ambulance registered!`, 3000);
         await refetch();
       },
       onUpdated: async (data) => {
-        showSuccessToast(`Ambulance updated!`, 3000);
         await refetch();
       },
       onDeleted: async (data) => {
-        showSuccessToast(`Ambulance deleted!`, 3000);
         await refetch();
       }
     });
@@ -189,15 +186,12 @@ const Ambulance = () => {
     const handleConnect = () => {
       registerAmbulanceEvents({
         onRegistered: async (data) => {
-          showSuccessToast(`New ambulance registered!`, 3000);
           await refetch();
         },
         onUpdated: async (data) => {
-          showSuccessToast(`Ambulance updated!`, 3000);
           await refetch();
         },
         onDeleted: async (data) => {
-          showSuccessToast(`Ambulance deleted!`, 3000);
           await refetch();
         }
       });

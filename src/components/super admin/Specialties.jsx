@@ -610,15 +610,12 @@ const Specialties = () => {
   useEffect(() => {
     registerSpecialityEvents({
       onSpecialityRegistered: (data) => {
-        showSuccessToast(`New speciality "${data.name || 'Speciality'}" created!`, 3000);
         refetch();
       },
       onSpecialityUpdated: (data) => {
-        showSuccessToast(`Speciality "${data.name || 'Speciality'}" updated!`, 3000);
         refetch();
       },
       onSpecialityDeleted: () => {
-        showSuccessToast(`Speciality deleted!`, 3000);
         refetch();
       }
     });
@@ -634,15 +631,12 @@ const Specialties = () => {
       if (!eventsRegistered) {
         registerSpecialityEvents({
           onSpecialityRegistered: (data) => {
-            showSuccessToast(`New speciality "${data.name || 'Speciality'}" created!`, 3000);
             refetch();
           },
           onSpecialityUpdated: (data) => {
-            showSuccessToast(`Speciality "${data.name || 'Speciality'}" updated!`, 3000);
             refetch();
           },
           onSpecialityDeleted: () => {
-            showSuccessToast(`Speciality deleted!`, 3000);
             refetch();
           }
         });

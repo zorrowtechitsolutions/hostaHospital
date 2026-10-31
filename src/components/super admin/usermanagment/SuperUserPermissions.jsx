@@ -43,15 +43,12 @@ const SuperUserPermissions = () => {
   useEffect(() => {
     registerPermissionEvents({
       onPermissionRegistered: () => {
-        showSuccessToast(`New permission created!`, 3000);
         refetch();
       },
       onPermissionUpdated: () => {
-        showSuccessToast(`Permission updated!`, 3000);
         refetch();
       },
       onPermissionDeleted: () => {
-        showSuccessToast(`Permission deleted!`, 3000);
         refetch();
       }
     });
@@ -70,15 +67,12 @@ const SuperUserPermissions = () => {
       if (!eventsRegistered) {
         registerPermissionEvents({
           onPermissionRegistered: () => {
-            showSuccessToast(`New permission created!`, 3000);
             refetch();
           },
           onPermissionUpdated: () => {
-            showSuccessToast(`Permission updated!`, 3000);
             refetch();
           },
           onPermissionDeleted: () => {
-            showSuccessToast(`Permission deleted!`, 3000);
             refetch();
           }
         });

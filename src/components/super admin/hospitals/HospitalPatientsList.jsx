@@ -14,7 +14,7 @@ import {
 } from '../../../../app/service/patients';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
-import { registerPatientEvents, unregisterPatientEvents } from '../../../socket/patientEvents';
+import { registerPatientEvents} from '../../../socket/patientEvents';
 import DeleteModal from '../../patients/DeleteModel';
 import AddAppointmentModal from '../../patients/AddAppointmentModal';
 import ApproveRequestModal from '../../Requests/ApproveRequestModel';
@@ -349,32 +349,30 @@ const HospitalPatientsList = () => {
 
   // Register socket event listeners
   useEffect(() => {
-    registerPatientEvents({
-      onPatientRegistered: () => {
-        showSuccessToast(`New patient registered!`, 3000);
-        refetch();
-      },
-      onPatientUpdated: () => {
-        showSuccessToast(`Patient updated!`, 3000);
-        refetch();
-      },
-      onPatientDeleted: () => {
-        showSuccessToast(`Patient deleted!`, 3000);
-        refetch();
-      },
-      onPatientRecovered: () => {
-        showSuccessToast(`Patient recovered!`, 3000);
-        refetch();
-      }
-    });
 
-    setEventsRegistered(true);
+  const cleanup = registerPatientEvents({
+    onRegistered: (eventData) => {
+      refetchPatients();
+    },
 
-    return () => {
-      unregisterPatientEvents();
-      setEventsRegistered(false);
-    };
-  }, [refetch]);
+    onUpdated: (eventData) => {
+      refetchPatients();
+    },
+
+    onDeleted: (eventData) => {
+      refetchPatients();
+    },
+
+    onRecovered: (eventData) => {
+      refetchPatients();
+    },
+
+    onUnknown: (eventData) => {
+    },
+  });
+
+  return cleanup;
+}, [refetchPatients]);
 
   // Listen for socket connection
   useEffect(() => {
@@ -382,19 +380,15 @@ const HospitalPatientsList = () => {
       if (!eventsRegistered) {
         registerPatientEvents({
           onPatientRegistered: () => {
-            showSuccessToast(`New patient registered!`, 3000);
             refetch();
           },
           onPatientUpdated: () => {
-            showSuccessToast(`Patient updated!`, 3000);
             refetch();
           },
           onPatientDeleted: () => {
-            showSuccessToast(`Patient deleted!`, 3000);
             refetch();
           },
           onPatientRecovered: () => {
-            showSuccessToast(`Patient recovered!`, 3000);
             refetch();
           }
         });

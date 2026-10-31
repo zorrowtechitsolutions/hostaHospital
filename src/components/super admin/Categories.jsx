@@ -307,15 +307,12 @@ const Categories = () => {
   useEffect(() => {
     registerCategoryEvents({
       onCategoryRegistered: (data) => {
-        showSuccessToast(`New category "${data.name || 'Category'}" created!`, 3000);
         refetch();
       },
       onCategoryUpdated: (data) => {
-        showSuccessToast(`Category "${data.name || 'Category'}" updated!`, 3000);
         refetch();
       },
       onCategoryDeleted: () => {
-        showSuccessToast(`Category deleted!`, 3000);
         refetch();
       },
     });
@@ -333,15 +330,12 @@ const Categories = () => {
       if (!eventsRegistered) {
         registerCategoryEvents({
           onCategoryRegistered: (data) => {
-            showSuccessToast(`New category "${data.name || 'Category'}" created!`, 3000);
             refetch();
           },
           onCategoryUpdated: (data) => {
-            showSuccessToast(`Category "${data.name || 'Category'}" updated!`, 3000);
             refetch();
           },
           onCategoryDeleted: () => {
-            showSuccessToast(`Category deleted!`, 3000);
             refetch();
           },
         });

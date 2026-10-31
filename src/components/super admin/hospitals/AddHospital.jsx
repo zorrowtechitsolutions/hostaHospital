@@ -333,23 +333,18 @@ const AddHospital = () => {
   useEffect(() => {
     registerHospitalEvents({
       onHospitalRegistered: (data) => {
-        showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
       },
 
       onHospitalUpdated: (data) => {
-        showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
       },
 
       onHospitalDeleted: (data) => {
-        showSuccessToast(`Hospital deleted!`, 3000);
       },
 
       onHospitalBlacklisted: (data) => {
-        showSuccessToast(`Hospital blacklisted!`, 3000);
       },
 
       onHospitalRecovered: (data) => {
-        showSuccessToast(`Hospital recovered successfully!`, 3000);
       }
     });
 
@@ -367,19 +362,14 @@ const AddHospital = () => {
       if (!eventsRegistered) {
         registerHospitalEvents({
           onHospitalRegistered: (data) => {
-            showSuccessToast(`New hospital registered: ${data.name || 'Hospital'}`, 3000);
           },
           onHospitalUpdated: (data) => {
-            showSuccessToast(`Hospital ${data.name || 'Hospital'} updated!`, 3000);
           },
           onHospitalDeleted: (data) => {
-            showSuccessToast(`Hospital deleted!`, 3000);
           },
           onHospitalBlacklisted: (data) => {
-            showSuccessToast(`Hospital blacklisted!`, 3000);
           },
           onHospitalRecovered: (data) => {
-            showSuccessToast(`Hospital recovered successfully!`, 3000);
           }
         });
         setEventsRegistered(true);

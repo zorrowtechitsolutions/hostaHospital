@@ -753,15 +753,12 @@ const Ads = () => {
   useEffect(() => {
     registerAdEvents({
       onAdCreated: () => {
-        showSuccessToast(`New ad created!`, 3000);
         refetch();
       },
       onAdUpdated: () => {
-        showSuccessToast(`Ad updated successfully!`, 3000);
         refetch();
       },
       onAdDeleted: () => {
-        showSuccessToast(`Ad deleted!`, 3000);
         refetch();
       }
     });
@@ -779,15 +776,12 @@ const Ads = () => {
       if (!eventsRegistered) {
         registerAdEvents({
           onAdCreated: () => {
-            showSuccessToast(`New ad created!`, 3000);
             refetch();
           },
           onAdUpdated: () => {
-            showSuccessToast(`Ad updated successfully!`, 3000);
             refetch();
           },
           onAdDeleted: () => {
-            showSuccessToast(`Ad deleted!`, 3000);
             refetch();
           }
         });

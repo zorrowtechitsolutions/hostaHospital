@@ -396,13 +396,10 @@ const Consultation = () => {
   useEffect(() => {
     registerPrescriptionEvents({
       onPrescriptionCreated: async (data) => {
-        showSuccessToast(`New prescription created!`, 3000);
       },
       onPrescriptionUpdated: async (data) => {
-        showSuccessToast(`Prescription updated!`, 3000);
       },
       onPrescriptionDeleted: async (data) => {
-        showSuccessToast(`Prescription deleted!`, 3000);
       }
     });
 

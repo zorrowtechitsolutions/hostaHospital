@@ -180,7 +180,6 @@ const DocumentsTab = ({ patient }) => {
           hospitalId &&
           String(data.hospitalId) !== String(hospitalId)
         ) return;
-        showSuccessToast(message || "Document uploaded", 3000);
         await refreshDocs();
       },
 
@@ -191,7 +190,6 @@ const DocumentsTab = ({ patient }) => {
           hospitalId &&
           String(data.hospitalId) !== String(hospitalId)
         ) return;
-        showSuccessToast(message || "Document updated", 3000);
         await refreshDocs();
       },
 
@@ -202,7 +200,6 @@ const DocumentsTab = ({ patient }) => {
           hospitalId &&
           String(data.hospitalId) !== String(hospitalId)
         ) return;
-        showSuccessToast(message || "Document deleted", 3000);
         await refreshDocs();
       },
     });
