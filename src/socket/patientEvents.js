@@ -36,10 +36,8 @@ import { socket } from "./socket";
 export const registerPatientEvents = (handlers = {}) => { 
  
   const listener = (payload) => { 
-    console.log("Received patient event:", payload); 
  
     if (!payload) { 
-      console.warn("Empty patient event payload"); 
       return; 
     } 
  
@@ -62,27 +60,23 @@ export const registerPatientEvents = (handlers = {}) => {
     switch (event) { 
  
       case "PATIENT_REGISTERED": 
-        console.log("New patient registered"); 
         handlers.onRegistered?.(eventData); 
         break; 
  
       case "PATIENT_UPDATED": 
-        console.log("Patient updated"); 
         handlers.onUpdated?.(eventData); 
         break; 
  
       case "PATIENT_DELETED": 
-        console.log("Patient deleted"); 
         handlers.onDeleted?.(eventData); 
         break; 
  
       case "PATIENT_RECOVERED": 
-        console.log("Patient recovered"); 
+      
         handlers.onRecovered?.(eventData); 
         break; 
  
       default: 
-        console.warn("Unknown patient event:", event); 
         handlers.onUnknown?.(eventData); 
         break; 
     } 
@@ -94,7 +88,6 @@ export const registerPatientEvents = (handlers = {}) => {
   // Return cleanup function 
   return () => { 
     socket.off("patient_event", listener); 
-    console.log("Patient event listener removed"); 
   }; 
 };
 

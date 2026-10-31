@@ -119,8 +119,7 @@ const joinUserRooms = () => {
     return;
   }
 
-  console.log("Socket connected:", socket.id);
-  console.log("Joining rooms for user:", authUser);
+ 
 
   const rooms = [];
 
@@ -155,7 +154,6 @@ const joinUserRooms = () => {
   // Join all applicable rooms
   [...new Set(rooms)].forEach((room) => {
     socket.emit("join-room", room);
-    console.log("Joining Socket.IO room:", room);
   });
 
   if (rooms.length === 0) {
@@ -175,20 +173,16 @@ socket.on("connect_error", (error) => {
 });
 
 socket.on("reconnect_attempt", (attempt) => {
-  console.log("Socket reconnection attempt:", attempt);
 });
 
 socket.on("reconnect", () => {
-  console.log("Socket reconnected successfully");
 });
 
 // Initialize socket connection
 export const initSocket = () => {
   if (!socket.connected) {
-    console.log("Initializing Socket.IO connection...");
     socket.connect();
   } else {
-    console.log("Socket is already connected");
     joinUserRooms();
   }
 
@@ -197,8 +191,6 @@ export const initSocket = () => {
 
 // Logout
 export const logoutSocket = () => {
-  console.log("Disconnecting Socket.IO...");
-
   // Disconnecting automatically removes this connection
   // from its joined server-side rooms.
   socket.disconnect();
