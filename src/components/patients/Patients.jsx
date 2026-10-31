@@ -54,7 +54,7 @@ import ExcelExportButton from '../ui/ExcelExportButton';
 // ✅ Import socket
 import { socket } from '../../socket/socket';
 // ✅ Import socket event listeners
-import { registerPatientEvents, unregisterPatientEvents } from '../../socket/patientEvents';
+import { registerPatientEvents } from '../../socket/patientEvents';
 
 // Permission IDs for Patient module (13-16)
 const PERMISSIONS = {
@@ -374,26 +374,35 @@ const Patients = () => {
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
   // ✅ Register socket event listeners
-  useEffect(() => {
-    registerPatientEvents({
-      onPatientRegistered: () => {
-        refetchPatients();
-      },
-      onPatientUpdated: () => {
-        refetchPatients();
-      },
-      onPatientDeleted: () => {
-        refetchPatients();
-      },
-      onPatientRecovered: () => {
-        refetchPatients();
-      }
-    });
+ useEffect(() => {
+  const cleanup = registerPatientEvents({
+    onRegistered: (eventData) => {
+      console.log("[PATIENT SOCKET] REGISTERED:", eventData);
+      refetchPatients();
+    },
 
-    return () => {
-      unregisterPatientEvents();
-    };
-  }, [refetchPatients]);
+    onUpdated: (eventData) => {
+      console.log("[PATIENT SOCKET] UPDATED:", eventData);
+      refetchPatients();
+    },
+
+    onDeleted: (eventData) => {
+      console.log("[PATIENT SOCKET] DELETED:", eventData);
+      refetchPatients();
+    },
+
+    onRecovered: (eventData) => {
+      console.log("[PATIENT SOCKET] RECOVERED:", eventData);
+      refetchPatients();
+    },
+
+    onUnknown: (eventData) => {
+      console.log("[PATIENT SOCKET] UNKNOWN EVENT:", eventData);
+    },
+  });
+
+  return cleanup;
+}, [refetchPatients]);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
