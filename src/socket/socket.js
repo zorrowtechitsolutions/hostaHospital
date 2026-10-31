@@ -154,6 +154,9 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelayMax: 5000,
 });
 
+/**
+ * Join all rooms belonging to the authenticated user
+ */
 const joinUserRooms = () => {
   const authUser = getAuthUser();
 
@@ -169,7 +172,7 @@ const joinUserRooms = () => {
     rooms.add(`hospital_${authUser.hospitalId}`);
   }
 
-  // Patient/user room
+  // User / patient room
   const userId = authUser.id ?? authUser.userId;
 
   if (userId) {
@@ -201,31 +204,64 @@ const joinUserRooms = () => {
 
   rooms.forEach((room) => {
     console.log("[SOCKET] Joining room:", room);
+
     socket.emit("join-room", room);
   });
 };
 
+/**
+ * Socket connected
+ */
 socket.on("connect", () => {
   console.log("[SOCKET] Connected:", socket.id);
+
   joinUserRooms();
 });
 
+/**
+ * Room successfully joined
+ */
 socket.on("room-joined", (data) => {
   console.log("[SOCKET] Room joined:", data);
 });
 
+/**
+ * DEBUG:
+ * Show EVERY Socket.IO event received by this client.
+ *
+ * Remove this later after debugging.
+ */
+socket.onAny((event, ...args) => {
+  console.log("=================================");
+  console.log("[SOCKET ANY] EVENT:", event);
+  console.log("[SOCKET ANY] DATA:", args);
+  console.log("=================================");
+});
+
+/**
+ * Socket disconnected
+ */
 socket.on("disconnect", (reason) => {
   console.warn("[SOCKET] Disconnected:", reason);
 });
 
+/**
+ * Connection error
+ */
 socket.on("connect_error", (error) => {
   console.error("[SOCKET] Connection error:", error.message);
 });
 
+/**
+ * Reconnection attempt
+ */
 socket.io.on("reconnect_attempt", (attempt) => {
   console.log("[SOCKET] Reconnection attempt:", attempt);
 });
 
+/**
+ * Initialize socket connection
+ */
 export const initSocket = () => {
   const authUser = getAuthUser();
 
@@ -236,20 +272,30 @@ export const initSocket = () => {
 
   if (!socket.connected) {
     console.log("[SOCKET] Connecting...");
+
     socket.connect();
   } else {
     console.log("[SOCKET] Already connected");
+
+    // Make sure rooms are joined
     joinUserRooms();
   }
 
   return socket;
 };
 
+/**
+ * Logout / disconnect socket
+ */
 export const logoutSocket = () => {
   console.log("[SOCKET] Logging out");
+
   socket.disconnect();
 };
 
+/**
+ * Manually reconnect socket
+ */
 export const reconnectSocket = () => {
   console.log("[SOCKET] Reconnecting...");
 
