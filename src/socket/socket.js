@@ -203,7 +203,6 @@ const joinUserRooms = () => {
   }
 
   rooms.forEach((room) => {
-    console.log("[SOCKET] Joining room:", room);
 
     socket.emit("join-room", room);
   });
@@ -213,7 +212,6 @@ const joinUserRooms = () => {
  * Socket connected
  */
 socket.on("connect", () => {
-  console.log("[SOCKET] Connected:", socket.id);
 
   joinUserRooms();
 });
@@ -222,21 +220,9 @@ socket.on("connect", () => {
  * Room successfully joined
  */
 socket.on("room-joined", (data) => {
-  console.log("[SOCKET] Room joined:", data);
 });
 
-/**
- * DEBUG:
- * Show EVERY Socket.IO event received by this client.
- *
- * Remove this later after debugging.
- */
-socket.onAny((event, ...args) => {
-  console.log("=================================");
-  console.log("[SOCKET ANY] EVENT:", event);
-  console.log("[SOCKET ANY] DATA:", args);
-  console.log("=================================");
-});
+
 
 /**
  * Socket disconnected
@@ -256,7 +242,6 @@ socket.on("connect_error", (error) => {
  * Reconnection attempt
  */
 socket.io.on("reconnect_attempt", (attempt) => {
-  console.log("[SOCKET] Reconnection attempt:", attempt);
 });
 
 /**
@@ -271,11 +256,9 @@ export const initSocket = () => {
   }
 
   if (!socket.connected) {
-    console.log("[SOCKET] Connecting...");
 
     socket.connect();
   } else {
-    console.log("[SOCKET] Already connected");
 
     // Make sure rooms are joined
     joinUserRooms();
@@ -288,7 +271,6 @@ export const initSocket = () => {
  * Logout / disconnect socket
  */
 export const logoutSocket = () => {
-  console.log("[SOCKET] Logging out");
 
   socket.disconnect();
 };
@@ -297,7 +279,6 @@ export const logoutSocket = () => {
  * Manually reconnect socket
  */
 export const reconnectSocket = () => {
-  console.log("[SOCKET] Reconnecting...");
 
   socket.disconnect();
 

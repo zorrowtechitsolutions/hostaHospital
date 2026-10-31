@@ -124,10 +124,8 @@ function App() {
   // Disconnect when the user logs out.
   useEffect(() => {
     if (isAuthenticated) {
-      console.log("[APP] User authenticated. Initializing socket...");
       initSocket();
     } else {
-      console.log("[APP] User not authenticated. Disconnecting socket...");
       logoutSocket();
     }
   }, [isAuthenticated]);

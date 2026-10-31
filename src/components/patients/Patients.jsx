@@ -375,31 +375,25 @@ const Patients = () => {
 
   // ✅ Register socket event listeners
 useEffect(() => {
-  console.log("[PATIENTS] Setting up patient socket events");
 
   const cleanup = registerPatientEvents({
     onRegistered: (eventData) => {
-      console.log("[PATIENTS] REGISTERED:", eventData);
       refetchPatients();
     },
 
     onUpdated: (eventData) => {
-      console.log("[PATIENTS] UPDATED:", eventData);
       refetchPatients();
     },
 
     onDeleted: (eventData) => {
-      console.log("[PATIENTS] DELETED:", eventData);
       refetchPatients();
     },
 
     onRecovered: (eventData) => {
-      console.log("[PATIENTS] RECOVERED:", eventData);
       refetchPatients();
     },
 
     onUnknown: (eventData) => {
-      console.log("[PATIENTS] UNKNOWN:", eventData);
     },
   });
 
