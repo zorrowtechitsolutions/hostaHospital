@@ -950,21 +950,20 @@ const Settings = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hospital Type *
-                  </label>
-                  {/* ✅ Replaced native  with CustomSelect */}
-                  <CustomSelect
-                    hideLabel
-                    value={editForm.hospitalType}
-                    options={hospitalTypeOptions}
-                    placeholder={
-                      isLoadingCategories ? 'Loading categories...' : 'Select hospital type'
-                    }
-                    onChange={(value) => handleInputChange({ target: { name: 'hospitalType', value } })}
-                    disabled={isLoadingCategories}
-                    required
-                    className={HOSPITAL_TYPE_SELECT_CLASS}
-                  />
+  Hospital Type *
+</label>
+
+<CustomSelect
+  hideLabel
+  value={editForm.hospitalType}
+  options={hospitalTypeOptions}
+  placeholder={
+    isLoadingCategories ? 'Loading categories...' : 'Select hospital type'
+  }
+  onChange={(value) => handleInputChange({ target: { name: 'hospitalType', value } })}
+  disabled={isLoadingCategories}
+  className={HOSPITAL_TYPE_SELECT_CLASS}
+/>
                   {categoriesError && (
                     <p className="text-xs text-red-500 mt-1">
                       Failed to load categories. Using defaults.

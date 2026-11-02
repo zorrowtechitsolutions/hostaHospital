@@ -337,7 +337,19 @@ const PrescriptionTemplate = () => {
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-  const allTemplates = templatesResponse?.data || [];
+const allTemplates = (templatesResponse?.data || []).map((template) => {
+  const nestedDesign = template.design?.[0];
+
+  if (nestedDesign?.design && Array.isArray(nestedDesign.design)) {
+    return {
+      ...template,
+      canvasBg: nestedDesign.canvasBg || template.canvasBg,
+      design: nestedDesign.design,
+    };
+  }
+
+  return template;
+});
 
   const demoTemplate = allTemplates.find(
     t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
