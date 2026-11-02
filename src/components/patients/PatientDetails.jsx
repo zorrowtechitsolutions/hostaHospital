@@ -407,26 +407,30 @@ const PatientDetails = () => {
       const isDeleted = prescription.isDelete === true || prescription.status === 'deleted';
       
       return {
-        id: prescription.id || prescription._id || index,
-        type: prescription.medications?.[0]?.name || "Prescription",
-        quantity: prescription.medications?.length || 0,
-        date: prescription.createdAt ? formatDate(prescription.createdAt) : formatDate(new Date()),
-        prescribedBy: doctorName,
-        doctorName: doctorName,
-        doctorSpecialization: doctorSpecialization,
-        amount: prescription.amount || "N/A",
-        paymentMethod: prescription.paymentMethod || "Insurance",
-        status: isDeleted ? "Blacklisted" : "Completed",
-        fullData: prescription,
-        complaint: prescription.complaint,
-        advice: prescription.advice,
-        investigations: prescription.investigations,
-        vitals: prescription.vitals,
-        medications: prescription.medications,
-        next_consultation: prescription.next_consultation,
-        doctorId: prescription.doctorId,
-        isDelete: isDeleted
-      };
+  id: prescription.id || prescription._id || index,
+  type: prescription.medications?.[0]?.name || "Prescription",
+  quantity: prescription.medications?.length || 0,
+
+  // IMPORTANT: keep the original timestamp
+  date: prescription.createdAt || null,
+  createdAt: prescription.createdAt || null,
+
+  prescribedBy: doctorName,
+  doctorName: doctorName,
+  doctorSpecialization: doctorSpecialization,
+  amount: prescription.amount || "N/A",
+  paymentMethod: prescription.paymentMethod || "Insurance",
+  status: isDeleted ? "Blacklisted" : "Completed",
+  fullData: prescription,
+  complaint: prescription.complaint,
+  advice: prescription.advice,
+  investigations: prescription.investigations,
+  vitals: prescription.vitals,
+  medications: prescription.medications,
+  next_consultation: prescription.next_consultation,
+  doctorId: prescription.doctorId,
+  isDelete: isDeleted
+};
     });
   }, [prescriptionsResponse, bookingResponse, doctorMap]);
 
