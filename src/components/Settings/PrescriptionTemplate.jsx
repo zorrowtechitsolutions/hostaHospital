@@ -38,7 +38,6 @@ const normalizeCanvasColor = (color) => {
 
   const value = String(color).trim();
 
-  // Already a valid CSS color
   if (
     value.startsWith("#") ||
     value.startsWith("rgb") ||
@@ -50,12 +49,10 @@ const normalizeCanvasColor = (color) => {
     return value;
   }
 
-  // Convert "FFFFFF" -> "#FFFFFF"
   if (/^[0-9a-fA-F]{6}$/.test(value)) {
     return `#${value}`;
   }
 
-  // Convert "FFF" -> "#FFF"
   if (/^[0-9a-fA-F]{3}$/.test(value)) {
     return `#${value}`;
   }
@@ -69,13 +66,6 @@ const normalizeTemplate = (template) => {
   let design = Array.isArray(template.design) ? template.design : [];
   let canvasBg = template.canvasBg;
 
-  /*
-   * API sometimes returns:
-   * design: [
-   *   { templateType: "demo", canvasBg: "white", design: [...] }
-   * ]
-   * Convert that into a flat design array.
-   */
   if (design.length === 1 && design[0] && Array.isArray(design[0].design)) {
     const wrapper = design[0];
     design = wrapper.design;
@@ -107,8 +97,7 @@ const normalizeTemplate = (template) => {
   };
 };
 
-// Default fallback template (hoisted function declaration so it is available
-// inside the useEffect that loads templates)
+// Default fallback template
 function getDefaultTemplate() {
   return {
     design: [
@@ -762,14 +751,11 @@ const ConfirmModal = ({
       : "bg-[#1C62A0] hover:bg-[#1C62A0]/80";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onCancel}
       />
-
-      {/* Dialog */}
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -792,7 +778,6 @@ const ConfirmModal = ({
             {message && <p className="text-sm text-gray-600 mt-1">{message}</p>}
           </div>
         </div>
-
         <div className="flex justify-end gap-2 mt-6">
           <button
             onClick={onCancel}
@@ -873,7 +858,6 @@ const PrescriptionTemplate = () => {
     { skip: !bookingId }
   );
 
-  // Fetch ALL templates
   const { data: templatesResponse, refetch: refetchTemplates } =
     useGetPrescriptionTemplatesQuery({});
 
@@ -881,10 +865,8 @@ const PrescriptionTemplate = () => {
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-  // Get ALL templates from response
   const allTemplates = templatesResponse?.data || [];
 
-  // ✅ Normalized demo template (API response shape -> predictable design array)
   const demoTemplate = useMemo(() => {
     const rawTemplate =
       allTemplates.find(
@@ -896,7 +878,6 @@ const PrescriptionTemplate = () => {
     return normalizeTemplate(rawTemplate);
   }, [allTemplates]);
 
-  // ✅ Normalized custom template for this hospital
   const customTemplate = useMemo(() => {
     const rawTemplate =
       allTemplates.find(
@@ -908,7 +889,6 @@ const PrescriptionTemplate = () => {
     return normalizeTemplate(rawTemplate);
   }, [allTemplates, hospitalId]);
 
-  // Background color for custom templates
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
 
   const [saved, setSaved] = useState(false);
@@ -926,7 +906,6 @@ const PrescriptionTemplate = () => {
     { value: "30px", label: "30px" },
   ];
 
-  // Load templates with proper priority
   useEffect(() => {
     const template =
       customTemplate?.design?.length > 0
@@ -1006,7 +985,6 @@ const PrescriptionTemplate = () => {
     );
   };
 
-  // Generic block creator
   const addBlock = (type) => {
     if (!isEditMode) {
       showWarningToast("Enter edit mode to add blocks");
@@ -1124,7 +1102,6 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  // Save Template
   const saveTemplate = async () => {
     if (isSaving) return;
 
@@ -1170,7 +1147,6 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  // Create prescription with real data
   const handleCreatePrescription = async (prescriptionFormData) => {
     try {
       let selectedTemplate = null;
@@ -1234,7 +1210,6 @@ const PrescriptionTemplate = () => {
   const toggleEditMode = () => {
     if (!isEditMode) {
       if (!customTemplate && demoTemplate) {
-        // Seed the builder from demo template design
         setItems(
           (demoTemplate.design || []).map((item, index) => ({
             ...item,
@@ -1460,7 +1435,6 @@ const PrescriptionTemplate = () => {
             </div>
           </div>
 
-          {/* Tab Navigation */}
           <div className="border-b border-gray-200">
             <nav className="flex gap-6 -mb-px">
               <button
@@ -1499,9 +1473,7 @@ const PrescriptionTemplate = () => {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="bg-white rounded-xl shadow p-6">
-          {/* Demo Template Tab - Read Only */}
           {activeTab === "demo" && (
             <div>
               <h3 className="font-semibold mb-3 text-gray-700">
@@ -1548,7 +1520,6 @@ const PrescriptionTemplate = () => {
             </div>
           )}
 
-          {/* Custom Template Tab - Editable */}
           {activeTab === "custom" && (
             <div>
               <div className="flex justify-between items-center mb-3">
@@ -1916,6 +1887,7 @@ const PrescriptionTemplate = () => {
         </div>
       </div>
 
+      {/* ✅ Shared ConfirmModal — any child can trigger it via openConfirm prop */}
       <ConfirmModal
         isOpen={confirmState.isOpen}
         title={confirmState.title}
@@ -1927,6 +1899,8 @@ const PrescriptionTemplate = () => {
         onCancel={closeConfirm}
       />
 
+      {/* ✅ openConfirm is passed down so PrescriptionReportModal can show
+          the styled modal instead of window.confirm("Delete this text?") */}
       <PrescriptionReportModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -1949,6 +1923,7 @@ const PrescriptionTemplate = () => {
         hospitalId={hospitalId}
         customTemplate={customTemplate}
         demoTemplate={demoTemplate}
+        openConfirm={openConfirm} // 👈 passed down so children never call window.confirm
       />
     </div>
   );
