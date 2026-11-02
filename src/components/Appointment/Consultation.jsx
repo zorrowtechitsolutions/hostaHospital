@@ -141,8 +141,8 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
   const timings = ["Before Meal", "After Meal", "With Meal", "At Bedtime", "Morning", "Evening"];
 
   return (
-    <div className="border border-gray-200 rounded-lg p-3 mb-3 bg-white">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+<div className="relative border border-gray-200 rounded-lg p-3 mb-3 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Medicine Name <span className="text-red-500">*</span>
@@ -1201,7 +1201,7 @@ const Consultation = () => {
         </Card>
 
         {/* Medications Card */}
-        <Card className="mb-4 overflow-hidden">
+        <Card className="mb-4 overflow-visible">
           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-medium text-gray-800">Medications <span className="text-red-500">*</span></h3>
             <button onClick={addMedicationRow} className="text-xs text-[#1C62A0] font-medium hover:underline">+ Add Another</button>

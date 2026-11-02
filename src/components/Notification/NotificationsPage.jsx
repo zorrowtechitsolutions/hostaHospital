@@ -1,5 +1,5 @@
 // src/components/NotificationsPage.jsx - FIXED for staff
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useCallback} from 'react';
 import { Bell, Trash2, CheckCheck, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
@@ -167,7 +167,6 @@ const NotificationsPage = () => {
   useEffect(() => {
     const handleNotificationCreated = (data) => {
       refetch();
-      showSuccessToast(data?.message || "New notification received!", 2000);
     };
 
     const handleNotificationRead = (data) => {
@@ -176,37 +175,30 @@ const NotificationsPage = () => {
 
     const handleDoctorRegistered = (data) => {
       refetch();
-      showSuccessToast(`Doctor ${data?.doctorName || 'Doctor'} registered`, 2000);
     };
 
     const handleDoctorUpdated = (data) => {
       refetch();
-      showSuccessToast(`Doctor ${data?.doctorName || 'Doctor'} updated`, 2000);
     };
 
     const handleDoctorDeleted = (data) => {
       refetch();
-      showSuccessToast('Doctor deleted', 2000);
     };
 
     const handleDoctorRecovered = (data) => {
       refetch();
-      showSuccessToast('Doctor recovered', 2000);
     };
 
     const handleDoctorPasswordReset = (data) => {
       refetch();
-      showSuccessToast('Password reset completed', 2000);
     };
 
     const handleDoctorPasswordChanged = (data) => {
       refetch();
-      showSuccessToast('Password changed successfully', 2000);
     };
 
     const handleDoctorPasswordChangedByAdmin = (data) => {
       refetch();
-      showSuccessToast('Password changed by admin', 2000);
     };
 
     registerNotificationEvents({
