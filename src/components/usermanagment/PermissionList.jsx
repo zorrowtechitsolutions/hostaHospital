@@ -167,6 +167,14 @@ const PermissionList = () => {
 
   const isAllowAllChecked = (module) => module.create && module.edit && module.delete && module.view;
 
+  const goToUserPermissions = () => {
+    navigate("/roles", {
+      state: {
+        tab: "User Permissions",
+      },
+    });
+  };
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -188,9 +196,12 @@ const PermissionList = () => {
       await createRolePermission(payload).unwrap();
 
       showSuccessToast("Permission saved successfully");
-      
+
       await refetchPermissions();
       await refetchRolePermissions();
+
+      // ✅ Navigate back to User Permissions page after successful save
+      goToUserPermissions();
       
     } catch (error) {
       showErrorToast("Failed to save permission");
@@ -200,19 +211,11 @@ const PermissionList = () => {
   };
 
   const handleCancel = () => {
-    navigate("/roles", { 
-      state: { 
-        tab: "User Permissions" 
-      } 
-    });
+    goToUserPermissions();
   };
 
   const handleBack = () => {
-    navigate("/roles", { 
-      state: { 
-        tab: "User Permissions" 
-      } 
-    });
+    goToUserPermissions();
   };
 
   const PermissionCheckbox = ({ checked, onToggle, disabled = false }) => (

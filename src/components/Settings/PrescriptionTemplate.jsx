@@ -1483,11 +1483,6 @@ const PrescriptionTemplate = () => {
                     (No demo template available)
                   </span>
                 )}
-                {demoTemplate && (
-                  <span className="text-sm font-normal text-green-600 ml-2">
-                    ✓ Template ID: {demoTemplate.id}
-                  </span>
-                )}
               </h3>
               {demoTemplate &&
               demoTemplate.design &&
