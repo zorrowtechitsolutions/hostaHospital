@@ -4,7 +4,6 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import PrescriptionReportModal from "../patients/modals/PrecriptionReportModal";
 import { useNavigate, useParams } from "react-router-dom";
-import CustomSelect from "../ui/CustomSelect";
 
 import {
   useCreatePrescriptionTemplateMutation,
@@ -29,15 +28,154 @@ import {
   showDeleteToast,
   showUpdateToast,
   showSaveToast,
-  showAddToast
+  showAddToast,
 } from "../ui/Toast";
 
-// Styling override so CustomSelect matches the small "px-2 py-1 border text-sm" style-editor control
-const FONT_SIZE_SELECT_CLASS =
-  "w-24 [&>button]:px-2 [&>button]:py-1 [&>button]:text-sm [&>button]:border-gray-300 [&>button]:rounded";
+// ================= TEMPLATE NORMALIZATION =================
 
-// Component for rendering different block types
-const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTextChange, isEditable }) => {
+const normalizeCanvasColor = (color) => {
+  if (!color) return "#ffffff";
+
+  const value = String(color).trim();
+
+  if (
+    value.startsWith("#") ||
+    value.startsWith("rgb") ||
+    value.startsWith("hsl") ||
+    value === "white" ||
+    value === "black" ||
+    value === "transparent"
+  ) {
+    return value;
+  }
+
+  if (/^[0-9a-fA-F]{6}$/.test(value)) {
+    return `#${value}`;
+  }
+
+  if (/^[0-9a-fA-F]{3}$/.test(value)) {
+    return `#${value}`;
+  }
+
+  return value;
+};
+
+const normalizeTemplate = (template) => {
+  if (!template) return null;
+
+  let design = Array.isArray(template.design) ? template.design : [];
+  let canvasBg = template.canvasBg;
+
+  if (design.length === 1 && design[0] && Array.isArray(design[0].design)) {
+    const wrapper = design[0];
+    design = wrapper.design;
+    if (!canvasBg) {
+      canvasBg = wrapper.canvasBg;
+    }
+  }
+
+  return {
+    ...template,
+    canvasBg: normalizeCanvasColor(canvasBg),
+    design: design.map((item, index) => ({
+      ...item,
+      id: item.id ?? `${template.templateType || "template"}-${index}`,
+      x: Number(item.x) || 0,
+      y: Number(item.y) || 0,
+      width: Number(item.width) || 200,
+      height: Number(item.height) || 80,
+      text: item.content ?? item.text ?? "",
+      style: {
+        textAlign: item.style?.textAlign ?? "left",
+        bgColor: item.style?.bgColor ?? "transparent",
+        color: item.style?.color ?? "#1e293b",
+        fontSize: item.style?.fontSize ?? "16px",
+        fontWeight: item.style?.fontWeight ?? "normal",
+      },
+      editable: item.editable ?? false,
+    })),
+  };
+};
+
+// Default fallback template
+function getDefaultTemplate() {
+  return {
+    design: [
+      {
+        id: 1,
+        type: "patientGrid",
+        x: 20,
+        y: 20,
+        width: 950,
+        height: 150,
+        style: { bgColor: "#f8fafc" },
+      },
+      {
+        id: 2,
+        type: "doctorDetails",
+        x: 20,
+        y: 180,
+        width: 400,
+        height: 80,
+      },
+      {
+        id: 3,
+        type: "chiefComplaint",
+        x: 20,
+        y: 270,
+        width: 950,
+        height: 80,
+        style: { bgColor: "#fef3c7" },
+      },
+      {
+        id: 4,
+        type: "medicinesTable",
+        x: 20,
+        y: 360,
+        width: 950,
+        height: 250,
+        style: { bgColor: "#ffffff" },
+      },
+      {
+        id: 5,
+        type: "advice",
+        x: 20,
+        y: 620,
+        width: 950,
+        height: 100,
+        style: { bgColor: "#d1fae5" },
+      },
+      {
+        id: 6,
+        type: "signature",
+        x: 20,
+        y: 730,
+        width: 400,
+        height: 80,
+      },
+      {
+        id: 7,
+        type: "prescriptionInfo",
+        x: 500,
+        y: 730,
+        width: 470,
+        height: 80,
+      },
+    ],
+    bgColor: "#ffffff",
+  };
+}
+
+// ================= BLOCK RENDERER =================
+
+const BlockRenderer = ({
+  block,
+  prescriptionData,
+  doctorData,
+  patientData,
+  onTextChange,
+  isEditable,
+}) => {
   const blockStyle = {
     backgroundColor: block.style?.bgColor || "transparent",
     color: block.style?.color || "#1e293b",
@@ -51,24 +189,58 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
   switch (block.type) {
     case "text":
       let displayContent = block.text || block.content || "";
-      displayContent = displayContent.replace(/\{doctorName\}/g, doctorData?.displayName || doctorData?.name || "Dr. Unknown");
-      displayContent = displayContent.replace(/\{doctorSpecialty\}/g, doctorData?.specialization || doctorData?.department || "General Medicine");
-      displayContent = displayContent.replace(/\{doctorContact\}/g, doctorData?.contact || doctorData?.phone || "N/A");
-      displayContent = displayContent.replace(/\{patientName\}/g, patientData?.name || patientData?.fullName || "N/A");
-      displayContent = displayContent.replace(/\{patientId\}/g, patientData?.id || patientData?.patientId || "N/A");
+      displayContent = displayContent.replace(
+        /\{doctorName\}/g,
+        doctorData?.displayName || doctorData?.name || "Dr. Unknown"
+      );
+      displayContent = displayContent.replace(
+        /\{doctorSpecialty\}/g,
+        doctorData?.specialization || doctorData?.department || "General Medicine"
+      );
+      displayContent = displayContent.replace(
+        /\{doctorContact\}/g,
+        doctorData?.contact || doctorData?.phone || "N/A"
+      );
+      displayContent = displayContent.replace(
+        /\{patientName\}/g,
+        patientData?.name || patientData?.fullName || "N/A"
+      );
+      displayContent = displayContent.replace(
+        /\{patientId\}/g,
+        patientData?.id || patientData?.patientId || "N/A"
+      );
       displayContent = displayContent.replace(/\{age\}/g, patientData?.age || "N/A");
-      displayContent = displayContent.replace(/\{gender\}/g, patientData?.gender || "N/A");
-      displayContent = displayContent.replace(/\{contact\}/g, patientData?.contact || patientData?.phone || "N/A");
-      displayContent = displayContent.replace(/\{date\}/g, new Date().toLocaleDateString());
-      displayContent = displayContent.replace(/\{complaint\}/g, prescriptionData?.complaint || "N/A");
-      displayContent = displayContent.replace(/\{advice\}/g, prescriptionData?.advice || "N/A");
+      displayContent = displayContent.replace(
+        /\{gender\}/g,
+        patientData?.gender || "N/A"
+      );
+      displayContent = displayContent.replace(
+        /\{contact\}/g,
+        patientData?.contact || patientData?.phone || "N/A"
+      );
+      displayContent = displayContent.replace(
+        /\{date\}/g,
+        new Date().toLocaleDateString()
+      );
+      displayContent = displayContent.replace(
+        /\{complaint\}/g,
+        prescriptionData?.complaint || "N/A"
+      );
+      displayContent = displayContent.replace(
+        /\{advice\}/g,
+        prescriptionData?.advice || "N/A"
+      );
 
       return (
         <div
           contentEditable={isEditable && block.editable}
           suppressContentEditableWarning
-          onBlur={(e) => onTextChange && onTextChange(block.id, e.target.innerText)}
-          className={`w-full h-full outline-none px-2 py-1 rounded ${isEditable && block.editable ? 'cursor-text' : ''}`}
+          onBlur={(e) =>
+            onTextChange && onTextChange(block.id, e.target.innerText)
+          }
+          className={`w-full h-full outline-none px-2 py-1 rounded ${
+            isEditable && block.editable ? "cursor-text" : ""
+          }`}
           style={blockStyle}
         >
           {displayContent}
@@ -78,14 +250,48 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
     case "prescriptionInfo":
       return (
         <div className="w-full h-full p-3" style={blockStyle}>
-          <div style={{ color: block.style?.color || "#4b5563", fontSize: block.style?.fontSize || "14px" }}>
-            Prescription ID: <span style={{ color: block.style?.color || "#1f2937" }}>{prescriptionData?.id || "N/A"}</span>
+          <div
+            style={{
+              color: block.style?.color || "#4b5563",
+              fontSize: block.style?.fontSize || "14px",
+            }}
+          >
+            Prescription ID:{" "}
+            <span style={{ color: block.style?.color || "#1f2937" }}>
+              {prescriptionData?.id || "N/A"}
+            </span>
           </div>
-          <div style={{ color: block.style?.color || "#4b5563", fontSize: block.style?.fontSize || "14px", marginTop: "4px" }}>
-            Date: <span style={{ color: block.style?.color || "#1f2937" }}>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          <div
+            style={{
+              color: block.style?.color || "#4b5563",
+              fontSize: block.style?.fontSize || "14px",
+              marginTop: "4px",
+            }}
+          >
+            Date:{" "}
+            <span style={{ color: block.style?.color || "#1f2937" }}>
+              {new Date().toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </span>
           </div>
-          <div style={{ color: block.style?.color || "#4b5563", fontSize: block.style?.fontSize || "14px", marginTop: "4px" }}>
-            Next Consulting: <span style={{ color: block.style?.color || "#1f2937" }}>{prescriptionData?.next_consultation ? new Date(prescriptionData.next_consultation).toLocaleDateString() : "Not scheduled"}</span>
+          <div
+            style={{
+              color: block.style?.color || "#4b5563",
+              fontSize: block.style?.fontSize || "14px",
+              marginTop: "4px",
+            }}
+          >
+            Next Consulting:{" "}
+            <span style={{ color: block.style?.color || "#1f2937" }}>
+              {prescriptionData?.next_consultation
+                ? new Date(
+                    prescriptionData.next_consultation
+                  ).toLocaleDateString()
+                : "Not scheduled"}
+            </span>
           </div>
         </div>
       );
@@ -94,23 +300,89 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
       return (
         <div className="w-full h-full p-2">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div className="p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#f9fafb", color: block.style?.color || "#1e293b" }}>
-              <p style={{ color: block.style?.color || "#6b7280", fontSize: block.style?.fontSize || "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient Name</p>
-              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>{patientData?.name || patientData?.fullName || "N/A"}</p>
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: block.style?.bgColor || "#f9fafb",
+                color: block.style?.color || "#1e293b",
+              }}
+            >
+              <p
+                style={{
+                  color: block.style?.color || "#6b7280",
+                  fontSize: block.style?.fontSize || "12px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Patient Name
+              </p>
+              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>
+                {patientData?.name || patientData?.fullName || "N/A"}
+              </p>
             </div>
-            <div className="p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#f9fafb", color: block.style?.color || "#1e293b" }}>
-              <p style={{ color: block.style?.color || "#6b7280", fontSize: block.style?.fontSize || "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Patient ID</p>
-              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>{patientData?.id || patientData?.patientId || "N/A"}</p>
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: block.style?.bgColor || "#f9fafb",
+                color: block.style?.color || "#1e293b",
+              }}
+            >
+              <p
+                style={{
+                  color: block.style?.color || "#6b7280",
+                  fontSize: block.style?.fontSize || "12px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Patient ID
+              </p>
+              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>
+                {patientData?.id || patientData?.patientId || "N/A"}
+              </p>
             </div>
-            <div className="p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#f9fafb", color: block.style?.color || "#1e293b" }}>
-              <p style={{ color: block.style?.color || "#6b7280", fontSize: block.style?.fontSize || "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Age / Gender</p>
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: block.style?.bgColor || "#f9fafb",
+                color: block.style?.color || "#1e293b",
+              }}
+            >
+              <p
+                style={{
+                  color: block.style?.color || "#6b7280",
+                  fontSize: block.style?.fontSize || "12px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Age / Gender
+              </p>
               <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>
                 {patientData?.age || "N/A"} / {patientData?.gender || "N/A"}
               </p>
             </div>
-            <div className="p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#f9fafb", color: block.style?.color || "#1e293b" }}>
-              <p style={{ color: block.style?.color || "#6b7280", fontSize: block.style?.fontSize || "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Contact</p>
-              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>{patientData?.contact || patientData?.phone || "N/A"}</p>
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: block.style?.bgColor || "#f9fafb",
+                color: block.style?.color || "#1e293b",
+              }}
+            >
+              <p
+                style={{
+                  color: block.style?.color || "#6b7280",
+                  fontSize: block.style?.fontSize || "12px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Contact
+              </p>
+              <p style={{ fontWeight: "semibold", color: block.style?.color || "#1f2937" }}>
+                {patientData?.contact || patientData?.phone || "N/A"}
+              </p>
             </div>
           </div>
         </div>
@@ -120,31 +392,78 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
       const medications = prescriptionData?.medications || [];
       return (
         <div className="w-full h-full overflow-auto p-2">
-          <div className="rounded-xl overflow-hidden shadow-sm border" style={{ borderColor: block.style?.bgColor || "#e5e7eb", backgroundColor: block.style?.bgColor || "#ffffff" }}>
-            <table className="w-full text-sm" style={{ backgroundColor: block.style?.bgColor || "#ffffff", color: block.style?.color || "#1e293b" }}>
+          <div
+            className="rounded-xl overflow-hidden shadow-sm border"
+            style={{
+              borderColor: block.style?.bgColor || "#e5e7eb",
+              backgroundColor: block.style?.bgColor || "#ffffff",
+            }}
+          >
+            <table
+              className="w-full text-sm"
+              style={{
+                backgroundColor: block.style?.bgColor || "#ffffff",
+                color: block.style?.color || "#1e293b",
+              }}
+            >
               <thead>
-                <tr style={{ backgroundColor: block.style?.bgColor || "#e0e7ff", borderBottom: "1px solid #e5e7eb" }}>
-                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>Medicine Name</th>
-                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>Dosage</th>
-                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>Duration</th>
-                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>Frequency</th>
-                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>Timing</th>
+                <tr
+                  style={{
+                    backgroundColor: block.style?.bgColor || "#e0e7ff",
+                    borderBottom: "1px solid #e5e7eb",
+                  }}
+                >
+                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>
+                    Medicine Name
+                  </th>
+                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>
+                    Dosage
+                  </th>
+                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>
+                    Duration
+                  </th>
+                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>
+                    Frequency
+                  </th>
+                  <th className="p-3 text-left font-semibold" style={{ color: block.style?.color || "#374151" }}>
+                    Timing
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: "#f3f4f6" }}>
                 {medications.length > 0 ? (
                   medications.map((row, idx) => (
-                    <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : block.style?.bgColor || "#f9fafb" }}>
-                      <td className="p-3 font-medium" style={{ color: block.style?.color || "#1f2937" }}>{row.medicine_name || row.name}</td>
-                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{row.dosage}</td>
-                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{row.duration}</td>
-                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{row.frequency}</td>
-                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>{row.timing}</td>
+                    <tr
+                      key={idx}
+                      style={{
+                        backgroundColor:
+                          idx % 2 === 0
+                            ? "transparent"
+                            : block.style?.bgColor || "#f9fafb",
+                      }}
+                    >
+                      <td className="p-3 font-medium" style={{ color: block.style?.color || "#1f2937" }}>
+                        {row.medicine_name || row.name}
+                      </td>
+                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>
+                        {row.dosage}
+                      </td>
+                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>
+                        {row.duration}
+                      </td>
+                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>
+                        {row.frequency}
+                      </td>
+                      <td className="p-3" style={{ color: block.style?.color || "#4b5563" }}>
+                        {row.timing}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="p-3 text-center" style={{ color: block.style?.color || "#6b7280" }}>No medications prescribed</td>
+                    <td colSpan="5" className="p-3 text-center" style={{ color: block.style?.color || "#6b7280" }}>
+                      No medications prescribed
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -156,44 +475,129 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
     case "doctorDetails":
       return (
         <div className="w-full h-full p-3" style={blockStyle}>
-          <div style={{ fontWeight: "500", color: block.style?.color || "#1f2937" }}>Dr. {doctorData?.displayName || doctorData?.name || "Unknown"}</div>
-          <div style={{ fontSize: block.style?.fontSize ? `calc(${block.style.fontSize} * 0.875)` : "14px", marginTop: "4px", color: block.style?.color || "#6b7280" }}>{doctorData?.specialization || doctorData?.department || "General Medicine"}</div>
-          <div style={{ fontSize: block.style?.fontSize ? `calc(${block.style.fontSize} * 0.75)` : "12px", marginTop: "4px", color: block.style?.color || "#9ca3af" }}>{doctorData?.contact || doctorData?.phone || "N/A"}</div>
+          <div style={{ fontWeight: "500", color: block.style?.color || "#1f2937" }}>
+            Dr. {doctorData?.displayName || doctorData?.name || "Unknown"}
+          </div>
+          <div
+            style={{
+              fontSize: block.style?.fontSize
+                ? `calc(${block.style.fontSize} * 0.875)`
+                : "14px",
+              marginTop: "4px",
+              color: block.style?.color || "#6b7280",
+            }}
+          >
+            {doctorData?.specialization || doctorData?.department || "General Medicine"}
+          </div>
+          <div
+            style={{
+              fontSize: block.style?.fontSize
+                ? `calc(${block.style.fontSize} * 0.75)`
+                : "12px",
+              marginTop: "4px",
+              color: block.style?.color || "#9ca3af",
+            }}
+          >
+            {doctorData?.contact || doctorData?.phone || "N/A"}
+          </div>
         </div>
       );
 
     case "chiefComplaint":
       return (
-        <div className="w-full h-full p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#fef3c7", color: block.style?.color || "#92400e", fontSize: block.style?.fontSize || "16px", fontWeight: block.style?.fontWeight || "normal" }}>
-          <div className="flex items-center gap-2 mb-1" style={{ color: block.style?.color || "#92400e", fontWeight: block.style?.fontWeight || "bold" }}>
+        <div
+          className="w-full h-full p-3 rounded-lg"
+          style={{
+            backgroundColor: block.style?.bgColor || "#fef3c7",
+            color: block.style?.color || "#92400e",
+            fontSize: block.style?.fontSize || "16px",
+            fontWeight: block.style?.fontWeight || "normal",
+          }}
+        >
+          <div
+            className="flex items-center gap-2 mb-1"
+            style={{
+              color: block.style?.color || "#92400e",
+              fontWeight: block.style?.fontWeight || "bold",
+            }}
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             Chief Complaint
           </div>
-          <p style={{ color: block.style?.color || "#374151" }}>{prescriptionData?.complaint || "No complaint recorded"}</p>
+          <p style={{ color: block.style?.color || "#374151" }}>
+            {prescriptionData?.complaint || "No complaint recorded"}
+          </p>
         </div>
       );
 
     case "advice":
       return (
-        <div className="w-full h-full p-3 rounded-lg" style={{ backgroundColor: block.style?.bgColor || "#d1fae5", color: block.style?.color || "#065f46", fontSize: block.style?.fontSize || "16px" }}>
+        <div
+          className="w-full h-full p-3 rounded-lg"
+          style={{
+            backgroundColor: block.style?.bgColor || "#d1fae5",
+            color: block.style?.color || "#065f46",
+            fontSize: block.style?.fontSize || "16px",
+          }}
+        >
           <div className="flex items-center gap-2 mb-1" style={{ fontWeight: "bold" }}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             Doctor Notes & Instructions
           </div>
-          <p style={{ color: block.style?.color || "#374151" }}>{prescriptionData?.advice || "No additional advice"}</p>
+          <p style={{ color: block.style?.color || "#374151" }}>
+            {prescriptionData?.advice || "No additional advice"}
+          </p>
         </div>
       );
 
     case "signature":
       return (
-        <div className="w-full h-full text-right pt-3 mt-2" style={{ borderTop: `2px solid ${block.style?.bgColor || "#e5e7eb"}`, ...blockStyle }}>
-          <div style={{ color: block.style?.color || "#1f2937" }}>Dr. {doctorData?.displayName || doctorData?.name || "Unknown"}</div>
-          <div style={{ fontSize: block.style?.fontSize ? `calc(${block.style.fontSize} * 0.875)` : "14px", color: block.style?.color || "#6b7280" }}>{doctorData?.specialization || doctorData?.department || "General Medicine"}</div>
-          <div style={{ fontSize: block.style?.fontSize ? `calc(${block.style.fontSize} * 0.75)` : "12px", marginTop: "4px", fontStyle: "italic", color: block.style?.color || "#9ca3af" }}>(Digital Signature)</div>
+        <div
+          className="w-full h-full text-right pt-3 mt-2"
+          style={{
+            borderTop: `2px solid ${block.style?.bgColor || "#e5e7eb"}`,
+            ...blockStyle,
+          }}
+        >
+          <div style={{ color: block.style?.color || "#1f2937" }}>
+            Dr. {doctorData?.displayName || doctorData?.name || "Unknown"}
+          </div>
+          <div
+            style={{
+              fontSize: block.style?.fontSize
+                ? `calc(${block.style.fontSize} * 0.875)`
+                : "14px",
+              color: block.style?.color || "#6b7280",
+            }}
+          >
+            {doctorData?.specialization || doctorData?.department || "General Medicine"}
+          </div>
+          <div
+            style={{
+              fontSize: block.style?.fontSize
+                ? `calc(${block.style.fontSize} * 0.75)`
+                : "12px",
+              marginTop: "4px",
+              fontStyle: "italic",
+              color: block.style?.color || "#9ca3af",
+            }}
+          >
+            (Digital Signature)
+          </div>
         </div>
       );
 
@@ -202,18 +606,17 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
   }
 };
 
-// Template Preview Component (Read-only) - Updated with responsive wrapper
+// ================= TEMPLATE PREVIEW (Read-only) =================
+
 const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }) => {
   if (!template || !template.design || template.design.length === 0) {
     return (
-      <div className="text-center py-20 text-gray-500">
-        No template available
-      </div>
+      <div className="text-center py-20 text-gray-500">No template available</div>
     );
   }
 
   return (
-    <div className="w-full max-w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <div className="min-w-[1000px] mx-auto">
         <div
           className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
@@ -221,7 +624,7 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
         >
           {template.design.map((item, index) => (
             <div
-              key={item.id || index}
+              key={index}
               style={{
                 position: "absolute",
                 left: Number(item.x) || 0,
@@ -246,8 +649,8 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
   );
 };
 
-// Custom Template Builder (Editable) - Updated with responsive wrapper
-// IMPORTANT: Only mounts <Rnd> when isEditable is true to avoid React #185 crash
+// ================= CUSTOM TEMPLATE BUILDER (Editable) =================
+
 const CustomTemplateBuilder = ({
   items,
   setItems,
@@ -260,29 +663,56 @@ const CustomTemplateBuilder = ({
   onUpdatePosition,
   selectedItemId,
   setSelectedItemId,
-  isEditable
+  isEditable,
 }) => {
   return (
-    <div className="w-full max-w-full overflow-x-auto">
-      <div className="sm:hidden text-xs text-gray-500 mb-2 flex items-center gap-1">
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-        Scroll horizontally to view the full template
-      </div>
+    <div className="w-full overflow-x-auto">
       <div className="min-w-[1000px] mx-auto">
         <div
           id="customTemplateCanvas"
           className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
           style={{ backgroundColor: customCanvasBg }}
         >
-          {items.map((item) => {
-            const width = Number(item.width) || 200;
-            const height = Number(item.height) || 80;
-            const x = Number(item.x) || 0;
-            const y = Number(item.y) || 0;
-
-            const content = (
+          {items.map((item) => (
+            <Rnd
+              key={item.id}
+              size={{
+                width: Number(item.width) || 200,
+                height: Number(item.height) || 80,
+              }}
+              position={{
+                x: Number(item.x) || 0,
+                y: Number(item.y) || 0,
+              }}
+              bounds="parent"
+              disableDragging={!isEditable}
+              enableResizing={isEditable}
+              resizeHandleStyles={{
+                bottomRight: { display: isEditable ? "block" : "none" },
+                bottomLeft: { display: "none" },
+                topRight: { display: "none" },
+                topLeft: { display: "none" },
+              }}
+              onClick={() => setSelectedItemId && setSelectedItemId(item.id)}
+              onDragStop={(e, d) =>
+                onUpdatePosition && onUpdatePosition(item.id, d.x, d.y)
+              }
+              onResizeStop={(e, direction, ref, delta, position) =>
+                onUpdatePosition &&
+                onUpdatePosition(
+                  item.id,
+                  position.x,
+                  position.y,
+                  ref.offsetWidth,
+                  ref.offsetHeight
+                )
+              }
+              className={`transition-all duration-200 ${
+                selectedItemId === item.id
+                  ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
+                  : ""
+              }`}
+            >
               <BlockRenderer
                 block={item}
                 prescriptionData={currentPrescription || {}}
@@ -291,100 +721,83 @@ const CustomTemplateBuilder = ({
                 onTextChange={onUpdateContent}
                 isEditable={isEditable}
               />
-            );
-
-            /*
-             * IMPORTANT:
-             * Do NOT mount react-rnd while viewing the template.
-             * This avoids the React #185 update loop that can occur
-             * during Rnd's mount/lifecycle handling.
-             */
-            if (!isEditable) {
-              return (
-                <div
-                  key={item.id}
-                  className={
-                    selectedItemId === item.id
-                      ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
-                      : ""
-                  }
-                  style={{
-                    position: "absolute",
-                    left: x,
-                    top: y,
-                    width,
-                    height,
-                  }}
-                  onClick={() => setSelectedItemId?.(item.id)}
-                >
-                  {content}
-                </div>
-              );
-            }
-
-            /*
-             * Only use react-rnd while actually editing.
-             */
-            return (
-              <Rnd
-                key={item.id}
-                size={{
-                  width,
-                  height,
-                }}
-                position={{
-                  x,
-                  y,
-                }}
-                bounds="parent"
-                disableDragging={false}
-                enableResizing={true}
-                resizeHandleStyles={{
-                  bottomRight: {
-                    display: "block",
-                  },
-                  bottomLeft: {
-                    display: "none",
-                  },
-                  topRight: {
-                    display: "none",
-                  },
-                  topLeft: {
-                    display: "none",
-                  },
-                }}
-                onClick={() => setSelectedItemId?.(item.id)}
-                onDragStop={(e, d) => {
-                  onUpdatePosition?.(
-                    item.id,
-                    Number(d.x) || 0,
-                    Number(d.y) || 0
-                  );
-                }}
-                onResizeStop={(e, direction, ref, delta, position) => {
-                  onUpdatePosition?.(
-                    item.id,
-                    Number(position.x) || 0,
-                    Number(position.y) || 0,
-                    ref.offsetWidth,
-                    ref.offsetHeight
-                  );
-                }}
-                className={
-                  selectedItemId === item.id
-                    ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
-                    : ""
-                }
-              >
-                {content}
-              </Rnd>
-            );
-          })}
+            </Rnd>
+          ))}
         </div>
       </div>
     </div>
   );
 };
+
+// ================= CONFIRM MODAL (replaces window.confirm) =================
+
+const ConfirmModal = ({
+  isOpen,
+  title = "Are you sure?",
+  message = "",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  confirmColor = "red",
+  onConfirm,
+  onCancel,
+}) => {
+  if (!isOpen) return null;
+
+  const confirmBtnClass =
+    confirmColor === "red"
+      ? "bg-red-500 hover:bg-red-600"
+      : confirmColor === "green"
+      ? "bg-green-600 hover:bg-green-700"
+      : "bg-[#1C62A0] hover:bg-[#1C62A0]/80";
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <svg
+              className="w-5 h-5 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+            {message && <p className="text-sm text-gray-600 mt-1">{message}</p>}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors shadow-sm ${confirmBtnClass}`}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ================= MAIN COMPONENT =================
 
 const PrescriptionTemplate = () => {
   const { bookingId, patientId, doctorId } = useParams();
@@ -398,12 +811,55 @@ const PrescriptionTemplate = () => {
   const [activeTab, setActiveTab] = useState("demo");
   const [isEditMode, setIsEditMode] = useState(false);
 
-  // Fetch real data
-  const { data: patientData, isLoading: patientLoading } = useGetPatientByIdQuery(patientId, { skip: !patientId });
-  const { data: doctorData, isLoading: doctorLoading } = useGetDoctorByIdQuery(doctorId, { skip: !doctorId });
-  const { data: bookingData, isLoading: bookingLoading } = useGetBookingByIdQuery(bookingId, { skip: !bookingId });
+  // Confirmation modal state (replaces window.confirm)
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    confirmColor: "red",
+    onConfirm: null,
+  });
 
-  const { data: templatesResponse, refetch: refetchTemplates } = useGetPrescriptionTemplatesQuery({});
+  const openConfirm = (options) => {
+    setConfirmState({
+      isOpen: true,
+      title: options.title || "Are you sure?",
+      message: options.message || "",
+      confirmText: options.confirmText || "Confirm",
+      cancelText: options.cancelText || "Cancel",
+      confirmColor: options.confirmColor || "red",
+      onConfirm: options.onConfirm || null,
+    });
+  };
+
+  const closeConfirm = () => {
+    setConfirmState((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
+  };
+
+  const handleConfirm = () => {
+    const action = confirmState.onConfirm;
+    closeConfirm();
+    if (typeof action === "function") action();
+  };
+
+  // Fetch real data
+  const { data: patientData, isLoading: patientLoading } = useGetPatientByIdQuery(
+    patientId,
+    { skip: !patientId }
+  );
+  const { data: doctorData, isLoading: doctorLoading } = useGetDoctorByIdQuery(
+    doctorId,
+    { skip: !doctorId }
+  );
+  const { data: bookingData, isLoading: bookingLoading } = useGetBookingByIdQuery(
+    bookingId,
+    { skip: !bookingId }
+  );
+
+  const { data: templatesResponse, refetch: refetchTemplates } =
+    useGetPrescriptionTemplatesQuery({});
 
   const [createPrescriptionTemplate] = useCreatePrescriptionTemplateMutation();
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
@@ -411,25 +867,27 @@ const PrescriptionTemplate = () => {
 
   const allTemplates = templatesResponse?.data || [];
 
-  const demoTemplate = useMemo(
-    () =>
+  const demoTemplate = useMemo(() => {
+    const rawTemplate =
       allTemplates.find(
         (t) =>
           t.templateType === "demo" &&
           (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
-      ) || null,
-    [allTemplates]
-  );
+      ) || null;
 
-  const customTemplate = useMemo(
-    () =>
+    return normalizeTemplate(rawTemplate);
+  }, [allTemplates]);
+
+  const customTemplate = useMemo(() => {
+    const rawTemplate =
       allTemplates.find(
         (t) =>
           t.templateType === "custom" &&
           Number(t.hospitalId) === Number(hospitalId)
-      ) || null,
-    [allTemplates, hospitalId]
-  );
+      ) || null;
+
+    return normalizeTemplate(rawTemplate);
+  }, [allTemplates, hospitalId]);
 
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
 
@@ -448,125 +906,25 @@ const PrescriptionTemplate = () => {
     { value: "30px", label: "30px" },
   ];
 
-  // Default fallback template
-  const getDefaultTemplate = () => {
-    return {
-      design: [
-        {
-          id: 1,
-          type: "patientGrid",
-          x: 20,
-          y: 20,
-          width: 950,
-          height: 150,
-          style: { bgColor: "#f8fafc" }
-        },
-        {
-          id: 2,
-          type: "doctorDetails",
-          x: 20,
-          y: 180,
-          width: 400,
-          height: 80
-        },
-        {
-          id: 3,
-          type: "chiefComplaint",
-          x: 20,
-          y: 270,
-          width: 950,
-          height: 80,
-          style: { bgColor: "#fef3c7" }
-        },
-        {
-          id: 4,
-          type: "medicinesTable",
-          x: 20,
-          y: 360,
-          width: 950,
-          height: 250,
-          style: { bgColor: "#ffffff" }
-        },
-        {
-          id: 5,
-          type: "advice",
-          x: 20,
-          y: 620,
-          width: 950,
-          height: 100,
-          style: { bgColor: "#d1fae5" }
-        },
-        {
-          id: 6,
-          type: "signature",
-          x: 20,
-          y: 730,
-          width: 400,
-          height: 80
-        },
-        {
-          id: 7,
-          type: "prescriptionInfo",
-          x: 500,
-          y: 730,
-          width: 470,
-          height: 80
-        }
-      ],
-      bgColor: "#ffffff"
-    };
-  };
-
-  // Load templates with proper priority
-  // FIX: Removed Date.now() to prevent unstable IDs and state churn
-  // FIX: Dependencies now only on stable identifiers (id), not full objects
   useEffect(() => {
     const template =
       customTemplate?.design?.length > 0
         ? customTemplate
         : demoTemplate?.design?.length > 0
-          ? demoTemplate
-          : null;
+        ? demoTemplate
+        : null;
 
     if (template) {
-      const isCustom = template === customTemplate;
-
-      const nextItems = template.design.map((item, index) => ({
-        ...item,
-
-        // Stable ID.
-        // Do NOT use Date.now() here.
-        id: item.id ?? `${isCustom ? "custom" : "demo"}-${index}`,
-
-        text: item.content ?? item.text ?? "",
-
-        style: {
-          textAlign: item.style?.textAlign ?? "left",
-          bgColor: item.style?.bgColor ?? "transparent",
-          color: item.style?.color ?? "#1e293b",
-          fontSize: item.style?.fontSize ?? "16px",
-          fontWeight: item.style?.fontWeight ?? "normal",
-        },
-
-        editable: true,
-
-        // Normalize position/dimensions so Rnd always receives numbers.
-        x: Number(item.x) || 0,
-        y: Number(item.y) || 0,
-        width: Number(item.width) || 200,
-        height: Number(item.height) || 80,
-      }));
-
-      setItems(nextItems);
-      setCustomCanvasBg(template.canvasBg ?? "#ffffff");
+      const isCustom = template.templateType === "custom";
+      setItems(template.design);
+      setCustomCanvasBg(template.canvasBg || "#ffffff");
       setHasCustomTemplate(isCustom);
       return;
     }
 
     const defaultTemplate = getDefaultTemplate();
-
     setItems(
-      (defaultTemplate.design || []).map((item, index) => ({
+      defaultTemplate.design.map((item, index) => ({
         ...item,
         id: item.id ?? `default-${index}`,
         x: Number(item.x) || 0,
@@ -575,8 +933,7 @@ const PrescriptionTemplate = () => {
         height: Number(item.height) || 80,
       }))
     );
-
-    setCustomCanvasBg(defaultTemplate.bgColor ?? "#ffffff");
+    setCustomCanvasBg(normalizeCanvasColor(defaultTemplate.bgColor));
     setHasCustomTemplate(false);
   }, [customTemplate?.id, demoTemplate?.id, hospitalId]);
 
@@ -586,16 +943,10 @@ const PrescriptionTemplate = () => {
         item.id === id
           ? {
               ...item,
-              x: Number(x) || 0,
-              y: Number(y) || 0,
-              width:
-                width !== undefined
-                  ? Number(width) || item.width
-                  : item.width,
-              height:
-                height !== undefined
-                  ? Number(height) || item.height
-                  : item.height,
+              x,
+              y,
+              width: width || item.width,
+              height: height || item.height,
             }
           : item
       )
@@ -619,22 +970,21 @@ const PrescriptionTemplate = () => {
 
   const updateStyle = (id, key, value) => {
     if (!isEditMode) return;
-    setItems(prev =>
-      prev.map(item =>
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === id
           ? {
               ...item,
               style: {
                 ...item.style,
-                [key]: value
-              }
+                [key]: value,
+              },
             }
           : item
       )
     );
   };
 
-  // Generic block creator
   const addBlock = (type) => {
     if (!isEditMode) {
       showWarningToast("Enter edit mode to add blocks");
@@ -646,7 +996,7 @@ const PrescriptionTemplate = () => {
       bgColor: "transparent",
       color: "#1e293b",
       fontSize: "16px",
-      fontWeight: "normal"
+      fontWeight: "normal",
     };
 
     let block = {
@@ -705,7 +1055,9 @@ const PrescriptionTemplate = () => {
 
     setItems((prev) => [...prev, block]);
     setSelectedItemId(block.id);
-    showAddToast(`${type.charAt(0).toUpperCase() + type.slice(1)} block added successfully`);
+    showAddToast(
+      `${type.charAt(0).toUpperCase() + type.slice(1)} block added successfully`
+    );
   };
 
   const deleteItem = (id) => {
@@ -722,11 +1074,20 @@ const PrescriptionTemplate = () => {
       return;
     }
 
-    if (window.confirm(`Delete this ${itemToDelete?.type || "block"}?`)) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      if (selectedItemId === id) setSelectedItemId(null);
-      showDeleteToast(`${itemToDelete?.type || "Block"} deleted successfully`);
-    }
+    openConfirm({
+      title: "Delete Block",
+      message: `Delete this ${itemToDelete?.type || "block"}? This cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      confirmColor: "red",
+      onConfirm: () => {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+        if (selectedItemId === id) setSelectedItemId(null);
+        showDeleteToast(
+          `${itemToDelete?.type || "Block"} deleted successfully`
+        );
+      },
+    });
   };
 
   const deleteSelectedItem = () => {
@@ -741,13 +1102,12 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  // Save Template
   const saveTemplate = async () => {
     if (isSaving) return;
 
     setIsSaving(true);
     try {
-      const designData = items.map(item => {
+      const designData = items.map((item) => {
         const { id, editable, ...cleanBlock } = item;
         return cleanBlock;
       });
@@ -756,7 +1116,7 @@ const PrescriptionTemplate = () => {
         templateType: "custom",
         hospitalId: Number(hospitalId),
         canvasBg: customCanvasBg,
-        design: designData
+        design: designData,
       };
 
       let result;
@@ -778,15 +1138,15 @@ const PrescriptionTemplate = () => {
       setIsEditMode(false);
       setSelectedItemId(null);
       setTimeout(() => setSaved(false), 2000);
-
     } catch (error) {
-      showErrorToast(`Save failed: ${error?.data?.message || error?.message}`);
+      showErrorToast(
+        `Save failed: ${error?.data?.message || error?.message}`
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Create prescription with real data
   const handleCreatePrescription = async (prescriptionFormData) => {
     try {
       let selectedTemplate = null;
@@ -829,7 +1189,7 @@ const PrescriptionTemplate = () => {
         weight: prescriptionFormData.weight,
         bmi: prescriptionFormData.bmi,
         waist: prescriptionFormData.waist,
-        bsa: prescriptionFormData.bsa
+        bsa: prescriptionFormData.bsa,
       };
 
       const result = await createPrescription(prescriptionPayload).unwrap();
@@ -840,7 +1200,10 @@ const PrescriptionTemplate = () => {
         showSuccessToast("Prescription created successfully!");
       }
     } catch (error) {
-      showErrorToast("Failed to create prescription: " + (error?.data?.message || error?.message));
+      showErrorToast(
+        "Failed to create prescription: " +
+          (error?.data?.message || error?.message)
+      );
     }
   };
 
@@ -850,7 +1213,7 @@ const PrescriptionTemplate = () => {
         setItems(
           (demoTemplate.design || []).map((item, index) => ({
             ...item,
-            id: item.id ?? `demo-${index}`,
+            id: Date.now() + index,
             text: item.content || item.text || "",
             style: {
               textAlign: item.style?.textAlign || "left",
@@ -860,10 +1223,6 @@ const PrescriptionTemplate = () => {
               fontWeight: item.style?.fontWeight || "normal",
             },
             editable: true,
-            x: Number(item.x) || 0,
-            y: Number(item.y) || 0,
-            width: Number(item.width) || 200,
-            height: Number(item.height) || 80,
           }))
         );
         setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
@@ -872,54 +1231,53 @@ const PrescriptionTemplate = () => {
       setActiveTab("custom");
       showInfoToast("Edit mode enabled. You can now customize your template.");
     } else {
-      if (window.confirm("Exit without saving changes?")) {
-        setIsEditMode(false);
-        setSelectedItemId(null);
-        if (customTemplate) {
-          setItems(
-            (customTemplate.design || []).map((item, index) => ({
-              ...item,
-              id: item.id ?? `custom-${index}`,
-              text: item.content || item.text || "",
-              style: {
-                textAlign: item.style?.textAlign || "left",
-                bgColor: item.style?.bgColor || "transparent",
-                color: item.style?.color || "#1e293b",
-                fontSize: item.style?.fontSize || "16px",
-                fontWeight: item.style?.fontWeight || "normal",
-              },
-              editable: true,
-              x: Number(item.x) || 0,
-              y: Number(item.y) || 0,
-              width: Number(item.width) || 200,
-              height: Number(item.height) || 80,
-            }))
-          );
-          setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
-        } else if (demoTemplate) {
-          setItems(
-            (demoTemplate.design || []).map((item, index) => ({
-              ...item,
-              id: item.id ?? `demo-${index}`,
-              text: item.content || item.text || "",
-              style: {
-                textAlign: item.style?.textAlign || "left",
-                bgColor: item.style?.bgColor || "transparent",
-                color: item.style?.color || "#1e293b",
-                fontSize: item.style?.fontSize || "16px",
-                fontWeight: item.style?.fontWeight || "normal",
-              },
-              editable: true,
-              x: Number(item.x) || 0,
-              y: Number(item.y) || 0,
-              width: Number(item.width) || 200,
-              height: Number(item.height) || 80,
-            }))
-          );
-          setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
-        }
-        showInfoToast("Edit mode disabled. Changes were not saved.");
-      }
+      openConfirm({
+        title: "Exit Edit Mode",
+        message: "Exit without saving changes? All unsaved edits will be lost.",
+        confirmText: "Exit",
+        cancelText: "Keep Editing",
+        confirmColor: "red",
+        onConfirm: () => {
+          setIsEditMode(false);
+          setSelectedItemId(null);
+          if (customTemplate) {
+            setItems(
+              (customTemplate.design || []).map((item, index) => ({
+                ...item,
+                id: item.id || index,
+                text: item.content || item.text || "",
+                style: {
+                  textAlign: item.style?.textAlign || "left",
+                  bgColor: item.style?.bgColor || "transparent",
+                  color: item.style?.color || "#1e293b",
+                  fontSize: item.style?.fontSize || "16px",
+                  fontWeight: item.style?.fontWeight || "normal",
+                },
+                editable: true,
+              }))
+            );
+            setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
+          } else if (demoTemplate) {
+            setItems(
+              (demoTemplate.design || []).map((item, index) => ({
+                ...item,
+                id: Date.now() + index,
+                text: item.content || item.text || "",
+                style: {
+                  textAlign: item.style?.textAlign || "left",
+                  bgColor: item.style?.bgColor || "transparent",
+                  color: item.style?.color || "#1e293b",
+                  fontSize: item.style?.fontSize || "16px",
+                  fontWeight: item.style?.fontWeight || "normal",
+                },
+                editable: true,
+              }))
+            );
+            setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
+          }
+          showInfoToast("Edit mode disabled. Changes were not saved.");
+        },
+      });
     }
   };
 
@@ -943,14 +1301,21 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  const resetToDefault = async () => {
-    if (window.confirm("Reset all changes?")) {
-      const defaultTemplate = getDefaultTemplate();
-      setItems(defaultTemplate.design);
-      setCustomCanvasBg(defaultTemplate.bgColor);
-      setSelectedItemId(null);
-      showInfoToast("Template reset to default");
-    }
+  const resetToDefault = () => {
+    openConfirm({
+      title: "Reset Template",
+      message: "Reset all changes and restore the default template?",
+      confirmText: "Reset",
+      cancelText: "Cancel",
+      confirmColor: "red",
+      onConfirm: () => {
+        const defaultTemplate = getDefaultTemplate();
+        setItems(defaultTemplate.design);
+        setCustomCanvasBg(defaultTemplate.bgColor);
+        setSelectedItemId(null);
+        showInfoToast("Template reset to default");
+      },
+    });
   };
 
   const selectedItem = items.find((i) => i.id === selectedItemId);
@@ -981,13 +1346,17 @@ const PrescriptionTemplate = () => {
   const booking = bookingData?.data || {};
 
   return (
-    <div className="h-full bg-gray-100 overflow-x-hidden">
-      <div className="p-6 min-w-0">
+    <div className="h-full bg-gray-100">
+      <div className="p-6">
         <div className="bg-white rounded-xl shadow-lg mb-4 p-4">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-800">Prescription Templates</h2>
-              <p className="text-sm text-gray-500">View and manage your prescription templates</p>
+              <h2 className="text-lg font-semibold text-gray-800">
+                Prescription Templates
+              </h2>
+              <p className="text-sm text-gray-500">
+                View and manage your prescription templates
+              </p>
             </div>
             <div className="flex gap-3">
               {!isEditMode ? (
@@ -995,8 +1364,18 @@ const PrescriptionTemplate = () => {
                   onClick={toggleEditMode}
                   className="bg-[#1C62A0] text-white px-5 py-2 rounded-lg hover:bg-[#1C62A0]/80 transition-all font-medium flex items-center gap-2 shadow-sm"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
                   </svg>
                   Edit Custom Template
                 </button>
@@ -1008,13 +1387,39 @@ const PrescriptionTemplate = () => {
                     className="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-all font-medium flex items-center gap-2 shadow-sm"
                   >
                     {isSaving ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="w-4 h-4 animate-spin"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     )}
                     {isSaving ? "Saving..." : "Save Template"}
@@ -1030,7 +1435,6 @@ const PrescriptionTemplate = () => {
             </div>
           </div>
 
-          {/* Tab Navigation */}
           <div className="border-b border-gray-200">
             <nav className="flex gap-6 -mb-px">
               <button
@@ -1042,8 +1446,11 @@ const PrescriptionTemplate = () => {
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">Default</span>
+                  <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">
+                    Default
+                  </span>
                   Demo Template
+                  {demoTemplate && <span className="text-green-500 text-xs">✓</span>}
                 </span>
               </button>
               <button
@@ -1066,25 +1473,45 @@ const PrescriptionTemplate = () => {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="bg-white rounded-xl shadow p-6">
-          {/* Demo Template Tab - Read Only */}
           {activeTab === "demo" && (
             <div>
               <h3 className="font-semibold mb-3 text-gray-700">
                 Demo Template
-                {!demoTemplate && <span className="text-sm font-normal text-gray-500 ml-2">(No demo template available)</span>}
+                {!demoTemplate && (
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    (No demo template available)
+                  </span>
+                )}
+                {demoTemplate && (
+                  <span className="text-sm font-normal text-green-600 ml-2">
+                    ✓ Template ID: {demoTemplate.id}
+                  </span>
+                )}
               </h3>
-              {demoTemplate && demoTemplate.design && demoTemplate.design.length > 0 ? (
+              {demoTemplate &&
+              demoTemplate.design &&
+              demoTemplate.design.length > 0 ? (
                 <TemplatePreview
                   template={demoTemplate}
                   patientData={patient}
                   doctorData={doctor}
+                  prescriptionData={currentPrescription}
                 />
               ) : (
                 <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg
+                    className="w-16 h-16 mx-auto mb-4 text-gray-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   <p className="text-lg font-medium">No demo template available</p>
                   <p className="text-sm mt-2">Please contact your administrator</p>
@@ -1093,15 +1520,20 @@ const PrescriptionTemplate = () => {
             </div>
           )}
 
-          {/* Custom Template Tab - Editable */}
           {activeTab === "custom" && (
             <div>
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-semibold text-gray-700">
                   {isEditMode ? "Editing Custom Template" : "Custom Template"}
-                  {!customTemplate && !isEditMode && <span className="text-sm font-normal text-gray-500 ml-2">(No custom template yet)</span>}
+                  {!customTemplate && !isEditMode && (
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      (No custom template yet)
+                    </span>
+                  )}
                   {customTemplate && !isEditMode && (
-                    <span className="text-sm font-normal text-green-600 ml-2">✓ Custom template exists for this hospital</span>
+                    <span className="text-sm font-normal text-green-600 ml-2">
+                      ✓ Custom template exists for this hospital
+                    </span>
                   )}
                 </h3>
                 {isEditMode && (
@@ -1137,8 +1569,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("text")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 4v16m8-8H4"
+                            />
                           </svg>
                           Add Text
                         </button>
@@ -1146,8 +1588,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("doctorDetails")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                            />
                           </svg>
                           Add Doctor
                         </button>
@@ -1155,8 +1607,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("patientGrid")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                            />
                           </svg>
                           Add Patient
                         </button>
@@ -1164,8 +1626,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("chiefComplaint")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
                           </svg>
                           Add Complaint
                         </button>
@@ -1173,8 +1645,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("medicinesTable")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
                           </svg>
                           Add Medicines
                         </button>
@@ -1182,8 +1664,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("advice")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                           Add Advice
                         </button>
@@ -1191,8 +1683,18 @@ const PrescriptionTemplate = () => {
                           onClick={() => addBlock("signature")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                            />
                           </svg>
                           Add Signature
                         </button>
@@ -1203,8 +1705,18 @@ const PrescriptionTemplate = () => {
                           onClick={deleteSelectedItem}
                           className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
                           </svg>
                           Delete Selected
                         </button>
@@ -1212,8 +1724,18 @@ const PrescriptionTemplate = () => {
                           onClick={resetToDefault}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
                           </svg>
                           Reset
                         </button>
@@ -1221,8 +1743,18 @@ const PrescriptionTemplate = () => {
                           onClick={exportPDF}
                           className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm flex items-center gap-1"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 10v6m0 0l-3-3m3 3l3-3M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"
+                            />
                           </svg>
                           Export PDF
                         </button>
@@ -1232,14 +1764,22 @@ const PrescriptionTemplate = () => {
 
                   {selectedItem && selectedItem.type === "text" && isEditMode && (
                     <div className="mt-4 flex flex-wrap gap-3 items-center border-t pt-4">
-                      <span className="text-sm font-medium text-gray-700">Style Editor:</span>
-                      <CustomSelect
-                        hideLabel
+                      <span className="text-sm font-medium text-gray-700">
+                        Style Editor:
+                      </span>
+                      <select
                         value={selectedItem.style?.fontSize || "16px"}
-                        options={fontSizeOptions}
-                        onChange={(value) => applyStyleToSelected("fontSize", value)}
-                        className={FONT_SIZE_SELECT_CLASS}
-                      />
+                        onChange={(e) =>
+                          applyStyleToSelected("fontSize", e.target.value)
+                        }
+                        className="px-2 py-1 border rounded text-sm"
+                      >
+                        {fontSizeOptions.map((size) => (
+                          <option key={size.value} value={size.value}>
+                            {size.label}
+                          </option>
+                        ))}
+                      </select>
 
                       <div className="flex items-center gap-3">
                         <label className="text-sm font-medium">
@@ -1255,19 +1795,31 @@ const PrescriptionTemplate = () => {
 
                       <button
                         onClick={() => applyStyleToSelected("textAlign", "left")}
-                        className={`px-2 py-1 rounded text-sm ${selectedItem.style?.textAlign === "left" ? "bg-blue-100 text-blue-600" : "bg-gray-100"}`}
+                        className={`px-2 py-1 rounded text-sm ${
+                          selectedItem.style?.textAlign === "left"
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-gray-100"
+                        }`}
                       >
                         Left
                       </button>
                       <button
                         onClick={() => applyStyleToSelected("textAlign", "center")}
-                        className={`px-2 py-1 rounded text-sm ${selectedItem.style?.textAlign === "center" ? "bg-blue-100 text-blue-600" : "bg-gray-100"}`}
+                        className={`px-2 py-1 rounded text-sm ${
+                          selectedItem.style?.textAlign === "center"
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-gray-100"
+                        }`}
                       >
                         Center
                       </button>
                       <button
                         onClick={() => applyStyleToSelected("textAlign", "right")}
-                        className={`px-2 py-1 rounded text-sm ${selectedItem.style?.textAlign === "right" ? "bg-blue-100 text-blue-600" : "bg-gray-100"}`}
+                        className={`px-2 py-1 rounded text-sm ${
+                          selectedItem.style?.textAlign === "right"
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-gray-100"
+                        }`}
                       >
                         Right
                       </button>
@@ -1275,17 +1827,27 @@ const PrescriptionTemplate = () => {
                       <input
                         type="color"
                         value={selectedItem.style?.color || "#000000"}
-                        onChange={(e) => applyStyleToSelected("color", e.target.value)}
+                        onChange={(e) =>
+                          applyStyleToSelected("color", e.target.value)
+                        }
                         className="w-8 h-8 rounded border cursor-pointer"
                         title="Text Color"
                       />
 
                       <button
-                        onClick={() => applyStyleToSelected(
-                          "fontWeight",
-                          selectedItem.style?.fontWeight === "bold" ? "normal" : "bold"
-                        )}
-                        className={`px-2 py-1 rounded text-sm ${selectedItem.style?.fontWeight === "bold" ? "bg-blue-100 text-blue-600 font-bold" : "bg-gray-100"}`}
+                        onClick={() =>
+                          applyStyleToSelected(
+                            "fontWeight",
+                            selectedItem.style?.fontWeight === "bold"
+                              ? "normal"
+                              : "bold"
+                          )
+                        }
+                        className={`px-2 py-1 rounded text-sm ${
+                          selectedItem.style?.fontWeight === "bold"
+                            ? "bg-blue-100 text-blue-600 font-bold"
+                            : "bg-gray-100"
+                        }`}
                       >
                         Bold
                       </button>
@@ -1301,11 +1863,23 @@ const PrescriptionTemplate = () => {
                 </>
               ) : (
                 <div className="text-center py-20 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  <svg
+                    className="w-16 h-16 mx-auto mb-4 text-gray-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M12 4v16m8-8H4"
+                    />
                   </svg>
                   <p className="text-lg font-medium">No custom template available</p>
-                  <p className="text-sm mt-2">Click "Edit Custom Template" to create one from the demo template</p>
+                  <p className="text-sm mt-2">
+                    Click "Edit Custom Template" to create one from the demo template
+                  </p>
                 </div>
               )}
             </div>
@@ -1313,6 +1887,20 @@ const PrescriptionTemplate = () => {
         </div>
       </div>
 
+      {/* ✅ Shared ConfirmModal — any child can trigger it via openConfirm prop */}
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        confirmColor={confirmState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={closeConfirm}
+      />
+
+      {/* ✅ openConfirm is passed down so PrescriptionReportModal can show
+          the styled modal instead of window.confirm("Delete this text?") */}
       <PrescriptionReportModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -1320,11 +1908,22 @@ const PrescriptionTemplate = () => {
         doctor={doctor}
         booking={booking}
         existingPrescription={currentPrescription}
-        templateDesign={currentPrescription?.design || (customTemplate ? customTemplate.design : demoTemplate?.design) || getDefaultTemplate().design}
-        templateBgColor={currentPrescription?.canvasBg || (customTemplate ? customTemplate.canvasBg : demoTemplate?.canvasBg) || "#ffffff"}
+        templateDesign={
+          currentPrescription?.design ||
+          customTemplate?.design ||
+          demoTemplate?.design ||
+          getDefaultTemplate().design
+        }
+        templateBgColor={normalizeCanvasColor(
+          currentPrescription?.canvasBg ||
+            customTemplate?.canvasBg ||
+            demoTemplate?.canvasBg ||
+            "#ffffff"
+        )}
         hospitalId={hospitalId}
         customTemplate={customTemplate}
         demoTemplate={demoTemplate}
+        openConfirm={openConfirm} // 👈 passed down so children never call window.confirm
       />
     </div>
   );
