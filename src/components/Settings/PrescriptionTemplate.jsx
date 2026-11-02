@@ -76,11 +76,7 @@ const normalizeTemplate = (template) => {
    * ]
    * Convert that into a flat design array.
    */
-  if (
-    design.length === 1 &&
-    design[0] &&
-    Array.isArray(design[0].design)
-  ) {
+  if (design.length === 1 && design[0] && Array.isArray(design[0].design)) {
     const wrapper = design[0];
     design = wrapper.design;
     if (!canvasBg) {
@@ -744,6 +740,78 @@ const CustomTemplateBuilder = ({
   );
 };
 
+// ================= CONFIRM MODAL (replaces window.confirm) =================
+
+const ConfirmModal = ({
+  isOpen,
+  title = "Are you sure?",
+  message = "",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  confirmColor = "red",
+  onConfirm,
+  onCancel,
+}) => {
+  if (!isOpen) return null;
+
+  const confirmBtnClass =
+    confirmColor === "red"
+      ? "bg-red-500 hover:bg-red-600"
+      : confirmColor === "green"
+      ? "bg-green-600 hover:bg-green-700"
+      : "bg-[#1C62A0] hover:bg-[#1C62A0]/80";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+
+      {/* Dialog */}
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <svg
+              className="w-5 h-5 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+            {message && <p className="text-sm text-gray-600 mt-1">{message}</p>}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors shadow-sm ${confirmBtnClass}`}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ================= MAIN COMPONENT =================
 
 const PrescriptionTemplate = () => {
@@ -757,6 +825,39 @@ const PrescriptionTemplate = () => {
   const [currentPrescription, setCurrentPrescription] = useState(null);
   const [activeTab, setActiveTab] = useState("demo");
   const [isEditMode, setIsEditMode] = useState(false);
+
+  // Confirmation modal state (replaces window.confirm)
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    confirmColor: "red",
+    onConfirm: null,
+  });
+
+  const openConfirm = (options) => {
+    setConfirmState({
+      isOpen: true,
+      title: options.title || "Are you sure?",
+      message: options.message || "",
+      confirmText: options.confirmText || "Confirm",
+      cancelText: options.cancelText || "Cancel",
+      confirmColor: options.confirmColor || "red",
+      onConfirm: options.onConfirm || null,
+    });
+  };
+
+  const closeConfirm = () => {
+    setConfirmState((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
+  };
+
+  const handleConfirm = () => {
+    const action = confirmState.onConfirm;
+    closeConfirm();
+    if (typeof action === "function") action();
+  };
 
   // Fetch real data
   const { data: patientData, isLoading: patientLoading } = useGetPatientByIdQuery(
@@ -995,11 +1096,20 @@ const PrescriptionTemplate = () => {
       return;
     }
 
-    if (window.confirm(`Delete this ${itemToDelete?.type || "block"}?`)) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      if (selectedItemId === id) setSelectedItemId(null);
-      showDeleteToast(`${itemToDelete?.type || "Block"} deleted successfully`);
-    }
+    openConfirm({
+      title: "Delete Block",
+      message: `Delete this ${itemToDelete?.type || "block"}? This cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      confirmColor: "red",
+      onConfirm: () => {
+        setItems((prev) => prev.filter((item) => item.id !== id));
+        if (selectedItemId === id) setSelectedItemId(null);
+        showDeleteToast(
+          `${itemToDelete?.type || "Block"} deleted successfully`
+        );
+      },
+    });
   };
 
   const deleteSelectedItem = () => {
@@ -1146,46 +1256,53 @@ const PrescriptionTemplate = () => {
       setActiveTab("custom");
       showInfoToast("Edit mode enabled. You can now customize your template.");
     } else {
-      if (window.confirm("Exit without saving changes?")) {
-        setIsEditMode(false);
-        setSelectedItemId(null);
-        if (customTemplate) {
-          setItems(
-            (customTemplate.design || []).map((item, index) => ({
-              ...item,
-              id: item.id || index,
-              text: item.content || item.text || "",
-              style: {
-                textAlign: item.style?.textAlign || "left",
-                bgColor: item.style?.bgColor || "transparent",
-                color: item.style?.color || "#1e293b",
-                fontSize: item.style?.fontSize || "16px",
-                fontWeight: item.style?.fontWeight || "normal",
-              },
-              editable: true,
-            }))
-          );
-          setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
-        } else if (demoTemplate) {
-          setItems(
-            (demoTemplate.design || []).map((item, index) => ({
-              ...item,
-              id: Date.now() + index,
-              text: item.content || item.text || "",
-              style: {
-                textAlign: item.style?.textAlign || "left",
-                bgColor: item.style?.bgColor || "transparent",
-                color: item.style?.color || "#1e293b",
-                fontSize: item.style?.fontSize || "16px",
-                fontWeight: item.style?.fontWeight || "normal",
-              },
-              editable: true,
-            }))
-          );
-          setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
-        }
-        showInfoToast("Edit mode disabled. Changes were not saved.");
-      }
+      openConfirm({
+        title: "Exit Edit Mode",
+        message: "Exit without saving changes? All unsaved edits will be lost.",
+        confirmText: "Exit",
+        cancelText: "Keep Editing",
+        confirmColor: "red",
+        onConfirm: () => {
+          setIsEditMode(false);
+          setSelectedItemId(null);
+          if (customTemplate) {
+            setItems(
+              (customTemplate.design || []).map((item, index) => ({
+                ...item,
+                id: item.id || index,
+                text: item.content || item.text || "",
+                style: {
+                  textAlign: item.style?.textAlign || "left",
+                  bgColor: item.style?.bgColor || "transparent",
+                  color: item.style?.color || "#1e293b",
+                  fontSize: item.style?.fontSize || "16px",
+                  fontWeight: item.style?.fontWeight || "normal",
+                },
+                editable: true,
+              }))
+            );
+            setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
+          } else if (demoTemplate) {
+            setItems(
+              (demoTemplate.design || []).map((item, index) => ({
+                ...item,
+                id: Date.now() + index,
+                text: item.content || item.text || "",
+                style: {
+                  textAlign: item.style?.textAlign || "left",
+                  bgColor: item.style?.bgColor || "transparent",
+                  color: item.style?.color || "#1e293b",
+                  fontSize: item.style?.fontSize || "16px",
+                  fontWeight: item.style?.fontWeight || "normal",
+                },
+                editable: true,
+              }))
+            );
+            setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
+          }
+          showInfoToast("Edit mode disabled. Changes were not saved.");
+        },
+      });
     }
   };
 
@@ -1209,14 +1326,21 @@ const PrescriptionTemplate = () => {
     }
   };
 
-  const resetToDefault = async () => {
-    if (window.confirm("Reset all changes?")) {
-      const defaultTemplate = getDefaultTemplate();
-      setItems(defaultTemplate.design);
-      setCustomCanvasBg(defaultTemplate.bgColor);
-      setSelectedItemId(null);
-      showInfoToast("Template reset to default");
-    }
+  const resetToDefault = () => {
+    openConfirm({
+      title: "Reset Template",
+      message: "Reset all changes and restore the default template?",
+      confirmText: "Reset",
+      cancelText: "Cancel",
+      confirmColor: "red",
+      onConfirm: () => {
+        const defaultTemplate = getDefaultTemplate();
+        setItems(defaultTemplate.design);
+        setCustomCanvasBg(defaultTemplate.bgColor);
+        setSelectedItemId(null);
+        showInfoToast("Template reset to default");
+      },
+    });
   };
 
   const selectedItem = items.find((i) => i.id === selectedItemId);
@@ -1791,6 +1915,17 @@ const PrescriptionTemplate = () => {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        confirmColor={confirmState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={closeConfirm}
+      />
 
       <PrescriptionReportModal
         isOpen={isModalOpen}
