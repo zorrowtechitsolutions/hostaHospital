@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Rnd } from "react-rnd";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import PrescriptionReportModal from "../patients/modals/PrecriptionReportModal";
 import { useNavigate, useParams } from "react-router-dom";
+import CustomSelect from "../ui/CustomSelect";
 
 import {
   useCreatePrescriptionTemplateMutation,
@@ -20,16 +21,20 @@ import { useCreatePrescriptionMutation } from "../../../app/service/prescription
 import { getHospitalId } from "../../utils/auth";
 
 // Import toast functions
-import { 
-  showSuccessToast, 
-  showErrorToast, 
-  showWarningToast, 
+import {
+  showSuccessToast,
+  showErrorToast,
+  showWarningToast,
   showInfoToast,
   showDeleteToast,
   showUpdateToast,
   showSaveToast,
   showAddToast
 } from "../ui/Toast";
+
+// Styling override so CustomSelect matches the small "px-2 py-1 border text-sm" style-editor control
+const FONT_SIZE_SELECT_CLASS =
+  "w-24 [&>button]:px-2 [&>button]:py-1 [&>button]:text-sm [&>button]:border-gray-300 [&>button]:rounded";
 
 // Component for rendering different block types
 const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTextChange, isEditable }) => {
@@ -57,7 +62,7 @@ const BlockRenderer = ({ block, prescriptionData, doctorData, patientData, onTex
       displayContent = displayContent.replace(/\{date\}/g, new Date().toLocaleDateString());
       displayContent = displayContent.replace(/\{complaint\}/g, prescriptionData?.complaint || "N/A");
       displayContent = displayContent.replace(/\{advice\}/g, prescriptionData?.advice || "N/A");
-      
+
       return (
         <div
           contentEditable={isEditable && block.editable}
@@ -208,7 +213,7 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
   }
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full max-w-full overflow-x-auto">
       <div className="min-w-[1000px] mx-auto">
         <div
           className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
@@ -216,13 +221,13 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
         >
           {template.design.map((item, index) => (
             <div
-              key={index}
+              key={item.id || index}
               style={{
                 position: "absolute",
-                left: item.x || 0,
-                top: item.y || 0,
-                width: item.width || 200,
-                height: item.height || 80,
+                left: Number(item.x) || 0,
+                top: Number(item.y) || 0,
+                width: Number(item.width) || 200,
+                height: Number(item.height) || 80,
               }}
             >
               <BlockRenderer
@@ -242,13 +247,14 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
 };
 
 // Custom Template Builder (Editable) - Updated with responsive wrapper
-const CustomTemplateBuilder = ({ 
-  items, 
-  setItems, 
-  customCanvasBg, 
-  setCustomCanvasBg, 
-  patient, 
-  doctor, 
+// IMPORTANT: Only mounts <Rnd> when isEditable is true to avoid React #185 crash
+const CustomTemplateBuilder = ({
+  items,
+  setItems,
+  customCanvasBg,
+  setCustomCanvasBg,
+  patient,
+  doctor,
   currentPrescription,
   onUpdateContent,
   onUpdatePosition,
@@ -257,36 +263,26 @@ const CustomTemplateBuilder = ({
   isEditable
 }) => {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full max-w-full overflow-x-auto">
+      <div className="sm:hidden text-xs text-gray-500 mb-2 flex items-center gap-1">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+        Scroll horizontally to view the full template
+      </div>
       <div className="min-w-[1000px] mx-auto">
         <div
           id="customTemplateCanvas"
           className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
           style={{ backgroundColor: customCanvasBg }}
         >
-          {items.map((item) => (
-            <Rnd
-              key={item.id}
-              size={{ width: item.width, height: item.height }}
-              position={{ x: item.x, y: item.y }}
-              bounds="parent"
-              disableDragging={!isEditable}
-              enableResizing={isEditable}
-              resizeHandleStyles={{
-                bottomRight: { display: isEditable ? 'block' : 'none' },
-                bottomLeft: { display: 'none' },
-                topRight: { display: 'none' },
-                topLeft: { display: 'none' },
-              }}
-              onClick={() => setSelectedItemId && setSelectedItemId(item.id)}
-              onDragStop={(e, d) => onUpdatePosition && onUpdatePosition(item.id, d.x, d.y)}
-              onResizeStop={(e, direction, ref, delta, position) =>
-                onUpdatePosition && onUpdatePosition(item.id, position.x, position.y, ref.offsetWidth, ref.offsetHeight)
-              }
-              className={`transition-all duration-200 ${
-                selectedItemId === item.id ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg" : ""
-              }`}
-            >
+          {items.map((item) => {
+            const width = Number(item.width) || 200;
+            const height = Number(item.height) || 80;
+            const x = Number(item.x) || 0;
+            const y = Number(item.y) || 0;
+
+            const content = (
               <BlockRenderer
                 block={item}
                 prescriptionData={currentPrescription || {}}
@@ -295,8 +291,95 @@ const CustomTemplateBuilder = ({
                 onTextChange={onUpdateContent}
                 isEditable={isEditable}
               />
-            </Rnd>
-          ))}
+            );
+
+            /*
+             * IMPORTANT:
+             * Do NOT mount react-rnd while viewing the template.
+             * This avoids the React #185 update loop that can occur
+             * during Rnd's mount/lifecycle handling.
+             */
+            if (!isEditable) {
+              return (
+                <div
+                  key={item.id}
+                  className={
+                    selectedItemId === item.id
+                      ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
+                      : ""
+                  }
+                  style={{
+                    position: "absolute",
+                    left: x,
+                    top: y,
+                    width,
+                    height,
+                  }}
+                  onClick={() => setSelectedItemId?.(item.id)}
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            /*
+             * Only use react-rnd while actually editing.
+             */
+            return (
+              <Rnd
+                key={item.id}
+                size={{
+                  width,
+                  height,
+                }}
+                position={{
+                  x,
+                  y,
+                }}
+                bounds="parent"
+                disableDragging={false}
+                enableResizing={true}
+                resizeHandleStyles={{
+                  bottomRight: {
+                    display: "block",
+                  },
+                  bottomLeft: {
+                    display: "none",
+                  },
+                  topRight: {
+                    display: "none",
+                  },
+                  topLeft: {
+                    display: "none",
+                  },
+                }}
+                onClick={() => setSelectedItemId?.(item.id)}
+                onDragStop={(e, d) => {
+                  onUpdatePosition?.(
+                    item.id,
+                    Number(d.x) || 0,
+                    Number(d.y) || 0
+                  );
+                }}
+                onResizeStop={(e, direction, ref, delta, position) => {
+                  onUpdatePosition?.(
+                    item.id,
+                    Number(position.x) || 0,
+                    Number(position.y) || 0,
+                    ref.offsetWidth,
+                    ref.offsetHeight
+                  );
+                }}
+                className={
+                  selectedItemId === item.id
+                    ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
+                    : ""
+                }
+              >
+                {content}
+              </Rnd>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -319,32 +402,37 @@ const PrescriptionTemplate = () => {
   const { data: patientData, isLoading: patientLoading } = useGetPatientByIdQuery(patientId, { skip: !patientId });
   const { data: doctorData, isLoading: doctorLoading } = useGetDoctorByIdQuery(doctorId, { skip: !doctorId });
   const { data: bookingData, isLoading: bookingLoading } = useGetBookingByIdQuery(bookingId, { skip: !bookingId });
-  
-  // ✅ FIXED: Fetch ALL templates without filtering by hospitalId
+
   const { data: templatesResponse, refetch: refetchTemplates } = useGetPrescriptionTemplatesQuery({});
 
   const [createPrescriptionTemplate] = useCreatePrescriptionTemplateMutation();
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-  // ✅ FIXED: Get ALL templates from response
   const allTemplates = templatesResponse?.data || [];
 
-  // ✅ FIXED: Demo template - look for templateType === "demo"
-  // The demo template should NOT have a hospitalId or should have null/0
-  const demoTemplate = allTemplates.find(
-    t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
-  ) || null;
+  const demoTemplate = useMemo(
+    () =>
+      allTemplates.find(
+        (t) =>
+          t.templateType === "demo" &&
+          (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
+      ) || null,
+    [allTemplates]
+  );
 
-  // ✅ FIXED: Custom template - MUST match current hospital ID
-  const customTemplate = allTemplates.find(
-    t => t.templateType === "custom" && Number(t.hospitalId) === Number(hospitalId)
-  ) || null;
+  const customTemplate = useMemo(
+    () =>
+      allTemplates.find(
+        (t) =>
+          t.templateType === "custom" &&
+          Number(t.hospitalId) === Number(hospitalId)
+      ) || null,
+    [allTemplates, hospitalId]
+  );
 
-
-  // Background color for custom templates
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
-  
+
   const [saved, setSaved] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [items, setItems] = useState([]);
@@ -359,58 +447,6 @@ const PrescriptionTemplate = () => {
     { value: "24px", label: "24px" },
     { value: "30px", label: "30px" },
   ];
-
-  // Load templates with proper priority
-  useEffect(() => {
-    
-    // First check if we have a custom template for this hospital
-    if (customTemplate && customTemplate.design && customTemplate.design.length > 0) {
-      setItems(
-        (customTemplate.design || []).map((item, index) => ({
-          ...item,
-          id: item.id || `custom-${index}`,
-          text: item.content || item.text || "",
-          style: {
-            textAlign: item.style?.textAlign || "left",
-            bgColor: item.style?.bgColor || "transparent",
-            color: item.style?.color || "#1e293b",
-            fontSize: item.style?.fontSize || "16px",
-            fontWeight: item.style?.fontWeight || "normal",
-          },
-          editable: true,
-        }))
-      );
-      setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
-      setHasCustomTemplate(true);
-    } 
-    // If no custom template, use demo template
-    else if (demoTemplate && demoTemplate.design && demoTemplate.design.length > 0) {
-      setItems(
-        (demoTemplate.design || []).map((item, index) => ({
-          ...item,
-          id: `demo-${Date.now()}-${index}`,
-          text: item.content || item.text || "",
-          style: {
-            textAlign: item.style?.textAlign || "left",
-            bgColor: item.style?.bgColor || "transparent",
-            color: item.style?.color || "#1e293b",
-            fontSize: item.style?.fontSize || "16px",
-            fontWeight: item.style?.fontWeight || "normal",
-          },
-          editable: true,
-        }))
-      );
-      setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
-      setHasCustomTemplate(false);
-    } 
-    // No templates exist - create default
-    else {
-      const defaultTemplate = getDefaultTemplate();
-      setItems(defaultTemplate.design);
-      setCustomCanvasBg(defaultTemplate.bgColor);
-      setHasCustomTemplate(false);
-    }
-  }, [customTemplate, demoTemplate, hospitalId]);
 
   // Default fallback template
   const getDefaultTemplate = () => {
@@ -481,16 +517,85 @@ const PrescriptionTemplate = () => {
     };
   };
 
+  // Load templates with proper priority
+  // FIX: Removed Date.now() to prevent unstable IDs and state churn
+  // FIX: Dependencies now only on stable identifiers (id), not full objects
+  useEffect(() => {
+    const template =
+      customTemplate?.design?.length > 0
+        ? customTemplate
+        : demoTemplate?.design?.length > 0
+          ? demoTemplate
+          : null;
+
+    if (template) {
+      const isCustom = template === customTemplate;
+
+      const nextItems = template.design.map((item, index) => ({
+        ...item,
+
+        // Stable ID.
+        // Do NOT use Date.now() here.
+        id: item.id ?? `${isCustom ? "custom" : "demo"}-${index}`,
+
+        text: item.content ?? item.text ?? "",
+
+        style: {
+          textAlign: item.style?.textAlign ?? "left",
+          bgColor: item.style?.bgColor ?? "transparent",
+          color: item.style?.color ?? "#1e293b",
+          fontSize: item.style?.fontSize ?? "16px",
+          fontWeight: item.style?.fontWeight ?? "normal",
+        },
+
+        editable: true,
+
+        // Normalize position/dimensions so Rnd always receives numbers.
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        width: Number(item.width) || 200,
+        height: Number(item.height) || 80,
+      }));
+
+      setItems(nextItems);
+      setCustomCanvasBg(template.canvasBg ?? "#ffffff");
+      setHasCustomTemplate(isCustom);
+      return;
+    }
+
+    const defaultTemplate = getDefaultTemplate();
+
+    setItems(
+      (defaultTemplate.design || []).map((item, index) => ({
+        ...item,
+        id: item.id ?? `default-${index}`,
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        width: Number(item.width) || 200,
+        height: Number(item.height) || 80,
+      }))
+    );
+
+    setCustomCanvasBg(defaultTemplate.bgColor ?? "#ffffff");
+    setHasCustomTemplate(false);
+  }, [customTemplate?.id, demoTemplate?.id, hospitalId]);
+
   const updatePosition = (id, x, y, width, height) => {
-    setItems(prev =>
-      prev.map(item =>
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === id
           ? {
               ...item,
-              x,
-              y,
-              width: width || item.width,
-              height: height || item.height,
+              x: Number(x) || 0,
+              y: Number(y) || 0,
+              width:
+                width !== undefined
+                  ? Number(width) || item.width
+                  : item.width,
+              height:
+                height !== undefined
+                  ? Number(height) || item.height
+                  : item.height,
             }
           : item
       )
@@ -535,7 +640,7 @@ const PrescriptionTemplate = () => {
       showWarningToast("Enter edit mode to add blocks");
       return;
     }
-    
+
     const defaultStyles = {
       textAlign: "left",
       bgColor: "transparent",
@@ -597,7 +702,7 @@ const PrescriptionTemplate = () => {
       default:
         break;
     }
-    
+
     setItems((prev) => [...prev, block]);
     setSelectedItemId(block.id);
     showAddToast(`${type.charAt(0).toUpperCase() + type.slice(1)} block added successfully`);
@@ -608,15 +713,15 @@ const PrescriptionTemplate = () => {
       showWarningToast("Enter edit mode to delete blocks");
       return;
     }
-    
+
     const protectedTypes = ["patientGrid", "medicinesTable"];
     const itemToDelete = items.find((item) => item.id === id);
-    
+
     if (itemToDelete && protectedTypes.includes(itemToDelete.type)) {
       showWarningToast("This block cannot be deleted!");
       return;
     }
-    
+
     if (window.confirm(`Delete this ${itemToDelete?.type || "block"}?`)) {
       setItems((prev) => prev.filter((item) => item.id !== id));
       if (selectedItemId === id) setSelectedItemId(null);
@@ -639,7 +744,7 @@ const PrescriptionTemplate = () => {
   // Save Template
   const saveTemplate = async () => {
     if (isSaving) return;
-    
+
     setIsSaving(true);
     try {
       const designData = items.map(item => {
@@ -665,15 +770,15 @@ const PrescriptionTemplate = () => {
         result = await createPrescriptionTemplate(payload).unwrap();
         showSaveToast("Custom template created successfully!");
       }
-      
+
       await refetchTemplates();
       setHasCustomTemplate(true);
-      
+
       setSaved(true);
       setIsEditMode(false);
       setSelectedItemId(null);
       setTimeout(() => setSaved(false), 2000);
-      
+
     } catch (error) {
       showErrorToast(`Save failed: ${error?.data?.message || error?.message}`);
     } finally {
@@ -684,10 +789,9 @@ const PrescriptionTemplate = () => {
   // Create prescription with real data
   const handleCreatePrescription = async (prescriptionFormData) => {
     try {
-      // ✅ FIXED: Use custom template if available, otherwise demo
       let selectedTemplate = null;
       let designToUse = [];
-      
+
       if (customTemplate) {
         selectedTemplate = customTemplate;
         designToUse = customTemplate.design;
@@ -704,19 +808,19 @@ const PrescriptionTemplate = () => {
         doctorId: parseInt(doctorId),
         userId: patientData?.data?.userId,
         patientId: parseInt(patientId),
-        
+
         complaint: prescriptionFormData.complaint,
         medications: prescriptionFormData.medications,
         investigations: prescriptionFormData.investigations || [],
         advice: prescriptionFormData.advice,
-        
+
         next_consultation: prescriptionFormData.next_consultation,
         empty_stomach: prescriptionFormData.empty_stomach || false,
-        
+
         templateType: customTemplate ? "custom" : "demo",
         canvasBg: selectedTemplate?.canvasBg || "#ffffff",
         design: designToUse,
-        
+
         temperature: prescriptionFormData.temperature,
         pulse: prescriptionFormData.pulse,
         respiratoryRate: prescriptionFormData.respiratoryRate,
@@ -728,9 +832,8 @@ const PrescriptionTemplate = () => {
         bsa: prescriptionFormData.bsa
       };
 
-
       const result = await createPrescription(prescriptionPayload).unwrap();
-      
+
       if (result.success) {
         setCurrentPrescription(result.data);
         setIsModalOpen(true);
@@ -747,7 +850,7 @@ const PrescriptionTemplate = () => {
         setItems(
           (demoTemplate.design || []).map((item, index) => ({
             ...item,
-            id: Date.now() + index,
+            id: item.id ?? `demo-${index}`,
             text: item.content || item.text || "",
             style: {
               textAlign: item.style?.textAlign || "left",
@@ -757,6 +860,10 @@ const PrescriptionTemplate = () => {
               fontWeight: item.style?.fontWeight || "normal",
             },
             editable: true,
+            x: Number(item.x) || 0,
+            y: Number(item.y) || 0,
+            width: Number(item.width) || 200,
+            height: Number(item.height) || 80,
           }))
         );
         setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
@@ -772,7 +879,7 @@ const PrescriptionTemplate = () => {
           setItems(
             (customTemplate.design || []).map((item, index) => ({
               ...item,
-              id: item.id || index,
+              id: item.id ?? `custom-${index}`,
               text: item.content || item.text || "",
               style: {
                 textAlign: item.style?.textAlign || "left",
@@ -782,6 +889,10 @@ const PrescriptionTemplate = () => {
                 fontWeight: item.style?.fontWeight || "normal",
               },
               editable: true,
+              x: Number(item.x) || 0,
+              y: Number(item.y) || 0,
+              width: Number(item.width) || 200,
+              height: Number(item.height) || 80,
             }))
           );
           setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
@@ -789,7 +900,7 @@ const PrescriptionTemplate = () => {
           setItems(
             (demoTemplate.design || []).map((item, index) => ({
               ...item,
-              id: Date.now() + index,
+              id: item.id ?? `demo-${index}`,
               text: item.content || item.text || "",
               style: {
                 textAlign: item.style?.textAlign || "left",
@@ -799,6 +910,10 @@ const PrescriptionTemplate = () => {
                 fontWeight: item.style?.fontWeight || "normal",
               },
               editable: true,
+              x: Number(item.x) || 0,
+              y: Number(item.y) || 0,
+              width: Number(item.width) || 200,
+              height: Number(item.height) || 80,
             }))
           );
           setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
@@ -866,8 +981,8 @@ const PrescriptionTemplate = () => {
   const booking = bookingData?.data || {};
 
   return (
-    <div className="h-full bg-gray-100">
-      <div className="p-6">
+    <div className="h-full bg-gray-100 overflow-x-hidden">
+      <div className="p-6 min-w-0">
         <div className="bg-white rounded-xl shadow-lg mb-4 p-4">
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -929,7 +1044,6 @@ const PrescriptionTemplate = () => {
                 <span className="flex items-center gap-2">
                   <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">Default</span>
                   Demo Template
-                  {demoTemplate && <span className="text-green-500 text-xs">✓</span>}
                 </span>
               </button>
               <button
@@ -960,7 +1074,6 @@ const PrescriptionTemplate = () => {
               <h3 className="font-semibold mb-3 text-gray-700">
                 Demo Template
                 {!demoTemplate && <span className="text-sm font-normal text-gray-500 ml-2">(No demo template available)</span>}
-                {demoTemplate && <span className="text-sm font-normal text-green-600 ml-2">✓ Template ID: {demoTemplate.id}</span>}
               </h3>
               {demoTemplate && demoTemplate.design && demoTemplate.design.length > 0 ? (
                 <TemplatePreview
@@ -999,7 +1112,7 @@ const PrescriptionTemplate = () => {
                   </div>
                 )}
               </div>
-              
+
               {items.length > 0 ? (
                 <>
                   <CustomTemplateBuilder
@@ -1016,7 +1129,7 @@ const PrescriptionTemplate = () => {
                     setSelectedItemId={setSelectedItemId}
                     isEditable={isEditMode}
                   />
-                  
+
                   {isEditMode && (
                     <div className="mt-4 flex flex-wrap gap-2 items-center justify-between border-t pt-4">
                       <div className="flex flex-wrap gap-2">
@@ -1084,7 +1197,7 @@ const PrescriptionTemplate = () => {
                           Add Signature
                         </button>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         <button
                           onClick={deleteSelectedItem}
@@ -1116,21 +1229,17 @@ const PrescriptionTemplate = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {selectedItem && selectedItem.type === "text" && isEditMode && (
                     <div className="mt-4 flex flex-wrap gap-3 items-center border-t pt-4">
                       <span className="text-sm font-medium text-gray-700">Style Editor:</span>
-                      <select
+                      <CustomSelect
+                        hideLabel
                         value={selectedItem.style?.fontSize || "16px"}
-                        onChange={(e) => applyStyleToSelected("fontSize", e.target.value)}
-                        className="px-2 py-1 border rounded text-sm"
-                      >
-                        {fontSizeOptions.map((size) => (
-                          <option key={size.value} value={size.value}>
-                            {size.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={fontSizeOptions}
+                        onChange={(value) => applyStyleToSelected("fontSize", value)}
+                        className={FONT_SIZE_SELECT_CLASS}
+                      />
 
                       <div className="flex items-center gap-3">
                         <label className="text-sm font-medium">
@@ -1143,7 +1252,7 @@ const PrescriptionTemplate = () => {
                           className="w-10 h-10 rounded cursor-pointer"
                         />
                       </div>
-                      
+
                       <button
                         onClick={() => applyStyleToSelected("textAlign", "left")}
                         className={`px-2 py-1 rounded text-sm ${selectedItem.style?.textAlign === "left" ? "bg-blue-100 text-blue-600" : "bg-gray-100"}`}
@@ -1162,7 +1271,7 @@ const PrescriptionTemplate = () => {
                       >
                         Right
                       </button>
-                      
+
                       <input
                         type="color"
                         value={selectedItem.style?.color || "#000000"}
@@ -1170,7 +1279,7 @@ const PrescriptionTemplate = () => {
                         className="w-8 h-8 rounded border cursor-pointer"
                         title="Text Color"
                       />
-                      
+
                       <button
                         onClick={() => applyStyleToSelected(
                           "fontWeight",
@@ -1180,7 +1289,7 @@ const PrescriptionTemplate = () => {
                       >
                         Bold
                       </button>
-                      
+
                       <button
                         onClick={() => deleteItem(selectedItemId)}
                         className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm"
