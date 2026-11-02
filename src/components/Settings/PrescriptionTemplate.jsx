@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Rnd } from "react-rnd";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -221,13 +221,13 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
         >
           {template.design.map((item, index) => (
             <div
-              key={index}
+              key={item.id || index}
               style={{
                 position: "absolute",
-                left: item.x || 0,
-                top: item.y || 0,
-                width: item.width || 200,
-                height: item.height || 80,
+                left: Number(item.x) || 0,
+                top: Number(item.y) || 0,
+                width: Number(item.width) || 200,
+                height: Number(item.height) || 80,
               }}
             >
               <BlockRenderer
@@ -247,6 +247,7 @@ const TemplatePreview = ({ template, patientData, doctorData, prescriptionData }
 };
 
 // Custom Template Builder (Editable) - Updated with responsive wrapper
+// IMPORTANT: Only mounts <Rnd> when isEditable is true to avoid React #185 crash
 const CustomTemplateBuilder = ({
   items,
   setItems,
@@ -275,29 +276,13 @@ const CustomTemplateBuilder = ({
           className="relative w-[1000px] h-[920px] rounded-lg shadow-md overflow-hidden border border-gray-200"
           style={{ backgroundColor: customCanvasBg }}
         >
-          {items.map((item) => (
-            <Rnd
-              key={item.id}
-              size={{ width: item.width, height: item.height }}
-              position={{ x: item.x, y: item.y }}
-              bounds="parent"
-              disableDragging={!isEditable}
-              enableResizing={isEditable}
-              resizeHandleStyles={{
-                bottomRight: { display: isEditable ? 'block' : 'none' },
-                bottomLeft: { display: 'none' },
-                topRight: { display: 'none' },
-                topLeft: { display: 'none' },
-              }}
-              onClick={() => setSelectedItemId && setSelectedItemId(item.id)}
-              onDragStop={(e, d) => onUpdatePosition && onUpdatePosition(item.id, d.x, d.y)}
-              onResizeStop={(e, direction, ref, delta, position) =>
-                onUpdatePosition && onUpdatePosition(item.id, position.x, position.y, ref.offsetWidth, ref.offsetHeight)
-              }
-              className={`transition-all duration-200 ${
-                selectedItemId === item.id ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg" : ""
-              }`}
-            >
+          {items.map((item) => {
+            const width = Number(item.width) || 200;
+            const height = Number(item.height) || 80;
+            const x = Number(item.x) || 0;
+            const y = Number(item.y) || 0;
+
+            const content = (
               <BlockRenderer
                 block={item}
                 prescriptionData={currentPrescription || {}}
@@ -306,8 +291,95 @@ const CustomTemplateBuilder = ({
                 onTextChange={onUpdateContent}
                 isEditable={isEditable}
               />
-            </Rnd>
-          ))}
+            );
+
+            /*
+             * IMPORTANT:
+             * Do NOT mount react-rnd while viewing the template.
+             * This avoids the React #185 update loop that can occur
+             * during Rnd's mount/lifecycle handling.
+             */
+            if (!isEditable) {
+              return (
+                <div
+                  key={item.id}
+                  className={
+                    selectedItemId === item.id
+                      ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
+                      : ""
+                  }
+                  style={{
+                    position: "absolute",
+                    left: x,
+                    top: y,
+                    width,
+                    height,
+                  }}
+                  onClick={() => setSelectedItemId?.(item.id)}
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            /*
+             * Only use react-rnd while actually editing.
+             */
+            return (
+              <Rnd
+                key={item.id}
+                size={{
+                  width,
+                  height,
+                }}
+                position={{
+                  x,
+                  y,
+                }}
+                bounds="parent"
+                disableDragging={false}
+                enableResizing={true}
+                resizeHandleStyles={{
+                  bottomRight: {
+                    display: "block",
+                  },
+                  bottomLeft: {
+                    display: "none",
+                  },
+                  topRight: {
+                    display: "none",
+                  },
+                  topLeft: {
+                    display: "none",
+                  },
+                }}
+                onClick={() => setSelectedItemId?.(item.id)}
+                onDragStop={(e, d) => {
+                  onUpdatePosition?.(
+                    item.id,
+                    Number(d.x) || 0,
+                    Number(d.y) || 0
+                  );
+                }}
+                onResizeStop={(e, direction, ref, delta, position) => {
+                  onUpdatePosition?.(
+                    item.id,
+                    Number(position.x) || 0,
+                    Number(position.y) || 0,
+                    ref.offsetWidth,
+                    ref.offsetHeight
+                  );
+                }}
+                className={
+                  selectedItemId === item.id
+                    ? "ring-2 ring-blue-500 ring-offset-2 rounded-lg"
+                    : ""
+                }
+              >
+                {content}
+              </Rnd>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -337,27 +409,27 @@ const PrescriptionTemplate = () => {
   const [updatePrescriptionTemplate] = useUpdatePrescriptionTemplateMutation();
   const [createPrescription] = useCreatePrescriptionMutation();
 
-const allTemplates = (templatesResponse?.data || []).map((template) => {
-  const nestedDesign = template.design?.[0];
+  const allTemplates = templatesResponse?.data || [];
 
-  if (nestedDesign?.design && Array.isArray(nestedDesign.design)) {
-    return {
-      ...template,
-      canvasBg: nestedDesign.canvasBg || template.canvasBg,
-      design: nestedDesign.design,
-    };
-  }
+  const demoTemplate = useMemo(
+    () =>
+      allTemplates.find(
+        (t) =>
+          t.templateType === "demo" &&
+          (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
+      ) || null,
+    [allTemplates]
+  );
 
-  return template;
-});
-
-  const demoTemplate = allTemplates.find(
-    t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
-  ) || null;
-
-  const customTemplate = allTemplates.find(
-    t => t.templateType === "custom" && Number(t.hospitalId) === Number(hospitalId)
-  ) || null;
+  const customTemplate = useMemo(
+    () =>
+      allTemplates.find(
+        (t) =>
+          t.templateType === "custom" &&
+          Number(t.hospitalId) === Number(hospitalId)
+      ) || null,
+    [allTemplates, hospitalId]
+  );
 
   const [customCanvasBg, setCustomCanvasBg] = useState("#ffffff");
 
@@ -375,54 +447,6 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
     { value: "24px", label: "24px" },
     { value: "30px", label: "30px" },
   ];
-
-  // Load templates with proper priority
-  useEffect(() => {
-    if (customTemplate && customTemplate.design && customTemplate.design.length > 0) {
-      setItems(
-        (customTemplate.design || []).map((item, index) => ({
-          ...item,
-          id: item.id || `custom-${index}`,
-          text: item.content || item.text || "",
-          style: {
-            textAlign: item.style?.textAlign || "left",
-            bgColor: item.style?.bgColor || "transparent",
-            color: item.style?.color || "#1e293b",
-            fontSize: item.style?.fontSize || "16px",
-            fontWeight: item.style?.fontWeight || "normal",
-          },
-          editable: true,
-        }))
-      );
-      setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
-      setHasCustomTemplate(true);
-    }
-    else if (demoTemplate && demoTemplate.design && demoTemplate.design.length > 0) {
-      setItems(
-        (demoTemplate.design || []).map((item, index) => ({
-          ...item,
-          id: `demo-${Date.now()}-${index}`,
-          text: item.content || item.text || "",
-          style: {
-            textAlign: item.style?.textAlign || "left",
-            bgColor: item.style?.bgColor || "transparent",
-            color: item.style?.color || "#1e293b",
-            fontSize: item.style?.fontSize || "16px",
-            fontWeight: item.style?.fontWeight || "normal",
-          },
-          editable: true,
-        }))
-      );
-      setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
-      setHasCustomTemplate(false);
-    }
-    else {
-      const defaultTemplate = getDefaultTemplate();
-      setItems(defaultTemplate.design);
-      setCustomCanvasBg(defaultTemplate.bgColor);
-      setHasCustomTemplate(false);
-    }
-  }, [customTemplate, demoTemplate, hospitalId]);
 
   // Default fallback template
   const getDefaultTemplate = () => {
@@ -493,16 +517,85 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
     };
   };
 
+  // Load templates with proper priority
+  // FIX: Removed Date.now() to prevent unstable IDs and state churn
+  // FIX: Dependencies now only on stable identifiers (id), not full objects
+  useEffect(() => {
+    const template =
+      customTemplate?.design?.length > 0
+        ? customTemplate
+        : demoTemplate?.design?.length > 0
+          ? demoTemplate
+          : null;
+
+    if (template) {
+      const isCustom = template === customTemplate;
+
+      const nextItems = template.design.map((item, index) => ({
+        ...item,
+
+        // Stable ID.
+        // Do NOT use Date.now() here.
+        id: item.id ?? `${isCustom ? "custom" : "demo"}-${index}`,
+
+        text: item.content ?? item.text ?? "",
+
+        style: {
+          textAlign: item.style?.textAlign ?? "left",
+          bgColor: item.style?.bgColor ?? "transparent",
+          color: item.style?.color ?? "#1e293b",
+          fontSize: item.style?.fontSize ?? "16px",
+          fontWeight: item.style?.fontWeight ?? "normal",
+        },
+
+        editable: true,
+
+        // Normalize position/dimensions so Rnd always receives numbers.
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        width: Number(item.width) || 200,
+        height: Number(item.height) || 80,
+      }));
+
+      setItems(nextItems);
+      setCustomCanvasBg(template.canvasBg ?? "#ffffff");
+      setHasCustomTemplate(isCustom);
+      return;
+    }
+
+    const defaultTemplate = getDefaultTemplate();
+
+    setItems(
+      (defaultTemplate.design || []).map((item, index) => ({
+        ...item,
+        id: item.id ?? `default-${index}`,
+        x: Number(item.x) || 0,
+        y: Number(item.y) || 0,
+        width: Number(item.width) || 200,
+        height: Number(item.height) || 80,
+      }))
+    );
+
+    setCustomCanvasBg(defaultTemplate.bgColor ?? "#ffffff");
+    setHasCustomTemplate(false);
+  }, [customTemplate?.id, demoTemplate?.id, hospitalId]);
+
   const updatePosition = (id, x, y, width, height) => {
-    setItems(prev =>
-      prev.map(item =>
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === id
           ? {
               ...item,
-              x,
-              y,
-              width: width || item.width,
-              height: height || item.height,
+              x: Number(x) || 0,
+              y: Number(y) || 0,
+              width:
+                width !== undefined
+                  ? Number(width) || item.width
+                  : item.width,
+              height:
+                height !== undefined
+                  ? Number(height) || item.height
+                  : item.height,
             }
           : item
       )
@@ -757,7 +850,7 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
         setItems(
           (demoTemplate.design || []).map((item, index) => ({
             ...item,
-            id: Date.now() + index,
+            id: item.id ?? `demo-${index}`,
             text: item.content || item.text || "",
             style: {
               textAlign: item.style?.textAlign || "left",
@@ -767,6 +860,10 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
               fontWeight: item.style?.fontWeight || "normal",
             },
             editable: true,
+            x: Number(item.x) || 0,
+            y: Number(item.y) || 0,
+            width: Number(item.width) || 200,
+            height: Number(item.height) || 80,
           }))
         );
         setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
@@ -782,7 +879,7 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
           setItems(
             (customTemplate.design || []).map((item, index) => ({
               ...item,
-              id: item.id || index,
+              id: item.id ?? `custom-${index}`,
               text: item.content || item.text || "",
               style: {
                 textAlign: item.style?.textAlign || "left",
@@ -792,6 +889,10 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
                 fontWeight: item.style?.fontWeight || "normal",
               },
               editable: true,
+              x: Number(item.x) || 0,
+              y: Number(item.y) || 0,
+              width: Number(item.width) || 200,
+              height: Number(item.height) || 80,
             }))
           );
           setCustomCanvasBg(customTemplate.canvasBg || "#ffffff");
@@ -799,7 +900,7 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
           setItems(
             (demoTemplate.design || []).map((item, index) => ({
               ...item,
-              id: Date.now() + index,
+              id: item.id ?? `demo-${index}`,
               text: item.content || item.text || "",
               style: {
                 textAlign: item.style?.textAlign || "left",
@@ -809,6 +910,10 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
                 fontWeight: item.style?.fontWeight || "normal",
               },
               editable: true,
+              x: Number(item.x) || 0,
+              y: Number(item.y) || 0,
+              width: Number(item.width) || 200,
+              height: Number(item.height) || 80,
             }))
           );
           setCustomCanvasBg(demoTemplate.canvasBg || "#ffffff");
@@ -1128,7 +1233,6 @@ const allTemplates = (templatesResponse?.data || []).map((template) => {
                   {selectedItem && selectedItem.type === "text" && isEditMode && (
                     <div className="mt-4 flex flex-wrap gap-3 items-center border-t pt-4">
                       <span className="text-sm font-medium text-gray-700">Style Editor:</span>
-                      {/* ✅ Replaced native  with CustomSelect */}
                       <CustomSelect
                         hideLabel
                         value={selectedItem.style?.fontSize || "16px"}
