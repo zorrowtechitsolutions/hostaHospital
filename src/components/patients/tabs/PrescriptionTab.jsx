@@ -137,7 +137,6 @@ const PrescriptionTab = ({
   // Stable callback so the effect doesn't re-run on every render
   const handleSocketEvent = useCallback(
     (type, eventData) => {
-     
       onPrescriptionChange?.(type, eventData);
     },
     [onPrescriptionChange]
@@ -145,17 +144,13 @@ const PrescriptionTab = ({
 
   useEffect(() => {
     const cleanup = registerPrescriptionEvents({
-      onCreated: (result) =>
-        handleSocketEvent("created", result),
+      onCreated: (result) => handleSocketEvent("created", result),
 
-      onUpdated: (result) =>
-        handleSocketEvent("updated", result),
+      onUpdated: (result) => handleSocketEvent("updated", result),
 
-      onDeleted: (result) =>
-        handleSocketEvent("deleted", result),
+      onDeleted: (result) => handleSocketEvent("deleted", result),
 
-      onRecovered: (result) =>
-        handleSocketEvent("recovered", result),
+      onRecovered: (result) => handleSocketEvent("recovered", result),
 
       onHospitalRegistered: (result) =>
         handleSocketEvent("hospitalRegistered", result),
@@ -248,44 +243,58 @@ const PrescriptionTab = ({
     return item.quantity || 1;
   };
 
-  // ✅ Helper function to get formatted date (prioritizes appointmentDateDisplay)
+  // ✅ Helper function to get formatted date
+  // Handles DD/MM/YYYY explicitly to prevent JS from misreading it as MM/DD/YYYY
   const getFormattedDate = (item) => {
-    const appointmentDateDisplay =
-      item.appointmentDateDisplay || item.fullData?.appointmentDateDisplay;
-
-    if (appointmentDateDisplay) {
-      return appointmentDateDisplay;
-    }
-
     const date =
+      item.appointmentDateDisplay ||
       item.appointmentDate ||
       item.date ||
-      item.createdAt ||
       item.prescriptionDate ||
       item.fullData?.appointmentDate ||
       item.fullData?.date ||
+      item.fullData?.prescriptionDate ||
+      item.createdAt ||
       item.fullData?.createdAt ||
       null;
 
-    if (date) {
-      try {
-        const d = new Date(date);
+    if (!date) return "N/A";
 
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString("en-IN", {
+    try {
+      // Handle DD/MM/YYYY explicitly
+      if (typeof date === "string") {
+        const match = date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+        if (match) {
+          const [, day, month, year] = match;
+
+          return new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day)
+          ).toLocaleDateString("en-IN", {
             day: "2-digit",
             month: "short",
             year: "numeric",
           });
         }
-
-        return date;
-      } catch (e) {
-        return date;
       }
-    }
 
-    return "N/A";
+      // Handle ISO dates / timestamps
+      const d = new Date(date);
+
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+      }
+
+      return date;
+    } catch (e) {
+      return date;
+    }
   };
 
   // Check if prescription is blacklisted (deleted)
@@ -499,7 +508,7 @@ const PrescriptionTab = ({
                                         "prescription",
                                         item.id,
                                         startIndex + index,
-                                        `prescription from ${item.date}`
+                                        `prescription from ${getFormattedDate(item)}`
                                       );
                                       setOpenMenu(null);
                                     }}
