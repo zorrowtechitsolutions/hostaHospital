@@ -108,7 +108,8 @@ const getDepartmentDisplay = (doctor) => {
   return 'Department not specified';
 };
 
-// ✅ Helper to check if doctor is unavailable today (no schedule for today's weekday)
+// ✅ Helper to check if doctor is unavailable today
+// Unavailable when: no schedule for today's weekday OR today is explicitly a holiday
 const isDoctorUnavailableToday = (doctor) => {
   if (!doctor) return false;
 
@@ -132,16 +133,23 @@ const isDoctorUnavailableToday = (doctor) => {
     ? doctor.consultingTwo
     : [];
 
-  const hasTodaySchedule =
-    consultingOne.some(
-      (item) => String(item.day).toLowerCase() === today
-    ) ||
-    consultingTwo.some(
-      (item) => String(item.day).toLowerCase() === today
-    );
+  // Find today's schedule entry (first match across both consulting arrays)
+  const todaySchedule = [...consultingOne, ...consultingTwo].find(
+    (item) => String(item.day || '').toLowerCase() === today
+  );
 
-  // If today's schedule does not exist, doctor is unavailable today
-  return !hasTodaySchedule;
+  // No schedule for today = unavailable
+  if (!todaySchedule) {
+    return true;
+  }
+
+  // Today explicitly marked as holiday = unavailable
+  // Handles boolean true and string "true" from the backend
+  const isHoliday =
+    todaySchedule.is_holiday === true ||
+    todaySchedule.is_holiday === 'true';
+
+  return isHoliday;
 };
 
 // ✅ Helper function to calculate slots using backend fields

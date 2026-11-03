@@ -726,21 +726,26 @@ const EditDoctor = () => {
       }
 
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
-        doctor.consultingTwo.forEach(item => {
-          const dayKey = item.day?.toLowerCase();
-          if (schedule[dayKey]) {
-            schedule[dayKey] = {
-              ...schedule[dayKey],
-              isHoliday: item.is_holiday || false,
-              hasBreak: item.has_break || true,
-              morningOpen: item.morning_session?.open || schedule[dayKey].morningOpen,
-              morningClose: item.morning_session?.close || schedule[dayKey].morningClose,
-              eveningOpen: item.evening_session?.open || schedule[dayKey].eveningOpen,
-              eveningClose: item.evening_session?.close || schedule[dayKey].eveningClose,
-            };
-          }
-        });
-      }
+  doctor.consultingTwo.forEach(item => {
+    const dayKey = item.day?.toLowerCase();
+
+    if (schedule[dayKey]) {
+      schedule[dayKey] = {
+        ...schedule[dayKey],
+        isHoliday: item.is_holiday || false,
+        hasBreak: item.has_break ?? false,
+        morningOpen:
+          item.morning_session?.open || schedule[dayKey].morningOpen,
+        morningClose:
+          item.morning_session?.close || schedule[dayKey].morningClose,
+        eveningOpen:
+          item.evening_session?.open || schedule[dayKey].eveningOpen,
+        eveningClose:
+          item.evening_session?.close || schedule[dayKey].eveningClose,
+      };
+    }
+  });
+}
 
       const newFormData = {
         profileImage: imageKey,
@@ -1019,28 +1024,29 @@ const EditDoctor = () => {
           pincode: formData.pincode ? Number(formData.pincode) : null
         },
         consultingOne: Object.entries(formData.weeklySchedule)
-          .filter(([_, schedule]) => !schedule.isHoliday && !schedule.hasBreak)
-          .map(([day, schedule]) => ({
-            day,
-            opening_time: schedule.morningOpen,
-            closing_time: schedule.morningClose,
-            is_holiday: false,
-          })),
-        consultingTwo: Object.entries(formData.weeklySchedule)
-          .filter(([_, schedule]) => !schedule.isHoliday && schedule.hasBreak)
-          .map(([day, schedule]) => ({
-            day,
-            morning_session: {
-              open: schedule.morningOpen,
-              close: schedule.morningClose,
-            },
-            evening_session: {
-              open: schedule.eveningOpen,
-              close: schedule.eveningClose,
-            },
-            is_holiday: false,
-            has_break: true,
-          })),
+  .filter(([_, schedule]) => !schedule.hasBreak)
+  .map(([day, schedule]) => ({
+    day,
+    opening_time: schedule.morningOpen,
+    closing_time: schedule.morningClose,
+    is_holiday: schedule.isHoliday,
+  })),
+
+consultingTwo: Object.entries(formData.weeklySchedule)
+  .filter(([_, schedule]) => schedule.hasBreak)
+  .map(([day, schedule]) => ({
+    day,
+    morning_session: {
+      open: schedule.morningOpen,
+      close: schedule.morningClose,
+    },
+    evening_session: {
+      open: schedule.eveningOpen,
+      close: schedule.eveningClose,
+    },
+    is_holiday: schedule.isHoliday,
+    has_break: true,
+  })),
       };
 
       if (formData.appointmentCount && formData.appointmentCount !== '') {
