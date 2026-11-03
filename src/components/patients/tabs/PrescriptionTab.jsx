@@ -393,17 +393,6 @@ const PrescriptionTab = ({
                           >
                             {getFormattedDate(item)}
                           </span>
-                          {patientNumberDisplay && (
-                            <span
-                              className={`block text-[10px] ${
-                                isBlacklistedItem
-                                  ? "text-gray-300"
-                                  : "text-gray-400"
-                              }`}
-                            >
-                              Patient {patientNumberDisplay}
-                            </span>
-                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
