@@ -811,34 +811,35 @@ const AddDoctor = () => {
     showSuccessToast('Image removed');
   };
 
+  // ✅ FIX: include holiday days in the payload with is_holiday: true
+  // Instead of dropping them, we always push each day into either
+  // consultingOne (single session) or consultingTwo (break / two sessions).
   const prepareDoctorData = () => {
     const consultingOneArray = [];
     const consultingTwoArray = [];
 
     Object.entries(formData.weeklySchedule).forEach(([day, schedule]) => {
-      if (!schedule.isHoliday) {
-        if (schedule.hasBreak) {
-          consultingTwoArray.push({
-            day: day,
-            morning_session: {
-              open: schedule.morningOpen,
-              close: schedule.morningClose
-            },
-            evening_session: {
-              open: schedule.eveningOpen,
-              close: schedule.eveningClose
-            },
-            is_holiday: false,
-            has_break: true
-          });
-        } else {
-          consultingOneArray.push({
-            day: day,
-            opening_time: schedule.morningOpen,
-            closing_time: schedule.morningClose,
-            is_holiday: false
-          });
-        }
+      if (schedule.hasBreak) {
+        consultingTwoArray.push({
+          day,
+          morning_session: {
+            open: schedule.morningOpen,
+            close: schedule.morningClose,
+          },
+          evening_session: {
+            open: schedule.eveningOpen,
+            close: schedule.eveningClose,
+          },
+          is_holiday: schedule.isHoliday === true,
+          has_break: true,
+        });
+      } else {
+        consultingOneArray.push({
+          day,
+          opening_time: schedule.morningOpen,
+          closing_time: schedule.morningClose,
+          is_holiday: schedule.isHoliday === true,
+        });
       }
     });
 
@@ -851,22 +852,28 @@ const AddDoctor = () => {
       gender: formData.gender?.toLowerCase(),
       knowLanguages: formData.knownLanguages,
       qualification: formData.qualification,
+
       address: {
         country: formData.countryName,
         state: formData.stateName,
         district: formData.district,
         place: formData.place || "",
-        pincode: formData.pincode ? Number(formData.pincode) : ""
+        pincode: formData.pincode ? Number(formData.pincode) : "",
       },
+
       firstName: formData.firstName,
       lastName: formData.lastName,
       fees: Number(formData.fees),
       department: formData.department,
       specialist: formData.specialist || "",
+
       consultingOne: consultingOneArray,
       consultingTwo: consultingTwoArray,
+
       bookingOpen: formData.bookingOpen,
-      displayName: formData.displayName || `${formData.firstName} ${formData.lastName}`,
+      displayName:
+        formData.displayName ||
+        `${formData.firstName} ${formData.lastName}`,
       experience: formData.experience,
       profileImage: formData.profileImage || undefined,
       imageKey: formData.imageKey || undefined,
@@ -883,9 +890,11 @@ const AddDoctor = () => {
       doctorData.appoimentCount = Number(formData.appointmentCount);
     }
 
-    if (formData.outDoorConsultingOpen &&
-        formData.outDoorConsultingClose &&
-        formData.outDoorConsultingPlace) {
+    if (
+      formData.outDoorConsultingOpen &&
+      formData.outDoorConsultingClose &&
+      formData.outDoorConsultingPlace
+    ) {
       doctorData.outDoorConsulting = {
         time: {
           open: formData.outDoorConsultingOpen,

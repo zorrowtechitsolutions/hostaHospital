@@ -271,35 +271,39 @@ const ViewDoctor = () => {
   const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
   const doctorName = getDoctorName(doctor);
 
+  // ✅ FIX: preserve is_holiday so the schedule can render "On Leave"
   const consultingHours = useMemo(() => {
     const hours = [];
-    
+
     if (doctor?.consultingOne && Array.isArray(doctor.consultingOne)) {
       doctor.consultingOne.forEach(item => {
         hours.push({
           day: item.day,
           morningOpen: item.opening_time,
           morningClose: item.closing_time,
-          hasBreak: false
+          hasBreak: false,
+          isHoliday: item.is_holiday === true || item.is_holiday === "true",
         });
       });
     }
-    
+
     if (doctor?.consultingTwo && Array.isArray(doctor.consultingTwo)) {
       doctor.consultingTwo.forEach(item => {
         const morning = item.morning_session;
         const evening = item.evening_session;
+
         hours.push({
           day: item.day,
           morningOpen: morning?.open,
           morningClose: morning?.close,
           eveningOpen: evening?.open,
           eveningClose: evening?.close,
-          hasBreak: true
+          hasBreak: true,
+          isHoliday: item.is_holiday === true || item.is_holiday === "true",
         });
       });
     }
-    
+
     return hours;
   }, [doctor]);
 
@@ -557,8 +561,13 @@ const ViewDoctor = () => {
                               {formatDay(item.day)}
                             </span>
                           </div>
+                          {/* ✅ FIX: show "On Leave" when isHoliday is true */}
                           <div className="text-gray-600">
-                            {item.hasBreak ? (
+                            {item.isHoliday ? (
+                              <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm font-medium">
+                                On Leave
+                              </span>
+                            ) : item.hasBreak ? (
                               <div className="flex flex-wrap gap-2">
                                 <span className="bg-blue-50 px-3 py-1 rounded-full text-sm">
                                   {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
