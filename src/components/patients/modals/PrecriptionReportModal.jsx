@@ -75,7 +75,7 @@ const PrescriptionReportModal = ({
         height: 80,
         style: {
           textAlign: "left",
-          bgColor: "#F9FAFB",
+          bgColor: "#FFFFFF",
           color: "#1e293b",
           fontSize: "16px",
           fontWeight: "normal",
