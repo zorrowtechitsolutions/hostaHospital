@@ -174,7 +174,7 @@ export const prescriptionApi = api.injectEndpoints({
           body: payload,
         };
       },
-      invalidatesTags: ["Prescription"],
+      invalidatesTags: ["Prescription", "Patient"],
     }),
 
     // ✅ GET ALL PRESCRIPTIONS - ONLY patientNumber (NO database ID)
