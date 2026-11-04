@@ -1,11 +1,1389 @@
-// Consultation.js - COMPLETE FIXED VERSION with updateBooking for completion
-// + prescriptionNumber / prescriptionId extraction after create
-// + Flatpickr for Next Consultation date
-// + Skeleton loader instead of spinner
-// + Robust scroll-to-top (handles internal scroll containers)
-// + FIX 1: patientNumber uses business number (not DB id)
-// + FIX 2: vitals send undefined when empty (not 0)
-// + FIX 3: prescriptionId reads id / prescriptionId / _id
+// // Consultation.js - COMPLETE FIXED VERSION with updateBooking for completion
+// // + prescriptionNumber / prescriptionId extraction after create
+// // + Flatpickr for Next Consultation date
+// // + Skeleton loader instead of spinner
+// // + Robust scroll-to-top (handles internal scroll containers)
+// // + FIX 1: patientNumber uses business number (not DB id)
+// // + FIX 2: vitals send undefined when empty (not 0)
+// // + FIX 3: prescriptionId reads id / prescriptionId / _id
+
+// import React, { useState, useEffect } from "react";
+// import { useLocation, useNavigate } from "react-router-dom";
+// import Flatpickr from "react-flatpickr";
+// import "flatpickr/dist/flatpickr.css";
+// import ViewMedicalHistory from "./ViewMedicalHistory";
+// import { Button, Card, Badge, CustomSelect } from "../ui";
+// import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
+// import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
+// import { useCreateVitalMutation } from "../../../app/service/vitals";
+// import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth";
+// import { useUpdateBookingMutation } from "../../../app/service/request";
+// import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
+// import { useGetPatientByIdQuery } from "../../../app/service/patients";
+
+// import { socket } from '../../socket/socket';
+// import { registerPrescriptionEvents, unregisterPrescriptionEvents } from '../../socket/prescriptionEvents';
+
+// /* =====================================================
+//    Helper: convert YYYY-MM-DD → DD/MM/YYYY (for Flatpickr display)
+//    ===================================================== */
+// const toDisplayDate = (isoDate) => {
+//   if (!isoDate || typeof isoDate !== "string") return "";
+//   const parts = isoDate.split("-");
+//   if (parts.length !== 3) return "";
+//   const [year, month, day] = parts;
+//   return `${day}/${month}/${year}`;
+// };
+
+// // Helper function to calculate age from DOB
+// const calculateAge = (dob) => {
+//   if (!dob) return null;
+//   try {
+//     const birthDate = new Date(dob);
+//     const today = new Date();
+//     let age = today.getFullYear() - birthDate.getFullYear();
+//     const monthDiff = today.getMonth() - birthDate.getMonth();
+//     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+//       age--;
+//     }
+//     return age;
+//   } catch (error) {
+//     console.error("Error calculating age:", error);
+//     return null;
+//   }
+// };
+
+// // ✅ Helper function to extract numeric ID from string
+// const extractNumericId = (id) => {
+//   if (!id) return null;
+//   if (typeof id === 'number') return id;
+//   if (typeof id === 'string') {
+//     const numericMatch = id.match(/\d+/);
+//     return numericMatch ? parseInt(numericMatch[0]) : null;
+//   }
+//   return null;
+// };
+
+// // ✅ Helper to get patient ID from appointment data
+// const getPatientIdFromAppointment = (appointmentData) => {
+//   if (appointmentData.patient) {
+//     if (appointmentData.patient.id) {
+//       const numericId = extractNumericId(appointmentData.patient.id);
+//       if (numericId) return numericId;
+//     }
+//     if (appointmentData.patient.patientId) {
+//       const numericId = extractNumericId(appointmentData.patient.patientId);
+//       if (numericId) return numericId;
+//     }
+//     if (appointmentData.patient._id) {
+//       const numericId = extractNumericId(appointmentData.patient._id);
+//       if (numericId) return numericId;
+//     }
+//   }
+
+//   if (appointmentData.patientId) {
+//     const numericId = extractNumericId(appointmentData.patientId);
+//     if (numericId) return numericId;
+//     if (!isNaN(appointmentData.patientId)) {
+//       return Number(appointmentData.patientId);
+//     }
+//   }
+
+//   if (appointmentData.userId) {
+//     const numericId = extractNumericId(appointmentData.userId);
+//     if (numericId) return numericId;
+//   }
+
+//   if (appointmentData.patientData?.id) {
+//     const numericId = extractNumericId(appointmentData.patientData.id);
+//     if (numericId) return numericId;
+//   }
+
+//   console.warn("⚠️ No valid patient ID found in appointment data");
+//   return null;
+// };
+
+// // ✅ Helper to get patient name from appointment data
+// const getPatientNameFromAppointment = (appointmentData) => {
+//   if (appointmentData.patientName) return appointmentData.patientName;
+//   if (appointmentData.patient?.name) return appointmentData.patient.name;
+//   if (appointmentData.patient?.patientName) return appointmentData.patient.patientName;
+//   if (appointmentData.name) return appointmentData.name;
+//   if (appointmentData.patient?.displayName) return appointmentData.patient.displayName;
+//   return null;
+// };
+
+// // Vital Input Component
+// const VitalInput = ({ label, type = "text", unit, value, onChange, isEditing, onBlur }) => {
+//   return (
+//     <div>
+//       <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
+//         {label} <span className="text-gray-400">({unit})</span>
+//       </label>
+//       {isEditing ? (
+//         <input
+//           type={type}
+//           className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+//           value={value}
+//           onChange={(e) => onChange(e.target.value)}
+//           onBlur={onBlur}
+//           placeholder="Enter value"
+//         />
+//       ) : (
+//         <div className="px-2 py-1 text-xs text-gray-800 bg-gray-50 rounded border border-gray-100">
+//           {value || "—"}
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+
+// // Medication Row Component
+// const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
+//   const frequencies = ["Once Daily", "Twice Daily", "Three Times Daily", "Four Times Daily", "Every 6 Hours", "Every 8 Hours", "As Needed"];
+//   const timings = ["Before Meal", "After Meal", "With Meal", "At Bedtime", "Morning", "Evening"];
+
+//   return (
+// <div className="relative border border-gray-200 rounded-lg p-3 mb-3 bg-white">
+//         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+//         <div>
+//           <label className="block text-xs font-medium text-gray-700 mb-1">
+//             Medicine Name <span className="text-red-500">*</span>
+//           </label>
+//           <input
+//             type="text"
+//             className={`w-full px-2 py-1.5 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+//             placeholder="Enter medicine name"
+//             value={medication.name}
+//             onChange={(e) => onUpdate(medication.id, "name", e.target.value)}
+//           />
+//           {errors.name && <p className="text-red-500 text-[10px] mt-1">{errors.name}</p>}
+//         </div>
+//         <div>
+//           <label className="block text-xs font-medium text-gray-700 mb-1">
+//             Dosage <span className="text-red-500">*</span>
+//           </label>
+//           <input
+//             type="text"
+//             className={`w-full px-2 py-1.5 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.dosage ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+//             placeholder="e.g., 500mg, 10ml"
+//             value={medication.dosage}
+//             onChange={(e) => onUpdate(medication.id, "dosage", e.target.value)}
+//           />
+//           {errors.dosage && <p className="text-red-500 text-[10px] mt-1">{errors.dosage}</p>}
+//         </div>
+//         <div>
+//           <label className="block text-xs font-medium text-gray-700 mb-1">
+//             Duration <span className="text-red-500">*</span>
+//           </label>
+//           <input
+//             type="text"
+//             className={`w-full px-2 py-1.5 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.duration ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+//             placeholder="e.g., 5 days, 2 weeks"
+//             value={medication.duration}
+//             onChange={(e) => onUpdate(medication.id, "duration", e.target.value)}
+//           />
+//           {errors.duration && <p className="text-red-500 text-[10px] mt-1">{errors.duration}</p>}
+//         </div>
+//       </div>
+//       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+//         {/* ✅ Frequency — CustomSelect */}
+//         <CustomSelect
+//           label="Frequency"
+//           value={medication.frequency}
+//           options={frequencies.map(freq => ({ value: freq, label: freq }))}
+//           onChange={(value) => onUpdate(medication.id, "frequency", value)}
+//           placeholder="Select"
+//           error={errors.frequency}
+//           touched={true}
+//           required
+//         />
+
+//         {/* ✅ Timing — CustomSelect */}
+//         <CustomSelect
+//           label="Timing"
+//           value={medication.timing}
+//           options={timings.map(time => ({ value: time, label: time }))}
+//           onChange={(value) => onUpdate(medication.id, "timing", value)}
+//           placeholder="Select"
+//           error={errors.timing}
+//           touched={true}
+//           required
+//         />
+
+//         <div>
+//           <label className="block text-xs font-medium text-gray-700 mb-1">Special Instructions</label>
+//           <input
+//             type="text"
+//             className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+//             placeholder="Additional instructions"
+//             value={medication.instructions}
+//             onChange={(e) => onUpdate(medication.id, "instructions", e.target.value)}
+//           />
+//         </div>
+//       </div>
+//       <div className="flex justify-end">
+//         <button
+//           onClick={() => onDelete(medication.id)}
+//           className="text-xs text-red-500 hover:text-red-700 transition-colors"
+//         >
+//           Remove Medication
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// /* =====================================================
+//    Skeleton Loader Primitives
+//    ===================================================== */
+// const SkeletonLine = ({ className = "" }) => (
+//   <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+// );
+
+// const SkeletonCircle = ({ className = "" }) => (
+//   <div className={`bg-gray-200 rounded-full animate-pulse ${className}`} />
+// );
+
+// const SkeletonBox = ({ className = "" }) => (
+//   <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+// );
+
+// const Consultation = () => {
+//   const location = useLocation();
+//   const navigate = useNavigate();
+//   const appointmentData = location.state?.appointment || location.state || {};
+
+//   console.log("APPOINTMENT DATA:", appointmentData);
+// console.log("PATIENT OBJECT:", appointmentData?.patient);
+// console.log("PATIENT ID:", appointmentData?.patientId);
+// console.log("PATIENT NUMBER:", appointmentData?.patientNumber);
+// console.log("PATIENT DB ID:", appointmentData?.patientDbId);
+// console.log("USER ID:", appointmentData?.userId);
+// console.log("HOSPITAL ID:", appointmentData?.hospitalId);
+
+//   const [createPrescription, { isLoading: isCreateLoading }] = useCreatePrescriptionMutation();
+//   const [createVital, { isLoading: isVitalLoading }] = useCreateVitalMutation();
+
+//   const [updateBooking, { isLoading: isCompleteLoading }] = useUpdateBookingMutation();
+
+//   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
+
+//   const patientId = getPatientIdFromAppointment(appointmentData);
+//   const patientNameFromAppointment = getPatientNameFromAppointment(appointmentData);
+
+//   const bookingNumber = Number(appointmentData?.bookingNumber);
+
+//   const formattedBookingNumber = bookingNumber && Number.isFinite(bookingNumber) && bookingNumber > 0
+//     ? `#BK${String(bookingNumber).padStart(5, "0")}`
+//     : "N/A";
+
+//   const [currentPatientId, setCurrentPatientId] = useState(patientId);
+
+//   const [createdPrescriptionNumber, setCreatedPrescriptionNumber] = useState(null);
+//   const [createdPrescriptionId, setCreatedPrescriptionId] = useState(null);
+
+//   const {
+//     data: patientData,
+//     isLoading: isPatientLoading,
+//     isFetching: isPatientFetching,
+//     refetch: refetchPatient
+//   } = useGetPatientByIdQuery(
+//     patientId ? String(patientId) : "",
+//     {
+//       skip: !patientId,
+//       refetchOnMountOrArgChange: true,
+//     }
+//   );
+
+//   const patient = React.useMemo(() => {
+//     if (!patientData?.data) return null;
+//     if (Array.isArray(patientData.data)) {
+//       return patientData.data[0];
+//     }
+//     return patientData.data;
+//   }, [patientData]);
+
+//   useEffect(() => {
+//     if (patientId && patientId !== currentPatientId) {
+//       setCurrentPatientId(patientId);
+//       refetchPatient();
+//     }
+//   }, [patientId, currentPatientId, refetchPatient]);
+
+//   /* =====================================================
+//      ✅ Scroll to top — handles window AND internal containers
+//      ===================================================== */
+//   useEffect(() => {
+//     const scrollToTop = () => {
+//       window.scrollTo(0, 0);
+//       document.documentElement.scrollTop = 0;
+//       document.body.scrollTop = 0;
+
+//       const selectors = [
+//         "main",
+//         '[role="main"]',
+//         ".overflow-y-auto",
+//         ".overflow-auto",
+//         ".h-screen.overflow-y-auto",
+//         ".min-h-screen.overflow-y-auto",
+//       ];
+
+//       selectors.forEach((selector) => {
+//         document.querySelectorAll(selector).forEach((element) => {
+//           element.scrollTop = 0;
+//           element.scrollLeft = 0;
+//         });
+//       });
+//     };
+
+//     scrollToTop();
+//     const frame1 = requestAnimationFrame(scrollToTop);
+//     const frame2 = requestAnimationFrame(() => {
+//       requestAnimationFrame(scrollToTop);
+//     });
+
+//     return () => {
+//       cancelAnimationFrame(frame1);
+//       cancelAnimationFrame(frame2);
+//     };
+//   }, [patientId]);
+
+//   /* =====================================================
+//      Redirect if no patient context (e.g., direct URL visit)
+//      ===================================================== */
+//   useEffect(() => {
+//     if (!patientId && !isPatientLoading && !isPatientFetching) {
+//       const timer = setTimeout(() => {
+//         navigate("/appointments");
+//       }, 800);
+//       return () => clearTimeout(timer);
+//     }
+//   }, [patientId, isPatientLoading, isPatientFetching, navigate]);
+
+//   const currentHospitalId = getHospitalId();
+
+//   const getHospitalTemplate = () => {
+//     const allTemplates = existingTemplates?.data || [];
+
+//     const customTemplate = allTemplates.find(
+//       t => t.templateType === "custom" && Number(t.hospitalId) === Number(currentHospitalId)
+//     );
+
+//     if (customTemplate) {
+//       return customTemplate;
+//     }
+
+//     const demoTemplate = allTemplates.find(
+//       t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
+//     );
+
+//     if (demoTemplate) {
+//       return demoTemplate;
+//     }
+
+//     return null;
+//   };
+
+//   const [medications, setMedications] = useState([
+//     { id: 1, name: "", dosage: "", duration: "", frequency: "", timing: "", instructions: "" }
+//   ]);
+//   const [medicationErrors, setMedicationErrors] = useState({});
+//   const [investigations, setInvestigations] = useState([]);
+//   const [newInvestigation, setNewInvestigation] = useState("");
+//   const [complaint, setComplaint] = useState("");
+//   const [complaintError, setComplaintError] = useState("");
+//   const [advice, setAdvice] = useState("");
+//   const [vitals, setVitals] = useState({
+//     temperature: "", pulse: "", respiratoryRate: "", spo2: "",
+//     height: "", weight: "", bmi: "", waist: "", bsa: ""
+//   });
+//   const [isEditingVitals, setIsEditingVitals] = useState(false);
+//   const [nextConsultationDate, setNextConsultationDate] = useState("");
+//   const [emptyStomach, setEmptyStomach] = useState("");
+//   const [showMedicalHistory, setShowMedicalHistory] = useState(false);
+//   const [isSubmitting, setIsSubmitting] = useState(false);
+
+//   useEffect(() => {
+//     registerPrescriptionEvents({
+//       onPrescriptionCreated: async (data) => {
+//       },
+//       onPrescriptionUpdated: async (data) => {
+//       },
+//       onPrescriptionDeleted: async (data) => {
+//       }
+//     });
+
+//     return () => {
+//       unregisterPrescriptionEvents();
+//     };
+//   }, []);
+
+//   useEffect(() => {
+//     const handleConnect = () => {};
+//     const handleDisconnect = () => {};
+
+//     socket.on("connect", handleConnect);
+//     socket.on("disconnect", handleDisconnect);
+
+//     return () => {
+//       socket.off("connect", handleConnect);
+//       socket.off("disconnect", handleDisconnect);
+//     };
+//   }, []);
+
+//   useEffect(() => {
+//     const handleAnyEvent = (event, ...args) => {};
+//     socket.onAny(handleAnyEvent);
+//     return () => {
+//       socket.offAny(handleAnyEvent);
+//     };
+//   }, []);
+
+//   const validateMedication = (med) => {
+//     const errors = {};
+//     if (!med.name.trim()) errors.name = "Medicine name is required";
+//     if (!med.dosage.trim()) errors.dosage = "Dosage is required";
+//     if (!med.duration.trim()) errors.duration = "Duration is required";
+//     if (!med.frequency) errors.frequency = "Frequency is required";
+//     if (!med.timing) errors.timing = "Timing is required";
+//     return errors;
+//   };
+
+//   const validateComplaint = () => {
+//     if (!complaint.trim()) {
+//       setComplaintError("Complaint is required");
+//       return false;
+//     }
+//     setComplaintError("");
+//     return true;
+//   };
+
+//   const validateAllMedications = () => {
+//     const allErrors = {};
+//     medications.forEach(med => {
+//       const errors = validateMedication(med);
+//       if (Object.keys(errors).length > 0) allErrors[med.id] = errors;
+//     });
+//     setMedicationErrors(allErrors);
+//     return Object.keys(allErrors).length === 0;
+//   };
+
+//   const validateAppointmentData = () => {
+//     const missingData = [];
+
+//     if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
+//       missingData.push("Booking Number");
+//     }
+
+//     if (!patientId) {
+//       missingData.push("Patient ID");
+//     }
+
+//     const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
+//     if (!doctorId) {
+//       missingData.push("Doctor ID");
+//     }
+
+//     const hospitalId = getHospitalId() || appointmentData.hospitalId;
+//     if (!hospitalId) {
+//       missingData.push("Hospital ID");
+//     }
+
+//     let hospitalName = null;
+//     try {
+//       hospitalName = getHospitalName() || appointmentData.hospitalName || appointmentData.hospital?.name;
+//     } catch (error) {
+//       console.warn("Could not get hospital name:", error);
+//       hospitalName = appointmentData.hospitalName || appointmentData.hospital?.name || null;
+//     }
+
+//     if (missingData.length > 0) {
+//       showErrorToast(`Missing required data: ${missingData.join(", ")}. Please go back and select a valid appointment.`);
+//       return false;
+//     }
+//     return true;
+//   };
+
+//   const addMedicationRow = () => {
+//     const newId = medications.length > 0 ? Math.max(...medications.map(m => m.id)) + 1 : 1;
+//     setMedications([...medications, { id: newId, name: "", dosage: "", duration: "", frequency: "", timing: "", instructions: "" }]);
+//     showSuccessToast("New medication row added", 2000);
+//   };
+
+//   const updateMedication = (id, field, value) => {
+//     setMedications(medications.map(med => med.id === id ? { ...med, [field]: value } : med));
+//     if (medicationErrors[id] && medicationErrors[id][field]) {
+//       setMedicationErrors(prev => ({ ...prev, [id]: { ...prev[id], [field]: undefined } }));
+//     }
+//   };
+
+//   const deleteMedicationRow = (id) => {
+//     if (medications.length === 1) {
+//       showWarningToast("At least one medication is required", 3000);
+//       return;
+//     }
+//     setMedications(medications.filter(med => med.id !== id));
+//     const newErrors = { ...medicationErrors };
+//     delete newErrors[id];
+//     setMedicationErrors(newErrors);
+//     showSuccessToast("Medication removed", 2000);
+//   };
+
+//   const addInvestigation = () => {
+//     if (newInvestigation.trim() !== "") {
+//       setInvestigations([...investigations, newInvestigation.trim()]);
+//       setNewInvestigation("");
+//       showSuccessToast("Investigation added", 2000);
+//     } else {
+//       showWarningToast("Please enter an investigation", 3000);
+//     }
+//   };
+
+//   const deleteInvestigation = (index) => {
+//     setInvestigations(investigations.filter((_, i) => i !== index));
+//     showSuccessToast("Investigation removed", 2000);
+//   };
+
+//   const updateVital = (field, value) => setVitals({ ...vitals, [field]: value });
+
+//   const calculateBMI = () => {
+//     if (vitals.height && vitals.weight) {
+//       const heightInMeters = vitals.height / 100;
+//       const bmiValue = (vitals.weight / (heightInMeters * heightInMeters)).toFixed(1);
+//       setVitals(prev => ({ ...prev, bmi: bmiValue }));
+//       showSuccessToast("BMI calculated: " + bmiValue, 2000);
+//     }
+//   };
+
+//   const saveVitals = () => {
+//     setIsEditingVitals(false);
+//     showSuccessToast("Vital signs saved locally", 3000);
+//   };
+
+//   const cancelVitalsEdit = () => setIsEditingVitals(false);
+
+//   const handleBackToAppointments = () => {
+//     navigate("/appointments");
+//   };
+
+//   const getPatientGender = () => {
+//     const patientGender = patient?.gender || patient?.patient_gender || null;
+
+//     if (patientGender) {
+//       const gender = String(patientGender);
+//       const normalized = gender.toLowerCase();
+//       if (normalized === 'male') return 'Male';
+//       if (normalized === 'female') return 'Female';
+//       if (normalized === 'other') return 'Other';
+//       return gender;
+//     }
+
+//     if (appointmentData.patient_gender) {
+//       const gender = String(appointmentData.patient_gender);
+//       const normalized = gender.toLowerCase();
+//       if (normalized === 'male') return 'Male';
+//       if (normalized === 'female') return 'Female';
+//       if (normalized === 'other') return 'Other';
+//       return gender;
+//     }
+
+//     if (appointmentData.patient?.gender) {
+//       const gender = String(appointmentData.patient.gender);
+//       const normalized = gender.toLowerCase();
+//       if (normalized === 'male') return 'Male';
+//       if (normalized === 'female') return 'Female';
+//       if (normalized === 'other') return 'Other';
+//       return gender;
+//     }
+
+//     if (appointmentData.gender) {
+//       const gender = String(appointmentData.gender);
+//       const normalized = gender.toLowerCase();
+//       if (normalized === 'male') return 'Male';
+//       if (normalized === 'female') return 'Female';
+//       if (normalized === 'other') return 'Other';
+//       return gender;
+//     }
+
+//     return "N/A";
+//   };
+
+//   const getPatientName = () => {
+//     if (patient?.name) {
+//       return patient.name;
+//     }
+//     if (patient?.patientName) {
+//       return patient.patientName;
+//     }
+
+//     if (appointmentData.patientName) {
+//       return appointmentData.patientName;
+//     }
+//     if (appointmentData.patient?.name) {
+//       return appointmentData.patient.name;
+//     }
+//     if (appointmentData.name) {
+//       return appointmentData.name;
+//     }
+//     if (appointmentData.patient?.patientName) {
+//       return appointmentData.patient.patientName;
+//     }
+
+//     return "Patient";
+//   };
+
+//   const getPatientAge = () => {
+//     if (patient?.age) {
+//       return patient.age;
+//     }
+//     if (patient?.patientAge) {
+//       return patient.patientAge;
+//     }
+
+//     if (appointmentData.age) {
+//       return appointmentData.age;
+//     }
+//     if (appointmentData.patient?.age) {
+//       return appointmentData.patient.age;
+//     }
+//     if (appointmentData.patientAge) {
+//       return appointmentData.patientAge;
+//     }
+
+//     return "N/A";
+//   };
+
+//   const getPatientContact = () => {
+//     if (patient?.mobileNumber) {
+//       return patient.mobileNumber;
+//     }
+//     if (patient?.contact) {
+//       return patient.contact;
+//     }
+//     if (patient?.phone) {
+//       return patient.phone;
+//     }
+//     if (patient?.patientPhone) {
+//       return patient.patientPhone;
+//     }
+
+//     if (appointmentData.contact) {
+//       return appointmentData.contact;
+//     }
+//     if (appointmentData.patient?.contact) {
+//       return appointmentData.patient.contact;
+//     }
+//     if (appointmentData.phone) {
+//       return appointmentData.phone;
+//     }
+//     if (appointmentData.mobile) {
+//       return appointmentData.mobile;
+//     }
+//     if (appointmentData.patient?.mobileNumber) {
+//       return appointmentData.patient.mobileNumber;
+//     }
+
+//     return "N/A";
+//   };
+
+//   const displayPatientName = getPatientName();
+//   const displayPatientAge = getPatientAge();
+//   const displayPatientGender = getPatientGender();
+//   const displayPatientContact = getPatientContact();
+
+//   const getDefaultTemplate = () => ({
+//     design: [
+//       { type: "patientGrid", x: 20, y: 20, width: 950, height: 150, style: { bgColor: "#f8fafc" } },
+//       { type: "doctorDetails", x: 20, y: 180, width: 400, height: 80 },
+//       { type: "chiefComplaint", x: 20, y: 270, width: 950, height: 80, style: { bgColor: "#fef3c7" } },
+//       { type: "medicinesTable", x: 20, y: 360, width: 950, height: 250, style: { bgColor: "#ffffff" } },
+//       { type: "advice", x: 20, y: 620, width: 950, height: 100, style: { bgColor: "#d1fae5" } },
+//       { type: "signature", x: 20, y: 730, width: 400, height: 80 },
+//       { type: "prescriptionInfo", x: 500, y: 730, width: 470, height: 80 }
+//     ],
+//     bgColor: "#ffffff"
+//   });
+
+//   const handleEndConsultation = async () => {
+//     if (!validateAppointmentData()) return;
+
+//     const isComplaintValid = validateComplaint();
+//     const isMedicationsValid = validateAllMedications();
+
+//     if (!isComplaintValid || !isMedicationsValid) return;
+
+//     setIsSubmitting(true);
+
+//     try {
+
+//       if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
+//         throw new Error("Invalid booking number: " + bookingNumber);
+//       }
+
+//       const extractedPatientId = patientId || extractNumericId(
+//         appointmentData.patientId ||
+//         appointmentData.patient?.id ||
+//         appointmentData.patient?.patientId ||
+//         appointmentData.userId ||
+//         appointmentData.patient?.userId ||
+//         null
+//       );
+
+//       // ✅ FIX 1: Use business patientNumber (NOT the DB patient.id)
+//       const patientNumber =
+//         patient?.patientNumber ||
+//         appointmentData.patientNumber ||
+//         appointmentData.patient?.patientNumber ||
+//         null;
+
+//       const extractedUserId = extractNumericId(
+//         appointmentData.userId ||
+//         appointmentData.patient?.userId ||
+//         null
+//       );
+
+//       const extractedDoctorId = extractNumericId(
+//         appointmentData.doctorId ||
+//         appointmentData.doctor?.id ||
+//         appointmentData.doctor?.doctorId
+//       );
+
+//       const extractedHospitalId = extractNumericId(
+//         getHospitalId() ||
+//         appointmentData.hospitalId ||
+//         appointmentData.hospital?.id
+//       );
+
+//       const extractedPatientName = getPatientName();
+
+//       let extractedAge = null;
+
+//       if (patient?.age) {
+//         extractedAge = patient.age;
+//       } else if (patient?.dob || patient?.dateOfBirth) {
+//         const dob = patient.dob || patient.dateOfBirth;
+//         extractedAge = calculateAge(dob);
+//       } else if (appointmentData.age) {
+//         extractedAge = appointmentData.age;
+//       } else if (appointmentData.patient?.age) {
+//         extractedAge = appointmentData.patient.age;
+//       } else {
+//         const dob = appointmentData.dob ||
+//                    appointmentData.patient?.dob ||
+//                    appointmentData.dateOfBirth ||
+//                    appointmentData.patient?.dateOfBirth;
+//         if (dob) {
+//           extractedAge = calculateAge(dob);
+//         }
+//       }
+
+//       const extractedContact = getPatientContact();
+//       const extractedGender = getPatientGender();
+
+//       const authUser = getAuthUser();
+//       const hospitalNameFromAuth = getHospitalName();
+
+//       const extractedHospitalName =
+//         hospitalNameFromAuth ||
+//         authUser?.name ||
+//         appointmentData.hospitalName ||
+//         appointmentData.hospital?.name ||
+//         "";
+
+//       const extractedDoctorName =
+//         appointmentData.doctor?.name ||
+//         appointmentData.doctorName ||
+//         appointmentData.displayName ||
+//         appointmentData.doctor?.displayName ||
+//         null;
+
+//       const extractedDoctorSpecialization =
+//         appointmentData.doctor?.specialization ||
+//         appointmentData.doctor?.department ||
+//         appointmentData.department ||
+//         appointmentData.specialization ||
+//         null;
+
+//       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
+//       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
+//       if (!patientNumber) throw new Error("Missing Patient Number");
+//       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
+
+//       const formattedMedications = medications.map(({ id, ...med }) => ({
+//         medicineName: med.name,
+//         dosage: med.dosage,
+//         duration: med.duration,
+//         frequency: med.frequency,
+//         timing: med.timing,
+//         instructions: med.instructions || "",
+//       }));
+
+//       const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
+
+//       const selectedTemplate = getHospitalTemplate();
+
+//       const defaultTemplate = getDefaultTemplate();
+//       const templateDesign = selectedTemplate?.design || defaultTemplate.design;
+//       const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
+//       const templateType = selectedTemplate?.templateType || "demo";
+
+//       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
+
+//       // ✅ FIX 2: Vitals send `undefined` when empty (not 0)
+//       const prescriptionData = {
+//         bookingId: bookingNumber,
+
+//         hospitalId: extractedHospitalId,
+//         doctorId: extractedDoctorId,
+
+//         prescribedBy: extractedDoctorName,
+//         doctorName: extractedDoctorName,
+//         doctorSpecialization: extractedDoctorSpecialization,
+
+//         patientName: extractedPatientName,
+//         age: ageAsNumber,
+//         contact: extractedContact,
+//         gender: extractedGender,
+
+//         hospitalName: extractedHospitalName,
+
+//         // ✅ FIX 1 (continued): payload's patientId = business patientNumber
+//         patientId: patientNumber,
+//         patientNumber: patientNumber,
+//         userId: extractedUserId || undefined,
+
+//         complaint: complaint.trim(),
+//         medications: validMedications,
+//         investigations: investigations.filter(i => i.trim() !== ""),
+//         advice: advice.trim() || "",
+//         next_consultation: nextConsultationDate || null,
+//         empty_stomach: emptyStomach === "yes",
+
+//         templateType: templateType,
+//         canvasBg: templateBg,
+//         design: templateDesign,
+
+//         // ✅ FIX 2: empty vital fields stay undefined (not 0)
+//         temperature: vitals.temperature !== "" && vitals.temperature != null
+//           ? Number(vitals.temperature)
+//           : undefined,
+//         pulse: vitals.pulse !== "" && vitals.pulse != null
+//           ? Number(vitals.pulse)
+//           : undefined,
+//         respiratoryRate: vitals.respiratoryRate !== "" && vitals.respiratoryRate != null
+//           ? Number(vitals.respiratoryRate)
+//           : undefined,
+//         spo2: vitals.spo2 !== "" && vitals.spo2 != null
+//           ? Number(vitals.spo2)
+//           : undefined,
+//         height: vitals.height !== "" && vitals.height != null
+//           ? Number(vitals.height)
+//           : undefined,
+//         weight: vitals.weight !== "" && vitals.weight != null
+//           ? Number(vitals.weight)
+//           : undefined,
+//         bmi: vitals.bmi !== "" && vitals.bmi != null
+//           ? Number(vitals.bmi)
+//           : undefined,
+//         waist: vitals.waist !== "" && vitals.waist != null
+//           ? Number(vitals.waist)
+//           : undefined,
+//         bsa: vitals.bsa !== "" && vitals.bsa != null
+//           ? Number(vitals.bsa)
+//           : undefined,
+//       };
+      
+//       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
+
+//       const prescriptionNumber =
+//         prescriptionResponse?.data?.prescriptionNumber;
+//       // ✅ FIX 3: read id / prescriptionId / _id
+//       const prescriptionId =
+//         prescriptionResponse?.data?.id ??
+//         prescriptionResponse?.data?.prescriptionId ??
+//         prescriptionResponse?.data?._id ??
+//         null;
+
+//       setCreatedPrescriptionNumber(prescriptionNumber ?? null);
+//       setCreatedPrescriptionId(prescriptionId ?? null);
+
+//       if (socket && socket.connected) {
+//         socket.emit('PRESCRIPTION_CREATED', {
+//           prescriptionId:
+//             prescriptionResponse?.data?.prescriptionId ||
+//             prescriptionResponse?.data?.id ||
+//             prescriptionResponse?.data?._id,
+//           prescriptionNumber,
+//           patientId: patientNumber || prescriptionResponse?.patientId,
+//           doctorId: extractedDoctorId,
+//           hospitalId: extractedHospitalId,
+//           bookingId: bookingNumber,
+//         });
+//       }
+
+//       await updateBooking({
+//         bookingNumber: bookingNumber,
+//         data: {
+//           status: "completed",
+//         },
+//       }).unwrap();
+
+//       const displayNumber = prescriptionId
+//         ? prescriptionId
+//         : prescriptionNumber
+//         ? `#PRS${String(prescriptionNumber).padStart(5, "0")}`
+//         : null;
+
+//       showSuccessToast(
+//         displayNumber
+//           ? `Consultation completed — Prescription ${displayNumber}`
+//           : "Consultation completed successfully"
+//       );
+
+//       navigate("/visits", {
+//         state: {
+//           completedPatientId: patientNumber || prescriptionResponse?.patientId,
+//           showSuccess: true,
+//         },
+//       });
+
+//     } catch (error) {
+//       console.error("❌ Consultation error:", error);
+//       showErrorToast(
+//         error?.data?.message ||
+//         error?.message ||
+//         "Failed to complete consultation"
+//       );
+//     } finally {
+//       setIsSubmitting(false);
+//     }
+//   };
+
+//   /* =====================================================
+//      Skeleton loader
+//      ===================================================== */
+//   if (patientId && (isPatientLoading || isPatientFetching)) {
+//     return (
+//       <div className="p-4 bg-gray-50 min-h-screen font-sans">
+//         <div className="max-w-6xl mx-auto">
+//           {/* ===== Header ===== */}
+//           <div className="mb-4">
+//             <div className="flex items-center gap-3 mb-2">
+//               <button
+//                 onClick={handleBackToAppointments}
+//                 className="flex items-center gap-1 text-gray-600 transition-colors group"
+//               >
+//                 <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+//                 </svg>
+//                 <span className="text-sm font-medium">Back to Appointments</span>
+//               </button>
+//             </div>
+//             <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
+//             <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
+//           </div>
+
+//           {/* ===== Basic Information Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//               <SkeletonLine className="h-3.5 w-32" />
+//               <SkeletonLine className="h-3 w-28" />
+//             </div>
+//             <div className="p-4 flex flex-wrap justify-between items-center gap-3">
+//               <div className="flex items-center gap-3">
+//                 <SkeletonBox className="w-10 h-10 rounded-lg" />
+//                 <div className="space-y-2">
+//                   <SkeletonLine className="h-4 w-16 rounded-full" />
+//                   <SkeletonLine className="h-4 w-40" />
+//                   <SkeletonLine className="h-3 w-32" />
+//                 </div>
+//               </div>
+//               <div className="flex flex-wrap gap-4 bg-gray-50 px-3 py-2 rounded-lg">
+//                 {[...Array(4)].map((_, i) => (
+//                   <div key={i} className="space-y-1">
+//                     <SkeletonLine className="h-2.5 w-16" />
+//                     <SkeletonLine className="h-3 w-24" />
+//                   </div>
+//                 ))}
+//               </div>
+//             </div>
+//           </Card>
+
+//           {/* ===== Vital Signs Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//               <SkeletonLine className="h-3.5 w-24" />
+//               <SkeletonLine className="h-3 w-12" />
+//             </div>
+//             <div className="p-4">
+//               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+//                 {[...Array(9)].map((_, i) => (
+//                   <div key={i} className="space-y-1.5">
+//                     <SkeletonLine className="h-2.5 w-20" />
+//                     <SkeletonBox className="h-7 w-full" />
+//                   </div>
+//                 ))}
+//               </div>
+//             </div>
+//           </Card>
+
+//           {/* ===== Complaint Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100">
+//               <SkeletonLine className="h-3.5 w-24" />
+//             </div>
+//             <div className="p-4 space-y-2">
+//               <SkeletonBox className="h-8 w-full" />
+//               <SkeletonLine className="h-2.5 w-48" />
+//             </div>
+//           </Card>
+
+//           {/* ===== Medications Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//               <SkeletonLine className="h-3.5 w-28" />
+//               <SkeletonLine className="h-3 w-20" />
+//             </div>
+//             <div className="p-4">
+//               <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
+//                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+//                   {[...Array(3)].map((_, i) => (
+//                     <div key={i} className="space-y-1.5">
+//                       <SkeletonLine className="h-2.5 w-20" />
+//                       <SkeletonBox className="h-8 w-full" />
+//                     </div>
+//                   ))}
+//                 </div>
+//                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+//                   {[...Array(3)].map((_, i) => (
+//                     <div key={i} className="space-y-1.5">
+//                       <SkeletonLine className="h-2.5 w-20" />
+//                       <SkeletonBox className="h-8 w-full" />
+//                     </div>
+//                   ))}
+//                 </div>
+//               </div>
+//             </div>
+//           </Card>
+
+//           {/* ===== Investigations Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100">
+//               <SkeletonLine className="h-3.5 w-40" />
+//             </div>
+//             <div className="p-4">
+//               <div className="flex gap-2">
+//                 <SkeletonBox className="h-8 flex-1" />
+//                 <SkeletonBox className="h-8 w-16" />
+//               </div>
+//             </div>
+//           </Card>
+
+//           {/* ===== Advice Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100">
+//               <SkeletonLine className="h-3.5 w-16" />
+//             </div>
+//             <div className="p-4">
+//               <SkeletonBox className="h-14 w-full" />
+//             </div>
+//           </Card>
+
+//           {/* ===== Follow Up Skeleton ===== */}
+//           <Card className="mb-4 overflow-hidden">
+//             <div className="px-4 py-2 border-b border-gray-100">
+//               <SkeletonLine className="h-3.5 w-20" />
+//             </div>
+//             <div className="p-4">
+//               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+//                 {[...Array(2)].map((_, i) => (
+//                   <div key={i} className="space-y-1.5">
+//                     <SkeletonLine className="h-3 w-24" />
+//                     <SkeletonBox className="h-8 w-full" />
+//                   </div>
+//                 ))}
+//               </div>
+//               <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
+//                 <SkeletonBox className="h-8 w-20" />
+//                 <SkeletonBox className="h-8 w-32" />
+//               </div>
+//             </div>
+//           </Card>
+//         </div>
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <div className="p-4 bg-gray-50 min-h-screen font-sans">
+//       <div className="max-w-6xl mx-auto">
+//         <div className="mb-4">
+//           <div className="flex items-center gap-3 mb-2">
+//             <button
+//               onClick={handleBackToAppointments}
+//               className="flex items-center gap-1 text-gray-600 transition-colors group"
+//             >
+//               <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+//               </svg>
+//               <span className="text-sm font-medium">Back to Appointments</span>
+//             </button>
+//           </div>
+//           <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
+//           <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
+//         </div>
+
+//         {/* Basic Information Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//             <h3 className="text-sm font-medium text-gray-800">Basic Information</h3>
+//             <button onClick={() => setShowMedicalHistory(true)} className="text-[#1C62A0] text-xs cursor-pointer hover:underline">
+//               View Medical History →
+//             </button>
+//           </div>
+//           <div className="p-4 flex flex-wrap justify-between items-center gap-3">
+//             <div className="flex items-center gap-3">
+//               <div className="w-10 h-10 rounded-lg bg-[#1C62A0] flex items-center justify-center text-white font-semibold text-sm">
+//                 {displayPatientName?.charAt(0)?.toUpperCase() || "P"}
+//               </div>
+//               <div>
+//                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
+//                 <p className="font-semibold text-gray-800 text-sm mt-1">
+//                   {displayPatientName}
+//                 </p>
+//                 <p className="text-xs text-gray-500">
+//                   Booking #: {formattedBookingNumber}
+//                 </p>
+//                 {patient?.patientNumber && (
+//                   <p className="text-xs text-blue-600 font-medium">Patient #: {patient.patientNumber}</p>
+//                 )}
+//                 {patientId && !patient?.patientNumber && (
+//                   <p className="text-xs text-gray-400">Patient ID: #{patientId}</p>
+//                 )}
+
+//                 {createdPrescriptionId && (
+//                   <p className="text-xs text-green-600 font-medium">
+//                     Prescription: {createdPrescriptionId}
+//                   </p>
+//                 )}
+//                 {!createdPrescriptionId && createdPrescriptionNumber && (
+//                   <p className="text-xs text-green-600 font-medium">
+//                     Prescription: #{`PRS${String(createdPrescriptionNumber).padStart(5, "0")}`}
+//                   </p>
+//                 )}
+//               </div>
+//             </div>
+//             <div className="flex flex-wrap gap-4 text-xs bg-gray-50 px-3 py-2 rounded-lg">
+//               <div>
+//                 <p className="text-gray-500 text-[10px]">Age / Gender</p>
+//                 <p className="font-medium text-gray-800 text-xs">
+//                   {displayPatientAge} Years / {displayPatientGender}
+//                 </p>
+//               </div>
+//               <div>
+//                 <p className="text-gray-500 text-[10px]">Contact</p>
+//                 <p className="font-medium text-gray-800 text-xs">
+//                   {displayPatientContact}
+//                 </p>
+//               </div>
+//               <div>
+//                 <p className="text-gray-500 text-[10px]">Department</p>
+//                 <p className="font-medium text-gray-800 text-xs">{appointmentData.department || "Cardiology"}</p>
+//               </div>
+//               <div>
+//                 <p className="text-gray-500 text-[10px]">Date</p>
+//                 <p className="font-medium text-gray-800 text-xs">{appointmentData.appointmentDateDisplay || "25 Jan 2025, 07:00 PM"}</p>
+//               </div>
+//             </div>
+//           </div>
+//         </Card>
+
+//         {/* Vital Signs Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//             <h3 className="text-sm font-medium text-gray-800">Vital Signs</h3>
+//             <div className="flex gap-2">
+//               {!isEditingVitals ? (
+//                 <button onClick={() => setIsEditingVitals(true)} className="text-xs text-[#1C62A0] font-medium">✎ Edit</button>
+//               ) : (
+//                 <>
+//                   <button onClick={cancelVitalsEdit} className="text-xs text-gray-500 font-medium">Cancel</button>
+//                   <button onClick={saveVitals} className="text-xs text-green-600 font-medium">✓ Save</button>
+//                 </>
+//               )}
+//             </div>
+//           </div>
+//           <div className="p-4">
+//             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+//               <VitalInput label="Temperature" type="number" unit="°F" value={vitals.temperature} onChange={(val) => updateVital("temperature", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="Pulse" type="number" unit="bpm" value={vitals.pulse} onChange={(val) => updateVital("pulse", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="Respiratory Rate" type="number" unit="rpm" value={vitals.respiratoryRate} onChange={(val) => updateVital("respiratoryRate", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="SPO2" type="number" unit="%" value={vitals.spo2} onChange={(val) => updateVital("spo2", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="Height" type="number" unit="cm" value={vitals.height} onChange={(val) => updateVital("height", val)} onBlur={calculateBMI} isEditing={isEditingVitals} />
+//               <VitalInput label="Weight" type="number" unit="kg" value={vitals.weight} onChange={(val) => updateVital("weight", val)} onBlur={calculateBMI} isEditing={isEditingVitals} />
+//               <VitalInput label="BMI" type="number" unit="kg/m²" value={vitals.bmi} onChange={(val) => updateVital("bmi", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="Waist" type="number" unit="cm" value={vitals.waist} onChange={(val) => updateVital("waist", val)} isEditing={isEditingVitals} />
+//               <VitalInput label="BSA" type="number" unit="m²" value={vitals.bsa} onChange={(val) => updateVital("bsa", val)} isEditing={isEditingVitals} />
+//             </div>
+//             <p className="text-[10px] text-gray-400 mt-2">💡 Vital signs will be saved with the prescription and appear in the patient's Vitals tab</p>
+//           </div>
+//         </Card>
+
+//         {/* Complaint Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100">
+//             <h3 className="text-sm font-medium text-gray-800">Complaint <span className="text-red-500">*</span></h3>
+//           </div>
+//           <div className="p-4">
+//             <input className={`w-full px-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm ${complaintError ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} placeholder="Enter value separated by comma" value={complaint} onChange={(e) => { setComplaint(e.target.value); if (complaintError && e.target.value.trim()) setComplaintError(""); }} />
+//             <p className="text-[10px] text-gray-400 mt-1">Example: Fever, Headache, Cough</p>
+//             {complaintError && <p className="text-red-500 text-[10px] mt-1">{complaintError}</p>}
+//           </div>
+//         </Card>
+
+//         {/* Medications Card */}
+//         <Card className="mb-4 overflow-visible">
+//           <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+//             <h3 className="text-sm font-medium text-gray-800">Medications <span className="text-red-500">*</span></h3>
+//             <button onClick={addMedicationRow} className="text-xs text-[#1C62A0] font-medium hover:underline">+ Add Another</button>
+//           </div>
+//           <div className="p-4">
+//             {medications.map((medication) => (
+//               <MedicationRow key={medication.id} medication={medication} onUpdate={updateMedication} onDelete={deleteMedicationRow} errors={medicationErrors[medication.id] || {}} />
+//             ))}
+//           </div>
+//         </Card>
+
+//         {/* Investigations Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100">
+//             <h3 className="text-sm font-medium text-gray-800">Investigations & Procedure</h3>
+//           </div>
+//           <div className="p-4">
+//             <div className="flex gap-2 mb-3">
+//               <input className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" placeholder="Enter investigation" value={newInvestigation} onChange={(e) => setNewInvestigation(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && addInvestigation()} />
+//               <button onClick={addInvestigation} className="px-3 py-1.5 text-[#1C62A0] hover:text-[#6da0ca] rounded-lg transition-colors text-sm font-medium">+ Add</button>
+//             </div>
+//             {investigations.length > 0 && (
+//               <div className="mt-3 space-y-2">
+//                 <p className="text-xs font-medium text-gray-500">Added Items:</p>
+//                 <div className="flex flex-wrap gap-2">
+//                   {investigations.map((item, index) => (
+//                     <div key={index} className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1">
+//                       <span className="text-sm text-gray-700">{item}</span>
+//                       <button onClick={() => deleteInvestigation(index)} className="text-gray-400 hover:text-red-500 transition-colors">✕</button>
+//                     </div>
+//                   ))}
+//                 </div>
+//               </div>
+//             )}
+//           </div>
+//         </Card>
+
+//         {/* Advice Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100">
+//             <h3 className="text-sm font-medium text-gray-800">Advice</h3>
+//           </div>
+//           <div className="p-4">
+//             <textarea className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm" rows={2} placeholder="Write advice for the patient..." value={advice} onChange={(e) => setAdvice(e.target.value)} />
+//           </div>
+//         </Card>
+
+//         {/* Follow Up Card */}
+//         <Card className="mb-4 overflow-hidden">
+//           <div className="px-4 py-2 border-b border-gray-100">
+//             <h3 className="text-sm font-medium text-gray-800">Follow Up</h3>
+//           </div>
+//           <div className="p-4">
+//             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+//               {/* ============ Next Consultation (Flatpickr) ============ */}
+//               <div>
+//                 <label className="block text-xs font-medium text-gray-700 mb-1">
+//                   Next Consultation
+//                 </label>
+
+//                 <Flatpickr
+//                   value={toDisplayDate(nextConsultationDate)}
+//                   options={{
+//                     dateFormat: "d/m/Y",
+//                     minDate: "today",
+//                     allowInput: false,
+//                   }}
+//                   onChange={(selectedDates) => {
+//                     if (!selectedDates.length) {
+//                       setNextConsultationDate("");
+//                       return;
+//                     }
+
+//                     const date = selectedDates[0];
+//                     const year = date.getFullYear();
+//                     const month = String(date.getMonth() + 1).padStart(2, "0");
+//                     const day = String(date.getDate()).padStart(2, "0");
+
+//                     setNextConsultationDate(`${year}-${month}-${day}`);
+//                   }}
+//                   placeholder="Select next consultation date"
+//                   className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white"
+//                 />
+//               </div>
+
+//               {/* ============ Empty Stomach — CustomSelect ============ */}
+//               <div>
+//                 <CustomSelect
+//                   label="Empty Stomach Required?"
+//                   value={emptyStomach}
+//                   options={[
+//                     { value: 'yes', label: 'Yes, come on empty stomach' },
+//                     { value: 'no', label: 'No, can have food' }
+//                   ]}
+//                   onChange={(value) => setEmptyStomach(value)}
+//                   placeholder="Select"
+//                 />
+//               </div>
+//             </div>
+//             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
+//               <Button variant="outline" size="sm" onClick={handleBackToAppointments}>Cancel</Button>
+//               <Button
+//                 variant="primary"
+//                 size="sm"
+//                 onClick={handleEndConsultation}
+//                 disabled={isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isTemplatesLoading || isPatientLoading}
+//                 loading={isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isPatientLoading}
+//               >
+//                 {isSubmitting || isCreateLoading || isCompleteLoading || isVitalLoading || isPatientLoading ? "Processing..." : "End Consultation"}
+//               </Button>
+//             </div>
+//           </div>
+//         </Card>
+//       </div>
+
+//       <ViewMedicalHistory
+//         isOpen={showMedicalHistory}
+//         onClose={() => setShowMedicalHistory(false)}
+//         patientId={patientId}
+//         department={
+//           appointmentData.department ||
+//           appointmentData.doctorDepartment ||
+//           appointmentData.departmentName
+//         }
+//         doctorName={
+//           appointmentData.doctor?.name ||
+//           appointmentData.doctorName ||
+//           appointmentData.displayName
+//         }
+//       />
+//     </div>
+//   );
+// };
+
+// export default Consultation;
+
+// Consultation.js - COMPLETE FIXED VERSION
+// + Enforced backend vitals validation handling
+// + Relaxed patientNumber check to allow backend auto-creation via bookingId
+// + Cleaned up payload to match strict backend types
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -64,6 +1442,13 @@ const extractNumericId = (id) => {
   return null;
 };
 
+// ✅ Helper to safely parse vitals (prevents NaN or empty strings hitting the backend)
+const parseVital = (val) => {
+  if (val === "" || val === null || val === undefined) return undefined;
+  const num = Number(val);
+  return isNaN(num) ? undefined : num;
+};
+
 // ✅ Helper to get patient ID from appointment data
 const getPatientIdFromAppointment = (appointmentData) => {
   if (appointmentData.patient) {
@@ -99,7 +1484,6 @@ const getPatientIdFromAppointment = (appointmentData) => {
     if (numericId) return numericId;
   }
 
-  console.warn("⚠️ No valid patient ID found in appointment data");
   return null;
 };
 
@@ -123,6 +1507,7 @@ const VitalInput = ({ label, type = "text", unit, value, onChange, isEditing, on
       {isEditing ? (
         <input
           type={type}
+          min="0"
           className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -144,8 +1529,8 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
   const timings = ["Before Meal", "After Meal", "With Meal", "At Bedtime", "Morning", "Evening"];
 
   return (
-<div className="relative border border-gray-200 rounded-lg p-3 mb-3 bg-white">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+    <div className="relative border border-gray-200 rounded-lg p-3 mb-3 bg-white">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Medicine Name <span className="text-red-500">*</span>
@@ -187,7 +1572,6 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
-        {/* ✅ Frequency — CustomSelect */}
         <CustomSelect
           label="Frequency"
           value={medication.frequency}
@@ -198,8 +1582,6 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
           touched={true}
           required
         />
-
-        {/* ✅ Timing — CustomSelect */}
         <CustomSelect
           label="Timing"
           value={medication.timing}
@@ -210,7 +1592,6 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
           touched={true}
           required
         />
-
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Special Instructions</label>
           <input
@@ -234,17 +1615,9 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
   );
 };
 
-/* =====================================================
-   Skeleton Loader Primitives
-   ===================================================== */
 const SkeletonLine = ({ className = "" }) => (
   <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
 );
-
-const SkeletonCircle = ({ className = "" }) => (
-  <div className={`bg-gray-200 rounded-full animate-pulse ${className}`} />
-);
-
 const SkeletonBox = ({ className = "" }) => (
   <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
 );
@@ -254,24 +1627,13 @@ const Consultation = () => {
   const navigate = useNavigate();
   const appointmentData = location.state?.appointment || location.state || {};
 
-  console.log("APPOINTMENT DATA:", appointmentData);
-console.log("PATIENT OBJECT:", appointmentData?.patient);
-console.log("PATIENT ID:", appointmentData?.patientId);
-console.log("PATIENT NUMBER:", appointmentData?.patientNumber);
-console.log("PATIENT DB ID:", appointmentData?.patientDbId);
-console.log("USER ID:", appointmentData?.userId);
-console.log("HOSPITAL ID:", appointmentData?.hospitalId);
-
   const [createPrescription, { isLoading: isCreateLoading }] = useCreatePrescriptionMutation();
   const [createVital, { isLoading: isVitalLoading }] = useCreateVitalMutation();
-
   const [updateBooking, { isLoading: isCompleteLoading }] = useUpdateBookingMutation();
-
   const { data: existingTemplates, isLoading: isTemplatesLoading } = useGetPrescriptionTemplatesQuery({});
 
   const patientId = getPatientIdFromAppointment(appointmentData);
   const patientNameFromAppointment = getPatientNameFromAppointment(appointmentData);
-
   const bookingNumber = Number(appointmentData?.bookingNumber);
 
   const formattedBookingNumber = bookingNumber && Number.isFinite(bookingNumber) && bookingNumber > 0
@@ -311,24 +1673,12 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
     }
   }, [patientId, currentPatientId, refetchPatient]);
 
-  /* =====================================================
-     ✅ Scroll to top — handles window AND internal containers
-     ===================================================== */
   useEffect(() => {
     const scrollToTop = () => {
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
-
-      const selectors = [
-        "main",
-        '[role="main"]',
-        ".overflow-y-auto",
-        ".overflow-auto",
-        ".h-screen.overflow-y-auto",
-        ".min-h-screen.overflow-y-auto",
-      ];
-
+      const selectors = ["main", '[role="main"]', ".overflow-y-auto", ".overflow-auto"];
       selectors.forEach((selector) => {
         document.querySelectorAll(selector).forEach((element) => {
           element.scrollTop = 0;
@@ -339,9 +1689,7 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
     scrollToTop();
     const frame1 = requestAnimationFrame(scrollToTop);
-    const frame2 = requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToTop);
-    });
+    const frame2 = requestAnimationFrame(() => requestAnimationFrame(scrollToTop));
 
     return () => {
       cancelAnimationFrame(frame1);
@@ -349,14 +1697,9 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
     };
   }, [patientId]);
 
-  /* =====================================================
-     Redirect if no patient context (e.g., direct URL visit)
-     ===================================================== */
   useEffect(() => {
     if (!patientId && !isPatientLoading && !isPatientFetching) {
-      const timer = setTimeout(() => {
-        navigate("/appointments");
-      }, 800);
+      const timer = setTimeout(() => navigate("/appointments"), 800);
       return () => clearTimeout(timer);
     }
   }, [patientId, isPatientLoading, isPatientFetching, navigate]);
@@ -365,22 +1708,15 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
   const getHospitalTemplate = () => {
     const allTemplates = existingTemplates?.data || [];
-
     const customTemplate = allTemplates.find(
       t => t.templateType === "custom" && Number(t.hospitalId) === Number(currentHospitalId)
     );
-
-    if (customTemplate) {
-      return customTemplate;
-    }
+    if (customTemplate) return customTemplate;
 
     const demoTemplate = allTemplates.find(
       t => t.templateType === "demo" && (!t.hospitalId || t.hospitalId === null || t.hospitalId === 0)
     );
-
-    if (demoTemplate) {
-      return demoTemplate;
-    }
+    if (demoTemplate) return demoTemplate;
 
     return null;
   };
@@ -406,37 +1742,21 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
   useEffect(() => {
     registerPrescriptionEvents({
-      onPrescriptionCreated: async (data) => {
-      },
-      onPrescriptionUpdated: async (data) => {
-      },
-      onPrescriptionDeleted: async (data) => {
-      }
+      onPrescriptionCreated: async (data) => {},
+      onPrescriptionUpdated: async (data) => {},
+      onPrescriptionDeleted: async (data) => {}
     });
-
-    return () => {
-      unregisterPrescriptionEvents();
-    };
+    return () => unregisterPrescriptionEvents();
   }, []);
 
   useEffect(() => {
     const handleConnect = () => {};
     const handleDisconnect = () => {};
-
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
-
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleAnyEvent = (event, ...args) => {};
-    socket.onAny(handleAnyEvent);
-    return () => {
-      socket.offAny(handleAnyEvent);
     };
   }, []);
 
@@ -471,35 +1791,14 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
   const validateAppointmentData = () => {
     const missingData = [];
-
-    if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
-      missingData.push("Booking Number");
-    }
-
-    if (!patientId) {
-      missingData.push("Patient ID");
-    }
-
+    if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) missingData.push("Booking Number");
     const doctorId = appointmentData.doctorId || appointmentData.doctor?.id;
-    if (!doctorId) {
-      missingData.push("Doctor ID");
-    }
-
+    if (!doctorId) missingData.push("Doctor ID");
     const hospitalId = getHospitalId() || appointmentData.hospitalId;
-    if (!hospitalId) {
-      missingData.push("Hospital ID");
-    }
-
-    let hospitalName = null;
-    try {
-      hospitalName = getHospitalName() || appointmentData.hospitalName || appointmentData.hospital?.name;
-    } catch (error) {
-      console.warn("Could not get hospital name:", error);
-      hospitalName = appointmentData.hospitalName || appointmentData.hospital?.name || null;
-    }
+    if (!hospitalId) missingData.push("Hospital ID");
 
     if (missingData.length > 0) {
-      showErrorToast(`Missing required data: ${missingData.join(", ")}. Please go back and select a valid appointment.`);
+      showErrorToast(`Missing required data: ${missingData.join(", ")}.`);
       return false;
     }
     return true;
@@ -562,129 +1861,35 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
   };
 
   const cancelVitalsEdit = () => setIsEditingVitals(false);
-
-  const handleBackToAppointments = () => {
-    navigate("/appointments");
-  };
+  const handleBackToAppointments = () => navigate("/appointments");
 
   const getPatientGender = () => {
-    const patientGender = patient?.gender || patient?.patient_gender || null;
-
+    const patientGender = patient?.gender || patient?.patient_gender || appointmentData.patient_gender || appointmentData.patient?.gender || appointmentData.gender;
     if (patientGender) {
-      const gender = String(patientGender);
-      const normalized = gender.toLowerCase();
+      const normalized = String(patientGender).toLowerCase();
       if (normalized === 'male') return 'Male';
       if (normalized === 'female') return 'Female';
       if (normalized === 'other') return 'Other';
-      return gender;
+      return patientGender;
     }
-
-    if (appointmentData.patient_gender) {
-      const gender = String(appointmentData.patient_gender);
-      const normalized = gender.toLowerCase();
-      if (normalized === 'male') return 'Male';
-      if (normalized === 'female') return 'Female';
-      if (normalized === 'other') return 'Other';
-      return gender;
-    }
-
-    if (appointmentData.patient?.gender) {
-      const gender = String(appointmentData.patient.gender);
-      const normalized = gender.toLowerCase();
-      if (normalized === 'male') return 'Male';
-      if (normalized === 'female') return 'Female';
-      if (normalized === 'other') return 'Other';
-      return gender;
-    }
-
-    if (appointmentData.gender) {
-      const gender = String(appointmentData.gender);
-      const normalized = gender.toLowerCase();
-      if (normalized === 'male') return 'Male';
-      if (normalized === 'female') return 'Female';
-      if (normalized === 'other') return 'Other';
-      return gender;
-    }
-
     return "N/A";
   };
 
   const getPatientName = () => {
-    if (patient?.name) {
-      return patient.name;
-    }
-    if (patient?.patientName) {
-      return patient.patientName;
-    }
-
-    if (appointmentData.patientName) {
-      return appointmentData.patientName;
-    }
-    if (appointmentData.patient?.name) {
-      return appointmentData.patient.name;
-    }
-    if (appointmentData.name) {
-      return appointmentData.name;
-    }
-    if (appointmentData.patient?.patientName) {
-      return appointmentData.patient.patientName;
-    }
-
-    return "Patient";
+    return patient?.name || patient?.patientName || patientNameFromAppointment || appointmentData.patient?.name || appointmentData.name || "Patient";
   };
 
   const getPatientAge = () => {
-    if (patient?.age) {
-      return patient.age;
-    }
-    if (patient?.patientAge) {
-      return patient.patientAge;
-    }
-
-    if (appointmentData.age) {
-      return appointmentData.age;
-    }
-    if (appointmentData.patient?.age) {
-      return appointmentData.patient.age;
-    }
-    if (appointmentData.patientAge) {
-      return appointmentData.patientAge;
-    }
-
+    if (patient?.age) return patient.age;
+    if (patient?.patientAge) return patient.patientAge;
+    if (appointmentData.age) return appointmentData.age;
+    if (appointmentData.patient?.age) return appointmentData.patient.age;
+    if (appointmentData.patientAge) return appointmentData.patientAge;
     return "N/A";
   };
 
   const getPatientContact = () => {
-    if (patient?.mobileNumber) {
-      return patient.mobileNumber;
-    }
-    if (patient?.contact) {
-      return patient.contact;
-    }
-    if (patient?.phone) {
-      return patient.phone;
-    }
-    if (patient?.patientPhone) {
-      return patient.patientPhone;
-    }
-
-    if (appointmentData.contact) {
-      return appointmentData.contact;
-    }
-    if (appointmentData.patient?.contact) {
-      return appointmentData.patient.contact;
-    }
-    if (appointmentData.phone) {
-      return appointmentData.phone;
-    }
-    if (appointmentData.mobile) {
-      return appointmentData.mobile;
-    }
-    if (appointmentData.patient?.mobileNumber) {
-      return appointmentData.patient.mobileNumber;
-    }
-
-    return "N/A";
+    return patient?.mobileNumber || patient?.contact || patient?.phone || patient?.patientPhone || appointmentData.contact || appointmentData.patient?.contact || appointmentData.phone || appointmentData.mobile || appointmentData.patient?.mobileNumber || "N/A";
   };
 
   const displayPatientName = getPatientName();
@@ -710,72 +1915,29 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
     const isComplaintValid = validateComplaint();
     const isMedicationsValid = validateAllMedications();
-
     if (!isComplaintValid || !isMedicationsValid) return;
 
     setIsSubmitting(true);
 
     try {
-
-      if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
-        throw new Error("Invalid booking number: " + bookingNumber);
-      }
-
       const extractedPatientId = patientId || extractNumericId(
-        appointmentData.patientId ||
-        appointmentData.patient?.id ||
-        appointmentData.patient?.patientId ||
-        appointmentData.userId ||
-        appointmentData.patient?.userId ||
-        null
+        appointmentData.patientId || appointmentData.patient?.id || appointmentData.patient?.patientId || appointmentData.userId || appointmentData.patient?.userId || null
       );
 
-      // ✅ FIX 1: Use business patientNumber (NOT the DB patient.id)
-      const patientNumber =
-        patient?.patientNumber ||
-        appointmentData.patientNumber ||
-        appointmentData.patient?.patientNumber ||
-        null;
-
-      const extractedUserId = extractNumericId(
-        appointmentData.userId ||
-        appointmentData.patient?.userId ||
-        null
-      );
-
-      const extractedDoctorId = extractNumericId(
-        appointmentData.doctorId ||
-        appointmentData.doctor?.id ||
-        appointmentData.doctor?.doctorId
-      );
-
-      const extractedHospitalId = extractNumericId(
-        getHospitalId() ||
-        appointmentData.hospitalId ||
-        appointmentData.hospital?.id
-      );
-
-      const extractedPatientName = getPatientName();
+      const patientNumber = patient?.patientNumber || appointmentData.patientNumber || appointmentData.patient?.patientNumber || null;
+      const extractedUserId = extractNumericId(appointmentData.userId || appointmentData.patient?.userId || null);
+      const extractedDoctorId = extractNumericId(appointmentData.doctorId || appointmentData.doctor?.id || appointmentData.doctor?.doctorId);
+      const extractedHospitalId = extractNumericId(getHospitalId() || appointmentData.hospitalId || appointmentData.hospital?.id);
 
       let extractedAge = null;
-
       if (patient?.age) {
         extractedAge = patient.age;
       } else if (patient?.dob || patient?.dateOfBirth) {
-        const dob = patient.dob || patient.dateOfBirth;
-        extractedAge = calculateAge(dob);
+        extractedAge = calculateAge(patient.dob || patient.dateOfBirth);
       } else if (appointmentData.age) {
         extractedAge = appointmentData.age;
       } else if (appointmentData.patient?.age) {
         extractedAge = appointmentData.patient.age;
-      } else {
-        const dob = appointmentData.dob ||
-                   appointmentData.patient?.dob ||
-                   appointmentData.dateOfBirth ||
-                   appointmentData.patient?.dateOfBirth;
-        if (dob) {
-          extractedAge = calculateAge(dob);
-        }
       }
 
       const extractedContact = getPatientContact();
@@ -784,31 +1946,15 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
       const authUser = getAuthUser();
       const hospitalNameFromAuth = getHospitalName();
 
-      const extractedHospitalName =
-        hospitalNameFromAuth ||
-        authUser?.name ||
-        appointmentData.hospitalName ||
-        appointmentData.hospital?.name ||
-        "";
-
-      const extractedDoctorName =
-        appointmentData.doctor?.name ||
-        appointmentData.doctorName ||
-        appointmentData.displayName ||
-        appointmentData.doctor?.displayName ||
-        null;
-
-      const extractedDoctorSpecialization =
-        appointmentData.doctor?.specialization ||
-        appointmentData.doctor?.department ||
-        appointmentData.department ||
-        appointmentData.specialization ||
-        null;
+      const extractedHospitalName = hospitalNameFromAuth || authUser?.name || appointmentData.hospitalName || appointmentData.hospital?.name || "";
+      const extractedDoctorName = appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName || appointmentData.doctor?.displayName || null;
+      const extractedDoctorSpecialization = appointmentData.doctor?.specialization || appointmentData.doctor?.department || appointmentData.department || appointmentData.specialization || null;
 
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
-      if (!patientNumber) throw new Error("Missing Patient Number");
-      if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
+      
+      // ✅ Removed strict patientNumber check. 
+      // The backend will auto-create the patient from the bookingId if patientNumber is null.
 
       const formattedMedications = medications.map(({ id, ...med }) => ({
         medicineName: med.name,
@@ -817,12 +1963,9 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         frequency: med.frequency,
         timing: med.timing,
         instructions: med.instructions || "",
-      }));
-
-      const validMedications = formattedMedications.filter(med => med.medicineName?.trim() !== "");
+      })).filter(med => med.medicineName?.trim() !== "");
 
       const selectedTemplate = getHospitalTemplate();
-
       const defaultTemplate = getDefaultTemplate();
       const templateDesign = selectedTemplate?.design || defaultTemplate.design;
       const templateBg = selectedTemplate?.canvasBg || defaultTemplate.bgColor;
@@ -830,10 +1973,8 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
 
-      // ✅ FIX 2: Vitals send `undefined` when empty (not 0)
       const prescriptionData = {
         bookingId: bookingNumber,
-
         hospitalId: extractedHospitalId,
         doctorId: extractedDoctorId,
 
@@ -841,20 +1982,17 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         doctorName: extractedDoctorName,
         doctorSpecialization: extractedDoctorSpecialization,
 
-        patientName: extractedPatientName,
+        patientName: displayPatientName,
         age: ageAsNumber,
-        contact: extractedContact,
-        gender: extractedGender,
-
+        contact: extractedContact === "N/A" ? undefined : extractedContact,
+        gender: extractedGender === "N/A" ? undefined : extractedGender,
         hospitalName: extractedHospitalName,
 
-        // ✅ FIX 1 (continued): payload's patientId = business patientNumber
-        patientId: patientNumber,
         patientNumber: patientNumber,
         userId: extractedUserId || undefined,
 
         complaint: complaint.trim(),
-        medications: validMedications,
+        medications: formattedMedications,
         investigations: investigations.filter(i => i.trim() !== ""),
         advice: advice.trim() || "",
         next_consultation: nextConsultationDate || null,
@@ -864,56 +2002,29 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         canvasBg: templateBg,
         design: templateDesign,
 
-        // ✅ FIX 2: empty vital fields stay undefined (not 0)
-        temperature: vitals.temperature !== "" && vitals.temperature != null
-          ? Number(vitals.temperature)
-          : undefined,
-        pulse: vitals.pulse !== "" && vitals.pulse != null
-          ? Number(vitals.pulse)
-          : undefined,
-        respiratoryRate: vitals.respiratoryRate !== "" && vitals.respiratoryRate != null
-          ? Number(vitals.respiratoryRate)
-          : undefined,
-        spo2: vitals.spo2 !== "" && vitals.spo2 != null
-          ? Number(vitals.spo2)
-          : undefined,
-        height: vitals.height !== "" && vitals.height != null
-          ? Number(vitals.height)
-          : undefined,
-        weight: vitals.weight !== "" && vitals.weight != null
-          ? Number(vitals.weight)
-          : undefined,
-        bmi: vitals.bmi !== "" && vitals.bmi != null
-          ? Number(vitals.bmi)
-          : undefined,
-        waist: vitals.waist !== "" && vitals.waist != null
-          ? Number(vitals.waist)
-          : undefined,
-        bsa: vitals.bsa !== "" && vitals.bsa != null
-          ? Number(vitals.bsa)
-          : undefined,
+        // ✅ FIX: Use parseVital to safely handle NaN or empty inputs
+        temperature: parseVital(vitals.temperature),
+        pulse: parseVital(vitals.pulse),
+        respiratoryRate: parseVital(vitals.respiratoryRate),
+        spo2: parseVital(vitals.spo2),
+        height: parseVital(vitals.height),
+        weight: parseVital(vitals.weight),
+        bmi: parseVital(vitals.bmi),
+        waist: parseVital(vitals.waist),
+        bsa: parseVital(vitals.bsa),
       };
       
       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
 
-      const prescriptionNumber =
-        prescriptionResponse?.data?.prescriptionNumber;
-      // ✅ FIX 3: read id / prescriptionId / _id
-      const prescriptionId =
-        prescriptionResponse?.data?.id ??
-        prescriptionResponse?.data?.prescriptionId ??
-        prescriptionResponse?.data?._id ??
-        null;
+      const prescriptionNumber = prescriptionResponse?.data?.prescriptionNumber;
+      const prescriptionId = prescriptionResponse?.data?.id ?? prescriptionResponse?.data?.prescriptionId ?? prescriptionResponse?.data?._id ?? null;
 
       setCreatedPrescriptionNumber(prescriptionNumber ?? null);
       setCreatedPrescriptionId(prescriptionId ?? null);
 
       if (socket && socket.connected) {
         socket.emit('PRESCRIPTION_CREATED', {
-          prescriptionId:
-            prescriptionResponse?.data?.prescriptionId ||
-            prescriptionResponse?.data?.id ||
-            prescriptionResponse?.data?._id,
+          prescriptionId: prescriptionResponse?.data?.prescriptionId || prescriptionResponse?.data?.id || prescriptionResponse?.data?._id,
           prescriptionNumber,
           patientId: patientNumber || prescriptionResponse?.patientId,
           doctorId: extractedDoctorId,
@@ -924,21 +2035,13 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
       await updateBooking({
         bookingNumber: bookingNumber,
-        data: {
-          status: "completed",
-        },
+        data: { status: "completed" },
       }).unwrap();
 
-      const displayNumber = prescriptionId
-        ? prescriptionId
-        : prescriptionNumber
-        ? `#PRS${String(prescriptionNumber).padStart(5, "0")}`
-        : null;
+      const displayNumber = prescriptionId ? prescriptionId : prescriptionNumber ? `#PRS${String(prescriptionNumber).padStart(5, "0")}` : null;
 
       showSuccessToast(
-        displayNumber
-          ? `Consultation completed — Prescription ${displayNumber}`
-          : "Consultation completed successfully"
+        displayNumber ? `Consultation completed — Prescription ${displayNumber}` : "Consultation completed successfully"
       );
 
       navigate("/visits", {
@@ -950,167 +2053,24 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
     } catch (error) {
       console.error("❌ Consultation error:", error);
-      showErrorToast(
-        error?.data?.message ||
-        error?.message ||
-        "Failed to complete consultation"
-      );
+      
+      // ✅ Extract specific validation errors from the backend (e.g., vitals validation)
+      let errorMessage = error?.data?.message || error?.message || "Failed to complete consultation";
+      
+      if (error?.data?.errors && Array.isArray(error.data.errors) && error.data.errors.length > 0) {
+        errorMessage = error.data.errors.join(", ");
+      }
+
+      showErrorToast(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  /* =====================================================
-     Skeleton loader
-     ===================================================== */
   if (patientId && (isPatientLoading || isPatientFetching)) {
     return (
-      <div className="p-4 bg-gray-50 min-h-screen font-sans">
-        <div className="max-w-6xl mx-auto">
-          {/* ===== Header ===== */}
-          <div className="mb-4">
-            <div className="flex items-center gap-3 mb-2">
-              <button
-                onClick={handleBackToAppointments}
-                className="flex items-center gap-1 text-gray-600 transition-colors group"
-              >
-                <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span className="text-sm font-medium">Back to Appointments</span>
-              </button>
-            </div>
-            <h1 className="text-xl font-semibold text-gray-800">Consultation</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Home / Appointments / Consultation</p>
-          </div>
-
-          {/* ===== Basic Information Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-              <SkeletonLine className="h-3.5 w-32" />
-              <SkeletonLine className="h-3 w-28" />
-            </div>
-            <div className="p-4 flex flex-wrap justify-between items-center gap-3">
-              <div className="flex items-center gap-3">
-                <SkeletonBox className="w-10 h-10 rounded-lg" />
-                <div className="space-y-2">
-                  <SkeletonLine className="h-4 w-16 rounded-full" />
-                  <SkeletonLine className="h-4 w-40" />
-                  <SkeletonLine className="h-3 w-32" />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-4 bg-gray-50 px-3 py-2 rounded-lg">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="space-y-1">
-                    <SkeletonLine className="h-2.5 w-16" />
-                    <SkeletonLine className="h-3 w-24" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* ===== Vital Signs Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-              <SkeletonLine className="h-3.5 w-24" />
-              <SkeletonLine className="h-3 w-12" />
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {[...Array(9)].map((_, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <SkeletonLine className="h-2.5 w-20" />
-                    <SkeletonBox className="h-7 w-full" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* ===== Complaint Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100">
-              <SkeletonLine className="h-3.5 w-24" />
-            </div>
-            <div className="p-4 space-y-2">
-              <SkeletonBox className="h-8 w-full" />
-              <SkeletonLine className="h-2.5 w-48" />
-            </div>
-          </Card>
-
-          {/* ===== Medications Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-              <SkeletonLine className="h-3.5 w-28" />
-              <SkeletonLine className="h-3 w-20" />
-            </div>
-            <div className="p-4">
-              <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="space-y-1.5">
-                      <SkeletonLine className="h-2.5 w-20" />
-                      <SkeletonBox className="h-8 w-full" />
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="space-y-1.5">
-                      <SkeletonLine className="h-2.5 w-20" />
-                      <SkeletonBox className="h-8 w-full" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* ===== Investigations Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100">
-              <SkeletonLine className="h-3.5 w-40" />
-            </div>
-            <div className="p-4">
-              <div className="flex gap-2">
-                <SkeletonBox className="h-8 flex-1" />
-                <SkeletonBox className="h-8 w-16" />
-              </div>
-            </div>
-          </Card>
-
-          {/* ===== Advice Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100">
-              <SkeletonLine className="h-3.5 w-16" />
-            </div>
-            <div className="p-4">
-              <SkeletonBox className="h-14 w-full" />
-            </div>
-          </Card>
-
-          {/* ===== Follow Up Skeleton ===== */}
-          <Card className="mb-4 overflow-hidden">
-            <div className="px-4 py-2 border-b border-gray-100">
-              <SkeletonLine className="h-3.5 w-20" />
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <SkeletonLine className="h-3 w-24" />
-                    <SkeletonBox className="h-8 w-full" />
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
-                <SkeletonBox className="h-8 w-20" />
-                <SkeletonBox className="h-8 w-32" />
-              </div>
-            </div>
-          </Card>
-        </div>
+      <div className="p-4 bg-gray-50 min-h-screen font-sans flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Loading patient details...</p>
       </div>
     );
   }
@@ -1120,10 +2080,7 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
       <div className="max-w-6xl mx-auto">
         <div className="mb-4">
           <div className="flex items-center gap-3 mb-2">
-            <button
-              onClick={handleBackToAppointments}
-              className="flex items-center gap-1 text-gray-600 transition-colors group"
-            >
+            <button onClick={handleBackToAppointments} className="flex items-center gap-1 text-gray-600 transition-colors group">
               <svg className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
@@ -1149,43 +2106,23 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
               </div>
               <div>
                 <Badge variant="info" className="text-[10px]">{appointmentData.patientType || "Out Patient"}</Badge>
-                <p className="font-semibold text-gray-800 text-sm mt-1">
-                  {displayPatientName}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Booking #: {formattedBookingNumber}
-                </p>
-                {patient?.patientNumber && (
-                  <p className="text-xs text-blue-600 font-medium">Patient #: {patient.patientNumber}</p>
-                )}
-                {patientId && !patient?.patientNumber && (
-                  <p className="text-xs text-gray-400">Patient ID: #{patientId}</p>
-                )}
-
-                {createdPrescriptionId && (
-                  <p className="text-xs text-green-600 font-medium">
-                    Prescription: {createdPrescriptionId}
-                  </p>
-                )}
+                <p className="font-semibold text-gray-800 text-sm mt-1">{displayPatientName}</p>
+                <p className="text-xs text-gray-500">Booking #: {formattedBookingNumber}</p>
+                {patient?.patientNumber && <p className="text-xs text-blue-600 font-medium">Patient #: {patient.patientNumber}</p>}
+                {createdPrescriptionId && <p className="text-xs text-green-600 font-medium">Prescription: {createdPrescriptionId}</p>}
                 {!createdPrescriptionId && createdPrescriptionNumber && (
-                  <p className="text-xs text-green-600 font-medium">
-                    Prescription: #{`PRS${String(createdPrescriptionNumber).padStart(5, "0")}`}
-                  </p>
+                  <p className="text-xs text-green-600 font-medium">Prescription: #{`PRS${String(createdPrescriptionNumber).padStart(5, "0")}`}</p>
                 )}
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-xs bg-gray-50 px-3 py-2 rounded-lg">
               <div>
                 <p className="text-gray-500 text-[10px]">Age / Gender</p>
-                <p className="font-medium text-gray-800 text-xs">
-                  {displayPatientAge} Years / {displayPatientGender}
-                </p>
+                <p className="font-medium text-gray-800 text-xs">{displayPatientAge} Years / {displayPatientGender}</p>
               </div>
               <div>
                 <p className="text-gray-500 text-[10px]">Contact</p>
-                <p className="font-medium text-gray-800 text-xs">
-                  {displayPatientContact}
-                </p>
+                <p className="font-medium text-gray-800 text-xs">{displayPatientContact}</p>
               </div>
               <div>
                 <p className="text-gray-500 text-[10px]">Department</p>
@@ -1298,46 +2235,28 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
           </div>
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ============ Next Consultation (Flatpickr) ============ */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Next Consultation
-                </label>
-
+                <label className="block text-xs font-medium text-gray-700 mb-1">Next Consultation</label>
                 <Flatpickr
                   value={toDisplayDate(nextConsultationDate)}
-                  options={{
-                    dateFormat: "d/m/Y",
-                    minDate: "today",
-                    allowInput: false,
-                  }}
+                  options={{ dateFormat: "d/m/Y", minDate: "today", allowInput: false }}
                   onChange={(selectedDates) => {
-                    if (!selectedDates.length) {
-                      setNextConsultationDate("");
-                      return;
-                    }
-
+                    if (!selectedDates.length) return setNextConsultationDate("");
                     const date = selectedDates[0];
                     const year = date.getFullYear();
                     const month = String(date.getMonth() + 1).padStart(2, "0");
                     const day = String(date.getDate()).padStart(2, "0");
-
                     setNextConsultationDate(`${year}-${month}-${day}`);
                   }}
                   placeholder="Select next consultation date"
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] text-sm bg-white"
                 />
               </div>
-
-              {/* ============ Empty Stomach — CustomSelect ============ */}
               <div>
                 <CustomSelect
                   label="Empty Stomach Required?"
                   value={emptyStomach}
-                  options={[
-                    { value: 'yes', label: 'Yes, come on empty stomach' },
-                    { value: 'no', label: 'No, can have food' }
-                  ]}
+                  options={[{ value: 'yes', label: 'Yes, come on empty stomach' }, { value: 'no', label: 'No, can have food' }]}
                   onChange={(value) => setEmptyStomach(value)}
                   placeholder="Select"
                 />
@@ -1363,16 +2282,8 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         isOpen={showMedicalHistory}
         onClose={() => setShowMedicalHistory(false)}
         patientId={patientId}
-        department={
-          appointmentData.department ||
-          appointmentData.doctorDepartment ||
-          appointmentData.departmentName
-        }
-        doctorName={
-          appointmentData.doctor?.name ||
-          appointmentData.doctorName ||
-          appointmentData.displayName
-        }
+        department={appointmentData.department || appointmentData.doctorDepartment || appointmentData.departmentName}
+        doctorName={appointmentData.doctor?.name || appointmentData.doctorName || appointmentData.displayName}
       />
     </div>
   );
