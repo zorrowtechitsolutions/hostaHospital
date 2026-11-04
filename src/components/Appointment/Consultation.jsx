@@ -863,7 +863,14 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         waist: Number(vitals.waist) || 0,
         bsa: Number(vitals.bsa) || 0,
       };
-       console.log("FINAL PRESCRIPTION DATA:", prescriptionData);
+
+      console.log(
+        "FINAL PRESCRIPTION DATA:",
+        JSON.stringify(prescriptionData, null, 2)
+      );
+
+      // ⚠️ TEMPORARY: stop here during test — no prescription is saved
+      return;
 
       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
 
