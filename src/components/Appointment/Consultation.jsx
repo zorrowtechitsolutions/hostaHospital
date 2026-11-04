@@ -61,42 +61,35 @@ const extractNumericId = (id) => {
   return null;
 };
 
-// ✅ Helper to get patient ID from appointment data
 const getPatientIdFromAppointment = (appointmentData) => {
-  if (appointmentData.patient) {
-    if (appointmentData.patient.id) {
-      const numericId = extractNumericId(appointmentData.patient.id);
-      if (numericId) return numericId;
-    }
-    if (appointmentData.patient.patientId) {
-      const numericId = extractNumericId(appointmentData.patient.patientId);
-      if (numericId) return numericId;
-    }
-    if (appointmentData.patient._id) {
-      const numericId = extractNumericId(appointmentData.patient._id);
-      if (numericId) return numericId;
-    }
+  // Priority 1: Hospital patient number
+  const patientNumber =
+    appointmentData?.patientNumber ??
+    appointmentData?.patient?.patientNumber ??
+    null;
+
+  if (
+    patientNumber !== null &&
+    patientNumber !== undefined &&
+    patientNumber !== ""
+  ) {
+    return Number(patientNumber);
   }
 
-  if (appointmentData.patientId) {
-    const numericId = extractNumericId(appointmentData.patientId);
-    if (numericId) return numericId;
-    if (!isNaN(appointmentData.patientId)) {
-      return Number(appointmentData.patientId);
-    }
-  }
+  // Priority 2: Explicit patient ID from accepted booking
+  const patientId = appointmentData?.patientId;
 
-  if (appointmentData.userId) {
-    const numericId = extractNumericId(appointmentData.userId);
+  if (
+    patientId !== null &&
+    patientId !== undefined &&
+    patientId !== ""
+  ) {
+    const numericId = extractNumericId(patientId);
     if (numericId) return numericId;
   }
 
-  if (appointmentData.patientData?.id) {
-    const numericId = extractNumericId(appointmentData.patientData.id);
-    if (numericId) return numericId;
-  }
+  console.warn("Patient identifier missing from appointment");
 
-  console.warn("⚠️ No valid patient ID found in appointment data");
   return null;
 };
 
