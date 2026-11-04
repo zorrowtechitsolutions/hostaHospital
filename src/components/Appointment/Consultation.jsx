@@ -251,6 +251,14 @@ const Consultation = () => {
   const navigate = useNavigate();
   const appointmentData = location.state?.appointment || location.state || {};
 
+  console.log("APPOINTMENT DATA:", appointmentData);
+console.log("PATIENT OBJECT:", appointmentData?.patient);
+console.log("PATIENT ID:", appointmentData?.patientId);
+console.log("PATIENT NUMBER:", appointmentData?.patientNumber);
+console.log("PATIENT DB ID:", appointmentData?.patientDbId);
+console.log("USER ID:", appointmentData?.userId);
+console.log("HOSPITAL ID:", appointmentData?.hospitalId);
+
   const [createPrescription, { isLoading: isCreateLoading }] = useCreatePrescriptionMutation();
   const [createVital, { isLoading: isVitalLoading }] = useCreateVitalMutation();
 
