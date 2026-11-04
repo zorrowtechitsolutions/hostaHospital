@@ -703,7 +703,6 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
   });
 
   const handleEndConsultation = async () => {
-    console.log("FINAL PRESCRIPTION DATA:", prescriptionData);
     if (!validateAppointmentData()) return;
 
     const isComplaintValid = validateComplaint();
