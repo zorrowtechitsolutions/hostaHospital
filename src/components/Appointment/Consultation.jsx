@@ -3,13 +3,16 @@
 // + Flatpickr for Next Consultation date
 // + Skeleton loader instead of spinner
 // + Robust scroll-to-top (handles internal scroll containers)
+// + FIX 1: patientNumber uses business number (not DB id)
+// + FIX 2: vitals send undefined when empty (not 0)
+// + FIX 3: prescriptionId reads id / prescriptionId / _id
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import ViewMedicalHistory from "./ViewMedicalHistory";
-import { Button, Card, Badge, CustomSelect } from "../ui"; // ✅ added CustomSelect
+import { Button, Card, Badge, CustomSelect } from "../ui";
 import { showSuccessToast, showWarningToast, showErrorToast } from "../ui/Toast";
 import { useCreatePrescriptionMutation } from "../../../app/service/prescription";
 import { useCreateVitalMutation } from "../../../app/service/vitals";
@@ -727,7 +730,12 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         null
       );
 
-      const patientNumber = patient?.patientNumber || extractedPatientId;
+      // ✅ FIX 1: Use business patientNumber (NOT the DB patient.id)
+      const patientNumber =
+        patient?.patientNumber ||
+        appointmentData.patientNumber ||
+        appointmentData.patient?.patientNumber ||
+        null;
 
       const extractedUserId = extractNumericId(
         appointmentData.userId ||
@@ -799,6 +807,7 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
       if (!extractedDoctorId) throw new Error("Missing Doctor ID");
       if (!extractedHospitalId) throw new Error("Missing Hospital ID");
+      if (!patientNumber) throw new Error("Missing Patient Number");
       if (!extractedPatientId && !extractedUserId) throw new Error("Missing both Patient ID and User ID");
 
       const formattedMedications = medications.map(({ id, ...med }) => ({
@@ -821,6 +830,7 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
       const ageAsNumber = extractedAge ? Number(extractedAge) : null;
 
+      // ✅ FIX 2: Vitals send `undefined` when empty (not 0)
       const prescriptionData = {
         bookingId: bookingNumber,
 
@@ -838,6 +848,7 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
 
         hospitalName: extractedHospitalName,
 
+        // ✅ FIX 1 (continued): payload's patientId = business patientNumber
         patientId: patientNumber,
         patientNumber: patientNumber,
         userId: extractedUserId || undefined,
@@ -853,23 +864,46 @@ console.log("HOSPITAL ID:", appointmentData?.hospitalId);
         canvasBg: templateBg,
         design: templateDesign,
 
-        temperature: Number(vitals.temperature) || 0,
-        pulse: Number(vitals.pulse) || 0,
-        respiratoryRate: Number(vitals.respiratoryRate) || 0,
-        spo2: Number(vitals.spo2) || 0,
-        height: Number(vitals.height) || 0,
-        weight: Number(vitals.weight) || 0,
-        bmi: Number(vitals.bmi) || 0,
-        waist: Number(vitals.waist) || 0,
-        bsa: Number(vitals.bsa) || 0,
+        // ✅ FIX 2: empty vital fields stay undefined (not 0)
+        temperature: vitals.temperature !== "" && vitals.temperature != null
+          ? Number(vitals.temperature)
+          : undefined,
+        pulse: vitals.pulse !== "" && vitals.pulse != null
+          ? Number(vitals.pulse)
+          : undefined,
+        respiratoryRate: vitals.respiratoryRate !== "" && vitals.respiratoryRate != null
+          ? Number(vitals.respiratoryRate)
+          : undefined,
+        spo2: vitals.spo2 !== "" && vitals.spo2 != null
+          ? Number(vitals.spo2)
+          : undefined,
+        height: vitals.height !== "" && vitals.height != null
+          ? Number(vitals.height)
+          : undefined,
+        weight: vitals.weight !== "" && vitals.weight != null
+          ? Number(vitals.weight)
+          : undefined,
+        bmi: vitals.bmi !== "" && vitals.bmi != null
+          ? Number(vitals.bmi)
+          : undefined,
+        waist: vitals.waist !== "" && vitals.waist != null
+          ? Number(vitals.waist)
+          : undefined,
+        bsa: vitals.bsa !== "" && vitals.bsa != null
+          ? Number(vitals.bsa)
+          : undefined,
       };
       
       const prescriptionResponse = await createPrescription(prescriptionData).unwrap();
 
       const prescriptionNumber =
         prescriptionResponse?.data?.prescriptionNumber;
+      // ✅ FIX 3: read id / prescriptionId / _id
       const prescriptionId =
-        prescriptionResponse?.data?.prescriptionId;
+        prescriptionResponse?.data?.id ??
+        prescriptionResponse?.data?.prescriptionId ??
+        prescriptionResponse?.data?._id ??
+        null;
 
       setCreatedPrescriptionNumber(prescriptionNumber ?? null);
       setCreatedPrescriptionId(prescriptionId ?? null);

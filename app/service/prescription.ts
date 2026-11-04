@@ -1,5 +1,6 @@
 // prescription.js - Complete with ONLY patientNumber support (no DB id fallback)
 // + Added prescriptionNumber / prescriptionId support
+// + FIX 4: optional vitals are conditionally spread (empty → omitted, not 0)
 
 import { api } from "./api";
 import { getHospitalId } from "../../src/utils/auth";
@@ -153,15 +154,43 @@ export const prescriptionApi = api.injectEndpoints({
           next_consultation: data.next_consultation,
           empty_stomach: data.empty_stomach,
 
-          temperature: data?.temperature || 0,
-          pulse: data?.pulse || 0,
-          respiratoryRate: data?.respiratoryRate || 0,
-          spo2: data?.spo2 || 0,
-          height: data?.height || 0,
-          weight: data?.weight || 0,
-          bmi: data?.bmi || 0,
-          waist: data?.waist || 0,
-          bsa: data?.bsa || 0,
+          // ✅ FIX 4: only include vitals that were actually provided.
+          // Never coerce an empty field to 0.
+          ...(data.temperature != null && data.temperature !== ""
+            ? { temperature: Number(data.temperature) }
+            : {}),
+
+          ...(data.pulse != null && data.pulse !== ""
+            ? { pulse: Number(data.pulse) }
+            : {}),
+
+          ...(data.respiratoryRate != null && data.respiratoryRate !== ""
+            ? { respiratoryRate: Number(data.respiratoryRate) }
+            : {}),
+
+          ...(data.spo2 != null && data.spo2 !== ""
+            ? { spo2: Number(data.spo2) }
+            : {}),
+
+          ...(data.height != null && data.height !== ""
+            ? { height: Number(data.height) }
+            : {}),
+
+          ...(data.weight != null && data.weight !== ""
+            ? { weight: Number(data.weight) }
+            : {}),
+
+          ...(data.bmi != null && data.bmi !== ""
+            ? { bmi: Number(data.bmi) }
+            : {}),
+
+          ...(data.waist != null && data.waist !== ""
+            ? { waist: Number(data.waist) }
+            : {}),
+
+          ...(data.bsa != null && data.bsa !== ""
+            ? { bsa: Number(data.bsa) }
+            : {}),
 
           // ✅ NOTE: Do NOT send prescriptionNumber / prescriptionId here.
           // The backend generates these. They are only READ from the response.
