@@ -856,7 +856,7 @@ const Consultation = () => {
 
       showSuccessToast(
         displayNumber
-          ? `Consultation completed — Prescription ${displayNumber}`
+          ? `Consultation completed successfully`
           : "Consultation completed successfully"
       );
 
