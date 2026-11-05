@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Filter, Download, MoreVertical, Eye,
-  Edit, Users as UsersIcon, RefreshCcw, Search, Trash2,
+  Edit, Users as UsersIcon, RefreshCcw, Trash2,
   PlayCircle, Check, X
 } from 'lucide-react';
 import {
@@ -24,14 +24,10 @@ import {
 import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../app/service/S3';
-
-// ✅ Only registerBookingEvents — no unregisterBookingEvents, no socket import
 import { registerBookingEvents } from '../../socket/bookingEvents';
-
 import { exportToExcel } from "../../utils/excelExport";
 import { hasPermission } from "../../utils/permission";
 
-// Permission IDs for Booking module (33-36)
 const PERMISSIONS = {
   CREATE: 33,
   VIEW: 34,
@@ -39,20 +35,14 @@ const PERMISSIONS = {
   DELETE: 36
 };
 
-// Helper function to safely convert to string for search
 const safeToString = (value) => {
   if (value === null || value === undefined) return '';
   return String(value);
 };
 
-// Helper: 24-hour → 12-hour format
 const convertTo12Hour = (time24h) => {
   if (!time24h || time24h === "N/A") return "";
-
-  if (time24h.includes("AM") || time24h.includes("PM")) {
-    return time24h;
-  }
-
+  if (time24h.includes("AM") || time24h.includes("PM")) return time24h;
   const [hours, minutes] = time24h.split(":");
   const hour = parseInt(hours, 10);
   const ampm = hour >= 12 ? "PM" : "AM";
@@ -60,23 +50,16 @@ const convertTo12Hour = (time24h) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
-// Calculate age from DOB with support for DD/MM/YYYY format
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
-
   let birthDate;
-
   if (typeof dob === "string" && dob.includes("/")) {
     const parts = dob.split("/");
     if (parts.length === 3) {
       const day = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10);
       const year = parseInt(parts[2], 10);
-
-      if (!day || !month || !year || isNaN(day) || isNaN(month) || isNaN(year)) {
-        return "N/A";
-      }
-
+      if (!day || !month || !year || isNaN(day) || isNaN(month) || isNaN(year)) return "N/A";
       birthDate = new Date(year, month - 1, day);
     } else {
       birthDate = new Date(dob);
@@ -84,25 +67,15 @@ const calculateAge = (dob) => {
   } else {
     birthDate = new Date(dob);
   }
-
-  if (isNaN(birthDate.getTime())) {
-    return "N/A";
-  }
-
+  if (isNaN(birthDate.getTime())) return "N/A";
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
   if (age < 0) return "N/A";
-
   return age;
 };
 
-// Skeleton Loader Component
 const SkeletonLoader = () => (
   <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
     <div className="mb-6">
@@ -112,7 +85,6 @@ const SkeletonLoader = () => (
       </div>
       <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
     </div>
-
     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
       <div className="flex-1 max-w-md">
         <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
@@ -123,7 +95,6 @@ const SkeletonLoader = () => (
         ))}
       </div>
     </div>
-
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
@@ -190,14 +161,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const itemsPerPage = 10;
 
-  // Permission Denied Modal State
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
   const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
 
-  // ============================================================
-  // ✅ SINGLE QUERY — this is the one that feeds the table.
-  // ============================================================
   const {
     data: allBookingsResponse,
     isLoading: loading,
@@ -216,42 +183,18 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [updateBooking] = useUpdateBookingMutation();
   const [deleteBooking] = useDeleteBookingMutation();
 
-  // ============================================================
-  // ✅ SOCKET LISTENER
-  // ============================================================
   useEffect(() => {
     const cleanup = registerBookingEvents({
-      onBookingRegistered: async (data) => {
-        await refetch();
-      },
-      onBookingUpdated: async (data) => {
-        // showSuccessToast("Booking updated!", 3000);
-        await refetch();
-      },
-      onBookingCancelled: async (data) => {
-        // showWarningToast("Booking cancelled!", 3000);
-        await refetch();
-      },
-      onBookingAccepted: async (data) => {
-        // showSuccessToast("Booking accepted!", 3000);
-        await refetch();
-      },
-      onBookingCompleted: async (data) => {
-        // showSuccessToast("Booking completed!", 3000);
-        await refetch();
-      },
-
-      // ✅ ADDED: Handle real-time deletion from other clients
-      onBookingDeleted: async (data) => {
-      
-        await refetch();
-      },
+      onBookingRegistered: async () => { await refetch(); },
+      onBookingUpdated: async () => { await refetch(); },
+      onBookingCancelled: async () => { await refetch(); },
+      onBookingAccepted: async () => { await refetch(); },
+      onBookingCompleted: async () => { await refetch(); },
+      onBookingDeleted: async () => { await refetch(); },
     });
-
     return cleanup;
   }, [refetch]);
 
-  // Helpers
   const formatAppointmentId = (booking) => {
     if (booking?.bookingNumber) {
       return `#BK${String(booking.bookingNumber).padStart(5, '0')}`;
@@ -298,7 +241,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       booking?.patientGender ||
       booking?.genderDisplay ||
       null;
-
     if (gender) {
       const normalized = gender.toLowerCase();
       if (normalized === 'male') return 'Male';
@@ -306,7 +248,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       if (normalized === 'other') return 'Other';
       return gender;
     }
-
     return null;
   };
 
@@ -322,25 +263,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       const displayStatus = mapStatus(booking.status);
       const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
-
       const rawDate = booking.booking_date || booking.appointmentDate || booking.date || "";
-      const actualPatientId = booking.patientId ||
-        booking.patient?.id ||
-        booking.patient?._id ||
-        booking.patient_id ||
-        booking.patientID;
-
+      const actualPatientId = booking.patientId || booking.patient?.id || booking.patient?._id || booking.patient_id || booking.patientID;
       const extractedGender = extractGender(booking);
       const finalGender = extractedGender || "N/A";
-
       const token = booking.token || booking.token_number || booking.tokenNumber || "";
-
       const calculatedAge = calculateAge(booking.patient_dob || booking.dob);
       const age = booking.patient_age ?? calculatedAge;
 
       return {
-        id: booking.id || booking._id,
-        bookingNumber: booking.bookingNumber,
+        id: booking.id || booking._id, // ✅ database primary key
+        bookingNumber: booking.bookingNumber, // display only
         formattedId: booking.bookingNumber
           ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
           : '#BK00000',
@@ -381,9 +314,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allAppointmentsData;
     }
-
     const searchLower = searchTerm.toLowerCase().trim();
-
     return allAppointmentsData.filter(item => {
       const searchFields = [
         safeToString(item.formattedId).toLowerCase(),
@@ -395,27 +326,23 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         safeToString(item.bookingStatus).toLowerCase(),
         safeToString(item.status).toLowerCase()
       ];
-
       return searchFields.some(field => field.includes(searchLower));
     });
   }, [allAppointmentsData, searchTerm]);
 
   const filteredAppointments = useMemo(() => {
     let result = filteredBySearch;
-
     if (statusFilter !== 'all') {
       result = result.filter(item =>
         safeToString(item.status).toLowerCase() === statusFilter.toLowerCase() ||
         safeToString(item.originalStatus).toLowerCase() === statusFilter.toLowerCase()
       );
     }
-
     if (departmentFilter) {
       result = result.filter(item =>
         safeToString(item.department).toLowerCase() === departmentFilter.toLowerCase()
       );
     }
-
     if (dateFilter) {
       result = result.filter(item => {
         const visitDate = item.appointmentDateDisplay
@@ -424,13 +351,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         return visitDate === dateFilter;
       });
     }
-
     if (doctorId && !showAllData) {
       result = result.filter(apt =>
         apt.doctorId === doctorId || apt.doctorName === doctorName
       );
     }
-
     return result;
   }, [filteredBySearch, statusFilter, departmentFilter, dateFilter, doctorId, doctorName, showAllData]);
 
@@ -490,7 +415,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       showErrorToast("No data available to export", 3000);
       return;
     }
-
     try {
       const exportData = filteredAppointments.map(apt => ({
         'Appointment ID': apt.formattedId,
@@ -509,21 +433,14 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         'Reason': apt.reason || "N/A",
         'Notes': apt.notes || "N/A"
       }));
-
       const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `appointments_export_${dateStr}`;
-
       exportToExcel({
         data: exportData,
-        fileName: fileName,
+        fileName: `appointments_export_${dateStr}`,
         sheetName: "Appointments",
         columnWidth: 20
       });
-
-      showSuccessToast(
-        `Successfully exported ${exportData.length} appointments to Excel!`,
-        3000
-      );
+      showSuccessToast(`Successfully exported ${exportData.length} appointments to Excel!`, 3000);
     } catch (error) {
       console.error("Export error:", error);
       showErrorToast("Failed to export data. Please try again.", 3000);
@@ -531,9 +448,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleStartConsultation = (appointment) => {
-    if (!checkPermission(PERMISSIONS.VIEW, 'start consultation')) {
-      return;
-    }
+    if (!checkPermission(PERMISSIONS.VIEW, 'start consultation')) return;
     navigate('/appointments/consultation', {
       state: {
         appointment,
@@ -552,9 +467,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleViewDetails = (appointment) => {
-    if (!checkPermission(PERMISSIONS.VIEW, 'view appointment details')) {
-      return;
-    }
+    if (!checkPermission(PERMISSIONS.VIEW, 'view appointment details')) return;
     setSelectedRequest(appointment);
     setShowDetailsModal(true);
   };
@@ -564,21 +477,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       showWarningToast('Only accepted appointments can be edited.', 3000);
       return;
     }
-
-    if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) {
-      return;
-    }
-
+    if (!checkPermission(PERMISSIONS.EDIT, 'edit appointment')) return;
     setAppointmentToEdit(appointment);
     setShowEditModal(true);
   };
 
   const handleApproveClick = (appointment) => {
-    if (!checkPermission(PERMISSIONS.EDIT, 'approve appointment')) {
-      return;
-    }
-    if (!appointment.bookingNumber) {
-      showErrorToast("Invalid appointment: Missing booking number.", 3000);
+    if (!checkPermission(PERMISSIONS.EDIT, 'approve appointment')) return;
+    if (!appointment.id) {
+      showErrorToast("Invalid appointment: Missing database ID.", 3000);
       return;
     }
     setSelectedRequest(appointment);
@@ -586,10 +493,8 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleConfirmApprove = async (appointmentData) => {
-    if (!selectedRequest) return;
-
-    if (!selectedRequest.bookingNumber) {
-      showErrorToast("Booking number is missing. Cannot approve.", 3000);
+    if (!selectedRequest || !selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot approve.", 3000);
       setShowApproveModal(false);
       setSelectedRequest(null);
       return;
@@ -599,11 +504,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
     try {
       let consultingTime = appointmentData.consulting_time;
-
       if (consultingTime.includes("AM") || consultingTime.includes("PM")) {
         const [time, modifier] = consultingTime.split(" ");
         let [hours, minutes] = time.split(":");
-
         if (hours === "12" && modifier === "AM") {
           hours = "00";
         } else if (hours === "12" && modifier === "PM") {
@@ -615,20 +518,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       }
 
       await approveBooking({
-        bookingNumber: selectedRequest.bookingNumber,
+        id: selectedRequest.id, // ✅ database primary key
         data: {
           date: appointmentData.booking_date,
           consulting_time: consultingTime,
-          token: appointmentData.token,
           notes: appointmentData.notes
         }
       }).unwrap();
 
-      showSuccessToast(
-        `Appointment ${selectedRequest.formattedId} approved successfully!`,
-        4000
-      );
-
+      showSuccessToast(`Appointment ${selectedRequest.formattedId} approved successfully!`, 4000);
       await refetch();
     } catch (error) {
       console.error("❌ Approve error:", error);
@@ -641,19 +539,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleRejectClick = (appointment) => {
-    if (!checkPermission(PERMISSIONS.EDIT, 'reject appointment')) {
-      return;
-    }
+    if (!checkPermission(PERMISSIONS.EDIT, 'reject appointment')) return;
     setSelectedRequest(appointment);
     setRejectReason("");
     setShowRejectModal(true);
   };
 
   const handleConfirmReject = async () => {
-    if (!selectedRequest) return;
-
-    if (!selectedRequest.bookingNumber) {
-      showErrorToast("Booking number is missing. Cannot reject.", 3000);
+    if (!selectedRequest || !selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot reject.", 3000);
       setShowRejectModal(false);
       setSelectedRequest(null);
       return;
@@ -663,15 +557,11 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
     try {
       await rejectBooking({
-        bookingNumber: selectedRequest.bookingNumber,
+        id: selectedRequest.id, // ✅ database primary key
         data: { reason: rejectReason }
       }).unwrap();
 
-      showErrorToast(
-        `Appointment ${selectedRequest.formattedId} rejected successfully!`,
-        4000
-      );
-
+      showSuccessToast(`Appointment ${selectedRequest.formattedId} rejected successfully!`, 4000);
       await refetch();
     } catch (error) {
       console.error("❌ Reject error:", error);
@@ -685,43 +575,27 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleSaveEdit = async (updatedData) => {
-    if (!appointmentToEdit) {
-      showErrorToast("No appointment selected for editing.", 3000);
-      return;
-    }
-
-    const bookingNumber = appointmentToEdit.bookingNumber;
-
-    if (!bookingNumber) {
-      showErrorToast("Booking number is missing. Cannot update.", 3000);
+    if (!appointmentToEdit || !appointmentToEdit.id) {
+      showErrorToast("Appointment ID is missing. Cannot update.", 3000);
       return;
     }
 
     setIsUpdating(true);
 
     try {
-      const response = await updateBooking({
-        bookingNumber: Number(bookingNumber),
+      await updateBooking({
+        id: appointmentToEdit.id, // ✅ database primary key
         data: updatedData,
       }).unwrap();
 
-      showSuccessToast(
-        `Appointment ${appointmentToEdit.formattedId} updated successfully!`,
-        3000
-      );
-
+      showSuccessToast(`Appointment ${appointmentToEdit.formattedId} updated successfully!`, 3000);
       setShowEditModal(false);
       setAppointmentToEdit(null);
-
       await refetch();
     } catch (error) {
       console.error("❌ Update booking error:", error);
-
       showErrorToast(
-        error?.data?.message ||
-          error?.error ||
-          error?.message ||
-          "Failed to update appointment",
+        error?.data?.message || error?.error || error?.message || "Failed to update appointment",
         4000
       );
     } finally {
@@ -730,26 +604,23 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleDeleteClick = (appointment) => {
-    if (!checkPermission(PERMISSIONS.DELETE, 'delete appointment')) {
-      return;
-    }
+    if (!checkPermission(PERMISSIONS.DELETE, 'delete appointment')) return;
     setAppointmentToDelete(appointment);
     setShowDeleteModal(true);
   };
 
   const handleConfirmDelete = async () => {
-    if (!appointmentToDelete) return;
+    if (!appointmentToDelete || !appointmentToDelete.id) {
+      showErrorToast("Appointment ID is missing. Cannot delete.", 3000);
+      return;
+    }
 
     setIsDeleting(true);
 
     try {
-      await deleteBooking(appointmentToDelete.bookingNumber).unwrap();
+      await deleteBooking(appointmentToDelete.id).unwrap(); // ✅ database primary key
 
-      showErrorToast(
-        `Appointment ${appointmentToDelete.formattedId} deleted successfully!`,
-        4000
-      );
-
+      showSuccessToast(`Appointment ${appointmentToDelete.formattedId} deleted successfully!`, 4000);
       setShowDeleteModal(false);
       setAppointmentToDelete(null);
       await refetch();
@@ -793,7 +664,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // AppointmentDetailsModal
   const AppointmentDetailsModal = ({ appointment, onClose }) => {
     if (!appointment) return null;
 
@@ -818,14 +688,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               <span className="text-sm font-medium text-gray-600">Booking ID</span>
               <span className="text-sm font-semibold text-[#1C62A0]">{appointment.formattedId}</span>
             </div>
-
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <ShadcnAvatar className="w-10 h-10">
-                  <AvatarImage
-                    src={getS3ImageUrl(appointment.patientImageKey)}
-                    alt={appointment.patientName}
-                  />
+                  <AvatarImage src={getS3ImageUrl(appointment.patientImageKey)} alt={appointment.patientName} />
                   <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
                     {appointment.patientName?.charAt(0)?.toUpperCase() || "P"}
                   </AvatarFallback>
@@ -837,28 +703,23 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               </div>
               <span className={appointment.statusClass}>{appointment.status}</span>
             </div>
-
             <div>
               <p className="font-medium text-sm mb-1">Date & Time</p>
               <p className="text-sm text-gray-500">{appointment.appointmentDateDisplay}, {convertTo12Hour(appointment.consulting_time)}</p>
             </div>
-
             <div>
               <p className="font-medium text-sm mb-1">Contact</p>
               <p className="text-sm text-gray-800">{appointment.contact}</p>
             </div>
-
             <div>
               <p className="font-medium text-sm mb-1">Gender</p>
               <p className="text-sm text-gray-800">{appointment.gender}</p>
             </div>
-
             <div>
               <p className="font-medium text-sm mb-1">Consultation With</p>
               <p className="text-sm font-medium">{appointment.doctorName}</p>
               <p className="text-sm text-gray-500">{appointment.department}</p>
             </div>
-
             <div>
               <p className="font-medium text-sm mb-1">Reason</p>
               <p className="text-sm text-gray-600">{appointment.reason || "No reason provided"}</p>
@@ -871,24 +732,18 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 <button
                   onClick={() => { handleApproveClick(appointment); onClose(); }}
                   className="px-4 py-2 bg-green-600 text-white rounded-md text-sm"
-                >
-                  Approve
-                </button>
+                >Approve</button>
                 <button
                   onClick={() => { handleRejectClick(appointment); onClose(); }}
                   className="px-4 py-2 bg-red-600 text-white rounded-md text-sm"
-                >
-                  Reject
-                </button>
+                >Reject</button>
               </>
             )}
             {appointment.originalStatus === 'accepted' && (
               <button
                 onClick={() => { handleStartConsultation(appointment); onClose(); }}
                 className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-md shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                Start Consultation
-              </button>
+              >Start Consultation</button>
             )}
           </div>
         </div>
@@ -896,7 +751,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  // RowActionMenu
   const RowActionMenu = ({ appointment }) => {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
@@ -917,57 +771,34 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         {showMenu && (
           <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 rounded-t-lg">
-              <p className="text-xs text-gray-500">
-                Booking: <span className="font-medium text-gray-700">{appointment.formattedId}</span>
-              </p>
-              <p className="text-xs text-gray-500">
-                Patient: <span className="font-medium text-gray-700">{appointment.patientName}</span>
-              </p>
+              <p className="text-xs text-gray-500">Booking: <span className="font-medium text-gray-700">{appointment.formattedId}</span></p>
+              <p className="text-xs text-gray-500">Patient: <span className="font-medium text-gray-700">{appointment.patientName}</span></p>
             </div>
-
-            <button
-              onClick={() => { handleViewDetails(appointment); setShowMenu(false); }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
+            <button onClick={() => { handleViewDetails(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
               <Eye size={16} /> View Details
             </button>
             {appointment.originalStatus === 'accepted' && (
-              <button
-                onClick={() => { handleStartConsultation(appointment); setShowMenu(false); }}
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
-              >
+              <button onClick={() => { handleStartConsultation(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100">
                 <PlayCircle size={16} /> Start Consultation
               </button>
             )}
             {appointment.originalStatus === 'pending' && (
               <>
-                <button
-                  onClick={() => { handleApproveClick(appointment); setShowMenu(false); }}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
-                >
+                <button onClick={() => { handleApproveClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100">
                   <Check size={16} /> Approve
                 </button>
-                <button
-                  onClick={() => { handleRejectClick(appointment); setShowMenu(false); }}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                >
+                <button onClick={() => { handleRejectClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
                   <X size={16} /> Reject
                 </button>
               </>
             )}
             <div className="border-t border-gray-100 my-1"></div>
             {appointment.originalStatus === 'accepted' && (
-              <button
-                onClick={() => { handleEditClick(appointment); setShowMenu(false); }}
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
-              >
+              <button onClick={() => { handleEditClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-blue-600 hover:bg-gray-100">
                 <Edit size={16} /> Edit
               </button>
             )}
-            <button
-              onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
-            >
+            <button onClick={() => { handleDeleteClick(appointment); setShowMenu(false); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg">
               <Trash2 size={16} /> Delete
             </button>
           </div>
@@ -976,13 +807,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     );
   };
 
-  if (loading) {
-    return <SkeletonLoader />;
-  }
+  if (loading) return <SkeletonLoader />;
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
-      {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
@@ -999,12 +827,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
           </div>
         </div>
         <h1 className="text-xl font-bold text-gray-800">Appointments</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          View and manage all appointments
-        </p>
+        <p className="text-sm text-gray-500 mt-1">View and manage all appointments</p>
       </div>
 
-      {/* Doctor Banner */}
       {showDoctorBanner && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1012,14 +837,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               <p className="text-sm font-medium text-blue-800">
                 Showing appointments for: <span className="font-semibold">{doctorName}</span>
               </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Total appointments: {filteredAppointments.length}
-              </p>
+              <p className="text-xs text-blue-600 mt-1">Total appointments: {filteredAppointments.length}</p>
             </div>
-            <button
-              onClick={toggleShowAllData}
-              className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 transition-colors"
-            >
+            <button onClick={toggleShowAllData} className="px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 transition-colors">
               Show All Doctors' Appointments
             </button>
           </div>
@@ -1034,16 +854,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               <span className="text-gray-500 ml-2">Total: {filteredAppointments.length} appointments</span>
             </p>
           </div>
-          <button
-            onClick={toggleShowAllData}
-            className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
-          >
+          <button onClick={toggleShowAllData} className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline">
             ← Back to {doctorName}'s Appointments
           </button>
         </div>
       )}
 
-      {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <SearchBar
@@ -1054,34 +870,17 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
             className="flex-1 max-w-sm"
           />
         </div>
-
         <div className="flex gap-2 flex-wrap items-center">
-          <button
-            onClick={handleRefresh}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
-            disabled={isFetching}
-          >
+          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" disabled={isFetching}>
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <button
-            onClick={handleExport}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
-            title="Export to Excel"
-          >
+          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
             <Download size={16} />
           </button>
-
-          {/* ✅ FilterBar — icon always stays gray */}
-          <FilterBar
-            onClick={() => setShowFilters(!showFilters)}
-            isOpen={showFilters}
-            activeFilterCount={activeFilterCount}
-            title="Toggle Filters"
-          />
+          <FilterBar onClick={() => setShowFilters(!showFilters)} isOpen={showFilters} activeFilterCount={activeFilterCount} title="Toggle Filters" />
         </div>
       </div>
 
-      {/* ✅ Filters panel — only rendered when showFilters is true */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
           <div className="flex items-center justify-between mb-4">
@@ -1098,9 +897,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               Clear All Filters
             </button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* ✅ Status — CustomSelect */}
             <div>
               <CustomSelect
                 label="Status"
@@ -1117,8 +914,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 placeholder="All Status"
               />
             </div>
-
-            {/* ✅ Department — CustomSelect */}
             <div>
               <CustomSelect
                 label="Department"
@@ -1131,8 +926,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 placeholder="All Departments"
               />
             </div>
-
-            {/* Appointment Date (unchanged — native date input is fine) */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
               <input
@@ -1152,7 +945,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Appointments Table */}
       {filteredAppointments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -1178,7 +970,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
               )}
             </h2>
           </div>
-
           <div className="flex flex-col min-h-[500px]">
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-sm text-left">
@@ -1202,11 +993,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <ShadcnAvatar className="w-8 h-8">
-                            <AvatarImage
-                              src={getS3ImageUrl(apt.patientImageKey)}
-                              alt={apt.patientName}
-                              className="object-cover"
-                            />
+                            <AvatarImage src={getS3ImageUrl(apt.patientImageKey)} alt={apt.patientName} className="object-cover" />
                             <AvatarFallback className="bg-gray-200 text-gray-600 text-xs font-medium">
                               {apt.patientName?.charAt(0)?.toUpperCase() || "P"}
                             </AvatarFallback>
@@ -1223,9 +1010,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                         <span className="text-xs text-gray-400">{convertTo12Hour(apt.consulting_time)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>
-                          {apt.bookingStatus}
-                        </span>
+                        <span className={getBookingStatusBadgeClass(apt.bookingStatus)}>{apt.bookingStatus}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={apt.statusClass}>{apt.status}</span>
@@ -1240,7 +1025,6 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 </tbody>
               </table>
             </div>
-
             {totalFilteredPages > 1 && (
               <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <Pagination
@@ -1257,22 +1041,15 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Modals */}
       {showDetailsModal && selectedRequest && (
-        <AppointmentDetailsModal
-          appointment={selectedRequest}
-          onClose={() => setShowDetailsModal(false)}
-        />
+        <AppointmentDetailsModal appointment={selectedRequest} onClose={() => setShowDetailsModal(false)} />
       )}
 
       {showApproveModal && selectedRequest && (
         <ApproveRequestModal
-          bookingId={selectedRequest.bookingNumber}
+          bookingId={selectedRequest.id} // ✅ database primary key
           requestData={selectedRequest}
-          onClose={() => {
-            setShowApproveModal(false);
-            setSelectedRequest(null);
-          }}
+          onClose={() => { setShowApproveModal(false); setSelectedRequest(null); }}
           onConfirm={handleConfirmApprove}
           initialDate={selectedRequest.appointmentDateDisplay !== "N/A" ? selectedRequest.appointmentDateDisplay : ""}
           initialTime={selectedRequest.consulting_time !== "N/A" ? convertTo12Hour(selectedRequest.consulting_time) : ""}
@@ -1283,11 +1060,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       {showRejectModal && selectedRequest && (
         <RejectRequestModal
-          onClose={() => {
-            setShowRejectModal(false);
-            setSelectedRequest(null);
-            setRejectReason("");
-          }}
+          bookingId={selectedRequest.id} // ✅ database primary key
+          requestData={selectedRequest}
+          onClose={() => { setShowRejectModal(false); setSelectedRequest(null); setRejectReason(""); }}
           onConfirm={handleConfirmReject}
           reason={rejectReason}
           setReason={setRejectReason}
@@ -1297,10 +1072,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
       <EditAppointmentModal
         isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setAppointmentToEdit(null);
-        }}
+        onClose={() => { setShowEditModal(false); setAppointmentToEdit(null); }}
         appointment={appointmentToEdit}
         patient={null}
         onSave={handleSaveEdit}

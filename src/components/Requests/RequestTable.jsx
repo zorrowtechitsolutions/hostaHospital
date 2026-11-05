@@ -1,4 +1,4 @@
-// src/components/Requests/RequestTable.jsx - With Server-Side Pagination & Optimistic Updates
+// src/components/Requests/RequestTable.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Check,
@@ -11,35 +11,29 @@ import {
   Users as UsersIcon,
   Phone,
 } from "lucide-react";
-import {
-  Pagination,
-  SearchBar,
-  FilterBar,
-} from "../ui";
+import { Pagination, SearchBar, FilterBar } from "../ui";
 import CustomSelect from "../ui/CustomSelect";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
-import { showSuccessToast, showErrorToast, showAddToast } from "../ui/Toast";
+import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import {
   useGetBookingsQuery,
   useApproveBookingMutation,
-  useRejectBookingMutation
+  useRejectBookingMutation,
 } from "../../../app/service/request";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from "../../../app/service/S3";
-
-import { registerBookingEvents } from '../../socket/bookingEvents';
-
+import { registerBookingEvents } from "../../socket/bookingEvents";
 import { exportToExcel } from "../../utils/excelExport";
 
-// Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
 
-const ICON_BUTTON_CLASS = "p-2 border border-gray-200 rounded-md bg-white transition-colors";
+const ICON_BUTTON_CLASS =
+  "p-2 border border-gray-200 rounded-md bg-white transition-colors";
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
 
-// ✅ Static options for the Status filter — "" is the "All Status" sentinel
+// Status filter removed from pending-only page (it was misleading — API always sends pending)
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "All Status" },
   { value: "pending", label: "Pending" },
@@ -48,40 +42,42 @@ const STATUS_FILTER_OPTIONS = [
   { value: "rejected", label: "Rejected" },
 ];
 
-// Styling override so CustomSelect matches the h-12 / border-gray-200 / rounded-xl filter inputs
 const SELECT_FILTER_CLASS =
   "w-full [&>button]:h-12 [&>button]:border-gray-200 [&>button]:rounded-xl [&>button]:px-6 [&>button]:text-sm [&>button]:text-gray-700 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
-// Helper functions
 const calculateAge = (dob) => {
   if (!dob) return "N/A";
   const birthDate = new Date(dob);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
     age--;
   }
   return age;
 };
 
-// ✅ Transform bookings data - Explicit separation of IDs
+// Explicit separation of IDs: id for CRUD, bookingNumber for display
 const transformBookingsData = (bookingList) => {
   if (!bookingList || !Array.isArray(bookingList)) return [];
 
   return bookingList.map((booking, index) => {
     const databaseId = booking.id || booking._id;
-    const patientImageKey = booking.patient_image || booking.patientImage || booking.avatar || null;
+    const patientImageKey =
+      booking.patient_image || booking.patientImage || booking.avatar || null;
 
     const rawDate = booking.booking_date || booking.appointmentDate || "N/A";
     const rawTime = booking.open || booking.consulting_time || "N/A";
 
     return {
-      id: databaseId,
-      bookingNumber: booking.bookingNumber,
+      id: databaseId, // ✅ Used for all API mutations
+      bookingNumber: booking.bookingNumber, // display only
       formattedId: booking.bookingNumber
-        ? `#BK${String(booking.bookingNumber).padStart(5, '0')}`
-        : '#BK00000',
+        ? `#BK${String(booking.bookingNumber).padStart(5, "0")}`
+        : "#BK00000",
       patientId: `PT${String(booking.userId || index).padStart(4, "0")}`,
       patientName: booking.patient_name || booking.patientName || "N/A",
       age: calculateAge(booking.patient_dob || booking.dob),
@@ -99,10 +95,10 @@ const transformBookingsData = (bookingList) => {
 };
 
 const resetFilters = (setters) => {
-  setters.setSearchTerm('');
-  setters.setDepartmentFilter('');
-  setters.setDateFilter('');
-  setters.setStatusFilter('');
+  setters.setSearchTerm("");
+  setters.setDepartmentFilter("");
+  setters.setDateFilter("");
+  setters.setStatusFilter("");
   setters.setCurrentPage(1);
 };
 
@@ -110,7 +106,6 @@ const matchesDoctor = (item, doctorId, doctorName) => {
   return item.doctorId === doctorId || item.doctorName === doctorName;
 };
 
-// Skeleton Loader Component
 const SkeletonLoader = () => (
   <div className="flex-1 p-6 bg-[#F8F9FA] min-h-screen w-full overflow-x-hidden font-sans">
     <div className="mb-6">
@@ -120,7 +115,6 @@ const SkeletonLoader = () => (
       </div>
       <div className="h-7 w-32 bg-gray-200 rounded animate-pulse mt-2"></div>
     </div>
-
     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
       <div className="flex-1 max-w-md">
         <div className="h-10 w-full bg-gray-200 rounded-md animate-pulse"></div>
@@ -131,7 +125,6 @@ const SkeletonLoader = () => (
         ))}
       </div>
     </div>
-
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
         <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
@@ -175,7 +168,6 @@ const SkeletonLoader = () => (
 );
 
 const RequestTable = ({ doctorId = null, doctorName = null }) => {
-  // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("");
@@ -183,32 +175,28 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [statusFilter, setStatusFilter] = useState("");
   const [showAllData, setShowAllData] = useState(false);
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Modal States
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  // Loading states
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
 
-  // ✅ Optimistic update state - track removed booking numbers
-  const [removedRequestNumbers, setRemovedRequestNumbers] = useState(new Set());
+  // Track removed booking numbers for optimistic removal
+  const [removedRequestIds, setRemovedRequestIds] = useState(new Set());
 
-  const removeFromPendingList = (bookingNumber) => {
-    setRemovedRequestNumbers((prev) => {
+  const removeFromPendingList = (id) => {
+    setRemovedRequestIds((prev) => {
       const next = new Set(prev);
-      next.add(Number(bookingNumber));
+      next.add(String(id));
       return next;
     });
   };
 
-  // ✅ API Hooks - Server-side pagination with status fixed to "pending"
   const {
     data: bookingsResponse,
     isLoading: loading,
@@ -219,18 +207,10 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       page: currentPage,
       limit: itemsPerPage,
       status: "pending",
-
-      ...(searchTerm && searchTerm.trim().length >= 2 && {
-        search_query: searchTerm,
-      }),
-
-      ...(departmentFilter && {
-        department: departmentFilter,
-      }),
-
-      ...(dateFilter && {
-        date: dateFilter,
-      }),
+      ...(searchTerm &&
+        searchTerm.trim().length >= 2 && { search_query: searchTerm }),
+      ...(departmentFilter && { department: departmentFilter }),
+      ...(dateFilter && { date: dateFilter }),
     },
     {
       refetchOnMountOrArgChange: true,
@@ -241,73 +221,54 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [approveBooking] = useApproveBookingMutation();
   const [rejectBooking] = useRejectBookingMutation();
 
-  // ✅ SINGLE socket registration effect
   useEffect(() => {
     const cleanup = registerBookingEvents({
-      onBookingRegistered: () => {
-        refetch();
-      },
-
-      onBookingUpdated: () => {
-        refetch();
-      },
-
-      onBookingCancelled: () => {
-        refetch();
-      },
-
-      onBookingAccepted: () => {
-        refetch();
-      },
-
-      onBookingCompleted: () => {
-        refetch();
-      },
+      onBookingRegistered: () => refetch(),
+      onBookingUpdated: () => refetch(),
+      onBookingCancelled: () => refetch(),
+      onBookingAccepted: () => refetch(),
+      onBookingCompleted: () => refetch(),
     });
-
     return cleanup;
   }, [refetch]);
 
-  // ✅ Transform API response with DESCENDING sorting
   const safeData = useMemo(() => {
     const transformed = transformBookingsData(bookingsResponse?.data || []);
-
-    const pendingOnly = transformed.filter(item =>
-      item.status === "pending" ||
-      item.status === "Pending" ||
-      !item.status ||
-      item.status?.toLowerCase() === "pending"
+    const pendingOnly = transformed.filter(
+      (item) =>
+        item.status === "pending" ||
+        item.status === "Pending" ||
+        !item.status ||
+        item.status?.toLowerCase() === "pending"
     );
-
-    return [...pendingOnly].sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
+    return [...pendingOnly].sort(
+      (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
+    );
   }, [bookingsResponse]);
 
   const filteredBySearch = useMemo(() => {
-    if (!searchTerm || searchTerm.trim().length < 2) {
-      return safeData;
-    }
+    if (!searchTerm || searchTerm.trim().length < 2) return safeData;
 
     const searchLower = searchTerm.toLowerCase().trim();
 
-    return safeData.filter(item => {
+    return safeData.filter((item) => {
       const searchFields = [
-        item.formattedId?.toLowerCase() || '',
-        item.patientName?.toLowerCase() || '',
-        item.patientId?.toLowerCase() || '',
-        item.contact?.toString() || '',
-        item.doctorName?.toLowerCase() || '',
-        item.department?.toLowerCase() || '',
-        item.appointmentDate?.toString() || '',
-        item.consulting_time?.toString() || ''
+        item.formattedId?.toLowerCase() || "",
+        item.patientName?.toLowerCase() || "",
+        item.patientId?.toLowerCase() || "",
+        item.contact?.toString() || "",
+        item.doctorName?.toLowerCase() || "",
+        item.department?.toLowerCase() || "",
+        item.appointmentDate?.toString() || "",
+        item.consulting_time?.toString() || "",
       ];
-
-      return searchFields.some(field => field.includes(searchLower));
+      return searchFields.some((field) => field.includes(searchLower));
     });
   }, [safeData, searchTerm]);
 
   const filteredByDoctor = useMemo(() => {
     if (doctorId && !showAllData) {
-      return filteredBySearch.filter(item =>
+      return filteredBySearch.filter((item) =>
         matchesDoctor(item, doctorId, doctorName)
       );
     }
@@ -318,42 +279,39 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     let result = filteredByDoctor;
 
     if (departmentFilter) {
-      result = result.filter(item =>
-        item.department?.toLowerCase() === departmentFilter.toLowerCase()
+      result = result.filter(
+        (item) =>
+          item.department?.toLowerCase() === departmentFilter.toLowerCase()
       );
     }
-
     if (dateFilter) {
-      result = result.filter(item =>
-        item.appointmentDate === dateFilter
-      );
+      result = result.filter((item) => item.appointmentDate === dateFilter);
     }
-
     return result;
   }, [filteredByDoctor, departmentFilter, dateFilter]);
 
   const filteredRequests = useMemo(() => {
     return filteredByDepartmentAndDate.filter(
-      (item) => !removedRequestNumbers.has(Number(item.bookingNumber))
+      (item) => !removedRequestIds.has(String(item.id))
     );
-  }, [filteredByDepartmentAndDate, removedRequestNumbers]);
+  }, [filteredByDepartmentAndDate, removedRequestIds]);
 
   const totalItems = bookingsResponse?.pagination?.totalItems ?? 0;
   const totalPages = bookingsResponse?.pagination?.totalPages ?? 0;
-
   const paginatedRequests = filteredRequests;
 
   const departments = useMemo(() => {
     let sourceData;
     if (doctorId && !showAllData) {
-      sourceData = safeData.filter(item => matchesDoctor(item, doctorId, doctorName));
+      sourceData = safeData.filter((item) =>
+        matchesDoctor(item, doctorId, doctorName)
+      );
     } else {
       sourceData = safeData;
     }
-    return [...new Set(sourceData.map(r => r.department).filter(Boolean))].sort();
+    return [...new Set(sourceData.map((r) => r.department).filter(Boolean))].sort();
   }, [safeData, doctorId, doctorName, showAllData]);
 
-  // ✅ Options for the Department filter CustomSelect — "" sentinel + dynamic departments
   const departmentFilterOptions = useMemo(
     () => [
       { value: "", label: "All Departments" },
@@ -362,28 +320,38 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
     [departments]
   );
 
-  const activeFilterCount = [departmentFilter, dateFilter, statusFilter, searchTerm].filter(Boolean).length;
+  const activeFilterCount = [
+    departmentFilter,
+    dateFilter,
+    statusFilter,
+    searchTerm,
+  ].filter(Boolean).length;
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
-  const hasActiveFilters = departmentFilter !== '' || dateFilter !== '' || statusFilter !== '';
+  const hasActiveFilters =
+    departmentFilter !== "" || dateFilter !== "" || statusFilter !== "";
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, departmentFilter, dateFilter, showAllData]);
 
   useEffect(() => {
-    setRemovedRequestNumbers(new Set());
-  }, [bookingsResponse?.pagination?.currentPage, searchTerm, departmentFilter, dateFilter]);
+    setRemovedRequestIds(new Set());
+  }, [
+    bookingsResponse?.pagination?.currentPage,
+    searchTerm,
+    departmentFilter,
+    dateFilter,
+  ]);
 
-  // Handlers
   const handleRefresh = () => {
     resetFilters({
       setSearchTerm,
       setDepartmentFilter,
       setDateFilter,
       setStatusFilter,
-      setCurrentPage
+      setCurrentPage,
     });
-    setRemovedRequestNumbers(new Set());
+    setRemovedRequestIds(new Set());
     refetch();
     showSuccessToast("Refreshed requests", TOAST_DURATION);
   };
@@ -394,9 +362,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       setDepartmentFilter,
       setDateFilter,
       setStatusFilter,
-      setCurrentPage
+      setCurrentPage,
     });
-    setRemovedRequestNumbers(new Set());
+    setRemovedRequestIds(new Set());
     showSuccessToast("All filters cleared", TOAST_DURATION);
   };
 
@@ -405,30 +373,31 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       showErrorToast("No data available to export", TOAST_DURATION);
       return;
     }
-
     try {
-      const exportData = filteredRequests.map(req => ({
-        'Request ID': req.formattedId,
-        'Patient ID': req.patientId,
-        'Patient Name': req.patientName,
-        'Age': req.age,
-        'Contact Number': req.contact,
-        'Doctor Name': req.doctorName,
-        'Department': req.department,
-        'Appointment Date': req.appointmentDate !== "N/A" ? req.appointmentDate : "",
-        'Consulting Time': req.consulting_time && req.consulting_time !== "N/A" ? req.consulting_time : "",
-        'Status': req.status || "pending",
-        'Reason/Notes': req.reason || "N/A"
+      const exportData = filteredRequests.map((req) => ({
+        "Request ID": req.formattedId,
+        "Patient ID": req.patientId,
+        "Patient Name": req.patientName,
+        Age: req.age,
+        "Contact Number": req.contact,
+        "Doctor Name": req.doctorName,
+        Department: req.department,
+        "Appointment Date":
+          req.appointmentDate !== "N/A" ? req.appointmentDate : "",
+        "Consulting Time":
+          req.consulting_time && req.consulting_time !== "N/A"
+            ? req.consulting_time
+            : "",
+        Status: req.status || "pending",
+        "Reason/Notes": req.reason || "N/A",
       }));
 
-      const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `requests_export_${dateStr}`;
-
+      const dateStr = new Date().toISOString().split("T")[0];
       exportToExcel({
         data: exportData,
-        fileName: fileName,
+        fileName: `requests_export_${dateStr}`,
         sheetName: "Pending Requests",
-        columnWidth: 20
+        columnWidth: 20,
       });
 
       showSuccessToast(
@@ -442,8 +411,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleApproveClick = (request) => {
-    if (!request.bookingNumber) {
-      showErrorToast("Invalid request: Missing booking number. Please refresh and try again.", TOAST_DURATION);
+    if (!request.id) {
+      showErrorToast(
+        "Invalid request: Missing database ID. Please refresh and try again.",
+        TOAST_DURATION
+      );
       return;
     }
     setSelectedRequest(request);
@@ -451,15 +423,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleConfirmApprove = async (appointmentData) => {
-    if (!selectedRequest) {
-      showErrorToast("No request selected", TOAST_DURATION);
-      return;
-    }
-
-    const bookingNumber = Number(selectedRequest.bookingNumber);
-
-    if (!bookingNumber) {
-      showErrorToast("Booking number is missing. Cannot approve.", TOAST_DURATION);
+    if (!selectedRequest || !selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot approve.", TOAST_DURATION);
       closeApproveModal();
       return;
     }
@@ -468,45 +433,38 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
 
     try {
       await approveBooking({
-        bookingNumber,
+        id: selectedRequest.id, // ✅ database primary key
         data: {
           date: appointmentData.booking_date,
           consulting_time: appointmentData.consulting_time,
-          token: appointmentData.token?.trim() || null,
           notes: appointmentData.notes || "",
         },
       }).unwrap();
 
-      removeFromPendingList(bookingNumber);
-
-      const tokenDisplay = appointmentData.token?.trim() ? `#${appointmentData.token}` : 'Automatic';
+      removeFromPendingList(selectedRequest.id);
 
       showSuccessToast(
         `Request ${selectedRequest.formattedId} approved successfully!`,
         SUCCESS_DURATION,
         {
-          'Patient': selectedRequest.patientName,
-          'Date': appointmentData.booking_date,
-          'Time': appointmentData.consulting_time,
-          'Token': tokenDisplay
+          Patient: selectedRequest.patientName,
+          Date: appointmentData.booking_date,
+          Time: appointmentData.consulting_time,
         }
       );
 
       closeApproveModal();
-
     } catch (error) {
       console.error("❌ Approve error:", error);
 
-      setRemovedRequestNumbers((prev) => {
+      setRemovedRequestIds((prev) => {
         const next = new Set(prev);
-        next.delete(bookingNumber);
+        next.delete(String(selectedRequest.id));
         return next;
       });
 
       showErrorToast(
-        error?.data?.message ||
-        error?.message ||
-        "Failed to approve request",
+        error?.data?.message || error?.message || "Failed to approve request",
         TOAST_DURATION
       );
     } finally {
@@ -521,15 +479,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const handleConfirmReject = async () => {
-    if (!selectedRequest) {
-      showErrorToast("No request selected", TOAST_DURATION);
-      return;
-    }
-
-    const bookingNumber = Number(selectedRequest.bookingNumber);
-
-    if (!bookingNumber) {
-      showErrorToast("Booking number is missing. Cannot reject.", TOAST_DURATION);
+    if (!selectedRequest || !selectedRequest.id) {
+      showErrorToast("Request ID is missing. Cannot reject.", TOAST_DURATION);
       closeRejectModal();
       return;
     }
@@ -538,39 +489,36 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
 
     try {
       await rejectBooking({
-        bookingNumber,
+        id: selectedRequest.id, // ✅ database primary key
         data: {
           reason: rejectReason.trim(),
         },
       }).unwrap();
 
-      removeFromPendingList(bookingNumber);
+      removeFromPendingList(selectedRequest.id);
 
       showSuccessToast(
         `Request ${selectedRequest.formattedId} rejected successfully!`,
         SUCCESS_DURATION,
         {
-          'Patient': selectedRequest.patientName,
-          'Doctor': selectedRequest.doctorName,
-          'Reason': rejectReason.trim() || "No reason provided"
+          Patient: selectedRequest.patientName,
+          Doctor: selectedRequest.doctorName,
+          Reason: rejectReason.trim() || "No reason provided",
         }
       );
 
       closeRejectModal();
-
     } catch (error) {
       console.error("❌ Reject error:", error);
 
-      setRemovedRequestNumbers((prev) => {
+      setRemovedRequestIds((prev) => {
         const next = new Set(prev);
-        next.delete(bookingNumber);
+        next.delete(String(selectedRequest.id));
         return next;
       });
 
       showErrorToast(
-        error?.data?.message ||
-        error?.message ||
-        "Failed to reject request",
+        error?.data?.message || error?.message || "Failed to reject request",
         TOAST_DURATION
       );
     } finally {
@@ -579,15 +527,15 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   };
 
   const toggleShowAllData = () => {
-    setShowAllData(prev => !prev);
+    setShowAllData((prev) => !prev);
     setCurrentPage(1);
-    setRemovedRequestNumbers(new Set());
+    setRemovedRequestIds(new Set());
     resetFilters({
       setSearchTerm,
       setDepartmentFilter,
       setDateFilter,
       setStatusFilter,
-      setCurrentPage
+      setCurrentPage,
     });
     if (!showAllData) {
       showSuccessToast(`Now showing all doctors' requests`, TOAST_DURATION);
@@ -604,30 +552,27 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const closeRejectModal = () => {
     setShowRejectModal(false);
     setSelectedRequest(null);
-    setRejectReason('');
+    setRejectReason("");
   };
 
   const showDoctorBanner = doctorId && !showAllData;
 
-  if (loading) {
-    return <SkeletonLoader />;
-  }
+  if (loading) return <SkeletonLoader />;
 
   return (
     <div className="flex-1 p-6 bg-[#F8F9FA] min-h-screen w-full overflow-x-hidden font-sans">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-800">Requests</h1>
         <p className="text-sm text-gray-500">Home / Requests</p>
       </div>
 
-      {/* Doctor Banner */}
       {showDoctorBanner && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <p className="text-sm font-medium text-blue-800">
-                Showing requests for: <span className="font-semibold">{doctorName}</span>
+                Showing requests for:{" "}
+                <span className="font-semibold">{doctorName}</span>
               </p>
               <p className="text-xs text-blue-600 mt-1">
                 Total requests: {totalItems}
@@ -648,7 +593,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           <div>
             <p className="text-sm text-gray-700">
               <span className="font-medium">Showing all doctors' requests</span>
-              <span className="text-gray-500 ml-2">Total: {totalItems} requests</span>
+              <span className="text-gray-500 ml-2">
+                Total: {totalItems} requests
+              </span>
             </p>
           </div>
           <button
@@ -660,17 +607,18 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Search and Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 w-full">
         <div className="flex-1 w-full lg:max-w-md">
           <SearchBar
             placeholder="Search by Patient ID, Name, or Contact..."
             value={searchTerm}
             onChange={setSearchTerm}
-            onClear={() => setSearchTerm('')}
+            onClear={() => setSearchTerm("")}
           />
           {searchTerm && searchTerm.length > 0 && searchTerm.length < 2 && (
-            <span className="text-xs text-yellow-500 ml-2">Type at least 2 characters</span>
+            <span className="text-xs text-yellow-500 ml-2">
+              Type at least 2 characters
+            </span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
@@ -689,9 +637,8 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
           >
             <Download size={16} />
           </button>
-
           <FilterBar
-            onClick={() => setShowFilters(prev => !prev)}
+            onClick={() => setShowFilters((prev) => !prev)}
             isOpen={showFilters}
             activeFilterCount={activeFilterCount}
             title="Toggle Filters"
@@ -699,7 +646,6 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       </div>
 
-      {/* Filters */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
           <div className="flex items-center justify-between mb-4">
@@ -708,19 +654,24 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
               {activeFilterCount > 0 && (
                 <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
-                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                  {activeFilterCount} Active Filter
+                  {activeFilterCount !== 1 ? "s" : ""}
                 </span>
               )}
             </div>
-            <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 font-medium">
+            <button
+              onClick={clearAllFilters}
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
+            >
               Clear All Filters
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Department — ✅ Replaced native  with CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Department
+              </label>
               <CustomSelect
                 hideLabel
                 value={departmentFilter}
@@ -730,34 +681,22 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               />
             </div>
 
-            {/* Appointment Date */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Appointment Date
+              </label>
               <input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="
-                  w-full
-                  h-12
-                  px-6
-                  border
-                  border-gray-200
-                  rounded-xl
-                  outline-none
-                  focus:ring-2
-                  focus:ring-[#1C62A0]
-                  focus:border-transparent
-                  text-gray-700
-                  text-sm
-                  bg-white
-                "
+                className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white"
               />
             </div>
 
-            {/* Status — ✅ Replaced native  with CustomSelect */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Status
+              </label>
               <CustomSelect
                 hideLabel
                 value={statusFilter}
@@ -770,19 +709,20 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Request Table */}
       {filteredRequests.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {hasSearchTerm || hasActiveFilters ? 'No requests found' : 'No pending requests'}
+            {hasSearchTerm || hasActiveFilters
+              ? "No requests found"
+              : "No pending requests"}
           </h3>
           <p className="text-gray-500 mb-4">
             {hasSearchTerm
               ? `No results found for "${searchTerm}". Try adjusting your search.`
               : hasActiveFilters
-              ? 'No requests match the selected filters. Try adjusting your filters.'
-              : 'All requests have been processed.'}
+              ? "No requests match the selected filters. Try adjusting your filters."
+              : "All requests have been processed."}
           </p>
           {(hasSearchTerm || hasActiveFilters) && (
             <button
@@ -803,9 +743,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                   {filteredRequests.length}
                 </span>
                 {(hasSearchTerm || hasActiveFilters) && totalItems > 0 && (
-                  <span className="text-xs text-gray-400 ml-2">
-                    (Filtered)
-                  </span>
+                  <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
                 )}
               </h2>
             </div>
@@ -827,9 +765,14 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {paginatedRequests.map((item, index) => (
-                      <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={item.id || index}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
                         <td className="px-6 py-4">
-                          <span className="text-[#1C62A0] font-medium">{item.formattedId}</span>
+                          <span className="text-[#1C62A0] font-medium">
+                            {item.formattedId}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -843,7 +786,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                                 {item.patientName?.charAt(0)?.toUpperCase() || "P"}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="font-medium text-gray-800">{item.patientName}</span>
+                            <span className="font-medium text-gray-800">
+                              {item.patientName}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -860,16 +805,23 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                               <Stethoscope size={12} className="text-blue-600" />
                             </div>
-                            <span className="text-gray-700">{item.doctorName}</span>
+                            <span className="text-gray-700">
+                              {item.doctorName}
+                            </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.department}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                          {item.department}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-1 text-gray-600">
                             <Calendar size={14} className="text-gray-400" />
-                            {item.appointmentDate} {item.consulting_time && item.consulting_time !== "N/A" && item.consulting_time !== "--:--" && (
-                              <>at {item.consulting_time}</>
-                            )}
+                            {item.appointmentDate}{" "}
+                            {item.consulting_time &&
+                              item.consulting_time !== "N/A" &&
+                              item.consulting_time !== "--:--" && (
+                                <>at {item.consulting_time}</>
+                              )}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -913,24 +865,31 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      {/* Approve Modal */}
       {showApproveModal && selectedRequest && (
         <ApproveRequestModal
-          bookingId={selectedRequest.bookingNumber}
+          bookingId={selectedRequest.id} // ✅ database primary key
           requestData={selectedRequest}
           onClose={closeApproveModal}
           onConfirm={handleConfirmApprove}
-          initialDate={selectedRequest.appointmentDate !== "N/A" ? selectedRequest.appointmentDate : ""}
-          initialTime={selectedRequest.consulting_time && selectedRequest.consulting_time !== "N/A" ? selectedRequest.consulting_time : ""}
+          initialDate={
+            selectedRequest.appointmentDate !== "N/A"
+              ? selectedRequest.appointmentDate
+              : ""
+          }
+          initialTime={
+            selectedRequest.consulting_time &&
+            selectedRequest.consulting_time !== "N/A"
+              ? selectedRequest.consulting_time
+              : ""
+          }
           initialToken=""
           isLoading={isApproving}
         />
       )}
 
-      {/* Reject Modal */}
       {showRejectModal && selectedRequest && (
         <RejectRequestModal
-          bookingId={selectedRequest.bookingNumber}
+          bookingId={selectedRequest.id} // ✅ database primary key
           requestData={selectedRequest}
           onClose={closeRejectModal}
           onConfirm={handleConfirmReject}
