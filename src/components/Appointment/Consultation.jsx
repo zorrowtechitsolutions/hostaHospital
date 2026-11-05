@@ -1,12 +1,8 @@
 // Consultation.js - COMPLETE FIXED VERSION
-// + updateBooking now uses database id (aligned with refactored request.ts)
-// + Added bookingId validation
-// + Enforced backend vitals validation handling
-// + Relaxed patientNumber check (backend auto-creates via bookingId)
-// + Cleaned up payload to match strict backend types
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import ViewMedicalHistory from "./ViewMedicalHistory";
@@ -17,7 +13,10 @@ import { useCreateVitalMutation } from "../../../app/service/vitals";
 import { getHospitalId, getAuthUser, getHospitalName } from "../../utils/auth";
 import { useUpdateBookingMutation } from "../../../app/service/request";
 import { useGetPrescriptionTemplatesQuery } from "../../../app/service/prescriptionTemplate";
-import { useGetPatientByIdQuery } from "../../../app/service/patients";
+import {
+  useGetPatientByIdQuery,
+  patientsApi,
+} from "../../../app/service/patients";
 
 import { socket } from "../../socket/socket";
 import {
@@ -285,6 +284,7 @@ const MedicationRow = ({ medication, onUpdate, onDelete, errors }) => {
 const Consultation = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const appointmentData = location.state?.appointment || location.state || {};
 
   const [createPrescription, { isLoading: isCreateLoading }] =
@@ -817,6 +817,11 @@ const Consultation = () => {
         prescriptionData
       ).unwrap();
 
+      // ✅ Refresh patient list after prescription creation
+      dispatch(
+        patientsApi.util.invalidateTags(["Patient"])
+      );
+
       const prescriptionNumber =
         prescriptionResponse?.data?.prescriptionNumber;
       const prescriptionId =
@@ -856,7 +861,7 @@ const Consultation = () => {
 
       showSuccessToast(
         displayNumber
-          ? `Consultation completed — Prescription ${displayNumber}`
+          ? `Consultation completed successfully`
           : "Consultation completed successfully"
       );
 
