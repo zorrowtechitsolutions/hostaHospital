@@ -17,6 +17,8 @@ import {
   Phone,
   FilePlus,
   Trash2,
+  Inbox,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar, Modal, Button } from '../ui';
@@ -42,7 +44,6 @@ const LEAVE_TYPES = [
   { label: 'Annual', color: 'bg-green-100 text-green-700' },
 ];
 
-// ✅ Options for the Leave Type filter — "all" is a real value (default + reset)
 const LEAVE_TYPE_FILTER_OPTIONS = [
   { value: 'all', label: 'All Leave Types' },
   ...LEAVE_TYPES.map((t) => ({ value: t.label, label: t.label })),
@@ -105,6 +106,73 @@ const mapRow = (r) => ({
   appliedOn: formatDate(r.appliedAt || r.createdAt),
   adminComments: r.adminComments,
 });
+
+// ============================================================
+// 📊 STATS CARD (professional KPI card — matches LeaveRequests)
+// ============================================================
+const StatCard = ({
+  label,
+  value,
+  icon: Icon,
+  accent,
+  total,
+  suffix = 'requests',
+}) => {
+  const pct =
+    total && total > 0 ? Math.round((Number(value) / Number(total)) * 100) : 0;
+
+  return (
+    <div className="group relative bg-white rounded-2xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(16,24,40,0.12)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+      <div className={`absolute inset-x-0 top-0 h-1 ${accent.bar}`} />
+
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-gray-500">
+              {label}
+            </p>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-[28px] leading-none font-bold text-gray-900 tabular-nums">
+                {value ?? 0}
+              </span>
+              <span className="text-xs text-gray-400 font-medium">{suffix}</span>
+            </div>
+          </div>
+
+          <div
+            className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${accent.iconBg} ${accent.iconColor} ring-1 ${accent.iconRing}`}
+          >
+            <Icon size={20} strokeWidth={2.2} />
+          </div>
+        </div>
+
+        {total > 0 && (
+          <div className="mt-4">
+            <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${accent.bar}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[11px]">
+              <span className="text-gray-400 font-medium">
+                {pct}% of total
+              </span>
+              {accent.trendLabel && (
+                <span
+                  className={`inline-flex items-center gap-0.5 font-semibold ${accent.trendColor}`}
+                >
+                  <ArrowUpRight size={11} strokeWidth={2.5} />
+                  {accent.trendLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ============================================================
 // DETAILS MODAL
@@ -308,7 +376,6 @@ const MyLeaveRequests = () => {
   const itemsPerPage = 10;
   const [detailsRecord, setDetailsRecord] = useState(null);
 
-  // ✅ Cancel + Delete state
   const [cancelRecord, setCancelRecord] = useState(null);
   const [deleteRecord, setDeleteRecord] = useState(null);
 
@@ -345,7 +412,6 @@ const MyLeaveRequests = () => {
     { skip: !employeeId }
   );
 
-  // ✅ Mutations
   const [cancelLeaveRequest, { isLoading: isCancelling }] =
     useCancelLeaveRequestMutation();
   const [deleteLeaveRequest, { isLoading: isDeleting }] =
@@ -432,7 +498,6 @@ const MyLeaveRequests = () => {
     if (match) setDetailsRecord(match);
   };
 
-  // ✅ Cancel handler
   const handleConfirmCancel = async () => {
     if (!cancelRecord) return;
     try {
@@ -444,7 +509,6 @@ const MyLeaveRequests = () => {
     }
   };
 
-  // ✅ Delete handler
   const handleConfirmDelete = async () => {
     if (!deleteRecord) return;
     try {
@@ -457,6 +521,68 @@ const MyLeaveRequests = () => {
   };
 
   const userName = auth?.name || auth?.employeeName || 'User';
+
+  // ============================================================
+  // STATS CONFIG — drives the 4 KPI cards
+  // ============================================================
+  const statCards = [
+    {
+      key: 'total',
+      label: 'Total Requests',
+      value: stats.total,
+      icon: Inbox,
+      accent: {
+        bar: 'bg-gradient-to-r from-[#1C62A0] to-[#3B8FD4]',
+        iconBg: 'bg-blue-50',
+        iconColor: 'text-[#1C62A0]',
+        iconRing: 'ring-blue-100',
+        trendLabel: 'All time',
+        trendColor: 'text-[#1C62A0]',
+      },
+    },
+    {
+      key: 'pending',
+      label: 'Pending',
+      value: stats.pending,
+      icon: Clock,
+      accent: {
+        bar: 'bg-gradient-to-r from-amber-400 to-amber-500',
+        iconBg: 'bg-amber-50',
+        iconColor: 'text-amber-600',
+        iconRing: 'ring-amber-100',
+        trendLabel: 'Awaiting review',
+        trendColor: 'text-amber-600',
+      },
+    },
+    {
+      key: 'approved',
+      label: 'Approved',
+      value: stats.approved,
+      icon: CheckCircle2,
+      accent: {
+        bar: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
+        iconBg: 'bg-emerald-50',
+        iconColor: 'text-emerald-600',
+        iconRing: 'ring-emerald-100',
+        trendLabel: 'Approved',
+        trendColor: 'text-emerald-600',
+      },
+    },
+    {
+      key: 'rejected',
+      label: 'Rejected',
+      value: stats.rejected,
+      icon: XCircle,
+      accent: {
+        bar: 'bg-gradient-to-r from-rose-400 to-rose-500',
+        iconBg: 'bg-rose-50',
+        iconColor: 'text-rose-600',
+        iconRing: 'ring-rose-100',
+        trendLabel: 'Declined',
+        trendColor: 'text-rose-600',
+      },
+    },
+  ];
 
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
@@ -489,36 +615,27 @@ const MyLeaveRequests = () => {
         </div>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-[#FFFBF0] border border-[#FDE6B4] p-4 rounded-xl flex items-center gap-4 shadow-sm">
-          <div className="bg-[#FDE6B4] p-3 rounded-lg text-[#D97706]"><Calendar size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Total Requests</p>
-            <p className="text-xl font-bold text-gray-800">{stats.total}</p>
-          </div>
-        </div>
-        <div className="bg-[#F0F7FF] border border-[#BEE3F8] p-4 rounded-xl flex items-center gap-4 shadow-sm">
-          <div className="bg-[#BEE3F8] p-3 rounded-lg text-[#2563EB]"><Clock size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Pending</p>
-            <p className="text-xl font-bold text-gray-800">{stats.pending}</p>
-          </div>
-        </div>
-        <div className="bg-[#F0FDF4] border border-[#BBF7D0] p-4 rounded-xl flex items-center gap-4 shadow-sm">
-          <div className="bg-[#BBF7D0] p-3 rounded-lg text-[#16A34A]"><CheckCircle2 size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Approved</p>
-            <p className="text-xl font-bold text-gray-800">{stats.approved}</p>
-          </div>
-        </div>
-        <div className="bg-[#FEF2F2] border border-[#FECACA] p-4 rounded-xl flex items-center gap-4 shadow-sm">
-          <div className="bg-[#FECACA] p-3 rounded-lg text-[#DC2626]"><XCircle size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Rejected</p>
-            <p className="text-xl font-bold text-gray-800">{stats.rejected}</p>
-          </div>
-        </div>
+      {/* ─────────────── KPI STATS CARDS ─────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {statCards.map((card) => (
+          <StatCard
+            key={card.key}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            accent={card.accent}
+            total={stats.total}
+            suffix={
+              card.key === 'total'
+                ? 'requests'
+                : card.key === 'pending'
+                ? 'awaiting'
+                : card.key === 'approved'
+                ? 'approved'
+                : 'rejected'
+            }
+          />
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -551,7 +668,6 @@ const MyLeaveRequests = () => {
                 onClear={handleClearSearch}
                 className="flex-1 min-w-[250px] max-w-sm"
               />
-              {/* ✅ Replaced native  with CustomSelect */}
               <CustomSelect
                 hideLabel
                 value={typeFilter}
@@ -753,7 +869,6 @@ const MyLeaveRequests = () => {
         record={detailsRecord}
       />
 
-      {/* ✅ Cancel Confirmation Modal */}
       <CancelConfirmModal
         isOpen={Boolean(cancelRecord)}
         onClose={() => setCancelRecord(null)}
@@ -762,7 +877,6 @@ const MyLeaveRequests = () => {
         isLoading={isCancelling}
       />
 
-      {/* ✅ Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={Boolean(deleteRecord)}
         onClose={() => setDeleteRecord(null)}

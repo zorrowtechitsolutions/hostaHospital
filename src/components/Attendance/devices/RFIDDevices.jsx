@@ -16,9 +16,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
+  RefreshCcw,
+  Download,
+  Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../../ui/Breadcrumb';
-import { Pagination, SearchBar, CustomSelect } from '../../ui';
+import { Pagination, SearchBar, CustomSelect, FilterBar } from '../../ui';
 import { Button } from '../../ui/button';
 import DeviceDetails from './DeviceDetails';
 import DeviceCredentialsModal from './credentials/DeviceCredentialsModal';
@@ -189,6 +192,8 @@ const Device = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -383,6 +388,48 @@ const Device = () => {
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setSearchTerm('');
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setLocationFilter('all');
+    setCurrentPage(1);
+    try {
+      await refetch();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  };
+
+  const handleExport = () => {
+    if (filteredData.length === 0) {
+      showErrorToast('No data available to export', 2500);
+      return;
+    }
+    const headers = ['Device Name', 'Device ID', 'Type', 'Location', 'Status', 'Created At'];
+    const csvRows = filteredData.map((r) => [
+      r.name, r.deviceId, r.type, r.location, r.status, r.createdAt,
+    ]);
+    const csv = [
+      headers.join(','),
+      ...csvRows.map((r) =>
+        r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `devices_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccessToast(`Exported ${csvRows.length} devices`, 2500);
   };
 
   const handleRegisterDevice = () => {
@@ -607,6 +654,22 @@ const Device = () => {
     ...new Set(normalizedData.map((r) => r.type).filter((t) => t && t !== '-')),
   ];
 
+  // ✅ Active filter count (three filters, search excluded)
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    typeFilter !== 'all',
+    locationFilter !== 'all',
+  ].filter(Boolean).length;
+
+  // ✅ Clear all filters (including search)
+  const clearAllFilters = () => {
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setLocationFilter('all');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const showLoading = isLoading || (isFetching && !deviceResponse);
 
   if (selectedDevice) {
@@ -633,70 +696,135 @@ const Device = () => {
         </p>
       </div>
 
-      {/* Search + Filters + Register Button */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full xl:w-auto flex-wrap items-center">
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+
+        {/* Search */}
+        <div className="flex-1 max-w-md">
           <SearchBar
             placeholder="Search by device name, ID or location..."
             value={searchTerm}
             onChange={handleSearchChange}
             onClear={handleClearSearch}
-            className="flex-1 min-w-[250px] max-w-sm"
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2 flex-wrap items-center">
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            title="Refresh"
+            disabled={isFetching}
+          >
+            <RefreshCcw size={16} className={isRefreshing || isFetching ? 'animate-spin' : ''} />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            title="Download"
+          >
+            <Download size={16} />
+          </Button>
+
+          <FilterBar
+            onClick={() => setShowFilters((prev) => !prev)}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
+            title="Toggle Filters"
           />
 
-          {/* ✅ Status filter — CustomSelect */}
-          <div className="w-full sm:w-44 -mt-1">
+          <Button
+            onClick={handleRegisterDevice}
+            className="flex items-center gap-2 whitespace-nowrap"
+          >
+            <Plus size={16} />
+            Register New Device
+          </Button>
+
+        </div>
+      </div>
+
+      {/* ─────────────── FILTER PANEL ─────────────── */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+
+          <div className="flex items-center justify-between mb-6">
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                <Filter size={18} className="text-[#1C62A0]" />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Filters
+                </h2>
+
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
+              Clear All Filters
+            </button>
+
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            {/* Status */}
             <CustomSelect
-              label=""
+              label="Status"
               value={statusFilter}
               options={[
                 { value: 'all', label: 'All Status' },
                 { value: 'Active', label: 'Active' },
                 { value: 'Disabled', label: 'Disabled' },
-                { value: 'Unregistered', label: 'Unregistered' }
+                { value: 'Unregistered', label: 'Unregistered' },
               ]}
               onChange={(value) => setStatusFilter(value)}
               placeholder="All Status"
             />
-          </div>
 
-          {/* ✅ Type filter — CustomSelect */}
-          <div className="w-full sm:w-52 -mt-1">
+            {/* Device Type */}
             <CustomSelect
-              label=""
+              label="Device Type"
               value={typeFilter}
               options={[
                 { value: 'all', label: 'All Device Types' },
-                ...deviceTypes.map((type) => ({ value: type, label: type }))
+                ...deviceTypes.map((type) => ({ value: type, label: type })),
               ]}
               onChange={(value) => setTypeFilter(value)}
               placeholder="All Device Types"
             />
-          </div>
 
-          {/* ✅ Location filter — CustomSelect */}
-          <div className="w-full sm:w-48 -mt-1">
+            {/* Location */}
             <CustomSelect
-              label=""
+              label="Location"
               value={locationFilter}
               options={[
                 { value: 'all', label: 'All Locations' },
-                ...locations.map((loc) => ({ value: loc, label: loc }))
+                ...locations.map((loc) => ({ value: loc, label: loc })),
               ]}
               onChange={(value) => setLocationFilter(value)}
               placeholder="All Locations"
             />
+
           </div>
         </div>
-
-        <Button
-          onClick={handleRegisterDevice}
-          className="flex items-center gap-2 whitespace-nowrap"
-        >
-          <Plus size={16} />
-          Register New Device
-        </Button>
-      </div>
+      )}
 
       {/* Table */}
       <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200">

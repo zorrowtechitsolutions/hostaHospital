@@ -12,9 +12,10 @@ import {
   RefreshCcw,
   Loader2,
   LogOut,
+  Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, CustomSelect } from '../ui';
+import { Pagination, SearchBar, CustomSelect, FilterBar } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
@@ -36,6 +37,7 @@ const Attendance = () => {
   const [methodFilter, setMethodFilter] = useState('all');
   const [attTypeFilter, setAttTypeFilter] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -148,7 +150,6 @@ const Attendance = () => {
     };
     const status = statusMap[row.status] || row.status || 'Present';
 
-    // ✅ Grab the employee id from every possible field
     const employeeId =
       row.userId?._id || row.userId || row.employeeId || row.roleId || null;
 
@@ -195,9 +196,6 @@ const Attendance = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
-  // ============================================================
-  // ✅ Navigate to employee detail
-  // ============================================================
   const handleEmployeeClick = (row) => {
     if (!row.employeeId) {
       console.warn('No employee id available for row:', row);
@@ -244,9 +242,34 @@ const Attendance = () => {
   };
 
   const handleExport = () => {
+    if (filteredData.length === 0) {
+      showWarningToast('No data available to export', 2500);
+      return;
+    }
+    const headers = ['Name', 'Role', 'Department', 'Date', 'Attendance Type', 'Method', 'Check In', 'Check Out', 'Duration', 'Status'];
+    const csvRows = filteredData.map((r) => [
+      r.name, r.role, r.dept, r.date, r.attType, r.method, r.checkIn, r.checkOut, r.duration, r.status,
+    ]);
+    const csv = [
+      headers.join(','),
+      ...csvRows.map((r) =>
+        r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccessToast(`Exported ${csvRows.length} attendance records`, 2500);
   };
 
-  // Badge helpers — unchanged
+  // Badge helpers
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Present': return 'bg-green-50 text-green-700 border-green-200';
@@ -309,6 +332,22 @@ const Attendance = () => {
     ),
   ];
 
+  const activeFilterCount = [
+    deptFilter !== 'all',
+    statusFilter !== 'all',
+    methodFilter !== 'all',
+    attTypeFilter !== 'all',
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setDeptFilter('all');
+    setStatusFilter('all');
+    setMethodFilter('all');
+    setAttTypeFilter('all');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   const showLoading = isLoading || (isFetching && !attendanceResponse);
 
   // ============================================================
@@ -328,35 +367,90 @@ const Attendance = () => {
         hospital.
       </p>
 
-      {/* Filters toolbar */}
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-center">
+
+        {/* Search */}
+        <div className="flex-1 max-w-md">
           <SearchBar
             placeholder="Search by name, department, role..."
             value={searchTerm}
             onChange={handleSearchChange}
             onClear={handleClearSearch}
-            className="flex-1 min-w-[250px] max-w-sm"
           />
+        </div>
 
-          {/* ✅ Department — CustomSelect */}
-          <div className="w-full sm:w-48 -mt-1">
+        {/* Action Buttons — icon sizing matches AttendanceSheet.jsx */}
+        <div className="flex gap-2 flex-wrap items-center">
+
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing || isFetching}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh"
+          >
+            <RefreshCcw
+              size={16}
+              className={isRefreshing || isFetching ? 'animate-spin' : ''}
+            />
+          </button>
+
+          <button
+            onClick={handleExport}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            title="Export to Excel"
+          >
+            <Download size={16} />
+          </button>
+
+          <button
+            onClick={() => setShowFilters((prev) => !prev)}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            title="Toggle Filters"
+          >
+            <Filter size={16} />
+          </button>
+
+        </div>
+      </div>
+
+      {/* ─────────────── FILTER PANEL ─────────────── */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 p-4">
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Filter className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
+              {activeFilterCount > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                  {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
+              Clear All Filters
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+
             <CustomSelect
-              label=""
+              label="Department"
               value={deptFilter}
               options={[
                 { value: 'all', label: 'All Departments' },
-                ...departments.map(dept => ({ value: dept, label: dept }))
+                ...departments.map((dept) => ({ value: dept, label: dept })),
               ]}
               onChange={(value) => setDeptFilter(value)}
               placeholder="All Departments"
             />
-          </div>
 
-          {/* ✅ Status — CustomSelect */}
-          <div className="w-full sm:w-48 -mt-1">
             <CustomSelect
-              label=""
+              label="Status"
               value={statusFilter}
               options={[
                 { value: 'all', label: 'All Status' },
@@ -366,63 +460,40 @@ const Attendance = () => {
                 { value: 'Shift Completed', label: 'Shift Completed' },
                 { value: 'Half Day', label: 'Half Day' },
                 { value: 'Absent', label: 'Absent' },
-                { value: 'On Leave', label: 'On Leave' }
+                { value: 'On Leave', label: 'On Leave' },
               ]}
               onChange={(value) => setStatusFilter(value)}
               placeholder="All Status"
             />
-          </div>
 
-          {/* ✅ Method — CustomSelect */}
-          <div className="w-full sm:w-44 -mt-1">
             <CustomSelect
-              label=""
+              label="Method"
               value={methodFilter}
               options={[
                 { value: 'all', label: 'All Methods' },
                 { value: 'Face', label: 'Face' },
                 { value: 'Access Card', label: 'Access Card' },
-                { value: 'Punch In', label: 'Punch In' }
+                { value: 'Punch In', label: 'Punch In' },
               ]}
               onChange={(value) => setMethodFilter(value)}
               placeholder="All Methods"
             />
-          </div>
 
-          {/* ✅ Attendance Type — CustomSelect */}
-          <div className="w-full sm:w-52 -mt-1">
             <CustomSelect
-              label=""
+              label="Attendance Type"
               value={attTypeFilter}
               options={[
                 { value: 'all', label: 'All Attendance Types' },
                 { value: 'Check In', label: 'Check In' },
-                { value: 'Check Out', label: 'Check Out' }
+                { value: 'Check Out', label: 'Check Out' },
               ]}
               onChange={(value) => setAttTypeFilter(value)}
               placeholder="All Attendance Types"
             />
+
           </div>
         </div>
-
-        <div className="flex gap-2 flex-wrap items-center">
-          <button
-            onClick={handleRefresh}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCcw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-          </button>
-
-          <button
-            onClick={handleExport}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Export to Excel"
-          >
-            <Download size={16} />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Table */}
       <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">

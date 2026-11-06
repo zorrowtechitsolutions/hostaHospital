@@ -13,9 +13,13 @@ import {
   ChevronRight,
   Check,
   X,
+  Filter,
+  TrendingUp,
+  Inbox,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button } from '../ui';
+import { Pagination, SearchBar, Modal, Button, FilterBar } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
@@ -51,7 +55,6 @@ const LEAVE_TYPES = [
 
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 
-// ✅ Options for the three toolbar filters — "all" is a real value (not a placeholder)
 const DEPT_FILTER_OPTIONS = [
   { value: 'all', label: 'All Departments' },
   { value: 'Doctor', label: 'Doctor' },
@@ -97,7 +100,6 @@ const getAvatarColor = (role) => {
   return role === 'Doctor' ? 'bg-[#8B5CF6]' : 'bg-[#14B8A6]';
 };
 
-// ✅ Map API row → UI row
 const mapRow = (r) => ({
   id: r.id,
   name: r.employeeName || 'Employee',
@@ -119,6 +121,75 @@ const mapRow = (r) => ({
   messageId: `LR-${r.id}`,
   raw: r,
 });
+
+// ============================================================
+// 📊 STATS CARD (professional KPI card)
+// ============================================================
+const StatCard = ({
+  label,
+  value,
+  icon: Icon,
+  accent,
+  total,
+  suffix = 'requests',
+}) => {
+  const pct =
+    total && total > 0 ? Math.round((Number(value) / Number(total)) * 100) : 0;
+
+  return (
+    <div className="group relative bg-white rounded-2xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(16,24,40,0.12)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+      {/* subtle accent strip */}
+      <div className={`absolute inset-x-0 top-0 h-1 ${accent.bar}`} />
+
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-gray-500">
+              {label}
+            </p>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-[28px] leading-none font-bold text-gray-900 tabular-nums">
+                {value ?? 0}
+              </span>
+              <span className="text-xs text-gray-400 font-medium">{suffix}</span>
+            </div>
+          </div>
+
+          <div
+            className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${accent.iconBg} ${accent.iconColor} ring-1 ${accent.iconRing}`}
+          >
+            <Icon size={20} strokeWidth={2.2} />
+          </div>
+        </div>
+
+        {/* progress line (only when we have a sensible total) */}
+        {total > 0 && (
+          <div className="mt-4">
+            <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${accent.bar}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[11px]">
+              <span className="text-gray-400 font-medium">
+                {pct}% of total
+              </span>
+              {accent.trendLabel && (
+                <span
+                  className={`inline-flex items-center gap-0.5 font-semibold ${accent.trendColor}`}
+                >
+                  <ArrowUpRight size={11} strokeWidth={2.5} />
+                  {accent.trendLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ============================================================
 // DETAILS MODAL
@@ -270,7 +341,6 @@ const ApproveRejectModal = ({
         </div>
 
         <div className="bg-slate-50 border rounded-lg p-4 text-sm space-y-3">
-          {/* ✅ FIX: all four grid-cols-3 rows now collapse to grid-cols-1 on mobile */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
             <span className="text-slate-500 text-xs sm:text-sm">Leave Type</span>
             <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.type}</span>
@@ -410,6 +480,7 @@ const LeaveRequests = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -417,7 +488,6 @@ const LeaveRequests = () => {
   const [detailsRecord, setDetailsRecord] = useState(null);
   const [actionRecord, setActionRecord] = useState(null);
 
-  // debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
     return () => clearTimeout(t);
@@ -525,6 +595,85 @@ const LeaveRequests = () => {
     }
   };
 
+  const activeFilterCount = [
+    deptFilter !== 'all',
+    typeFilter !== 'all',
+    statusFilter !== 'all',
+    !!dateFilter,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setDeptFilter('all');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setDateFilter('');
+    setSearchTerm('');
+    setDebouncedSearch('');
+    setCurrentPage(1);
+  };
+
+  // ============================================================
+  // STATS CONFIG — drives the 4 KPI cards
+  // ============================================================
+  const statCards = [
+    {
+      key: 'total',
+      label: 'Total Requests',
+      value: stats.total,
+      icon: Inbox,
+      accent: {
+        bar: 'bg-gradient-to-r from-[#1C62A0] to-[#3B8FD4]',
+        iconBg: 'bg-blue-50',
+        iconColor: 'text-[#1C62A0]',
+        iconRing: 'ring-blue-100',
+        trendLabel: 'All time',
+        trendColor: 'text-[#1C62A0]',
+      },
+    },
+    {
+      key: 'pending',
+      label: 'Pending',
+      value: stats.pending,
+      icon: Clock,
+      accent: {
+        bar: 'bg-gradient-to-r from-amber-400 to-amber-500',
+        iconBg: 'bg-amber-50',
+        iconColor: 'text-amber-600',
+        iconRing: 'ring-amber-100',
+        trendLabel: 'Awaiting review',
+        trendColor: 'text-amber-600',
+      },
+    },
+    {
+      key: 'approved',
+      label: 'Approved',
+      value: stats.approved,
+      icon: CheckCircle2,
+      accent: {
+        bar: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
+        iconBg: 'bg-emerald-50',
+        iconColor: 'text-emerald-600',
+        iconRing: 'ring-emerald-100',
+        trendLabel: 'Approved',
+        trendColor: 'text-emerald-600',
+      },
+    },
+    {
+      key: 'rejected',
+      label: 'Rejected',
+      value: stats.rejected,
+      icon: XCircle,
+      accent: {
+        bar: 'bg-gradient-to-r from-rose-400 to-rose-500',
+        iconBg: 'bg-rose-50',
+        iconColor: 'text-rose-600',
+        iconRing: 'ring-rose-100',
+        trendLabel: 'Declined',
+        trendColor: 'text-rose-600',
+      },
+    },
+  ];
+
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
       <Breadcrumb
@@ -539,41 +688,33 @@ const LeaveRequests = () => {
         View and manage leave requests from staff and doctors. Requests can also be received via email.
       </p>
 
-      {/* STATS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-[#FFFBF0] border border-[#FDE6B4] p-4 rounded-xl flex items-center gap-4">
-          <div className="bg-[#FDE6B4] p-3 rounded-lg text-[#D97706]"><Mail size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Total Requests</p>
-            <p className="text-xl font-bold text-gray-800">{stats.total}</p>
-          </div>
-        </div>
-        <div className="bg-[#F0F7FF] border border-[#BEE3F8] p-4 rounded-xl flex items-center gap-4">
-          <div className="bg-[#BEE3F8] p-3 rounded-lg text-[#2563EB]"><Clock size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Pending</p>
-            <p className="text-xl font-bold text-gray-800">{stats.pending}</p>
-          </div>
-        </div>
-        <div className="bg-[#F0FDF4] border border-[#BBF7D0] p-4 rounded-xl flex items-center gap-4">
-          <div className="bg-[#BBF7D0] p-3 rounded-lg text-[#16A34A]"><CheckCircle2 size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Approved</p>
-            <p className="text-xl font-bold text-gray-800">{stats.approved}</p>
-          </div>
-        </div>
-        <div className="bg-[#FEF2F2] border border-[#FECACA] p-4 rounded-xl flex items-center gap-4">
-          <div className="bg-[#FECACA] p-3 rounded-lg text-[#DC2626]"><XCircle size={20} /></div>
-          <div>
-            <p className="text-sm text-slate-600 font-medium">Rejected</p>
-            <p className="text-xl font-bold text-gray-800">{stats.rejected}</p>
-          </div>
-        </div>
+      {/* ─────────────── KPI STATS CARDS ─────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {statCards.map((card) => (
+          <StatCard
+            key={card.key}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            accent={card.accent}
+            total={stats.total}
+            suffix={
+              card.key === 'total'
+                ? 'requests'
+                : card.key === 'pending'
+                ? 'awaiting'
+                : card.key === 'approved'
+                ? 'approved'
+                : 'rejected'
+            }
+          />
+        ))}
       </div>
 
-      {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <div className="flex-1 min-w-[220px]">
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+
+        <div className="flex-1 max-w-md">
           <SearchBar
             placeholder="Search employees, doctors, or leave requests..."
             value={searchTerm}
@@ -582,63 +723,112 @@ const LeaveRequests = () => {
           />
         </div>
 
-        {/* ✅ Replaced native  with CustomSelect */}
-        <CustomSelect
-          hideLabel
-          value={deptFilter}
-          options={DEPT_FILTER_OPTIONS}
-          onChange={(value) => setDeptFilter(value)}
-          className="w-44"
-        />
+        <div className="flex gap-2 flex-wrap items-center">
 
-        {/* ✅ Replaced native with CustomSelect */}
-        <CustomSelect
-          hideLabel
-          value={typeFilter}
-          options={LEAVE_TYPE_FILTER_OPTIONS}
-          onChange={(value) => setTypeFilter(value)}
-          className="w-44"
-        />
-
-        {/* ✅ Replaced native  with CustomSelect */}
-        <CustomSelect
-          hideLabel
-          value={statusFilter}
-          options={STATUS_FILTER_OPTIONS}
-          onChange={(value) => setStatusFilter(value)}
-          className="w-40"
-        />
-
-        <div className="relative">
-          <Calendar
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-          />
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="h-9 border border-gray-200 rounded-md pl-8 pr-2.5 text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-[#1C62A0] shadow-sm cursor-pointer"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
-            className="p-2 h-9 w-9 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
             title="Refresh"
+            disabled={isFetching}
           >
             <RefreshCcw size={16} className={isRefreshing || isFetching ? 'animate-spin' : ''} />
-          </button>
-          <button
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleExport}
-            className="p-2 h-9 w-9 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Export to Excel"
+            title="Download"
           >
             <Download size={16} />
-          </button>
+          </Button>
+
+          <FilterBar
+            onClick={() => setShowFilters((prev) => !prev)}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
+            title="Toggle Filters"
+          />
+
         </div>
       </div>
+
+      {/* ─────────────── FILTER PANEL ─────────────── */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+
+          <div className="flex items-center justify-between mb-6">
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                <Filter size={18} className="text-[#1C62A0]" />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Filters
+                </h2>
+
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
+              Clear All Filters
+            </button>
+
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+
+            <CustomSelect
+              label="Department"
+              value={deptFilter}
+              options={DEPT_FILTER_OPTIONS}
+              onChange={(value) => setDeptFilter(value)}
+              placeholder="All Departments"
+            />
+
+            <CustomSelect
+              label="Leave Type"
+              value={typeFilter}
+              options={LEAVE_TYPE_FILTER_OPTIONS}
+              onChange={(value) => setTypeFilter(value)}
+              placeholder="All Leave Types"
+            />
+
+            <CustomSelect
+              label="Status"
+              value={statusFilter}
+              options={STATUS_FILTER_OPTIONS}
+              onChange={(value) => setStatusFilter(value)}
+              placeholder="All Status"
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-2">
+                Date
+              </label>
+
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* TABLE */}
       <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
