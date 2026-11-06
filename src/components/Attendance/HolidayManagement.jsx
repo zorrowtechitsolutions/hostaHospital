@@ -53,14 +53,6 @@ const toISODate = (value) => {
   }
 };
 
-const getTodayISO = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 const HOLIDAY_TYPES = [
   'Public Holiday',
   'National Holiday',
@@ -100,7 +92,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
 
   const [form, setForm] = useState({
     name: '',
-    date: getTodayISO(),
+    date: new Date().toISOString().split('T')[0],
     endDate: '',
     type: 'Public Holiday',
     description: '',
@@ -114,7 +106,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
     if (isEdit && initialData) {
       setForm({
         name: initialData.name || '',
-        date: initialData.dateISO || getTodayISO(),
+        date: initialData.dateISO || new Date().toISOString().split('T')[0],
         endDate: initialData.endDateISO || '',
         type: initialData.type || 'Public Holiday',
         description: initialData.description || '',
@@ -123,7 +115,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
     } else {
       setForm({
         name: '',
-        date: getTodayISO(),
+        date: new Date().toISOString().split('T')[0],
         endDate: '',
         type: 'Public Holiday',
         description: '',
@@ -582,17 +574,6 @@ const HolidayManagement = () => {
   const showLoading = isLoading;
   const isSaving = isCreating || isUpdating;
 
-  const stats = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const thisYear = holidays.filter(
-      (h) => h.dateISO && h.dateISO.startsWith(String(currentYear))
-    ).length;
-    const upcoming = holidays.filter(
-      (h) => h.dateISO && h.dateISO >= getTodayISO()
-    ).length;
-    return { total: holidays.length, thisYear, upcoming };
-  }, [holidays]);
-
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
     return Array.from({ length: 7 }, (_, i) => String(currentYear - 3 + i));
@@ -600,7 +581,7 @@ const HolidayManagement = () => {
 
   const activeFilterCount = [
     typeFilter !== 'all',
-    yearFilter !== String(new Date().getFullYear()), // Assuming default year shouldn't count as an "active" filter unless we want it to. Let's just count if it differs from 'all' or default.
+    yearFilter !== String(new Date().getFullYear()),
     !!searchTerm,
   ].filter(Boolean).length;
 
@@ -625,22 +606,6 @@ const HolidayManagement = () => {
         Store and manage the list of public, religious, and company holidays.
         Attendance sheets automatically mark these dates as holidays.
       </p>
-
-      {/* Stats chips */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Calendar size={14} className="text-indigo-500" />
-          Total Holidays: {stats.total}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Flag size={14} className="text-blue-500" />
-          This Year: {stats.thisYear}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Sparkles size={14} className="text-emerald-500" />
-          Upcoming: {stats.upcoming}
-        </span>
-      </div>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
