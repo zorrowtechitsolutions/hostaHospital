@@ -87,6 +87,9 @@ const getRiskBadgeClass = (riskLevel) => {
   return "bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium";
 };
 
+const ICON_BUTTON_CLASS =
+  "p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0";
+
 // ============================================================
 // Skeleton Loader
 // ============================================================
@@ -553,9 +556,11 @@ const SessionHistory = () => {
         </div>
       </div>
 
-      {/* Search + Actions — mobile stacked, desktop row */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div className="w-full lg:flex-1 lg:max-w-md">
+      {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Left: Search */}
+        <div className="flex-1 min-w-[200px] max-w-[400px]">
           <SearchBar
             placeholder="Search by name..."
             value={searchTerm}
@@ -568,29 +573,31 @@ const SessionHistory = () => {
               setDebouncedSearch("");
               setCurrentPage(1);
             }}
-            className="w-full"
           />
         </div>
 
-        <div className="flex gap-2 items-center justify-end">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className={ICON_BUTTON_CLASS}
             disabled={isFetching}
             title="Refresh"
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
+          
           <button
             onClick={handleExport}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className={ICON_BUTTON_CLASS}
             title="Export to Excel"
           >
             <Download size={16} />
           </button>
+
           <button
             onClick={() => setShowFilters((value) => !value)}
-            className={`relative p-2 border border-gray-200 rounded-md bg-white ${
+            className={`relative h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white shrink-0 ${
               showFilters || activeFilterCount > 0 ? "text-[#1C62A0]" : "text-gray-500"
             } hover:bg-gray-50`}
             title="Toggle Filters"
@@ -632,7 +639,7 @@ const SessionHistory = () => {
                 label="Role"
                 value={roleFilter}
                 options={[
-                  { value: '', label: 'All Roles' },
+                  { value: '', label: 'Roles' },
                   ...roles.map((role) => ({ value: role, label: role }))
                 ]}
                 onChange={(value) => {
@@ -648,7 +655,7 @@ const SessionHistory = () => {
                 label="Status"
                 value={statusFilter}
                 options={[
-                  { value: '', label: 'All Status' },
+                  { value: '', label: 'Status' },
                   ...STATUS_OPTIONS.map((status) => ({ value: status, label: status }))
                 ]}
                 onChange={(value) => {
@@ -664,7 +671,7 @@ const SessionHistory = () => {
                 label="Risk Level"
                 value={riskFilter}
                 options={[
-                  { value: '', label: 'All Risk Levels' },
+                  { value: '', label: 'Risk Levels' },
                   ...RISK_OPTIONS.map((risk) => ({ value: risk, label: risk }))
                 ]}
                 onChange={(value) => {
@@ -680,7 +687,7 @@ const SessionHistory = () => {
                 label="Department"
                 value={departmentFilter}
                 options={[
-                  { value: '', label: 'All Departments' },
+                  { value: '', label: 'Departments' },
                   ...departments.map((dept) => ({ value: dept, label: dept }))
                 ]}
                 onChange={(value) => {

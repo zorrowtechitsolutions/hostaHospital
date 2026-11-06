@@ -56,6 +56,13 @@ const PERMISSIONS = {
   DELETE: 32
 };
 
+// Styling override so CustomSelect matches the toolbar height
+const SELECT_FILTER_CLASS =
+  "w-[160px] xl:w-[180px] shrink-0 " +
+  "[&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full " +
+  "[&_button]:!whitespace-nowrap [&_button]:!px-3 " +
+  "[&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600";
+
 // Skeleton Loading Component
 const AmbulanceSkeleton = () => {
   return (
@@ -462,43 +469,59 @@ const Ambulance = () => {
         <h1 className="text-xl font-bold text-gray-800">Ambulance Management</h1>
       </div>
 
-      {/* Search, Filters and Action Buttons Row */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
-          {/* Using global SearchBar component */}
-          <SearchBar
-            placeholder="Search by name, ID, place..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            onClear={handleClearSearch}
-            className="flex-1 max-w-sm"
-          />
-          {/* ✅ Custom Vehicle Type filter (mobile-safe) */}
-          <div className="w-full sm:w-56 -mt-1">
-            <CustomSelect
-              label=""
-              value={typeFilter}
-              options={[
-                { value: 'all', label: 'All Vehicle Types' },
-                ...ambulanceTypes.map(type => ({ value: type, label: type }))
-              ]}
-              onChange={(value) => setTypeFilter(value)}
-              placeholder="All Vehicle Types"
+      {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Left: Search + Type Filter */}
+        <div className="flex flex-1 min-w-0 items-center gap-3">
+          <div className="relative flex-1 min-w-[180px] max-w-[360px]">
+            <SearchBar
+              placeholder="Search by name, ID, place..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              onClear={handleClearSearch}
             />
           </div>
+
+          <CustomSelect
+            hideLabel
+            value={typeFilter}
+            options={[
+              { value: 'all', label: 'Vehicle Types' },
+              ...ambulanceTypes.map(type => ({ value: type, label: type }))
+            ]}
+            onChange={(value) => setTypeFilter(value)}
+            className={SELECT_FILTER_CLASS}
+          />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex border border-gray-200 rounded-md bg-white mr-2">
-            <button 
-              onClick={() => setViewMode('grid')} 
-              className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View Toggle */}
+          <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-lg bg-white shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+              aria-label="Grid view"
+              title="Grid view"
             >
               <LayoutGrid size={16} />
             </button>
-            <button 
-              onClick={() => setViewMode('list')} 
-              className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+              aria-label="List view"
+              title="List view"
             >
               <List size={16} />
             </button>
@@ -506,17 +529,20 @@ const Ambulance = () => {
 
           <button 
             onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" 
+            className="p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0" 
             title="Refresh"
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
+          <button 
+            onClick={handleExport} 
+            className="p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0" 
+            title="Export to Excel"
+          >
             <Download size={16} />
           </button>
 
-          {/* Add Ambulance Button with Permission Check */}
           <button 
             onClick={() => {
               if (!hasPermission(PERMISSIONS.CREATE)) {
@@ -526,7 +552,7 @@ const Ambulance = () => {
               }
               setShowAddModal(true);
             }} 
-            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+            className="px-4 h-10 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300 shrink-0 whitespace-nowrap"
           >
             <Plus size={16} /> Add Ambulance
           </button>
@@ -549,7 +575,6 @@ const Ambulance = () => {
                     </button>
                     {activeMenu === ambulance.id && (
                       <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                        {/* View Details with Permission Check */}
                         <button onClick={() => { 
                           if (!hasPermission(PERMISSIONS.VIEW)) {
                             setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
@@ -564,7 +589,6 @@ const Ambulance = () => {
                           <Eye size={16} /> View Details
                         </button>
                         
-                        {/* Edit with Permission Check */}
                         <button onClick={() => { 
                           if (!hasPermission(PERMISSIONS.EDIT)) {
                             setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
@@ -581,7 +605,6 @@ const Ambulance = () => {
                         
                         <div className="border-t border-gray-100 my-1"></div>
                         
-                        {/* Delete with Permission Check */}
                         <button onClick={() => { 
                           if (!hasPermission(PERMISSIONS.DELETE)) {
                             setPermissionDeniedMessage("You do not have permission to delete an ambulance. Please contact your administrator.");
@@ -636,7 +659,6 @@ const Ambulance = () => {
             ))}
           </div>
 
-          {/* Pagination for Grid View - Using server-side totalPages */}
           {totalPages > 1 && (
             <div className="mt-6 flex justify-center">
               <Pagination
@@ -717,7 +739,6 @@ const Ambulance = () => {
                           </button>
                           {activeMenu === ambulance.id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                              {/* View Details with Permission Check */}
                               <button onClick={() => { 
                                 if (!hasPermission(PERMISSIONS.VIEW)) {
                                   setPermissionDeniedMessage("You do not have permission to view ambulance details. Please contact your administrator.");
@@ -732,7 +753,6 @@ const Ambulance = () => {
                                 <Eye size={16} /> View Details
                               </button>
                               
-                              {/* Edit with Permission Check */}
                               <button onClick={() => { 
                                 if (!hasPermission(PERMISSIONS.EDIT)) {
                                   setPermissionDeniedMessage("You do not have permission to edit an ambulance. Please contact your administrator.");
@@ -749,7 +769,6 @@ const Ambulance = () => {
                               
                               <div className="border-t border-gray-100 my-1"></div>
                               
-                              {/* Delete with Permission Check */}
                               <button onClick={() => { 
                                 if (!hasPermission(PERMISSIONS.DELETE)) {
                                   setPermissionDeniedMessage("You do not have permission to delete an ambulance. Please contact your administrator.");
@@ -773,7 +792,6 @@ const Ambulance = () => {
               </table>
             </div>
 
-            {/* Pagination */}
             <div className="mt-auto px-6 py-4 bg-gray-50 border-t border-gray-200">
               <Pagination
                 currentPage={currentPage}

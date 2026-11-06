@@ -32,7 +32,7 @@ import {
 
 // ✅ Options for the Category filter — "All Categories" is a real value (default + reset)
 const CATEGORY_FILTER_OPTIONS = [
-  { value: "All Categories", label: "All Categories" },
+  { value: "All Categories", label: "Categories" },
   { value: "General", label: "General" },
   { value: "Alert", label: "Alert" },
   { value: "Training", label: "Training" },
@@ -41,15 +41,18 @@ const CATEGORY_FILTER_OPTIONS = [
 
 // ✅ Options for the Status filter — "All Statuses" is a real value
 const STATUS_FILTER_OPTIONS = [
-  { value: "All Statuses", label: "All Statuses" },
+  { value: "All Statuses", label: "Statuses" },
   { value: "Active", label: "Active" },
   { value: "Inactive", label: "Inactive" },
   { value: "Draft", label: "Draft" },
 ];
 
-// Styling override so CustomSelect matches the h-10 / border-slate-200 filter inputs
+// ✅ Filter class — sized to match the search input (h-10) and use `!` overrides on the nested button
 const SELECT_FILTER_CLASS =
-  "w-44 [&>button]:h-10 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-600 [&>button]:px-4 [&>button]:focus:ring-indigo-400 [&>button]:focus:border-indigo-400";
+  "w-[150px] md:w-[160px] shrink-0 " +
+  "[&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full " +
+  "[&_button]:!whitespace-nowrap [&_button]:!px-3 " +
+  "[&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600";
 
 const categoryStyles = {
   General: "bg-indigo-50 text-indigo-600",
@@ -382,13 +385,12 @@ const EmailTemplates = () => {
         <h1 className="text-xl font-bold text-gray-800">Email Template Management</h1>
       </div>
 
-      {/* ================= HEADER & ACTIONS ================= */}
+      {/* ================= SINGLE-ROW TOOLBAR ================= */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
+        {/* Left: Search + Filters */}
+        <div className="flex flex-1 min-w-0 items-center gap-3">
+          <div className="relative flex-1 min-w-[180px] max-w-[320px]">
             <Search
               size={17}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -402,7 +404,6 @@ const EmailTemplates = () => {
             />
           </div>
 
-          {/* ✅ Replaced native (Category) with CustomSelect */}
           <CustomSelect
             hideLabel
             value={category}
@@ -411,7 +412,6 @@ const EmailTemplates = () => {
             className={SELECT_FILTER_CLASS}
           />
 
-          {/* ✅ Replaced native  (Status) with CustomSelect */}
           <CustomSelect
             hideLabel
             value={status}
@@ -421,10 +421,11 @@ const EmailTemplates = () => {
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+            className="p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
             title="Refresh"
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
@@ -435,6 +436,7 @@ const EmailTemplates = () => {
             size="md"
             leftIcon={<Plus size={17} />}
             onClick={handleCreate}
+            className="shrink-0 whitespace-nowrap h-10 px-4"
           >
             Create Template
           </Button>

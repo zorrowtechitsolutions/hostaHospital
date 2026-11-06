@@ -30,12 +30,12 @@ const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
 
 const ICON_BUTTON_CLASS =
-  "p-2 border border-gray-200 rounded-md bg-white transition-colors";
+  "p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0";
 const CENTERED_FLEX_CLASS = "flex items-center justify-center gap-2";
 
 // Status filter removed from pending-only page (it was misleading — API always sends pending)
 const STATUS_FILTER_OPTIONS = [
-  { value: "", label: "All Status" },
+  { value: "", label: "Status" },
   { value: "pending", label: "Pending" },
   { value: "accepted", label: "Accepted" },
   { value: "cancel", label: "Cancelled" },
@@ -314,7 +314,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
 
   const departmentFilterOptions = useMemo(
     () => [
-      { value: "", label: "All Departments" },
+      { value: "", label: "Departments" },
       ...departments.map((d) => ({ value: d, label: d })),
     ],
     [departments]
@@ -607,8 +607,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 w-full">
-        <div className="flex-1 w-full lg:max-w-md">
+      {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Left: Search */}
+        <div className="flex-1 min-w-[200px] max-w-[400px]">
           <SearchBar
             placeholder="Search by Patient ID, Name, or Contact..."
             value={searchTerm}
@@ -621,7 +624,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             </span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
             className={ICON_BUTTON_CLASS}
@@ -642,6 +647,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
             isOpen={showFilters}
             activeFilterCount={activeFilterCount}
             title="Toggle Filters"
+            className="h-10 w-10 flex items-center justify-center shrink-0"
           />
         </div>
       </div>
