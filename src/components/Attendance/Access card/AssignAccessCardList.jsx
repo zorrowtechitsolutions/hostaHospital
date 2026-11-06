@@ -5,7 +5,6 @@ import {
   ArrowLeft, Download, RefreshCcw, Filter, IdCard,
   MoreVertical, Users as UsersIcon, Eye, Trash2,
   Stethoscope, Briefcase, Ban, CheckCircle2, Edit,
-  ShieldCheck, ShieldAlert,
 } from 'lucide-react';
 import { useGetDoctorsQuery } from '../../../../app/service/doctorApi';
 import { useGetStaffQuery } from '../../../../app/service/staffApi';
@@ -509,22 +508,6 @@ const AssignAccessCardList = () => {
     }
   };
 
-  const stats = useMemo(() => {
-    const totalCards = members.filter((m) => m.accessCardUid).length;
-    const activeCards = members.filter((m) => m.cardStatus === 'Active').length;
-    const inactiveCards = members.filter((m) => m.cardStatus === 'Inactive').length;
-
-    return {
-      doctors: members.filter((m) => m.type === 'Doctor').length,
-      staff: members.filter((m) => m.type === 'Staff').length,
-      total: members.length,
-      totalCards,
-      activeCards,
-      inactiveCards,
-      notAssigned: members.length - totalCards,
-    };
-  }, [members]);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
@@ -579,34 +562,6 @@ const AssignAccessCardList = () => {
         <p className="text-sm text-gray-500 mt-1">
           All doctors and staff in this hospital — assign or manage access cards
         </p>
-      </div>
-
-      {/* Quick stats */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Stethoscope size={14} className="text-blue-500" />
-          Doctors: {stats.doctors}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Briefcase size={14} className="text-emerald-500" />
-          Staff: {stats.staff}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <IdCard size={14} className="text-indigo-500" />
-          Total Members: {stats.total}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <ShieldCheck size={14} className="text-green-600" />
-          Active Cards: {stats.activeCards}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <ShieldAlert size={14} className="text-red-500" />
-          Inactive Cards: {stats.inactiveCards}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Ban size={14} className="text-amber-500" />
-          Not Assigned: {stats.notAssigned}
-        </span>
       </div>
 
       {/* Search + Actions */}

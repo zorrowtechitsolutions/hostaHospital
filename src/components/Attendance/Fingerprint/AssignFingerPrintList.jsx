@@ -217,6 +217,7 @@ const AssignFingerprintList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // ✅ new
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -411,6 +412,25 @@ const AssignFingerprintList = () => {
       );
     }
 
+    // ✅ Fingerprint status filter (mirrors Card Status in AccessCards)
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'enrolled') {
+        result = result.filter((m) => m.fingerprintId);
+      } else if (statusFilter === 'not-enrolled') {
+        result = result.filter((m) => !m.fingerprintId);
+      } else if (statusFilter === 'active') {
+        result = result.filter(
+          (m) => (m.fingerprintStatus || '').toLowerCase() === 'active'
+        );
+      } else if (statusFilter === 'inactive') {
+        result = result.filter(
+          (m) =>
+            m.fingerprintId &&
+            (m.fingerprintStatus || '').toLowerCase() !== 'active'
+        );
+      }
+    }
+
     if (hasSearchTerm) {
       const q = searchTerm.toLowerCase().trim();
       result = result.filter((m) =>
@@ -425,7 +445,7 @@ const AssignFingerprintList = () => {
       const bNum = Number(b.rawNumber ?? 0);
       return aNum - bNum;
     });
-  }, [members, typeFilter, departmentFilter, searchTerm, hasSearchTerm]);
+  }, [members, typeFilter, departmentFilter, statusFilter, searchTerm, hasSearchTerm]);
 
   const totalFilteredItems = filteredMembers.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
@@ -437,7 +457,7 @@ const AssignFingerprintList = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, departmentFilter]);
+  }, [searchTerm, typeFilter, departmentFilter, statusFilter]);
 
   const departments = useMemo(() => {
     const set = new Set(members.map((m) => m.department).filter(Boolean));
@@ -458,6 +478,7 @@ const AssignFingerprintList = () => {
     setSearchTerm('');
     setTypeFilter('all');
     setDepartmentFilter('');
+    setStatusFilter('all');
     setCurrentPage(1);
     setActiveMenu(null);
 
@@ -476,6 +497,7 @@ const AssignFingerprintList = () => {
   const handleClearFilters = useCallback(() => {
     setTypeFilter('all');
     setDepartmentFilter('');
+    setStatusFilter('all');
     setSearchTerm('');
     setCurrentPage(1);
   }, []);
@@ -582,13 +604,17 @@ const AssignFingerprintList = () => {
     return (
       (typeFilter !== 'all' ? 1 : 0) +
       (departmentFilter ? 1 : 0) +
+      (statusFilter !== 'all' ? 1 : 0) +
       (hasSearchTerm ? 1 : 0)
     );
-  }, [typeFilter, departmentFilter, hasSearchTerm]);
+  }, [typeFilter, departmentFilter, statusFilter, hasSearchTerm]);
 
   const activeFilterCount = getActiveFilterCount();
   const hasActiveFilters =
-    typeFilter !== 'all' || departmentFilter !== '' || hasSearchTerm;
+    typeFilter !== 'all' ||
+    departmentFilter !== '' ||
+    statusFilter !== 'all' ||
+    hasSearchTerm;
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
@@ -652,25 +678,6 @@ const AssignFingerprintList = () => {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Stethoscope size={14} className="text-blue-500" />
-          Doctors: {members.filter((m) => m.type === 'Doctor').length}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Briefcase size={14} className="text-emerald-500" />
-          Staff: {members.filter((m) => m.type === 'Staff').length}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <UsersIcon size={14} className="text-indigo-500" />
-          Total Members: {members.length}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <CheckCircle2 size={14} className="text-green-600" />
-          Fingerprints Enrolled: {members.filter((m) => m.fingerprintId).length}
-        </span>
-      </div>
-
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="flex flex-1 gap-3 w-full lg:w-auto">
           <SearchBar
@@ -732,7 +739,7 @@ const AssignFingerprintList = () => {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* ✅ Member Type — CustomSelect */}
             <div>
               <CustomSelect
@@ -759,6 +766,23 @@ const AssignFingerprintList = () => {
                 ]}
                 onChange={(value) => setDepartmentFilter(value)}
                 placeholder="All Departments"
+              />
+            </div>
+
+            {/* ✅ Fingerprint Status — CustomSelect */}
+            <div>
+              <CustomSelect
+                label="Fingerprint Status"
+                value={statusFilter}
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'enrolled', label: 'Enrolled' },
+                  { value: 'not-enrolled', label: 'Not Enrolled' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+                onChange={(value) => setStatusFilter(value)}
+                placeholder="All Statuses"
               />
             </div>
           </div>
