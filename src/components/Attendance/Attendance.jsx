@@ -15,7 +15,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, CustomSelect, FilterBar } from '../ui';
+import { Pagination, SearchBar, CustomSelect } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
@@ -368,10 +368,12 @@ const Attendance = () => {
       </p>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
+      {/* FIX: Changed flex layout to force items onto 1 row at 1280px. 
+          Reduced search bar max width, reduced gap, and added shrink-0 to the buttons. */}
+      <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
+        
         {/* Search */}
-        <div className="flex-1 max-w-md">
+        <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search by name, department, role..."
             value={searchTerm}
@@ -380,13 +382,12 @@ const Attendance = () => {
           />
         </div>
 
-        {/* Action Buttons — icon sizing matches AttendanceSheet.jsx */}
-        <div className="flex gap-2 flex-wrap items-center">
-
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing || isFetching}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             title="Refresh"
           >
             <RefreshCcw
@@ -397,7 +398,7 @@ const Attendance = () => {
 
           <button
             onClick={handleExport}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
             title="Export to Excel"
           >
             <Download size={16} />
@@ -405,12 +406,11 @@ const Attendance = () => {
 
           <button
             onClick={() => setShowFilters((prev) => !prev)}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
             title="Toggle Filters"
           >
             <Filter size={16} />
           </button>
-
         </div>
       </div>
 

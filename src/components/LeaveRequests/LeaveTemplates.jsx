@@ -32,7 +32,7 @@ const categoryStyles = {
   "Maternity Leave": "bg-amber-50 text-amber-600",
 };
 
-// ✅ Options for the Category filter — "All Categories" is a real value (default + reset)
+// ✅ Options for the Category filter
 const CATEGORY_OPTIONS = [
   { value: "All Categories", label: "All Categories" },
   { value: "Annual Leave", label: "Annual Leave" },
@@ -41,16 +41,20 @@ const CATEGORY_OPTIONS = [
   { value: "Maternity Leave", label: "Maternity Leave" },
 ];
 
-// ✅ Options for the Status filter — "All Statuses" is a real value
+// ✅ Options for the Status filter
 const STATUS_OPTIONS = [
   { value: "All Statuses", label: "All Statuses" },
   { value: "Active", label: "Active" },
   { value: "Inactive", label: "Inactive" },
 ];
 
-// Styling override so CustomSelect matches the h-10 / border-slate-200 inputs
+// ✅ 1. Updated SELECT_FILTER_CLASS (wider responsive widths, min-h-10, whitespace-nowrap)
 const SELECT_FILTER_CLASS =
-  "w-44 [&>button]:h-10 [&>button]:border-slate-200 [&>button]:text-sm [&>button]:text-slate-600 [&>button]:px-4";
+  "w-[150px] md:w-[170px] lg:w-[180px] xl:w-[190px] " +
+  "[&>button]:h-10 [&>button]:min-h-10 [&>button]:w-full " +
+  "[&>button]:whitespace-nowrap [&>button]:border-slate-200 " +
+  "[&>button]:text-sm [&>button]:text-slate-600 " +
+  "[&>button]:px-3";
 
 const getIconForCategory = (category) => {
   const map = {
@@ -228,10 +232,14 @@ const LeaveTemplates = () => {
         </h1>
       </div>
 
-      {/* Header / Filters */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
-          <div className="relative flex-1 max-w-sm">
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
+      {/* ✅ 2. Added flex-nowrap to the main container */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Search & Filters */}
+        {/* ✅ 3. Added min-w-0 to allow flex children to shrink without breaking */}
+        <div className="flex flex-1 min-w-0 items-center gap-3">
+          <div className="relative w-full max-w-[320px] xl:max-w-[400px]">
             <Search
               size={17}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -245,7 +253,6 @@ const LeaveTemplates = () => {
             />
           </div>
 
-          {/* ✅ Replaced native  (Category) with CustomSelect */}
           <CustomSelect
             hideLabel
             value={category}
@@ -254,7 +261,6 @@ const LeaveTemplates = () => {
             className={SELECT_FILTER_CLASS}
           />
 
-          {/* ✅ Replaced native  (Status) with CustomSelect */}
           <CustomSelect
             hideLabel
             value={status}
@@ -264,10 +270,11 @@ const LeaveTemplates = () => {
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 h-10 w-10 flex items-center justify-center"
             title="Refresh"
           >
             <RefreshCcw size={16} />
@@ -277,6 +284,7 @@ const LeaveTemplates = () => {
             size="md"
             leftIcon={<Plus size={17} />}
             onClick={() => navigate("/leave-templates/create")}
+            className="shrink-0 whitespace-nowrap h-10 px-4"
           >
             Create Template
           </Button>

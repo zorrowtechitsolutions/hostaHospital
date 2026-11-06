@@ -240,7 +240,6 @@ const ManualAttendanceModal = ({
       size="md"
     >
       <div className="space-y-4">
-        {/* ✅ Employee — CustomSelect */}
         <div>
           <CustomSelect
             label="Employee"
@@ -282,7 +281,6 @@ const ManualAttendanceModal = ({
             )}
           </div>
 
-          {/* ✅ Status — CustomSelect */}
           <div>
             <CustomSelect
               label="Status"
@@ -336,7 +334,6 @@ const ManualAttendanceModal = ({
           </div>
         </div>
 
-        {/* Method is fixed to Manual */}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Method
@@ -599,7 +596,6 @@ const ManualAttendance = () => {
     [attendanceData]
   );
 
-  // ✅ Apply ALL THREE filters: department, status, date
   const filteredData = useMemo(() => {
     return normalizedData.filter((row) => {
       const matchesDept = deptFilter === 'all' || row.dept === deptFilter;
@@ -768,14 +764,12 @@ const ManualAttendance = () => {
     ),
   ];
 
-  // ✅ Active filter count (3 filters, search excluded)
   const activeFilterCount = [
     deptFilter !== 'all',
     statusFilter !== 'all',
     !!dateFilter,
   ].filter(Boolean).length;
 
-  // ✅ Clear all filters (including search)
   const clearAllFilters = () => {
     setDeptFilter('all');
     setStatusFilter('all');
@@ -797,10 +791,12 @@ const ManualAttendance = () => {
       />
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
+      {/* FIX: Changed flex layout to force items onto 1 row at 1280px. 
+          Reduced search bar max width, reduced gap, and added whitespace-nowrap to the Add button. */}
+      <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
+        
         {/* Search */}
-        <div className="flex-1 max-w-md">
+        <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search..."
             value={searchTerm}
@@ -809,15 +805,15 @@ const ManualAttendance = () => {
           />
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 flex-wrap items-center">
-
+        {/* Action Buttons - grouped tightly to prevent wrapping */}
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefresh}
             title="Refresh"
             disabled={isFetching}
+            className="shrink-0"
           >
             <RefreshCcw size={16} className={isRefreshing ? 'animate-spin' : ''} />
           </Button>
@@ -827,6 +823,7 @@ const ManualAttendance = () => {
             size="sm"
             onClick={handleExport}
             title="Download"
+            className="shrink-0"
           >
             <Download size={16} />
           </Button>
@@ -836,25 +833,23 @@ const ManualAttendance = () => {
             isOpen={showFilters}
             activeFilterCount={activeFilterCount}
             title="Toggle Filters"
+            className="shrink-0"
           />
 
           <Button
             onClick={handleAddClick}
-            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg shrink-0 whitespace-nowrap h-10 px-4 ml-1"
           >
             <Plus size={16} />
             Add Attendance
           </Button>
-
         </div>
       </div>
 
       {/* ─────────────── FILTER PANEL ─────────────── */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-
           <div className="flex items-center justify-between mb-6">
-
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
                 <Filter size={18} className="text-[#1C62A0]" />
@@ -879,12 +874,9 @@ const ManualAttendance = () => {
             >
               Clear All Filters
             </button>
-
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            {/* Department */}
             <CustomSelect
               label="Department"
               value={deptFilter}
@@ -899,7 +891,6 @@ const ManualAttendance = () => {
               placeholder="All Departments"
             />
 
-            {/* Status */}
             <CustomSelect
               label="Status"
               value={statusFilter}
@@ -914,12 +905,10 @@ const ManualAttendance = () => {
               placeholder="All Status"
             />
 
-            {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-2">
                 Date
               </label>
-
               <input
                 type="date"
                 value={dateFilter}
@@ -927,7 +916,6 @@ const ManualAttendance = () => {
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>
-
           </div>
         </div>
       )}

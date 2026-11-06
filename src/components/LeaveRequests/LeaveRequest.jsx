@@ -689,7 +689,8 @@ const LeaveRequests = () => {
       </p>
 
       {/* ─────────────── KPI STATS CARDS ─────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* FIX: Forces a 2x2 grid on smaller screens (grid-cols-2), and 4 columns on extra large screens (xl:grid-cols-4) */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {statCards.map((card) => (
           <StatCard
             key={card.key}
@@ -712,9 +713,10 @@ const LeaveRequests = () => {
       </div>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
-        <div className="flex-1 max-w-md">
+      <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Search */}
+        <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search employees, doctors, or leave requests..."
             value={searchTerm}
@@ -723,14 +725,15 @@ const LeaveRequests = () => {
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
-
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefresh}
             title="Refresh"
             disabled={isFetching}
+            className="shrink-0"
           >
             <RefreshCcw size={16} className={isRefreshing || isFetching ? 'animate-spin' : ''} />
           </Button>
@@ -740,6 +743,7 @@ const LeaveRequests = () => {
             size="sm"
             onClick={handleExport}
             title="Download"
+            className="shrink-0"
           >
             <Download size={16} />
           </Button>
@@ -749,8 +753,8 @@ const LeaveRequests = () => {
             isOpen={showFilters}
             activeFilterCount={activeFilterCount}
             title="Toggle Filters"
+            className="shrink-0"
           />
-
         </div>
       </div>
 
