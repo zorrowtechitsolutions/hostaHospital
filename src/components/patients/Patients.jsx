@@ -66,15 +66,18 @@ const PERMISSIONS = {
 
 // ✅ Static Status filter options — "All" is a real value (default + reset)
 const STATUS_FILTER_OPTIONS = [
-  { value: 'All', label: 'All Status' },
+  { value: 'All', label: 'Status' },
   { value: 'Active', label: 'Active' },
   { value: 'Inactive', label: 'Inactive' },
   { value: 'Blacklisted', label: 'Blacklisted' },
 ];
 
-// Styling override so CustomSelect matches the border-gray-200 / rounded-md / text-sm filter look
+// ✅ Updated filter class so they have a fixed width and align nicely
 const SELECT_FILTER_CLASS =
-  "w-40 [&>button]:border-gray-200 [&>button]:rounded-md [&>button]:text-sm [&>button]:text-gray-600 [&>button]:focus:ring-1 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
+  "w-[140px] xl:w-[160px] shrink-0 " +
+  "[&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full " +
+  "[&_button]:!whitespace-nowrap [&_button]:!px-3 " +
+  "[&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600";
 
 // ✅ Local wrapper adds cache-busting (?t=timestamp) on top of shared helper
 const getS3ImageUrl = (imageKey) => {
@@ -519,7 +522,7 @@ useEffect(() => {
     () =>
       genderOptions.map((g) => ({
         value: g,
-        label: g === 'All' ? 'All Genders' : g,
+        label: g === 'All' ? 'Genders' : g,
       })),
     [genderOptions]
   );
@@ -851,12 +854,14 @@ useEffect(() => {
           <h1 className="text-xl font-bold text-gray-800">Patients</h1>
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto items-start">
-            <div className="flex-1 max-w-sm">
+        {/* ─────────────── TWO-ROW TOOLBAR ─────────────── */}
+        <div className="flex flex-col gap-3 mb-6 w-full">
+          
+          {/* Row 1: Search & Filters */}
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            <div className="relative flex-1 min-w-[200px] max-w-[400px]">
               <SearchBar
-                placeholder="Search by name, mobile, email, ID, or Patient Number..."
+                placeholder="Search by name, mobile, email, ID..."
                 value={searchTerm}
                 onChange={handleSearchChange}
                 onClear={handleClearSearch}
@@ -864,7 +869,6 @@ useEffect(() => {
               />
             </div>
 
-            {/* ✅ Replaced native select (Gender) with CustomSelect */}
             <CustomSelect
               hideLabel
               value={genderFilter}
@@ -876,7 +880,6 @@ useEffect(() => {
               className={SELECT_FILTER_CLASS}
             />
 
-            {/* ✅ Replaced native select (Status) with CustomSelect */}
             <CustomSelect
               hideLabel
               value={statusFilter}
@@ -889,46 +892,64 @@ useEffect(() => {
             />
           </div>
 
-          <div className="flex gap-2 flex-wrap items-center">
-            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+          {/* Row 2: Actions & View Toggle */}
+          <div className="flex items-center justify-between w-full">
+            {/* View Toggle (Left-aligned on row 2) */}
+            <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-lg bg-white shrink-0">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === "grid"
+                    ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
                 aria-label="Grid view"
+                title="Grid view"
               >
-                <LayoutGrid size={16} />
+                <LayoutGrid size={18} />
               </button>
+
               <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === "list"
+                    ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
                 aria-label="List view"
+                title="List view"
               >
-                <List size={16} />
+                <List size={18} />
               </button>
             </div>
 
-            <button
-              onClick={handleRefresh}
-              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-              disabled={isFetching}
-              aria-label="Refresh"
-            >
-              <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
-            </button>
+            {/* Right side Actions (Refresh, Export, New Patient) */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleRefresh}
+                className="p-2 h-10 w-10 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 flex items-center justify-center"
+                disabled={isFetching}
+                aria-label="Refresh"
+              >
+                <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+              </button>
 
-            <ExcelExportButton
-              data={getExportData()}
-              fileName={`patients_${new Date().toISOString().split("T")[0]}`}
-              sheetName="Patients"
-              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            />
+              <ExcelExportButton
+                data={getExportData()}
+                fileName={`patients_${new Date().toISOString().split("T")[0]}`}
+                sheetName="Patients"
+                className="p-2 h-10 w-10 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 flex items-center justify-center"
+              />
 
-            <Button
-              onClick={handleAddPatient}
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus size={16} /> New Patient
-            </Button>
+              <Button
+                onClick={handleAddPatient}
+                className="px-4 h-10 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300 shrink-0 whitespace-nowrap"
+              >
+                <Plus size={16} /> New Patient
+              </Button>
+            </div>
           </div>
         </div>
 

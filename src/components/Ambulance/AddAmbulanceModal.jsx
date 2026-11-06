@@ -4,24 +4,10 @@ import { Modal, Input, Button, CustomSelect } from '../ui';
 import { Country, State, City } from 'country-state-city';
 import { showErrorToast } from '../ui/Toast';
 
-const DEFAULT_AMBULANCE_TYPES = [
-  "Basic Life Support (BLS)",
-  "Advanced Life Support (ALS)",
-  "Patient Transport Ambulance",
-  "ICU Ambulance",
-  "Neonatal Ambulance",
-  "Air Ambulance",
-  "Mortuary Ambulance",
-  "Motorcycle Ambulance",
-  "Boat Ambulance",
-  "Emergency Response Vehicle"
-];
-
 const AddAmbulanceModal = ({ 
   isOpen, 
   onClose, 
-  onSave, 
-  ambulanceTypes = DEFAULT_AMBULANCE_TYPES 
+  onSave
 }) => {
   const [formData, setFormData] = useState({
     serviceName: '',
@@ -47,8 +33,6 @@ const AddAmbulanceModal = ({
   const cities = City.getCitiesOfState(countryCode, stateCode);
 
   // ---- Options for CustomSelect ----
-  const vehicleTypeOptions = (ambulanceTypes || []).map(t => ({ value: t, label: t }));
-
   const countryOptions = countries.map(c => ({
     value: c.isoCode,
     label: c.name
@@ -80,7 +64,9 @@ const AddAmbulanceModal = ({
   };
 
   const validateVehicleType = (type) => {
-    if (!type) return 'Vehicle type is required';
+    if (!type || type.trim() === '') return 'Vehicle type is required';
+    if (type.length < 2) return 'Vehicle type must be at least 2 characters';
+    if (type.length > 100) return 'Vehicle type must be less than 100 characters';
     return '';
   };
 
@@ -173,12 +159,6 @@ const AddAmbulanceModal = ({
     }));
     setTouched(prev => ({ ...prev, 'address.district': true }));
     if (errors['address.district']) setErrors(prev => ({ ...prev, 'address.district': '' }));
-  };
-
-  const handleVehicleTypeChange = (value) => {
-    setFormData(prev => ({ ...prev, vehicleType: value }));
-    setTouched(prev => ({ ...prev, vehicleType: true }));
-    if (errors.vehicleType) setErrors(prev => ({ ...prev, vehicleType: '' }));
   };
 
   const validateForm = () => {
@@ -302,13 +282,14 @@ const AddAmbulanceModal = ({
           required
         />
 
-        {/* ✅ Custom Vehicle Type dropdown */}
-        <CustomSelect
-          label="Vehicle Type"
+        {/* ✅ Vehicle Type as text input */}
+        <Input
+          label="Vehicle Type *"
+          name="vehicleType"
           value={formData.vehicleType}
-          options={vehicleTypeOptions}
-          onChange={handleVehicleTypeChange}
-          placeholder="Select vehicle type"
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="Enter vehicle type (e.g., Basic Life Support, ICU Ambulance, etc.)"
           error={errors.vehicleType}
           touched={touched.vehicleType}
           required
@@ -331,7 +312,6 @@ const AddAmbulanceModal = ({
           <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
           
           <div className="space-y-3">
-            {/* ✅ Custom Country dropdown */}
             <CustomSelect
               label="Country"
               value={countryCode}
@@ -343,7 +323,6 @@ const AddAmbulanceModal = ({
               required
             />
 
-            {/* ✅ Custom State dropdown */}
             <CustomSelect
               label="State"
               value={stateCode}
@@ -356,7 +335,6 @@ const AddAmbulanceModal = ({
               required
             />
 
-            {/* ✅ Custom District dropdown */}
             <CustomSelect
               label="District"
               value={formData.address.district}

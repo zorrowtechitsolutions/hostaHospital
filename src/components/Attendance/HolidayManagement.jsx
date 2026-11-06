@@ -13,9 +13,10 @@ import {
   Sparkles,
   Sun,
   Flag,
+  Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button, CustomSelect } from '../ui';
+import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar } from '../ui';
 import {
   showSuccessToast,
   showErrorToast,
@@ -182,7 +183,6 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
           )}
         </div>
 
-        {/* ✅ Holiday Type — CustomSelect */}
         <div>
           <CustomSelect
             label="Holiday Type"
@@ -366,6 +366,7 @@ const HolidayManagement = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
   const [currentPage, setCurrentPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
   const itemsPerPage = 10;
 
   const {
@@ -597,6 +598,19 @@ const HolidayManagement = () => {
     return Array.from({ length: 7 }, (_, i) => String(currentYear - 3 + i));
   }, []);
 
+  const activeFilterCount = [
+    typeFilter !== 'all',
+    yearFilter !== String(new Date().getFullYear()), // Assuming default year shouldn't count as an "active" filter unless we want it to. Let's just count if it differs from 'all' or default.
+    !!searchTerm,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setTypeFilter('all');
+    setYearFilter(String(new Date().getFullYear()));
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   return (
     <div className="w-full min-h-screen max-w-none bg-[#F8FAFC] p-4 md:p-6 font-sans text-gray-800">
       <Breadcrumb
@@ -628,9 +642,11 @@ const HolidayManagement = () => {
         </span>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <div className="flex-1 min-w-[220px]">
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
+      <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Search */}
+        <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search holiday by name…"
             value={searchTerm}
@@ -639,62 +655,102 @@ const HolidayManagement = () => {
           />
         </div>
 
-        {/* ✅ Type filter — CustomSelect */}
-        <div className="w-full sm:w-44 -mt-1">
-          <CustomSelect
-            label=""
-            value={typeFilter}
-            options={[
-              { value: 'all', label: 'All Types' },
-              ...HOLIDAY_TYPES.map((t) => ({ value: t, label: t }))
-            ]}
-            onChange={(value) => setTypeFilter(value)}
-            placeholder="All Types"
-          />
-        </div>
-
-        {/* ✅ Year filter — CustomSelect */}
-        <div className="w-full sm:w-32 -mt-1">
-          <CustomSelect
-            label=""
-            value={yearFilter}
-            options={[
-              { value: '', label: 'All Years' },
-              ...yearOptions.map((y) => ({ value: y, label: y }))
-            ]}
-            onChange={(value) => setYearFilter(value)}
-            placeholder="All Years"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <Button
-            type="button"
-            variant="primary"
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            title="Refresh"
+            disabled={isFetching}
+            className="shrink-0"
+          >
+            <RefreshCcw size={16} className={isFetching ? 'animate-spin' : ''} />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            title="Download"
+            className="shrink-0"
+          >
+            <Download size={16} />
+          </Button>
+
+          <FilterBar
+            onClick={() => setShowFilters((prev) => !prev)}
+            isOpen={showFilters}
+            activeFilterCount={activeFilterCount}
+            title="Toggle Filters"
+            className="shrink-0"
+          />
+
+          <Button
             onClick={handleAddClick}
-            className="inline-flex items-center gap-2 h-9"
+            className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg shrink-0 whitespace-nowrap h-10 px-4 ml-1"
           >
             <Plus size={16} />
             Add Holiday
           </Button>
-
-          <button
-            onClick={handleRefresh}
-            className="p-2 h-9 w-9 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCcw size={16} className={isFetching ? 'animate-spin' : ''} />
-          </button>
-
-          <button
-            onClick={handleExport}
-            className="p-2 h-9 w-9 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            title="Export"
-          >
-            <Download size={16} />
-          </button>
         </div>
       </div>
+
+      {/* ─────────────── FILTER PANEL ─────────────── */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                <Filter size={18} className="text-[#1C62A0]" />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Filters
+                </h2>
+
+                {activeFilterCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-md">
+                    {activeFilterCount} Active Filter{activeFilterCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
+              Clear All Filters
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <CustomSelect
+              label="Holiday Type"
+              value={typeFilter}
+              options={[
+                { value: 'all', label: 'All Types' },
+                ...HOLIDAY_TYPES.map((t) => ({ value: t, label: t })),
+              ]}
+              onChange={setTypeFilter}
+              placeholder="All Types"
+            />
+
+            <CustomSelect
+              label="Year"
+              value={yearFilter}
+              options={[
+                { value: '', label: 'All Years' },
+                ...yearOptions.map((y) => ({ value: y, label: y })),
+              ]}
+              onChange={setYearFilter}
+              placeholder="All Years"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="w-full max-w-none bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">

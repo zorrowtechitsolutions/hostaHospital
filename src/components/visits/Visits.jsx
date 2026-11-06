@@ -71,6 +71,9 @@ const formatVisitId = (booking) => {
   return id ? `#BK${String(id).padStart(5, '0')}` : '#BK00000';
 };
 
+const ICON_BUTTON_CLASS =
+  "p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0";
+
 const Visits = () => {
   const navigate = useNavigate();
   
@@ -571,7 +574,7 @@ const Visits = () => {
   const activeFilterCount = getActiveFilterCount();
 
   const recentVisits = useMemo(() => {
-    return filteredVisits.slice(0, 3).map(visit => ({
+    return filteredVisits.slice(0, 4).map(visit => ({
       id: visit.id,
       patientName: visit.patientName,
       patientId: visit.patientId,
@@ -619,8 +622,8 @@ const Visits = () => {
 
       <div className="mb-8">
         <div className="h-6 w-32 bg-gray-200 rounded animate-pulse mb-4"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1, 2].map((i) => (
             <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
@@ -686,37 +689,44 @@ const Visits = () => {
         </p>
       </div>
 
-      {/* Search and Action Buttons Row */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          {/* ✅ Using global SearchBar component */}
+      {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+      <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Left: Search */}
+        <div className="flex-1 min-w-[200px] max-w-[400px]">
           <SearchBar
             placeholder="Search by Visit ID, Patient Name, Doctor, Token..."
             value={searchTerm}
             onChange={handleSearchChange}
             onClear={handleClearSearch}
-            className="flex-1 max-w-sm"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button 
             onClick={handleRefresh} 
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className={ICON_BUTTON_CLASS}
+            title="Refresh"
             disabled={isFetching}
           >
             <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
           </button>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50" title="Export to Excel">
+          
+          <button 
+            onClick={handleExport} 
+            className={ICON_BUTTON_CLASS}
+            title="Export to Excel"
+          >
             <Download size={16} />
           </button>
 
-          {/* ✅ FilterBar — icon always stays gray */}
           <FilterBar
             onClick={() => setShowFilters(!showFilters)}
             isOpen={showFilters}
             activeFilterCount={activeFilterCount}
             title="Toggle Filters"
+            className="h-10 w-10 flex items-center justify-center shrink-0"
           />
         </div>
       </div>
@@ -744,12 +754,11 @@ const Visits = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* ✅ Replaced native  with CustomSelect */}
             <CustomSelect
               label="Department"
               value={departmentFilter}
               options={[
-                { value: '', label: 'All Departments' },
+                { value: '', label: 'Departments' },
                 ...getAllDepartments().map((dept) => ({ value: dept, label: dept }))
               ]}
               onChange={(value) => setDepartmentFilter(value)}
@@ -771,11 +780,11 @@ const Visits = () => {
         </div>
       )}
 
-      {/* Recent Visits Cards */}
+      {/* Recent Visits Cards - exactly 2 per row on desktop */}
       {recentVisits.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Visits</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {recentVisits.map((visit) => (
               <div key={visit.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <div className="p-5">

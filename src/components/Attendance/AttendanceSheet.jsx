@@ -498,10 +498,12 @@ const AttendanceSheet = () => {
         </p>
       </div>
 
-      {/* Search and Actions */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-1 gap-3 w-full lg:w-auto">
-          <div className="flex-1 max-w-sm relative">
+      {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
+      <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
+        
+        {/* Search */}
+        <div className="w-full max-w-[320px] xl:max-w-[400px]">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
@@ -511,7 +513,7 @@ const AttendanceSheet = () => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white"
+              className="w-full pl-10 pr-10 py-2 h-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white"
             />
             {searchTerm && (
               <button
@@ -524,24 +526,28 @@ const AttendanceSheet = () => {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing || isFetching}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            title="Refresh"
           >
             <RefreshCw size={16} className={isRefreshing || isFetching ? "animate-spin" : ""} />
           </button>
+          
           <button
             onClick={exportToExcel}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
             title="Export to Excel"
           >
             <Download size={16} />
           </button>
+          
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
             title="Toggle Filters"
           >
             <Filter size={16} />

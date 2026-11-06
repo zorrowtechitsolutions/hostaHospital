@@ -159,7 +159,6 @@ const AddBloodStockModal = ({ isOpen, onClose, onSave, isSaving, error }) => {
           </div>
         </div>
 
-        {/* ✅ Blood Group — CustomSelect */}
         <div>
           <CustomSelect
             label="Blood Group"
@@ -253,23 +252,20 @@ const EditBloodStockModal = ({ isOpen, onClose, onSave, stock, isSaving, error }
           </div>
         </div>
 
-        {/* ✅ Blood Group — CustomSelect */}
         <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Blood Group
-  </label>
-
-  <input
-    type="text"
-    value={formData.bloodGroup}
-    disabled
-    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
-  />
-
-  <p className="text-xs text-gray-400 mt-1">
-    Blood group cannot be changed after stock is created.
-  </p>
-</div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Blood Group
+          </label>
+          <input
+            type="text"
+            value={formData.bloodGroup}
+            disabled
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Blood group cannot be changed after stock is created.
+          </p>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Count (Units) *</label>
@@ -732,49 +728,57 @@ const BloodBank = () => {
           <h1 className="text-xl font-bold text-gray-800">Blood Bank Management</h1>
         </div>
 
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto flex-wrap items-start">
-            <SearchBar
-              placeholder="Search by blood group or ID..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onClear={handleClearSearch}
-              className="flex-1 max-w-sm"
-            />
-            {/* ✅ Blood Group filter — CustomSelect */}
-            <div className="w-full sm:w-48 -mt-1">
-              <CustomSelect
-                label=""
-                value={bloodGroupFilter}
-                options={[
-                  { value: 'all', label: 'All Blood Groups' },
-                  ...BLOOD_GROUPS.map(group => ({ value: group, label: group }))
-                ]}
-                onChange={(value) => {
-                  setBloodGroupFilter(value);
-                  setCurrentPage(1);
-                }}
-                placeholder="All Blood Groups"
+        {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+        <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+          
+          {/* Left: Search + Blood Group Filter */}
+          <div className="flex flex-1 min-w-0 items-center gap-3">
+            <div className="relative flex-1 min-w-[180px] max-w-[360px]">
+              <SearchBar
+                placeholder="Search by blood group or ID..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onClear={handleClearSearch}
               />
             </div>
+
+            <CustomSelect
+              hideLabel
+              value={bloodGroupFilter}
+              options={[
+                { value: 'all', label: 'Blood Groups' },
+                ...BLOOD_GROUPS.map(group => ({ value: group, label: group }))
+              ]}
+              onChange={(value) => {
+                setBloodGroupFilter(value);
+                setCurrentPage(1);
+              }}
+              className="w-[160px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600"
+            />
           </div>
 
-          <div className="flex gap-2 flex-wrap items-center">
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             <button 
               onClick={handleRefresh} 
-              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+              className="p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
               disabled={isFetching}
+              title="Refresh"
             >
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </button>
 
-            <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors" title="Export to Excel">
+            <button 
+              onClick={handleExport} 
+              className="p-2 h-10 w-10 flex items-center justify-center border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+              title="Export to Excel"
+            >
               <Download size={16} />
             </button>
 
             <button 
               onClick={handleAddClick} 
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+              className="px-4 h-10 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300 shrink-0 whitespace-nowrap"
             >
               <Plus size={16} /> Add Blood Stock
             </button>

@@ -1,10 +1,10 @@
 // src/components/Ambulance/EditAmbulanceModal.jsx
 import React, { useState, useEffect } from 'react';
-import { Modal, Input, Button, CustomSelect } from '../ui'; // ✅ added CustomSelect
+import { Modal, Input, Button, CustomSelect } from '../ui';
 import { Country, State, City } from 'country-state-city';
 import { showErrorToast } from '../ui/Toast';
 
-const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes }) => {
+const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance }) => {
   const [formData, setFormData] = useState({
     id: null,
     serviceName: '',
@@ -74,7 +74,9 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
   };
 
   const validateVehicleType = (type) => {
-    if (!type) return 'Vehicle type is required';
+    if (!type || type.trim() === '') return 'Vehicle type is required';
+    if (type.length < 2) return 'Vehicle type must be at least 2 characters';
+    if (type.length > 100) return 'Vehicle type must be less than 100 characters';
     return '';
   };
 
@@ -286,17 +288,14 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
           required
         />
 
-        {/* ✅ Custom Vehicle Type dropdown */}
-        <CustomSelect
-          label="Vehicle Type"
+        {/* ✅ Vehicle Type as text input */}
+        <Input
+          label="Vehicle Type *"
+          name="vehicleType"
           value={formData.vehicleType}
-          options={(ambulanceTypes || []).map(type => ({ value: type, label: type }))}
-          onChange={(value) => {
-            setFormData(prev => ({ ...prev, vehicleType: value }));
-            setTouched(prev => ({ ...prev, vehicleType: true }));
-            if (errors.vehicleType) setErrors(prev => ({ ...prev, vehicleType: '' }));
-          }}
-          placeholder="Select vehicle type"
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="Enter vehicle type (e.g., Basic Life Support, ICU Ambulance, etc.)"
           error={errors.vehicleType}
           touched={touched.vehicleType}
           required
@@ -319,7 +318,6 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
           <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
           
           <div className="space-y-3">
-            {/* ✅ Custom Country dropdown */}
             <CustomSelect
               label="Country"
               value={countryCode}
@@ -337,7 +335,6 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
               required
             />
 
-            {/* ✅ Custom State dropdown */}
             <CustomSelect
               label="State"
               value={stateCode}
@@ -356,7 +353,6 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance, ambulanceTypes
               required
             />
 
-            {/* ✅ Custom District dropdown */}
             <CustomSelect
               label="District"
               value={formData.address.district}

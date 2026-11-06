@@ -76,14 +76,14 @@ const PERMISSIONS = {
 
 // ✅ Static Gender filter options
 const GENDER_FILTER_OPTIONS = [
-  { value: 'all', label: 'All Genders' },
+  { value: 'all', label: 'Genders' },
   { value: 'Male', label: 'Male' },
   { value: 'Female', label: 'Female' },
 ];
 
 // ✅ Static Status filter options
 const STATUS_FILTER_OPTIONS = [
-  { value: 'all', label: 'All Status' },
+  { value: 'all', label: 'Status' },
   { value: 'Active', label: 'Active' },
   { value: 'Inactive', label: 'Inactive' },
   { value: 'Blacklisted', label: 'Blacklisted' },
@@ -571,7 +571,7 @@ const Staffs = () => {
   // ✅ Options for the Designation filter CustomSelect
   const designationFilterOptions = useMemo(
     () => [
-      { value: 'all', label: 'All Designations' },
+      { value: 'all', label: 'Designations' },
       ...getAllDesignations().map(d => ({ value: d, label: d })),
     ],
     [staffsData, staffApiResponse]
@@ -932,9 +932,11 @@ const Staffs = () => {
           )}
         </div>
 
-        {/* Search and Action Buttons Row */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex-1 max-w-md">
+        {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+        <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
+          
+          {/* Left: Search */}
+          <div className="flex-1 min-w-[200px] max-w-[400px]">
             <SearchBar
               placeholder="Search by name, staff ID, designation, phone or hospital..."
               value={searchTerm}
@@ -945,28 +947,57 @@ const Staffs = () => {
               }}
             />
           </div>
-          <div className="flex gap-2 flex-wrap items-center">
-            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* View Toggle */}
+            <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-lg bg-white shrink-0">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === 'grid'
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
                 aria-label="Grid view"
+                title="Grid view"
               >
                 <LayoutGrid size={16} />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('list')}
-                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === 'list'
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
                 aria-label="List view"
+                title="List view"
               >
                 <List size={16} />
               </button>
             </div>
 
-            <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isFetching}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh} 
+              title="Refresh" 
+              disabled={isFetching}
+              className="h-10 w-10 flex items-center justify-center shrink-0"
+            >
               <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} title="Export to Excel">
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExport} 
+              title="Export to Excel"
+              className="h-10 w-10 flex items-center justify-center shrink-0"
+            >
               <Download size={16} />
             </Button>
 
@@ -975,11 +1006,12 @@ const Staffs = () => {
               isOpen={showFilters}
               activeFilterCount={activeFilterCount}
               title="Toggle Filters"
+              className="h-10 w-10 flex items-center justify-center shrink-0"
             />
 
             <Button
               onClick={handleAddStaff}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 h-10 px-4 shrink-0 whitespace-nowrap"
             >
               <Plus size={16} /> New Staff
             </Button>
@@ -1009,7 +1041,6 @@ const Staffs = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              {/* ✅ Replaced native  (Designation) with CustomSelect */}
               <CustomSelect
                 hideLabel
                 value={designationFilter}
@@ -1018,7 +1049,6 @@ const Staffs = () => {
                 className={SELECT_FILTER_CLASS}
               />
 
-              {/* ✅ Replaced native  (Gender) with CustomSelect */}
               <CustomSelect
                 hideLabel
                 value={genderFilter}
@@ -1027,7 +1057,6 @@ const Staffs = () => {
                 className={SELECT_FILTER_CLASS}
               />
 
-              {/* ✅ Replaced native  (Status) with CustomSelect */}
               <CustomSelect
                 hideLabel
                 value={statusFilter}

@@ -498,7 +498,7 @@ const Doctors = () => {
     () =>
       departments.map((dept) => ({
         value: dept,
-        label: dept === 'All' ? 'All Departments' : dept,
+        label: dept === 'All' ? 'Departments' : dept,
       })),
     [departments]
   );
@@ -506,7 +506,7 @@ const Doctors = () => {
   // ✅ Options for CustomSelect — status filter
   const statusFilterOptions = useMemo(
     () => [
-      { value: 'All', label: 'All Status' },
+      { value: 'All', label: 'Status' },
       { value: 'Active', label: 'Active' },
       { value: 'Inactive', label: 'Inactive' },
     ],
@@ -755,9 +755,12 @@ const Doctors = () => {
           )}
         </div>
 
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-          <div className="flex flex-1 gap-3 w-full lg:w-auto items-start">
-            <div className="flex-1 max-w-sm">
+        {/* ─────────────── TWO-ROW TOOLBAR ─────────────── */}
+        <div className="flex flex-col gap-3 mb-6 w-full">
+          
+          {/* Row 1: Search & Filters */}
+          <div className="flex flex-wrap items-center gap-3 w-full">
+            <div className="relative flex-1 min-w-[200px] max-w-[400px]">
               <SearchBar
                 placeholder="Search by name, department, specialty..."
                 value={searchTerm}
@@ -767,40 +770,52 @@ const Doctors = () => {
               />
             </div>
 
-            {/* ✅ Replaced native select for Department with CustomSelect */}
             <CustomSelect
               hideLabel
               value={selectedSpecialty}
               options={departmentFilterOptions}
               onChange={(value) => setSelectedSpecialty(value)}
-              className="w-44"
+              className="w-[160px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600"
             />
 
-            {/* ✅ Replaced native select for Status with CustomSelect */}
             <CustomSelect
               hideLabel
               value={filterStatus}
               options={statusFilterOptions}
               onChange={(value) => setFilterStatus(value)}
-              className="w-36"
+              className="w-[140px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600"
             />
           </div>
 
-          <div className="flex gap-2 flex-wrap items-center">
-            <div className="flex border border-gray-200 rounded-md bg-white mr-2">
+          {/* Row 2: Actions & View Toggle */}
+          <div className="flex items-center justify-between w-full">
+            {/* View Toggle (Left-aligned on row 2) */}
+            <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-lg bg-white shrink-0">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-l-md transition-colors ${viewMode === 'grid' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === "grid"
+                    ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
                 aria-label="Grid view"
+                title="Grid view"
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z" />
                 </svg>
               </button>
               <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-r-md transition-colors ${viewMode === 'list' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                  viewMode === "list"
+                    ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
                 aria-label="List view"
+                title="List view"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -808,37 +823,40 @@ const Doctors = () => {
               </button>
             </div>
 
-            <button
-              onClick={handleRefresh}
-              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-              disabled={isFetching}
-              aria-label="Refresh"
-            >
-              <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            {/* Right side Actions (Refresh, Export, New Doctor) */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleRefresh}
+                className="p-2 h-10 w-10 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 flex items-center justify-center"
+                disabled={isFetching}
+                aria-label="Refresh"
+              >
+                <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
 
-            <ExcelExportButton
-              data={getExportData()}
-              fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
-              sheetName="Doctors"
-              className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors"
-            />
+              <ExcelExportButton
+                data={getExportData()}
+                fileName={`doctors_${new Date().toISOString().split("T")[0]}`}
+                sheetName="Doctors"
+                className="p-2 h-10 w-10 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 flex items-center justify-center"
+              />
 
-            <Link
-              to="/add-doctor"
-              onClick={(e) => {
-                if (!hasPermission(PERMISSIONS.CREATE)) {
-                  e.preventDefault();
-                  setPermissionDeniedMessage('You do not have permission to add a doctor.');
-                  setShowPermissionDenied(true);
-                }
-              }}
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <span className="text-lg">+</span> New Doctor
-            </Link>
+              <Link
+                to="/add-doctor"
+                onClick={(e) => {
+                  if (!hasPermission(PERMISSIONS.CREATE)) {
+                    e.preventDefault();
+                    setPermissionDeniedMessage('You do not have permission to add a doctor.');
+                    setShowPermissionDenied(true);
+                  }
+                }}
+                className="px-4 h-10 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-md flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-300 shrink-0 whitespace-nowrap"
+              >
+                <span className="text-lg">+</span> New Doctor
+              </Link>
+            </div>
           </div>
         </div>
 
