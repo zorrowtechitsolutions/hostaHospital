@@ -755,12 +755,12 @@ const Doctors = () => {
           )}
         </div>
 
-        {/* ─────────────── TWO-ROW TOOLBAR ─────────────── */}
-        <div className="flex flex-col gap-3 mb-6 w-full">
+        {/* ─────────────── SINGLE-ROW TOOLBAR ─────────────── */}
+        <div className="flex flex-wrap lg:flex-nowrap justify-between items-center gap-3 mb-6 w-full">
           
-          {/* Row 1: Search & Filters */}
-          <div className="flex flex-wrap items-center gap-3 w-full">
-            <div className="relative flex-1 min-w-[200px] max-w-[400px]">
+          {/* Left: Search & Filters */}
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            <div className="relative w-full sm:w-[280px] md:w-[320px] shrink-0">
               <SearchBar
                 placeholder="Search by name, department, specialty..."
                 value={searchTerm}
@@ -775,7 +775,7 @@ const Doctors = () => {
               value={selectedSpecialty}
               options={departmentFilterOptions}
               onChange={(value) => setSelectedSpecialty(value)}
-              className="w-[160px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600"
+              className="w-full sm:w-[160px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600 [&_button]:!rounded-md"
             />
 
             <CustomSelect
@@ -783,18 +783,18 @@ const Doctors = () => {
               value={filterStatus}
               options={statusFilterOptions}
               onChange={(value) => setFilterStatus(value)}
-              className="w-[140px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600"
+              className="w-full sm:w-[140px] shrink-0 [&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full [&_button]:!whitespace-nowrap [&_button]:!px-3 [&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600 [&_button]:!rounded-md"
             />
           </div>
 
-          {/* Row 2: Actions & View Toggle */}
-          <div className="flex items-center justify-between w-full">
-            {/* View Toggle (Left-aligned on row 2) */}
-            <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-lg bg-white shrink-0">
+          {/* Right: Actions & View Toggle */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap w-full lg:w-auto justify-between lg:justify-end">
+            {/* View Toggle */}
+            <div className="inline-flex items-center gap-1 p-1 h-10 border border-slate-200 rounded-md bg-white shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                className={`w-8 h-8 rounded-sm flex items-center justify-center transition-all duration-200 ${
                   viewMode === "grid"
                     ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
                     : "text-slate-500 hover:bg-slate-100"
@@ -809,7 +809,7 @@ const Doctors = () => {
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                className={`w-9 h-8 rounded-md flex items-center justify-center transition-all duration-200 ${
+                className={`w-8 h-8 rounded-sm flex items-center justify-center transition-all duration-200 ${
                   viewMode === "list"
                     ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-sm"
                     : "text-slate-500 hover:bg-slate-100"
@@ -823,8 +823,7 @@ const Doctors = () => {
               </button>
             </div>
 
-            {/* Right side Actions (Refresh, Export, New Doctor) */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleRefresh}
                 className="p-2 h-10 w-10 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 transition-colors shrink-0 flex items-center justify-center"
