@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
+import DatePicker from '../ui/DatePicker';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ API
@@ -412,12 +413,13 @@ const AddLeaveRequest = () => {
                   <div className="relative">
                     <CalendarIcon
                       size={16}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
                     />
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.startDate}
-                      onChange={(e) => handleChange('startDate', e.target.value)}
+                      onChange={(isoDate) => handleChange('startDate', isoDate)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
                       className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                         errors.startDate ? 'border-red-300' : 'border-gray-200'
                       }`}
@@ -435,13 +437,14 @@ const AddLeaveRequest = () => {
                   <div className="relative">
                     <CalendarIcon
                       size={16}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
                     />
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.endDate}
-                      min={form.startDate || todayISO()}
-                      onChange={(e) => handleChange('endDate', e.target.value)}
+                      onChange={(isoDate) => handleChange('endDate', isoDate)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
+                      options={{ minDate: form.startDate || todayISO() }}
                       className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                         errors.endDate ? 'border-red-300' : 'border-gray-200'
                       }`}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import {
   showSuccessToast,
   showErrorToast,
@@ -54,6 +55,14 @@ const toISODate = (value) => {
   } catch {
     return '';
   }
+};
+
+const getTodayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 const HOLIDAY_TYPES = [
@@ -95,7 +104,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
 
   const [form, setForm] = useState({
     name: '',
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayISO(),
     endDate: '',
     type: 'Public Holiday',
     description: '',
@@ -109,7 +118,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
     if (isEdit && initialData) {
       setForm({
         name: initialData.name || '',
-        date: initialData.dateISO || new Date().toISOString().split('T')[0],
+        date: initialData.dateISO || getTodayISO(),
         endDate: initialData.endDateISO || '',
         type: initialData.type || 'Public Holiday',
         description: initialData.description || '',
@@ -118,7 +127,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
     } else {
       setForm({
         name: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayISO(),
         endDate: '',
         type: 'Public Holiday',
         description: '',
@@ -192,6 +201,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE <input type="date"> */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Start Date <span className="text-red-500">*</span>
@@ -199,12 +209,13 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             <div className="relative">
               <Calendar
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
               />
-              <input
-                type="date"
+              <DatePicker
                 value={form.date}
-                onChange={(e) => handleChange('date', e.target.value)}
+                onChange={(isoDate) => handleChange('date', isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                   errors.date ? 'border-red-300' : 'border-gray-200'
                 }`}
@@ -215,6 +226,7 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             )}
           </div>
 
+          {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE <input type="date"> */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               End Date (optional)
@@ -222,13 +234,14 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             <div className="relative">
               <Calendar
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
               />
-              <input
-                type="date"
+              <DatePicker
                 value={form.endDate}
-                min={form.date}
-                onChange={(e) => handleChange('endDate', e.target.value)}
+                onChange={(isoDate) => handleChange('endDate', isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                options={{ minDate: form.date || undefined }}
                 className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                   errors.endDate ? 'border-red-300' : 'border-gray-200'
                 }`}

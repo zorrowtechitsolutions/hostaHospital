@@ -21,6 +21,7 @@ import {
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { Pagination, SearchBar, Modal, Button, FilterBar } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
+import DatePicker from '../ui/DatePicker';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ API
@@ -837,14 +838,16 @@ const LeaveRequests = () => {
               placeholder="All Status"
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
+            {/* ✅ DATE FIELD ALIGNED HORIZONTALLY USING mb-1 */}
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
                 Date
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>
