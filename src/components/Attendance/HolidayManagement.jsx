@@ -386,15 +386,12 @@ const HolidayManagement = () => {
   useEffect(() => {
     registerHolidayEvents({
       onCreated: async (data) => {
-        console.log('Holiday created event:', data);
         await refetch();
       },
       onUpdated: async (data) => {
-        console.log('Holiday updated event:', data);
         await refetch();
       },
       onDeleted: async (data) => {
-        console.log('Holiday deleted event:', data);
         await refetch();
       },
     });
