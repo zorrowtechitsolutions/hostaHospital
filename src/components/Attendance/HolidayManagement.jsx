@@ -27,6 +27,9 @@ import {
   useUpdateHolidayMutation,
   useDeleteHolidayMutation,
 } from '../../../app/service/holidayApi';
+// ✅ ADD: Socket imports
+import { socket } from '../../socket/socket';
+import { registerHolidayEvents, unregisterHolidayEvents } from '../../socket/holidayEvents';
 
 // ============================================================
 // HELPERS
@@ -378,6 +381,55 @@ const HolidayManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editHoliday, setEditHoliday] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // ✅ ADD: Register socket event listeners (like Ambulance)
+  useEffect(() => {
+    registerHolidayEvents({
+      onCreated: async (data) => {
+        console.log('Holiday created event:', data);
+        await refetch();
+      },
+      onUpdated: async (data) => {
+        console.log('Holiday updated event:', data);
+        await refetch();
+      },
+      onDeleted: async (data) => {
+        console.log('Holiday deleted event:', data);
+        await refetch();
+      },
+    });
+
+    return () => {
+      unregisterHolidayEvents();
+    };
+  }, [refetch]);
+
+  // ✅ ADD: Listen for socket connection/disconnection (like Ambulance)
+  useEffect(() => {
+    const handleConnect = () => {
+      registerHolidayEvents({
+        onCreated: async (data) => {
+          await refetch();
+        },
+        onUpdated: async (data) => {
+          await refetch();
+        },
+        onDeleted: async (data) => {
+          await refetch();
+        },
+      });
+    };
+
+    const handleDisconnect = () => {};
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [refetch]);
 
   const normalizeRow = (row, index) => {
     const dateSource = row.startDate || row.date || row.holidayDate;
