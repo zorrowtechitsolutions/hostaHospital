@@ -19,8 +19,9 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button, FilterBar } from '../ui';
+import { Pagination, SearchBar, Modal, Button, FilterBar, useDebounce } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
+import DatePicker from '../ui/DatePicker';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
 
 // ✅ API
@@ -123,7 +124,7 @@ const mapRow = (r) => ({
 });
 
 // ============================================================
-// 📊 STATS CARD (professional KPI card)
+// 📊 STATS CARD
 // ============================================================
 const StatCard = ({
   label,
@@ -138,7 +139,6 @@ const StatCard = ({
 
   return (
     <div className="group relative bg-white rounded-2xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(16,24,40,0.12)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
-      {/* subtle accent strip */}
       <div className={`absolute inset-x-0 top-0 h-1 ${accent.bar}`} />
 
       <div className="p-5">
@@ -162,7 +162,6 @@ const StatCard = ({
           </div>
         </div>
 
-        {/* progress line (only when we have a sensible total) */}
         {total > 0 && (
           <div className="mt-4">
             <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
@@ -190,6 +189,32 @@ const StatCard = ({
     </div>
   );
 };
+
+// ============================================================
+// SHARED: LEAVE SUMMARY CARD
+// ============================================================
+const LeaveSummaryCard = ({ record }) => (
+  <div className="bg-slate-50 border rounded-lg p-4 text-sm space-y-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+      <span className="text-slate-500 text-xs sm:text-sm">Leave Type</span>
+      <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.type}</span>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+      <span className="text-slate-500 text-xs sm:text-sm">Date Range</span>
+      <span className="col-span-1 sm:col-span-2 font-medium text-sm">
+        {record.start} → {record.end}
+      </span>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+      <span className="text-slate-500 text-xs sm:text-sm">Total Days</span>
+      <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.days} Days</span>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
+      <span className="text-slate-500 text-xs sm:text-sm">Reason</span>
+      <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.reason}</span>
+    </div>
+  </div>
+);
 
 // ============================================================
 // DETAILS MODAL
@@ -281,38 +306,22 @@ const LeaveDetailsModal = ({ isOpen, onClose, record }) => {
 };
 
 // ============================================================
-// APPROVE / REJECT MODAL
+// APPROVE MODAL
 // ============================================================
-const ApproveRejectModal = ({
-  isOpen,
-  onClose,
-  onSave,
-  record,
-  isLoading,
-}) => {
-  const [decision, setDecision] = useState('approve');
+const ApproveModal = ({ isOpen, onClose, onSave, record, isLoading }) => {
   const [comments, setComments] = useState('');
-  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isOpen) {
-      setDecision('approve');
-      setComments('');
-      setError('');
-    }
+    if (isOpen) setComments('');
   }, [isOpen]);
 
   if (!isOpen || !record) return null;
 
   const handleSubmit = () => {
-    if (decision === 'reject' && !comments.trim()) {
-      setError('Please provide a reason for rejection.');
-      return;
-    }
     onSave({
       id: record.id,
-      status: decision === 'approve' ? 'Approved' : 'Rejected',
-      comments,
+      status: 'Approved',
+      comments: comments || undefined,
     });
   };
 
@@ -320,7 +329,7 @@ const ApproveRejectModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Approve / Reject Leave Request"
+      title="Approve Leave Request"
       size="md"
     >
       <div className="space-y-6">
@@ -340,115 +349,31 @@ const ApproveRejectModal = ({
           </div>
         </div>
 
-        <div className="bg-slate-50 border rounded-lg p-4 text-sm space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
-            <span className="text-slate-500 text-xs sm:text-sm">Leave Type</span>
-            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.type}</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
-            <span className="text-slate-500 text-xs sm:text-sm">Date Range</span>
-            <span className="col-span-1 sm:col-span-2 font-medium text-sm">
-              {record.start} → {record.end}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
-            <span className="text-slate-500 text-xs sm:text-sm">Total Days</span>
-            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.days} Days</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-0">
-            <span className="text-slate-500 text-xs sm:text-sm">Reason</span>
-            <span className="col-span-1 sm:col-span-2 font-medium text-sm">{record.reason}</span>
+        <LeaveSummaryCard record={record} />
+
+        <div className="border border-green-500 bg-green-50 rounded-lg p-3 flex items-start gap-3">
+          <Check size={18} className="text-green-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-sm text-green-700">
+              Approve Request
+            </p>
+            <p className="text-xs mt-0.5 text-green-600">
+              The employee will receive a confirmation email.
+            </p>
           </div>
         </div>
 
         <div>
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Decision</h4>
-          <div className="space-y-3">
-            <label
-              className={`border rounded-lg p-3 flex items-start gap-3 cursor-pointer transition-colors ${
-                decision === 'approve'
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:bg-slate-50'
-              }`}
-            >
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'approve'}
-                onChange={() => setDecision('approve')}
-                className="mt-1 w-4 h-4 text-green-600 focus:ring-green-500"
-              />
-              <div>
-                <p
-                  className={`font-medium text-sm flex items-center gap-1 ${
-                    decision === 'approve' ? 'text-green-700' : 'text-gray-700'
-                  }`}
-                >
-                  <Check size={16} /> Approve Request
-                </p>
-                <p
-                  className={`text-xs mt-0.5 ${
-                    decision === 'approve' ? 'text-green-600' : 'text-slate-500'
-                  }`}
-                >
-                  The employee will receive a confirmation email.
-                </p>
-              </div>
-            </label>
-
-            <label
-              className={`border rounded-lg p-3 flex items-start gap-3 cursor-pointer transition-colors ${
-                decision === 'reject'
-                  ? 'border-red-500 bg-red-50'
-                  : 'border-gray-200 hover:bg-slate-50'
-              }`}
-            >
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'reject'}
-                onChange={() => setDecision('reject')}
-                className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500"
-              />
-              <div>
-                <p
-                  className={`font-medium text-sm flex items-center gap-1 ${
-                    decision === 'reject' ? 'text-red-600' : 'text-gray-700'
-                  }`}
-                >
-                  <X size={16} /> Reject Request
-                </p>
-                <p
-                  className={`text-xs mt-0.5 ${
-                    decision === 'reject' ? 'text-red-500' : 'text-slate-500'
-                  }`}
-                >
-                  Please provide a reason for rejection.
-                </p>
-              </div>
-            </label>
-          </div>
-
-          <div className="mt-4">
-            <label className="text-xs font-medium text-slate-600 mb-1 block">
-              Comments{' '}
-              <span className="text-slate-400 font-normal">
-                (required for rejection)
-              </span>
-            </label>
-            <textarea
-              value={comments}
-              onChange={(e) => {
-                setComments(e.target.value);
-                if (error) setError('');
-              }}
-              className={`w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] resize-none h-20 ${
-                error ? 'border-red-300' : 'border-gray-200'
-              }`}
-              placeholder="e.g. Insufficient staff coverage during the requested dates..."
-            ></textarea>
-            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-          </div>
+          <label className="text-xs font-medium text-slate-600 mb-1 block">
+            Comments{' '}
+            <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] resize-none h-20"
+            placeholder="e.g. Enjoy your time off..."
+          ></textarea>
         </div>
       </div>
 
@@ -461,8 +386,112 @@ const ApproveRejectModal = ({
           onClick={handleSubmit}
           disabled={isLoading}
           loading={isLoading}
+          className="bg-green-600 hover:bg-green-700 border-green-600"
         >
-          Submit
+          Approve Request
+        </Button>
+      </div>
+    </Modal>
+  );
+};
+
+// ============================================================
+// REJECT MODAL
+// ============================================================
+const RejectModal = ({ isOpen, onClose, onSave, record, isLoading }) => {
+  const [comments, setComments] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setComments('');
+      setError('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !record) return null;
+
+  const handleSubmit = () => {
+    if (!comments.trim()) {
+      setError('Please provide a reason for rejection.');
+      return;
+    }
+    onSave({
+      id: record.id,
+      status: 'Rejected',
+      comments,
+    });
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Reject Leave Request"
+      size="md"
+    >
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${getAvatarColor(
+              record.role
+            )}`}
+          >
+            {record.initial}
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800">{record.name}</p>
+            <p className="text-xs text-slate-500">
+              {record.role} | {record.email}
+            </p>
+          </div>
+        </div>
+
+        <LeaveSummaryCard record={record} />
+
+        <div className="border border-red-500 bg-red-50 rounded-lg p-3 flex items-start gap-3">
+          <X size={18} className="text-red-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-sm text-red-600">
+              Reject Request
+            </p>
+            <p className="text-xs mt-0.5 text-red-500">
+              Please provide a reason for rejection.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1 block">
+            Reason for Rejection <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={comments}
+            onChange={(e) => {
+              setComments(e.target.value);
+              if (error) setError('');
+            }}
+            className={`w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] resize-none h-20 ${
+              error ? 'border-red-300' : 'border-gray-200'
+            }`}
+            placeholder="e.g. Insufficient staff coverage during the requested dates..."
+          ></textarea>
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+        <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSubmit}
+          disabled={isLoading}
+          loading={isLoading}
+          className="bg-red-600 hover:bg-red-700 border-red-600"
+        >
+          Reject Request
         </Button>
       </div>
     </Modal>
@@ -478,21 +507,21 @@ const LeaveRequests = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (400ms) — shared hook for consistency
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
   const [detailsRecord, setDetailsRecord] = useState(null);
-  const [actionRecord, setActionRecord] = useState(null);
+  // ✅ Two separate action records — one per modal
+  const [approveRecord, setApproveRecord] = useState(null);
+  const [rejectRecord, setRejectRecord] = useState(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
-    return () => clearTimeout(t);
-  }, [searchTerm]);
-
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, deptFilter, typeFilter, statusFilter, dateFilter]);
@@ -500,7 +529,7 @@ const LeaveRequests = () => {
   const queryParams = {
     page: currentPage,
     limit: itemsPerPage,
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
     ...(deptFilter !== 'all' ? { employeeType: deptFilter } : {}),
     ...(typeFilter !== 'all' ? { leaveType: typeFilter } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
@@ -537,12 +566,14 @@ const LeaveRequests = () => {
 
   const handleSearchChange = (value) => setSearchTerm(value);
 
-  const handleClearSearch = () => setSearchTerm('');
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchTerm('');
-    setDebouncedSearch('');
     setDeptFilter('all');
     setTypeFilter('all');
     setStatusFilter('all');
@@ -588,7 +619,8 @@ const LeaveRequests = () => {
         adminComments: comments || undefined,
       }).unwrap();
       showSuccessToast(`Leave request ${status.toLowerCase()} successfully`, 2500);
-      setActionRecord(null);
+      setApproveRecord(null);
+      setRejectRecord(null);
     } catch (err) {
       console.error('Update failed:', err);
       showErrorToast(err?.data?.message || 'Failed to update leave request.', 3000);
@@ -608,13 +640,9 @@ const LeaveRequests = () => {
     setStatusFilter('all');
     setDateFilter('');
     setSearchTerm('');
-    setDebouncedSearch('');
     setCurrentPage(1);
   };
 
-  // ============================================================
-  // STATS CONFIG — drives the 4 KPI cards
-  // ============================================================
   const statCards = [
     {
       key: 'total',
@@ -689,7 +717,6 @@ const LeaveRequests = () => {
       </p>
 
       {/* ─────────────── KPI STATS CARDS ─────────────── */}
-      {/* FIX: Forces a 2x2 grid on smaller screens (grid-cols-2), and 4 columns on extra large screens (xl:grid-cols-4) */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {statCards.map((card) => (
           <StatCard
@@ -714,8 +741,6 @@ const LeaveRequests = () => {
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
-        
-        {/* Search */}
         <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search employees, doctors, or leave requests..."
@@ -725,7 +750,6 @@ const LeaveRequests = () => {
           />
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
@@ -761,9 +785,7 @@ const LeaveRequests = () => {
       {/* ─────────────── FILTER PANEL ─────────────── */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 p-6">
-
           <div className="flex items-center justify-between mb-6">
-
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
                 <Filter size={18} className="text-[#1C62A0]" />
@@ -788,11 +810,9 @@ const LeaveRequests = () => {
             >
               Clear All Filters
             </button>
-
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-
             <CustomSelect
               label="Department"
               value={deptFilter}
@@ -817,19 +837,18 @@ const LeaveRequests = () => {
               placeholder="All Status"
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
                 Date
               </label>
-
-              <input
-                type="date"
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>
-
           </div>
         </div>
       )}
@@ -927,13 +946,13 @@ const LeaveRequests = () => {
                           {row.status === 'Pending' && (
                             <>
                               <button
-                                onClick={() => setActionRecord(row)}
+                                onClick={() => setApproveRecord(row)}
                                 className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
                               >
                                 Approve
                               </button>
                               <button
-                                onClick={() => setActionRecord(row)}
+                                onClick={() => setRejectRecord(row)}
                                 className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
                               >
                                 Reject
@@ -980,11 +999,19 @@ const LeaveRequests = () => {
         record={detailsRecord}
       />
 
-      <ApproveRejectModal
-        isOpen={Boolean(actionRecord)}
-        onClose={() => setActionRecord(null)}
+      <ApproveModal
+        isOpen={Boolean(approveRecord)}
+        onClose={() => setApproveRecord(null)}
         onSave={handleSaveDecision}
-        record={actionRecord}
+        record={approveRecord}
+        isLoading={isUpdating}
+      />
+
+      <RejectModal
+        isOpen={Boolean(rejectRecord)}
+        onClose={() => setRejectRecord(null)}
+        onSave={handleSaveDecision}
+        record={rejectRecord}
         isLoading={isUpdating}
       />
     </div>

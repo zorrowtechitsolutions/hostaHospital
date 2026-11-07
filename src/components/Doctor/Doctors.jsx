@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CalendarClock } from "lucide-react";
 import DeleteDoctor from "./DeleteDoctor";
 import AppointmentManagement from "./AppointmentManagment";
-import { Badge, Pagination, SearchBar } from '../ui';
+import { Badge, Pagination, SearchBar, useDebounce } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import { useGetDoctorsQuery, useRecoverDoctorMutation } from "../../../app/service/doctorApi";
@@ -346,6 +346,9 @@ const Doctors = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search term (500ms) — prevents an API call on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   // Permission Denied Modal State
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [permissionDeniedMessage, setPermissionDeniedMessage] = useState('');
@@ -362,8 +365,9 @@ const Doctors = () => {
   const isSuperAdmin = auth?.role === 'super-admin' || auth?.roleId === 1;
   const shouldFilterByHospital = isHospitalAdmin || isDoctor || isStaff;
 
+  // ✅ Use debouncedSearchTerm here so the API isn't hammered on each keystroke
   const queryParams = {
-    search_query: searchTerm?.trim() ? searchTerm : undefined,
+    search_query: debouncedSearchTerm?.trim() ? debouncedSearchTerm : undefined,
     speciality: selectedSpecialty !== "All" ? selectedSpecialty : undefined,
     status: filterStatus === "All" ? undefined : (filterStatus === "Active" ? true : false),
     page: currentPage,
@@ -523,9 +527,10 @@ const Doctors = () => {
     }
   }, [location.state]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedSpecialty, filterStatus]);
+  }, [debouncedSearchTerm, selectedSpecialty, filterStatus]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -540,7 +545,7 @@ const Doctors = () => {
   const handleSearchChange = (value) => {
     const searchValue = typeof value === 'string' ? value : value?.target?.value || '';
     setSearchTerm(searchValue);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {

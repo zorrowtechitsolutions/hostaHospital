@@ -15,7 +15,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, CustomSelect } from '../ui';
+import { Pagination, SearchBar, CustomSelect, useDebounce } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
@@ -42,6 +42,9 @@ const Attendance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — prevents refetching on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   // ============================================================
   // API (server-side filters — method stays frontend-only)
   // ============================================================
@@ -53,7 +56,7 @@ const Attendance = () => {
     refetch,
   } = useGetAttendancesQuery({
     today: true,
-    search: searchTerm || undefined,
+    search: debouncedSearchTerm?.trim() || undefined,
     department: deptFilter !== 'all' ? deptFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     type:
@@ -186,9 +189,10 @@ const Attendance = () => {
     });
   }, [normalizedData, methodFilter]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, deptFilter, statusFilter, methodFilter, attTypeFilter]);
+  }, [debouncedSearchTerm, deptFilter, statusFilter, methodFilter, attTypeFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -218,7 +222,7 @@ const Attendance = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
@@ -368,8 +372,6 @@ const Attendance = () => {
       </p>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      {/* FIX: Changed flex layout to force items onto 1 row at 1280px. 
-          Reduced search bar max width, reduced gap, and added shrink-0 to the buttons. */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
         
         {/* Search */}

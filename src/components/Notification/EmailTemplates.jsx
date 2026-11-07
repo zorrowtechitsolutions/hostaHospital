@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Plus,
-  Search,
   Eye,
   Pencil,
   Trash2,
@@ -16,9 +15,7 @@ import {
   useGetTemplatesQuery,
   useDeleteTemplateMutation,
 } from "../../../app/service/emailtemplate";
-import { Button } from "../ui/button";
-import { Pagination } from "../ui/Pagination";
-import CustomSelect from "../ui/CustomSelect";
+import { Button, SearchBar, Pagination, CustomSelect, useDebounce } from "../ui";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 
 // ✅ Shared Delete confirmation modal (same as Device / PatientDetails)
@@ -193,6 +190,9 @@ const EmailTemplates = () => {
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  // ✅ Debounce search (500ms) — prevents an API call on every keystroke
+  const debouncedSearch = useDebounce(search, 500);
+
   // ── Delete modal state ──
   const [templateToDelete, setTemplateToDelete] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -209,7 +209,7 @@ const EmailTemplates = () => {
     refetch,
     isFetching,
   } = useGetTemplatesQuery({
-    search: search || undefined,
+    search: debouncedSearch.trim() || undefined,
     category: category === "All Categories" ? undefined : category,
     status: status === "All Statuses" ? undefined : status,
     page: page,
@@ -328,10 +328,10 @@ const EmailTemplates = () => {
     }
   };
 
-  // Reset page when filters change
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setPage(1);
-  }, [search, category, status]);
+  }, [debouncedSearch, category, status]);
 
   // ============================
   // RENDER
@@ -390,17 +390,11 @@ const EmailTemplates = () => {
 
         {/* Left: Search + Filters */}
         <div className="flex flex-1 min-w-0 items-center gap-3">
-          <div className="relative flex-1 min-w-[180px] max-w-[320px]">
-            <Search
-              size={17}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
+          <div className="flex-1 min-w-[180px] max-w-[320px]">
+            <SearchBar
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
               placeholder="Search templates by name or subject..."
-              className="w-full h-10 pl-10 pr-4 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
           </div>
 

@@ -16,7 +16,8 @@ import {
   Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar } from '../ui';
+import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar, useDebounce } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import {
   showSuccessToast,
   showErrorToast,
@@ -27,6 +28,9 @@ import {
   useUpdateHolidayMutation,
   useDeleteHolidayMutation,
 } from '../../../app/service/holidayApi';
+// ✅ ADD: Socket imports
+import { socket } from '../../socket/socket';
+import { registerHolidayEvents, unregisterHolidayEvents } from '../../socket/holidayEvents';
 
 // ============================================================
 // HELPERS
@@ -204,12 +208,13 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             <div className="relative">
               <Calendar
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
               />
-              <input
-                type="date"
+              <DatePicker
                 value={form.date}
-                onChange={(e) => handleChange('date', e.target.value)}
+                onChange={(isoDate) => handleChange('date', isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                   errors.date ? 'border-red-300' : 'border-gray-200'
                 }`}
@@ -227,13 +232,14 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             <div className="relative">
               <Calendar
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
               />
-              <input
-                type="date"
+              <DatePicker
                 value={form.endDate}
-                min={form.date}
-                onChange={(e) => handleChange('endDate', e.target.value)}
+                onChange={(isoDate) => handleChange('endDate', isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                options={{ minDate: form.date || undefined }}
                 className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                   errors.endDate ? 'border-red-300' : 'border-gray-200'
                 }`}
@@ -369,6 +375,9 @@ const HolidayManagement = () => {
   const [showFilters, setShowFilters] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const {
     data: holidaysResponse,
     isLoading,
@@ -386,6 +395,52 @@ const HolidayManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editHoliday, setEditHoliday] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // ✅ Register socket event listeners
+  useEffect(() => {
+    registerHolidayEvents({
+      onCreated: async (data) => {
+        await refetch();
+      },
+      onUpdated: async (data) => {
+        await refetch();
+      },
+      onDeleted: async (data) => {
+        await refetch();
+      },
+    });
+
+    return () => {
+      unregisterHolidayEvents();
+    };
+  }, [refetch]);
+
+  // ✅ Listen for socket connection/disconnection
+  useEffect(() => {
+    const handleConnect = () => {
+      registerHolidayEvents({
+        onCreated: async (data) => {
+          await refetch();
+        },
+        onUpdated: async (data) => {
+          await refetch();
+        },
+        onDeleted: async (data) => {
+          await refetch();
+        },
+      });
+    };
+
+    const handleDisconnect = () => {};
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [refetch]);
 
   const normalizeRow = (row, index) => {
     const dateSource = row.startDate || row.date || row.holidayDate;
@@ -416,6 +471,7 @@ const HolidayManagement = () => {
     return list.map((row, i) => normalizeRow(row, i));
   }, [holidaysResponse]);
 
+  // ✅ Filter uses the debounced search term
   const filteredData = useMemo(() => {
     let result = [...holidays];
 
@@ -423,8 +479,8 @@ const HolidayManagement = () => {
       result = result.filter((h) => h.type === typeFilter);
     }
 
-    if (searchTerm && searchTerm.trim().length >= 2) {
-      const q = searchTerm.toLowerCase().trim();
+    if (debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2) {
+      const q = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter((h) =>
         [h.name, h.type, h.description]
           .filter(Boolean)
@@ -437,11 +493,12 @@ const HolidayManagement = () => {
       if (!b.dateISO) return -1;
       return a.dateISO.localeCompare(b.dateISO);
     });
-  }, [holidays, typeFilter, searchTerm]);
+  }, [holidays, typeFilter, debouncedSearchTerm]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, yearFilter]);
+  }, [debouncedSearchTerm, typeFilter, yearFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -523,12 +580,12 @@ const HolidayManagement = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
   };
 
   const handleRefresh = async () => {
@@ -582,17 +639,6 @@ const HolidayManagement = () => {
   const showLoading = isLoading;
   const isSaving = isCreating || isUpdating;
 
-  const stats = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const thisYear = holidays.filter(
-      (h) => h.dateISO && h.dateISO.startsWith(String(currentYear))
-    ).length;
-    const upcoming = holidays.filter(
-      (h) => h.dateISO && h.dateISO >= getTodayISO()
-    ).length;
-    return { total: holidays.length, thisYear, upcoming };
-  }, [holidays]);
-
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
     return Array.from({ length: 7 }, (_, i) => String(currentYear - 3 + i));
@@ -600,7 +646,7 @@ const HolidayManagement = () => {
 
   const activeFilterCount = [
     typeFilter !== 'all',
-    yearFilter !== String(new Date().getFullYear()), // Assuming default year shouldn't count as an "active" filter unless we want it to. Let's just count if it differs from 'all' or default.
+    yearFilter !== String(new Date().getFullYear()),
     !!searchTerm,
   ].filter(Boolean).length;
 
@@ -625,22 +671,6 @@ const HolidayManagement = () => {
         Store and manage the list of public, religious, and company holidays.
         Attendance sheets automatically mark these dates as holidays.
       </p>
-
-      {/* Stats chips */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Calendar size={14} className="text-indigo-500" />
-          Total Holidays: {stats.total}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Flag size={14} className="text-blue-500" />
-          This Year: {stats.thisYear}
-        </span>
-        <span className="bg-white border border-gray-200 text-sm px-3 py-1.5 rounded-md shadow-sm flex items-center gap-2">
-          <Sparkles size={14} className="text-emerald-500" />
-          Upcoming: {stats.upcoming}
-        </span>
-      </div>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">

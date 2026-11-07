@@ -39,6 +39,61 @@ const PRESETS = {
   dob: { ...BASE_OPTIONS, maxDate: "today", minDate: minDob },
 };
 
+/* =====================================================
+   Flatpickr lifecycle hooks
+   -----------------------------------------------------
+   Problem this solves:
+   Flatpickr registers its outside-click handler on the
+   `document` in the BUBBLE phase. When the picker is
+   rendered inside a Modal whose content wrapper calls
+   e.stopPropagation() on `mousedown`, the event never
+   reaches the document → the calendar never closes.
+
+   Fix: we attach our own outside-click handler in the
+   CAPTURE phase (runs before stopPropagation can eat it)
+   and close the calendar ourselves. Calling close() on an
+   already-closed Flatpickr is a no-op, so this is safe to
+   have in addition to Flatpickr's built-in handler.
+   ===================================================== */
+
+const handleReady = (_, __, instance) => {
+  if (!instance) return;
+
+  // Store the handler on the instance so onDestroy can remove it.
+  instance._customOutsideClick = (event) => {
+    if (!instance.isOpen) return;
+
+    const calendarEl = instance.calendarContainer;
+    const inputEl = instance.input;
+
+    const clickedInsideCalendar =
+      calendarEl && calendarEl.contains(event.target);
+    const clickedOnInput =
+      inputEl && (inputEl === event.target || inputEl.contains?.(event.target));
+
+    if (!clickedInsideCalendar && !clickedOnInput) {
+      instance.close();
+    }
+  };
+
+  document.addEventListener(
+    "mousedown",
+    instance._customOutsideClick,
+    true // ← CAPTURE phase, runs before stopPropagation in modal
+  );
+};
+
+const handleDestroy = (_, __, instance) => {
+  if (instance?._customOutsideClick) {
+    document.removeEventListener(
+      "mousedown",
+      instance._customOutsideClick,
+      true
+    );
+    instance._customOutsideClick = null;
+  }
+};
+
 /**
  * Universal DatePicker wrapper.
  *
@@ -82,6 +137,8 @@ const DatePicker = ({
       value={toDisplayDate(value)}
       options={{ ...preset, ...options }}
       onChange={handleChange}
+      onReady={handleReady}
+      onDestroy={handleDestroy}
       disabled={disabled}
       placeholder={placeholder}
       className={

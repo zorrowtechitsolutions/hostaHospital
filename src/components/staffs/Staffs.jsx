@@ -29,10 +29,12 @@ import {
   SearchBar,
   Modal,
   Pagination,
-  FilterBar
+  FilterBar,
+  useDebounce
 } from '../ui';
 
 import CustomSelect from '../ui/CustomSelect';
+import DatePicker from '../ui/DatePicker';
 import DeleteModal from '../patients/DeleteModel';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 
@@ -255,7 +257,10 @@ const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
 const Staffs = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // ✅ Debounce search (500ms) — shared hook for consistency across the codebase
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [showFilters, setShowFilters] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -290,15 +295,6 @@ const Staffs = () => {
   useEffect(() => {
     localStorage.setItem('staffViewMode', viewMode);
   }, [viewMode]);
-
-  // Debounce search term
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -583,7 +579,6 @@ const Staffs = () => {
     setStatusFilter('all');
     setDateFilter('');
     setSearchTerm('');
-    setDebouncedSearchTerm('');
     setCurrentPage(1);
   };
 
@@ -941,10 +936,7 @@ const Staffs = () => {
               placeholder="Search by name, staff ID, designation, phone or hospital..."
               value={searchTerm}
               onChange={setSearchTerm}
-              onClear={() => {
-                setSearchTerm('');
-                setDebouncedSearchTerm('');
-              }}
+              onClear={() => setSearchTerm('')}
             />
           </div>
 
@@ -1065,11 +1057,13 @@ const Staffs = () => {
                 className={SELECT_FILTER_CLASS}
               />
 
-              <input
-                type="date"
+              {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE INPUT */}
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>
           </div>

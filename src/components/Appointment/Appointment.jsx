@@ -7,8 +7,9 @@ import {
   PlayCircle, Check, X
 } from 'lucide-react';
 import {
-  Button, Pagination, SearchBar, FilterBar, CustomSelect
+  Button, Pagination, SearchBar, FilterBar, CustomSelect, useDebounce
 } from '../ui';
+import DatePicker from '../ui/DatePicker';
 import DeleteModal from '../patients/DeleteModel';
 import EditAppointmentModal from '../patients/EditAppointmentModal';
 import ApproveRequestModal from "../Requests/ApproveRequestModel";
@@ -164,6 +165,9 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search term (500ms) — avoids re-filtering up to 1000 rows per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [permissionDeniedAction, setPermissionDeniedAction] = useState('');
   const [permissionDeniedPermissionId, setPermissionDeniedPermissionId] = useState(null);
@@ -313,11 +317,12 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     (a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0)
   );
 
+  // ✅ Client-side search uses the debounced value
   const filteredBySearch = useMemo(() => {
-    if (!searchTerm || searchTerm.trim().length < 2) {
+    if (!debouncedSearchTerm || debouncedSearchTerm.trim().length < 2) {
       return allAppointmentsData;
     }
-    const searchLower = searchTerm.toLowerCase().trim();
+    const searchLower = debouncedSearchTerm.toLowerCase().trim();
     return allAppointmentsData.filter(item => {
       const searchFields = [
         safeToString(item.formattedId).toLowerCase(),
@@ -331,7 +336,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
       ];
       return searchFields.some(field => field.includes(searchLower));
     });
-  }, [allAppointmentsData, searchTerm]);
+  }, [allAppointmentsData, debouncedSearchTerm]);
 
   const filteredAppointments = useMemo(() => {
     let result = filteredBySearch;
@@ -371,9 +376,10 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
     return filteredAppointments.slice(startIndex, endIndex);
   }, [filteredAppointments, currentPage, itemsPerPage]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter, dateFilter, showAllData]);
+  }, [debouncedSearchTerm, statusFilter, departmentFilter, dateFilter, showAllData]);
 
   const getAllDepartments = () => {
     const departments = [...new Set(allAppointmentsData.map(a => a.department).filter(Boolean))];
@@ -385,7 +391,7 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
@@ -948,18 +954,13 @@ const Appointments = ({ doctorId = null, doctorName = null }) => {
                 placeholder="All Departments"
               />
             </div>
-            <div>
+            <div className="flex flex-col">
               <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" || e.key === "Delete") {
-                    e.preventDefault();
-                    setDateFilter("");
-                  }
-                }}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white"
               />
             </div>

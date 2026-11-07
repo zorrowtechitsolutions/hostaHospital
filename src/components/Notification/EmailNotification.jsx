@@ -30,9 +30,8 @@ import {
   useArchiveEmailMutation,
   useUnarchiveEmailMutation,
 } from '../../../app/service/emailnotification';
+import { Button, CustomSelect, SearchBar, useDebounce } from '../ui';
 import { showErrorToast, showSuccessToast, showInfoToast } from '../ui/Toast';
-import { Button } from '../ui/button';
-import CustomSelect from '../ui/CustomSelect';
 
 // ✅ Real-time email notification events
 import {
@@ -228,6 +227,11 @@ const EmailComposer = () => {
   const [activeRole, setActiveRole] = useState('doctor');
   const [doctorSearch, setDoctorSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
+
+  // ✅ Debounce both search inputs (400ms) — avoids re-filtering on every keystroke
+  const debouncedDoctorSearch = useDebounce(doctorSearch, 400);
+  const debouncedStaffSearch = useDebounce(staffSearch, 400);
+
   const [selectedDoctors, setSelectedDoctors] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState([]);
   const [subject, setSubject] = useState('');
@@ -548,27 +552,41 @@ const EmailComposer = () => {
     return template?.templateName || 'Unknown Template';
   };
 
-  const filteredDoctors = doctors.filter((d) => {
-    const name = d.name || d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim() || '';
-    const email = d.email || '';
-    const specialty = d.specialty || d.specialization || d.department || '';
-    const phone = d.phone || d.phoneNumber || '';
-    const search = doctorSearch.toLowerCase();
-    return name.toLowerCase().includes(search) ||
-      email.toLowerCase().includes(search) ||
-      specialty.toLowerCase().includes(search) ||
-      phone.toLowerCase().includes(search);
-  });
+  // ✅ Memoized client-side filter for doctors (uses debounced search)
+  const filteredDoctors = useMemo(() => {
+    const search = debouncedDoctorSearch.toLowerCase().trim();
+    if (!search) return doctors;
 
-  const filteredStaff = staff.filter((s) => {
-    const name = s.name || s.fullName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || '';
-    const email = s.email || '';
-    const role = s.role || s.position || s.designation || '';
-    const search = staffSearch.toLowerCase();
-    return name.toLowerCase().includes(search) ||
-      email.toLowerCase().includes(search) ||
-      role.toLowerCase().includes(search);
-  });
+    return doctors.filter((d) => {
+      const name = d.name || d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim() || '';
+      const email = d.email || '';
+      const specialty = d.specialty || d.specialization || d.department || '';
+      const phone = d.phone || d.phoneNumber || '';
+      return (
+        name.toLowerCase().includes(search) ||
+        email.toLowerCase().includes(search) ||
+        specialty.toLowerCase().includes(search) ||
+        phone.toLowerCase().includes(search)
+      );
+    });
+  }, [doctors, debouncedDoctorSearch]);
+
+  // ✅ Memoized client-side filter for staff (uses debounced search)
+  const filteredStaff = useMemo(() => {
+    const search = debouncedStaffSearch.toLowerCase().trim();
+    if (!search) return staff;
+
+    return staff.filter((s) => {
+      const name = s.name || s.fullName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || '';
+      const email = s.email || '';
+      const role = s.role || s.position || s.designation || '';
+      return (
+        name.toLowerCase().includes(search) ||
+        email.toLowerCase().includes(search) ||
+        role.toLowerCase().includes(search)
+      );
+    });
+  }, [staff, debouncedStaffSearch]);
 
   const toggleDoctor = (id) => {
     setSelectedDoctors((prev) =>
@@ -978,18 +996,11 @@ const EmailComposer = () => {
               {activeRole === 'doctor' && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="p-3 bg-slate-50 border-b border-slate-200">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search doctors by name, email or specialty..."
-                        value={doctorSearch}
-                        onChange={(e) => setDoctorSearch(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-white"
-                      />
-                      <svg className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
+                    <SearchBar
+                      value={doctorSearch}
+                      onChange={setDoctorSearch}
+                      placeholder="Search doctors by name, email or specialty..."
+                    />
                   </div>
                   <div className="overflow-x-auto max-h-64 overflow-y-auto">
                     <table className="w-full text-sm">
@@ -1067,18 +1078,11 @@ const EmailComposer = () => {
               {activeRole === 'staff' && (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="p-3 bg-slate-50 border-b border-slate-200">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search staff by name, email or role..."
-                        value={staffSearch}
-                        onChange={(e) => setStaffSearch(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-white"
-                      />
-                      <svg className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
+                    <SearchBar
+                      value={staffSearch}
+                      onChange={setStaffSearch}
+                      placeholder="Search staff by name, email or role..."
+                    />
                   </div>
                   <div className="overflow-x-auto max-h-64 overflow-y-auto">
                     <table className="w-full text-sm">
@@ -1176,8 +1180,6 @@ const EmailComposer = () => {
                   Email Template
                 </label>
 
-                {/* ✅ Replaced native with CustomSelect.
-                    flex-1 wrapper keeps the "Applied" badge aligned to the right. */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
                     <CustomSelect

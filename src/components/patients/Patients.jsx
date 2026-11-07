@@ -29,7 +29,8 @@ import {
   Loader,
   Pagination,
   SearchBar,
-  Card
+  Card,
+  useDebounce
 } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import {
@@ -323,6 +324,9 @@ const Patients = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search input (500ms delay) — filtering runs only after typing stops
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
@@ -377,31 +381,30 @@ const Patients = () => {
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
   // ✅ Register socket event listeners
-useEffect(() => {
+  useEffect(() => {
+    const cleanup = registerPatientEvents({
+      onRegistered: (eventData) => {
+        refetchPatients();
+      },
 
-  const cleanup = registerPatientEvents({
-    onRegistered: (eventData) => {
-      refetchPatients();
-    },
+      onUpdated: (eventData) => {
+        refetchPatients();
+      },
 
-    onUpdated: (eventData) => {
-      refetchPatients();
-    },
+      onDeleted: (eventData) => {
+        refetchPatients();
+      },
 
-    onDeleted: (eventData) => {
-      refetchPatients();
-    },
+      onRecovered: (eventData) => {
+        refetchPatients();
+      },
 
-    onRecovered: (eventData) => {
-      refetchPatients();
-    },
+      onUnknown: (eventData) => {
+      },
+    });
 
-    onUnknown: (eventData) => {
-    },
-  });
-
-  return cleanup;
-}, [refetchPatients]);
+    return cleanup;
+  }, [refetchPatients]);
 
   // ✅ Listen for socket connection/disconnection
   useEffect(() => {
@@ -460,12 +463,12 @@ useEffect(() => {
     });
   }, [allPatients]);
 
-  // ✅ CLIENT-SIDE FILTERING
+  // ✅ CLIENT-SIDE FILTERING (uses debounced search term)
   const filteredPatients = useMemo(() => {
     let result = transformedPatients;
 
-    if (searchTerm && searchTerm.trim()) {
-      const search = searchTerm.toLowerCase().trim();
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      const search = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter(patient => {
         const name = (patient.name || '').toLowerCase();
         const mobile = (patient.mobileNumber || '').toLowerCase();
@@ -495,7 +498,7 @@ useEffect(() => {
     }
 
     return result;
-  }, [transformedPatients, searchTerm, genderFilter, statusFilter]);
+  }, [transformedPatients, debouncedSearchTerm, genderFilter, statusFilter]);
 
   // ✅ Client-side pagination
   const paginatedPatients = useMemo(() => {
@@ -527,10 +530,10 @@ useEffect(() => {
     [genderOptions]
   );
 
-  // Reset page when filters change
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, genderFilter, statusFilter]);
+  }, [debouncedSearchTerm, genderFilter, statusFilter]);
 
   // Handle click outside for menu
   useEffect(() => {
@@ -555,7 +558,7 @@ useEffect(() => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {

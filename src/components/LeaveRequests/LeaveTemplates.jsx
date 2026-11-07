@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Plus,
-  Search,
   Eye,
   Pencil,
   Trash2,
@@ -13,9 +12,13 @@ import {
   Copy,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../ui/button";
-import { Pagination } from "../ui/Pagination";
-import CustomSelect from "../ui/CustomSelect";
+import {
+  Button,
+  SearchBar,
+  Pagination,
+  CustomSelect,
+  useDebounce,
+} from "../ui";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import DeleteModal from "../patients/DeleteModel";
 import { getAuthUser } from "../../utils/auth";
@@ -32,7 +35,6 @@ const categoryStyles = {
   "Maternity Leave": "bg-amber-50 text-amber-600",
 };
 
-// ✅ Options for the Category filter
 const CATEGORY_OPTIONS = [
   { value: "All Categories", label: "All Categories" },
   { value: "Annual Leave", label: "Annual Leave" },
@@ -41,14 +43,12 @@ const CATEGORY_OPTIONS = [
   { value: "Maternity Leave", label: "Maternity Leave" },
 ];
 
-// ✅ Options for the Status filter
 const STATUS_OPTIONS = [
   { value: "All Statuses", label: "All Statuses" },
   { value: "Active", label: "Active" },
   { value: "Inactive", label: "Inactive" },
 ];
 
-// ✅ 1. Updated SELECT_FILTER_CLASS (wider responsive widths, min-h-10, whitespace-nowrap)
 const SELECT_FILTER_CLASS =
   "w-[150px] md:w-[170px] lg:w-[180px] xl:w-[190px] " +
   "[&>button]:h-10 [&>button]:min-h-10 [&>button]:w-full " +
@@ -85,6 +85,9 @@ const LeaveTemplates = () => {
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  // ✅ Debounce search (500ms) — prevents an API call on every keystroke
+  const debouncedSearch = useDebounce(search, 500);
+
   const [templateToDelete, setTemplateToDelete] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -94,7 +97,7 @@ const LeaveTemplates = () => {
     isFetching,
     refetch,
   } = useGetLeaveTemplatesQuery({
-    search: search || undefined,
+    search: debouncedSearch.trim() || undefined,
     reasonCategory: category !== "All Categories" ? category : undefined,
   });
 
@@ -112,18 +115,17 @@ const LeaveTemplates = () => {
 
   const filtered = useMemo(() => {
     if (status === "All Statuses") return templates;
-    return templates.filter(
-      (t) => (t.status || "Active") === status
-    );
+    return templates.filter((t) => (t.status || "Active") === status);
   }, [templates, status]);
 
   const totalItems = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
   const paginated = filtered.slice((page - 1) * limit, page * limit);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setPage(1);
-  }, [search, category, status]);
+  }, [debouncedSearch, category, status]);
 
   const handleView = (t) => navigate(`/leave-templates/view/${t.id}`);
   const handleEdit = (t) => navigate(`/leave-templates/edit/${t.id}`);
@@ -233,23 +235,14 @@ const LeaveTemplates = () => {
       </div>
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      {/* ✅ 2. Added flex-nowrap to the main container */}
       <div className="flex flex-row flex-nowrap justify-between items-center gap-3 mb-6 w-full">
-        
         {/* Search & Filters */}
-        {/* ✅ 3. Added min-w-0 to allow flex children to shrink without breaking */}
         <div className="flex flex-1 min-w-0 items-center gap-3">
-          <div className="relative w-full max-w-[320px] xl:max-w-[400px]">
-            <Search
-              size={17}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
+          <div className="w-full max-w-[320px] xl:max-w-[400px] shrink-0">
+            <SearchBar
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
               placeholder="Search templates by name..."
-              className="w-full h-10 pl-10 pr-4 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
           </div>
 
@@ -389,7 +382,6 @@ const LeaveTemplates = () => {
                         </td>
 
                         <td className="px-6 py-4">
-                          {/* ✅ Now reflects template.status instead of hardcoding "Active" */}
                           <span
                             className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium ${
                               rowStatus === "Active"

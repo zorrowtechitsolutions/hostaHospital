@@ -11,7 +11,8 @@ import {
   Monitor,
 } from "lucide-react";
 
-import { Button, Pagination, SearchBar, CustomSelect } from "../ui";
+import { Button, Pagination, SearchBar, CustomSelect, useDebounce } from "../ui";
+import DatePicker from "../ui/DatePicker";
 import { useGetSessionHistoryQuery } from "../../../app/service/sessionHistoryApi";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
 import { exportToExcel } from "../../utils/excelExport";
@@ -309,7 +310,9 @@ const SessionHistory = () => {
   );
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // ✅ Debounce search term (400ms) — shared hook for consistency
+  const debouncedSearch = useDebounce(searchTerm, 400);
 
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
@@ -337,13 +340,10 @@ const SessionHistory = () => {
     }
   }, [navigationHospitalId]);
 
+  // ✅ Reset page when the debounced search term actually changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm.trim());
-      setCurrentPage(1);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+    setCurrentPage(1);
+  }, [debouncedSearch]);
 
   const {
     data: sessionResponse,
@@ -352,7 +352,7 @@ const SessionHistory = () => {
     refetch,
   } = useGetSessionHistoryQuery({
     hospitalId: effectiveHospitalId,
-    search: debouncedSearch || undefined,
+    search: debouncedSearch.trim() || undefined,
     role: roleFilter || undefined,
     riskLevel: riskFilter || undefined,
     status: statusFilter || undefined,
@@ -409,7 +409,6 @@ const SessionHistory = () => {
 
   const clearFilters = () => {
     setSearchTerm("");
-    setDebouncedSearch("");
     setRoleFilter("");
     setStatusFilter("");
     setRiskFilter("");
@@ -564,15 +563,8 @@ const SessionHistory = () => {
           <SearchBar
             placeholder="Search by name..."
             value={searchTerm}
-            onChange={(value) => {
-              setSearchTerm(value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm("");
-              setDebouncedSearch("");
-              setCurrentPage(1);
-            }}
+            onChange={setSearchTerm}
+            onClear={() => setSearchTerm("")}
           />
         </div>
 
@@ -698,29 +690,35 @@ const SessionHistory = () => {
               />
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">Start Date</label>
-              <input
-                type="date"
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-600 mb-2">
+                Start Date
+              </label>
+              <DatePicker
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
+                onChange={(isoDate) => {
+                  setStartDate(isoDate);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white text-gray-700"
               />
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-600">End Date</label>
-              <input
-                type="date"
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-600 mb-2">
+                End Date
+              </label>
+              <DatePicker
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
+                onChange={(isoDate) => {
+                  setEndDate(isoDate);
                   setCurrentPage(1);
                 }}
-                className="h-12 w-full px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-[#1C62A0] bg-white text-gray-700"
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] bg-white text-gray-700"
               />
             </div>
           </div>

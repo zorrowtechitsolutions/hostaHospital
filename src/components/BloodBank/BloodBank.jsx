@@ -5,7 +5,7 @@ import {
   Edit, RefreshCcw, Trash2, Search
 } from 'lucide-react';
 import { 
-  Button, Badge, Loader, Card, Modal, SearchBar, Pagination, CustomSelect
+  Button, Badge, Loader, Card, Modal, SearchBar, Pagination, CustomSelect, useDebounce
 } from '../ui';
 import DeleteModal from '../patients/DeleteModel';
 import PermissionDeniedModal from '../ui/PermissionDeniedModal';
@@ -335,6 +335,9 @@ const BloodBank = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // ✅ Debounce search (500ms) — prevents refetching + re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -362,7 +365,9 @@ const BloodBank = () => {
   } = useGetBloodBankQuery({
     hospitalId: hospitalId,
     bloodGroup: bloodGroupFilter !== "all" ? bloodGroupFilter : undefined,
-    search_query: searchTerm?.trim() && searchTerm.trim().length >= 2 ? searchTerm : undefined,
+    search_query: debouncedSearchTerm?.trim() && debouncedSearchTerm.trim().length >= 2 
+      ? debouncedSearchTerm 
+      : undefined,
   }, {
     skip: !hospitalId,
   });
@@ -417,12 +422,13 @@ const BloodBank = () => {
 
   const allBloodStocks = transformBloodStockData(bloodStocksResponse?.data || []);
   
+  // ✅ Client-side fallback filter uses debounced term
   const filteredBloodStocks = React.useMemo(() => {
-    if (!searchTerm || searchTerm.trim().length < 2) {
+    if (!debouncedSearchTerm || debouncedSearchTerm.trim().length < 2) {
       return allBloodStocks;
     }
 
-    const searchLower = searchTerm.toLowerCase().trim();
+    const searchLower = debouncedSearchTerm.toLowerCase().trim();
     
     return allBloodStocks.filter(item => {
       const searchFields = [
@@ -433,7 +439,7 @@ const BloodBank = () => {
 
       return searchFields.some(field => field.includes(searchLower));
     });
-  }, [allBloodStocks, searchTerm]);
+  }, [allBloodStocks, debouncedSearchTerm]);
 
   const paginatedBloodStocks = React.useMemo(() => {
     let result = filteredBloodStocks;
@@ -456,9 +462,10 @@ const BloodBank = () => {
     return paginatedBloodStocks.slice(startIndex, endIndex);
   }, [paginatedBloodStocks, currentPage, itemsPerPage]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, bloodGroupFilter]);
+  }, [debouncedSearchTerm, bloodGroupFilter]);
 
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = bloodGroupFilter !== 'all';
@@ -475,7 +482,7 @@ const BloodBank = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {

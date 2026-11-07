@@ -21,7 +21,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../../ui/Breadcrumb';
-import { Pagination, SearchBar, CustomSelect, FilterBar } from '../../ui';
+import { Pagination, SearchBar, CustomSelect, FilterBar, useDebounce } from '../../ui';
 import { Button } from '../../ui/button';
 import DeviceDetails from './DeviceDetails';
 import DeviceCredentialsModal from './credentials/DeviceCredentialsModal';
@@ -198,6 +198,9 @@ const Device = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const dropdownRef = useRef(null);
 
@@ -339,8 +342,9 @@ const Device = () => {
     [deviceData]
   );
 
+  // ✅ Filter uses the debounced search term
   const filteredData = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = debouncedSearchTerm.trim().toLowerCase();
 
     return normalizedData.filter((row) => {
       const matchesSearch =
@@ -361,11 +365,12 @@ const Device = () => {
 
       return matchesSearch && matchesStatus && matchesType && matchesLocation;
     });
-  }, [normalizedData, searchTerm, statusFilter, typeFilter, locationFilter]);
+  }, [normalizedData, debouncedSearchTerm, statusFilter, typeFilter, locationFilter]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, typeFilter, locationFilter]);
+  }, [debouncedSearchTerm, statusFilter, typeFilter, locationFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -382,12 +387,12 @@ const Device = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
   };
 
   const handleRefresh = async () => {
@@ -654,14 +659,12 @@ const Device = () => {
     ...new Set(normalizedData.map((r) => r.type).filter((t) => t && t !== '-')),
   ];
 
-  // ✅ Active filter count (three filters, search excluded)
   const activeFilterCount = [
     statusFilter !== 'all',
     typeFilter !== 'all',
     locationFilter !== 'all',
   ].filter(Boolean).length;
 
-  // ✅ Clear all filters (including search)
   const clearAllFilters = () => {
     setStatusFilter('all');
     setTypeFilter('all');
@@ -784,7 +787,6 @@ const Device = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-            {/* Status */}
             <CustomSelect
               label="Status"
               value={statusFilter}
@@ -798,7 +800,6 @@ const Device = () => {
               placeholder="All Status"
             />
 
-            {/* Device Type */}
             <CustomSelect
               label="Device Type"
               value={typeFilter}
@@ -810,7 +811,6 @@ const Device = () => {
               placeholder="All Device Types"
             />
 
-            {/* Location */}
             <CustomSelect
               label="Location"
               value={locationFilter}

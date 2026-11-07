@@ -21,7 +21,10 @@ import {
   Button,
   CustomSelect,
   FilterBar,
+  useDebounce,
 } from '../ui';
+import DatePicker from '../ui/DatePicker';
+import CustomTimePicker from '../ui/CustomTimePicker';
 import {
   useGetAttendancesQuery,
   useCreateAttendanceMutation,
@@ -265,12 +268,13 @@ const ManualAttendanceModal = ({
             <div className="relative">
               <Calendar
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
               />
-              <input
-                type="date"
+              <DatePicker
                 value={form.date}
-                onChange={(e) => handleChange('date', e.target.value)}
+                onChange={(isoDate) => handleChange('date', isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className={`w-full h-11 pl-9 pr-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
                   errors.date ? 'border-red-300' : 'border-gray-200'
                 }`}
@@ -298,18 +302,10 @@ const ManualAttendanceModal = ({
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Check-In Time
             </label>
-            <input
-              type="time"
+            <CustomTimePicker
               value={form.checkInTime}
-              onChange={(e) => handleChange('checkInTime', e.target.value)}
+              onChange={(value) => handleChange('checkInTime', value)}
               disabled={form.status === 'Absent' || form.status === 'On Leave'}
-              className={`w-full h-11 px-4 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-                errors.checkInTime ? 'border-red-300' : 'border-gray-200'
-              } ${
-                form.status === 'Absent' || form.status === 'On Leave'
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-              }`}
             />
             {errors.checkInTime && (
               <p className="text-xs text-red-500 mt-1">{errors.checkInTime}</p>
@@ -320,16 +316,10 @@ const ManualAttendanceModal = ({
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Check-Out Time
             </label>
-            <input
-              type="time"
+            <CustomTimePicker
               value={form.checkOutTime}
-              onChange={(e) => handleChange('checkOutTime', e.target.value)}
+              onChange={(value) => handleChange('checkOutTime', value)}
               disabled={form.status === 'Absent' || form.status === 'On Leave'}
-              className={`w-full h-11 px-4 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-                form.status === 'Absent' || form.status === 'On Leave'
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-              }`}
             />
           </div>
         </div>
@@ -461,6 +451,9 @@ const ManualAttendance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — prevents refetching per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [showModal, setShowModal] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
   const [deleteRecord, setDeleteRecord] = useState(null);
@@ -472,7 +465,7 @@ const ManualAttendance = () => {
     isError,
     refetch,
   } = useGetAttendancesQuery({
-    search: searchTerm || undefined,
+    search: debouncedSearchTerm?.trim() || undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date: dateFilter || undefined,
     limit: 1000,
@@ -606,9 +599,10 @@ const ManualAttendance = () => {
     });
   }, [normalizedData, deptFilter, statusFilter, dateFilter]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, deptFilter, statusFilter, dateFilter]);
+  }, [debouncedSearchTerm, deptFilter, statusFilter, dateFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -732,12 +726,12 @@ const ManualAttendance = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
   };
 
   const handleRefresh = async () => {
@@ -791,8 +785,6 @@ const ManualAttendance = () => {
       />
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
-      {/* FIX: Changed flex layout to force items onto 1 row at 1280px. 
-          Reduced search bar max width, reduced gap, and added whitespace-nowrap to the Add button. */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
         
         {/* Search */}
@@ -905,14 +897,15 @@ const ManualAttendance = () => {
               placeholder="All Status"
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
                 Date
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>

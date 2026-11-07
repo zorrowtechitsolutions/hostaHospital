@@ -7,18 +7,17 @@ import {
   Download,
   X,
   Calendar,
-  Loader2,
   Filter,
   Users as UsersIcon,
-  CircleMinus,
-  CircleCheck,
-  CircleX,
-  Sparkles,
   ChevronDown,
+  CheckCircle,
+  XCircle,
+  CalendarCheck,
 } from "lucide-react";
 
-import { Pagination } from '../ui';
+import { Pagination, SearchBar, useDebounce } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
+import { useGetHolidaysQuery } from "../../../app/service/holidayApi";
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
 // ✅ Real-time attendance events
@@ -28,62 +27,67 @@ import {
 } from '../../socket/attendanceEvents';
 
 // ============================================================
-// 🎯 ATTENDANCE STATUS ICON
+// 🎯 ATTENDANCE ICON CONFIG  (Apollo style — 3 statuses)
 // ============================================================
-const AttendanceStatusIcon = ({ status, size = "md" }) => {
-  const sizeMap = {
-    sm: "w-5 h-5 p-1",
-    md: "w-7 h-7 p-1.5",
-    lg: "w-8 h-8 p-2",
-  };
-  const common = `${sizeMap[size] || sizeMap.md} rounded-full transition-all duration-200`;
-
-  switch (status) {
-    case "Weekend":
-      return (
-        <div className={`${common} bg-gray-100 ring-1 ring-gray-200`}>
-          <CircleMinus className="w-full h-full text-gray-500" strokeWidth={2.2} />
-        </div>
-      );
-
-    case "Present":
-      return (
-        <div className={`${common} bg-emerald-50 ring-1 ring-emerald-100`}>
-          <CircleCheck className="w-full h-full text-emerald-600" strokeWidth={2.2} />
-        </div>
-      );
-
-    case "Leave":
-      return (
-        <div className={`${common} bg-orange-50 ring-1 ring-orange-100`}>
-          <CircleX className="w-full h-full text-orange-500" strokeWidth={2.2} />
-        </div>
-      );
-
-    case "Holiday":
-      return (
-        <div className={`${common} bg-amber-50 ring-1 ring-amber-100`}>
-          <Sparkles className="w-full h-full text-amber-500" strokeWidth={2.2} />
-        </div>
-      );
-
-    default:
-      return null;
-  }
+const attendanceIcons = {
+  present: {
+    icon: CheckCircle,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    label: "Present",
+  },
+  absent: {
+    icon: XCircle,
+    color: "text-red-600",
+    bg: "bg-red-50",
+    label: "Absent",
+  },
+  holiday: {
+    icon: CalendarCheck,
+    color: "text-amber-500",
+    bg: "bg-amber-50",
+    label: "Holiday",
+  },
 };
 
 // ============================================================
-// 🎯 LEGEND ITEMS
+// 🎯 ATTENDANCE STATUS ICON COMPONENT
+// ============================================================
+const AttendanceStatusIcon = ({ status, size = "md" }) => {
+  const item = attendanceIcons[String(status || "").toLowerCase()];
+
+  if (!item) return null;
+
+  const Icon = item.icon;
+
+  const sizeMap = {
+    sm: { wrap: "w-7 h-7", icon: 16 },
+    md: { wrap: "w-9 h-9", icon: 20 },
+    lg: { wrap: "w-10 h-10", icon: 22 },
+  };
+  const dims = sizeMap[size] || sizeMap.md;
+
+  return (
+    <div
+      title={item.label}
+      className={`${dims.wrap} rounded-full flex items-center justify-center ${item.bg} transition-all duration-200`}
+    >
+      <Icon size={dims.icon} strokeWidth={2} className={item.color} />
+    </div>
+  );
+};
+
+// ============================================================
+// 🎯 LEGEND ITEMS  (3 statuses)
 // ============================================================
 const LEGEND_ITEMS = [
-  { status: "Weekend", label: "Weekend" },
   { status: "Present", label: "Present" },
-  { status: "Leave", label: "Leave" },
+  { status: "Absent", label: "Absent" },
   { status: "Holiday", label: "Holiday" },
 ];
 
 // ============================================================
-// 🎯 STATUS NORMALIZER
+// 🎯 STATUS NORMALIZER  (everything → Present | Absent | Holiday)
 // ============================================================
 const normalizeStatus = (rawStatus) => {
   if (!rawStatus) return null;
@@ -95,28 +99,49 @@ const normalizeStatus = (rawStatus) => {
     case "check-out":
     case "checked-in":
     case "checked-out":
-      return "Present";
-
+    case "wfh":
+    case "work from home":
+    case "od":
+    case "on duty":
     case "leave":
     case "on leave":
     case "approved leave":
-      return "Leave";
+    case "half-day":
+    case "half day":
+      return "Present";
+
+    case "absent":
+    case "abs":
+    case "no show":
+    case "no-show":
+    case "weekend":
+    case "week off":
+    case "week-off":
+      return "Absent";
 
     case "holiday":
     case "public holiday":
       return "Holiday";
 
-    case "weekend":
-    case "week off":
-      return "Weekend";
-
     default:
+      if (typeof console !== "undefined") {
+        console.warn(`[AttendanceSheet] Unmapped attendance status: "${rawStatus}"`);
+      }
       return null;
   }
 };
 
 // ============================================================
-// 🎯 EMPLOYEE TYPE RESOLVER  (single source of truth)
+// 🎯 STATUS PRIORITY  (higher wins when merging same-day records)
+// ============================================================
+const STATUS_PRIORITY = {
+  Present: 1,
+  Absent: 2,
+  Holiday: 3,
+};
+
+// ============================================================
+// 🎯 EMPLOYEE TYPE RESOLVER
 // ============================================================
 const getEmployeeType = (att) => {
   if (att?.employeeType) return att.employeeType;
@@ -135,7 +160,7 @@ const getEmployeeKey = (att) => {
 // ============================================================
 // COMPONENT
 // ============================================================
-const AttendanceSheet = () => {
+const AttendanceSheet = ({ holidayDates = [] }) => {
   const navigate = useNavigate();
   const now = new Date();
 
@@ -149,12 +174,15 @@ const AttendanceSheet = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const yearRef = useRef(null);
   const monthRef = useRef(null);
   const tableContainerRef = useRef(null);
 
   // ============================================================
-  // API CALL
+  // API CALLS
   // ============================================================
   const {
     data: attendanceResponse,
@@ -166,20 +194,22 @@ const AttendanceSheet = () => {
     limit: 1000,
   });
 
+  const {
+    data: holidayResponse,
+    isLoading: isHolidayLoading,
+  } = useGetHolidaysQuery({
+    page: 1,
+    limit: 1000,
+  });
+
   /* ============================================================
      ✅ REAL-TIME ATTENDANCE EVENTS
      ============================================================ */
   useEffect(() => {
     registerAttendanceEvents({
-      onRegistered: ({ message }) => {
-        refetch();
-      },
-      onUpdated: ({ message }) => {
-        refetch();
-      },
-      onDeleted: ({ message }) => {
-        refetch();
-      },
+      onRegistered: () => refetch(),
+      onUpdated: () => refetch(),
+      onDeleted: () => refetch(),
     });
 
     return () => unregisterAttendanceEvents();
@@ -192,6 +222,16 @@ const AttendanceSheet = () => {
     return [];
   }, [attendanceResponse]);
 
+  const holidays = useMemo(() => {
+    if (Array.isArray(holidayResponse?.data)) {
+      return holidayResponse.data;
+    }
+    if (holidayResponse?.data) {
+      return [holidayResponse.data];
+    }
+    return [];
+  }, [holidayResponse]);
+
   useEffect(() => {
     if (!isFetching) {
       const timer = setTimeout(() => setIsRefreshing(false), 200);
@@ -200,7 +240,79 @@ const AttendanceSheet = () => {
   }, [isFetching]);
 
   // ============================================================
-  // EMPLOYEES  (type-aware key so Doctor 1 ≠ Staff 1)
+  // HOLIDAY SET — API + PARENT PROP
+  // ============================================================
+  const holidaySet = useMemo(() => {
+    const set = new Set();
+
+    const year = Number(selectedYear);
+    const month = Number(selectedMonth);
+
+    const allHolidays = [
+      ...holidays,
+      ...(holidayDates || []).map((date) => ({
+        startDate: date,
+        endDate: date,
+        repeatsAnnually: false,
+      })),
+    ];
+
+    const parseDate = (value) => {
+      if (!value) return null;
+      const dateString = String(value).split("T")[0];
+      const [y, m, d] = dateString.split("-").map(Number);
+      if (!y || !m || !d) return null;
+      return { year: y, month: m, day: d };
+    };
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentKey = `${year}-${String(month).padStart(2, "0")}-${String(
+        day
+      ).padStart(2, "0")}`;
+
+      const isHoliday = allHolidays.some((holiday) => {
+        if (holiday.isActive === false) return false;
+
+        const start = parseDate(holiday.startDate);
+        const end = parseDate(holiday.endDate);
+        if (!start || !end) return false;
+
+        if (holiday.repeatsAnnually) {
+          const currentMonthDay = month * 100 + day;
+          const startMonthDay = start.month * 100 + start.day;
+          const endMonthDay = end.month * 100 + end.day;
+
+          if (startMonthDay <= endMonthDay) {
+            return (
+              currentMonthDay >= startMonthDay &&
+              currentMonthDay <= endMonthDay
+            );
+          }
+          return (
+            currentMonthDay >= startMonthDay ||
+            currentMonthDay <= endMonthDay
+          );
+        }
+
+        const current = new Date(year, month - 1, day).getTime();
+        const startTime = new Date(start.year, start.month - 1, start.day).getTime();
+        const endTime = new Date(end.year, end.month - 1, end.day).getTime();
+
+        return current >= startTime && current <= endTime;
+      });
+
+      if (isHoliday) {
+        set.add(currentKey);
+      }
+    }
+
+    return set;
+  }, [holidays, holidayDates, selectedYear, selectedMonth]);
+
+  // ============================================================
+  // EMPLOYEES  (type-aware key)
   // ============================================================
   const employees = useMemo(() => {
     const map = new Map();
@@ -215,9 +327,9 @@ const AttendanceSheet = () => {
 
       if (!map.has(key)) {
         map.set(key, {
-          id: key,               // composite — used for React keys & routing
-          employeeId,            // raw numeric id (used to fetch detail page)
-          employeeType,          // "Doctor" | "Staff"
+          id: key,
+          employeeId,
+          employeeType,
           name: att.name || att.employeeName || "Unknown",
         });
       }
@@ -229,7 +341,7 @@ const AttendanceSheet = () => {
   }, [attendanceData]);
 
   // ============================================================
-  // GROUP BY USER + DAY  (type-aware key)
+  // GROUP BY USER + DAY  (priority-based merge)
   // ============================================================
   const attendanceByUserAndDate = useMemo(() => {
     const map = new Map();
@@ -254,7 +366,20 @@ const AttendanceSheet = () => {
         const normalized =
           normalizeStatus(att.status) || normalizeStatus(att.type);
 
-        if (!map.has(key) || att.type === "check-in") {
+        if (!normalized) return;
+
+        const existing = map.get(key);
+        const newPriority = STATUS_PRIORITY[normalized] ?? 0;
+        const existingPriority = existing
+          ? STATUS_PRIORITY[existing.status] ?? 0
+          : -1;
+
+        const shouldSet =
+          !existing ||
+          newPriority > existingPriority ||
+          (newPriority === existingPriority && att.type === "check-in");
+
+        if (shouldSet) {
           map.set(key, {
             status: normalized,
             rawStatus: att.status,
@@ -270,19 +395,41 @@ const AttendanceSheet = () => {
     return map;
   }, [attendanceData, selectedYear, selectedMonth]);
 
-  // Accepts an employee object so we can use both type + id
+  // ============================================================
+  // STATUS RESOLVER  (3-status fallback chain)
+  // ============================================================
   const getAttendanceStatus = (employee, day) => {
     if (!employee) return null;
+
     const key = `${employee.id}_${day}`;
     const found = attendanceByUserAndDate.get(key);
-    return found?.status || null;
+    if (found?.status) return found.status;
+
+    const year = parseInt(selectedYear);
+    const month = parseInt(selectedMonth);
+
+    const isoKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+      2,
+      "0"
+    )}`;
+    if (holidaySet.has(isoKey)) return "Holiday";
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cellDate = new Date(year, month - 1, day);
+    if (cellDate < today) {
+      return "Absent";
+    }
+
+    return null;
   };
 
   // ============================================================
   // CALENDAR HELPERS
   // ============================================================
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
-  const getFirstDayOfMonth = (year, month) => new Date(year, month - 1, 1).getDay();
+  const getFirstDayOfMonth = (year, month) =>
+    new Date(year, month - 1, 1).getDay();
 
   const daysInMonth = getDaysInMonth(parseInt(selectedYear), parseInt(selectedMonth));
   const firstDay = getFirstDayOfMonth(parseInt(selectedYear), parseInt(selectedMonth));
@@ -322,12 +469,22 @@ const AttendanceSheet = () => {
   // ============================================================
   // FILTER + PAGINATION
   // ============================================================
+  // ✅ Filter uses the debounced term
   const filteredEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
+
+    const search = debouncedSearchTerm.trim().toLowerCase();
+    if (!search) return employees;
+
     return employees.filter((emp) =>
-      String(emp.name).toLowerCase().includes(searchTerm.toLowerCase())
+      String(emp.name).toLowerCase().includes(search)
     );
-  }, [employees, searchTerm]);
+  }, [employees, debouncedSearchTerm]);
+
+  // ✅ Reset page when debounced search term actually changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm]);
 
   const totalItems = filteredEmployees.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -363,7 +520,7 @@ const AttendanceSheet = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchTerm("");
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset alongside refresh
     try {
       await refetch();
     } finally {
@@ -408,7 +565,7 @@ const AttendanceSheet = () => {
   // ============================================================
   // LOADING STATE
   // ============================================================
-  if (isLoading) {
+  if (isLoading || isHolidayLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
         <div className="mb-6">
@@ -424,7 +581,10 @@ const AttendanceSheet = () => {
           </div>
           <div className="flex gap-2">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"></div>
+              <div
+                key={i}
+                className="w-10 h-10 bg-gray-200 rounded-md animate-pulse"
+              ></div>
             ))}
           </div>
         </div>
@@ -479,9 +639,22 @@ const AttendanceSheet = () => {
       {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-200 rounded transition-colors">
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+          >
+            <svg
+              className="w-5 h-5 text-gray-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
           </button>
           <div className="text-xs text-gray-500">
@@ -500,33 +673,16 @@ const AttendanceSheet = () => {
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
-        
         {/* Search */}
         <div className="w-full max-w-[320px] xl:max-w-[400px]">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search employee..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-10 py-2 h-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent bg-white"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-              >
-                <X size={16} className="text-gray-400 hover:text-gray-600" />
-              </button>
-            )}
-          </div>
+          <SearchBar
+            placeholder="Search employee..."
+            value={searchTerm}
+            onChange={setSearchTerm}
+            onClear={() => setSearchTerm("")}
+          />
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
@@ -534,9 +690,12 @@ const AttendanceSheet = () => {
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             title="Refresh"
           >
-            <RefreshCw size={16} className={isRefreshing || isFetching ? "animate-spin" : ""} />
+            <RefreshCw
+              size={16}
+              className={isRefreshing || isFetching ? "animate-spin" : ""}
+            />
           </button>
-          
+
           <button
             onClick={exportToExcel}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
@@ -544,7 +703,7 @@ const AttendanceSheet = () => {
           >
             <Download size={16} />
           </button>
-          
+
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50 shrink-0"
@@ -568,7 +727,9 @@ const AttendanceSheet = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Year */}
             <div className="relative" ref={yearRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Year
+              </label>
               <button
                 onClick={() => setShowYearDropdown(!showYearDropdown)}
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white flex items-center justify-between"
@@ -579,7 +740,9 @@ const AttendanceSheet = () => {
                 </span>
                 <ChevronDown
                   size={14}
-                  className={`transition-transform ${showYearDropdown ? "rotate-180" : ""}`}
+                  className={`transition-transform ${
+                    showYearDropdown ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {showYearDropdown && (
@@ -607,7 +770,9 @@ const AttendanceSheet = () => {
 
             {/* Month */}
             <div className="relative" ref={monthRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Month
+              </label>
               <button
                 onClick={() => setShowMonthDropdown(!showMonthDropdown)}
                 className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white flex items-center justify-between"
@@ -618,7 +783,9 @@ const AttendanceSheet = () => {
                 </span>
                 <ChevronDown
                   size={14}
-                  className={`transition-transform ${showMonthDropdown ? "rotate-180" : ""}`}
+                  className={`transition-transform ${
+                    showMonthDropdown ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {showMonthDropdown && (
@@ -651,7 +818,7 @@ const AttendanceSheet = () => {
       <div className="flex flex-wrap items-center justify-end gap-6 mb-6">
         {LEGEND_ITEMS.map((item) => (
           <div key={item.status} className="flex items-center gap-2">
-            <AttendanceStatusIcon status={item.status} />
+            <AttendanceStatusIcon status={item.status} size="sm" />
             <span className="text-sm font-semibold text-gray-600">
               {item.label}
             </span>
@@ -664,12 +831,12 @@ const AttendanceSheet = () => {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <UsersIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No employees found' : 'No attendance data available'}
+            {searchTerm ? "No employees found" : "No attendance data available"}
           </h3>
           <p className="text-gray-500 mb-4">
             {searchTerm
               ? `No results found for "${searchTerm}". Try adjusting your search.`
-              : 'No attendance records for the selected period.'}
+              : "No attendance records for the selected period."}
           </p>
         </div>
       ) : (
@@ -677,7 +844,9 @@ const AttendanceSheet = () => {
           <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">
               Total Employees
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredEmployees.length}</span>
+              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">
+                {filteredEmployees.length}
+              </span>
               {searchTerm && (
                 <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
               )}
@@ -744,12 +913,15 @@ const AttendanceSheet = () => {
                         <button
                           type="button"
                           onClick={() =>
-                            navigate(`/attendance/employee/${employee.employeeId}`, {
-                              state: {
-                                employeeName: employee.name,
-                                employeeType: employee.employeeType,
-                              },
-                            })
+                            navigate(
+                              `/attendance/employee/${employee.employeeId}`,
+                              {
+                                state: {
+                                  employeeName: employee.name,
+                                  employeeType: employee.employeeType,
+                                },
+                              }
+                            )
                           }
                           className="break-words whitespace-normal text-left text-gray-800 hover:text-[#1C62A0] hover:underline transition-colors cursor-pointer w-full"
                           title={`View attendance for ${employee.name}`}
@@ -770,7 +942,9 @@ const AttendanceSheet = () => {
                             className="px-2 py-3 text-center border-l border-gray-100"
                           >
                             <div className="inline-flex items-center justify-center">
-                              {status && <AttendanceStatusIcon status={status} />}
+                              {status && (
+                                <AttendanceStatusIcon status={status} />
+                              )}
                             </div>
                           </td>
                         );
