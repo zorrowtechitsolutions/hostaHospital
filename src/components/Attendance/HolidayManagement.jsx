@@ -16,7 +16,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar } from '../ui';
+import { Pagination, SearchBar, Modal, Button, CustomSelect, FilterBar, useDebounce } from '../ui';
 import DatePicker from '../ui/DatePicker';
 import {
   showSuccessToast,
@@ -201,7 +201,6 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE <input type="date"> */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Start Date <span className="text-red-500">*</span>
@@ -226,7 +225,6 @@ const HolidayModal = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
             )}
           </div>
 
-          {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE <input type="date"> */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               End Date (optional)
@@ -377,6 +375,9 @@ const HolidayManagement = () => {
   const [showFilters, setShowFilters] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const {
     data: holidaysResponse,
     isLoading,
@@ -395,7 +396,7 @@ const HolidayManagement = () => {
   const [editHoliday, setEditHoliday] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  // ✅ ADD: Register socket event listeners (like Ambulance)
+  // ✅ Register socket event listeners
   useEffect(() => {
     registerHolidayEvents({
       onCreated: async (data) => {
@@ -414,7 +415,7 @@ const HolidayManagement = () => {
     };
   }, [refetch]);
 
-  // ✅ ADD: Listen for socket connection/disconnection (like Ambulance)
+  // ✅ Listen for socket connection/disconnection
   useEffect(() => {
     const handleConnect = () => {
       registerHolidayEvents({
@@ -470,6 +471,7 @@ const HolidayManagement = () => {
     return list.map((row, i) => normalizeRow(row, i));
   }, [holidaysResponse]);
 
+  // ✅ Filter uses the debounced search term
   const filteredData = useMemo(() => {
     let result = [...holidays];
 
@@ -477,8 +479,8 @@ const HolidayManagement = () => {
       result = result.filter((h) => h.type === typeFilter);
     }
 
-    if (searchTerm && searchTerm.trim().length >= 2) {
-      const q = searchTerm.toLowerCase().trim();
+    if (debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2) {
+      const q = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter((h) =>
         [h.name, h.type, h.description]
           .filter(Boolean)
@@ -491,11 +493,12 @@ const HolidayManagement = () => {
       if (!b.dateISO) return -1;
       return a.dateISO.localeCompare(b.dateISO);
     });
-  }, [holidays, typeFilter, searchTerm]);
+  }, [holidays, typeFilter, debouncedSearchTerm]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, yearFilter]);
+  }, [debouncedSearchTerm, typeFilter, yearFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -577,12 +580,12 @@ const HolidayManagement = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
   };
 
   const handleRefresh = async () => {

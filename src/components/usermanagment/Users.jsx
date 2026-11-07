@@ -17,7 +17,8 @@ import {
   Button,
   Card,
   Pagination,
-  SearchBar
+  SearchBar,
+  useDebounce,
 } from '../ui';
 
 import CustomSelect from '../ui/CustomSelect'; // ✅ Added import
@@ -67,41 +68,44 @@ const Users = () => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  
+
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
-  
+
   const [userTypeFilter, setUserTypeFilter] = useState('all');
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const itemsPerPage = 10;
 
   // Fetch doctors and staff from API
-  const { 
-    data: doctorsData, 
+  const {
+    data: doctorsData,
     isLoading: doctorsLoading,
-    refetch: refetchDoctors 
+    refetch: refetchDoctors
   } = useGetDoctorsQuery({ limit: 100 });
-  
-  const { 
-    data: staffData, 
+
+  const {
+    data: staffData,
     isLoading: staffLoading,
-    refetch: refetchStaff 
+    refetch: refetchStaff
   } = useGetStaffQuery({ limit: 100 });
-  
-  const { 
+
+  const {
     data: rolePermissions,
     isLoading: permissionsLoading,
     refetch: refetchPermissions
   } = useGetRolePermissionsQuery({});
-  
+
   // Delete role permission mutation
   const [deleteRolePermission, { isLoading: isDeletingPermission }] = useDeleteRolePermissionMutation();
-  
+
   // Fetch roles from API to get dynamic role names
-  const { 
-    data: rolesData, 
+  const {
+    data: rolesData,
     isLoading: rolesLoading,
     refetch: refetchRoles
   } = useGetRolesQuery({ limit: 100 });
@@ -111,7 +115,7 @@ const Users = () => {
   // Transform API data to aggregated user format by type
   const transformToUsers = () => {
     const aggregatedUsers = [];
-    
+
     if (doctorsData?.data?.length > 0 || doctorsData?.length > 0) {
       aggregatedUsers.push({
         id: "doctor_type",
@@ -119,7 +123,7 @@ const Users = () => {
         count: doctorsData?.data?.length || doctorsData?.length || 0
       });
     }
-    
+
     if (staffData?.data?.length > 0 || staffData?.length > 0) {
       aggregatedUsers.push({
         id: "staff_type",
@@ -127,7 +131,7 @@ const Users = () => {
         count: staffData?.data?.length || staffData?.length || 0
       });
     }
-    
+
     return aggregatedUsers;
   };
 
@@ -163,9 +167,10 @@ const Users = () => {
     }
   }, [location.state, navigate, location.pathname, refetchDoctors, refetchStaff, refetchPermissions, refetchRoles]);
 
+  // ✅ Reset page when debounced search or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, userTypeFilter]);
+  }, [debouncedSearchTerm, userTypeFilter]);
 
   const getUserTypes = () => {
     return [...new Set(users.map(u => u.userType).filter(Boolean))];
@@ -177,19 +182,21 @@ const Users = () => {
     ...getUserTypes().map((type) => ({ value: type, label: type })),
   ];
 
+  // ✅ Filter uses the debounced search term
   const getFilteredUsers = () => {
     let filtered = [...users];
-    
-    if (searchTerm) {
-      filtered = filtered.filter(user => 
-        user.userType?.toLowerCase().includes(searchTerm.toLowerCase())
+
+    if (debouncedSearchTerm) {
+      const term = debouncedSearchTerm.toLowerCase();
+      filtered = filtered.filter(user =>
+        user.userType?.toLowerCase().includes(term)
       );
     }
-    
+
     if (userTypeFilter !== 'all') {
       filtered = filtered.filter(user => user.userType === userTypeFilter);
     }
-    
+
     return filtered;
   };
 
@@ -221,7 +228,7 @@ const Users = () => {
       'User Type': user.userType,
       'Count': user.count || 'N/A'
     }));
-    
+
     const link = document.createElement('a');
     const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -237,14 +244,14 @@ const Users = () => {
     const headers = ['User Type', 'Count'];
     const csvRows = [
       headers.join(','),
-      ...exportData.map(user => 
+      ...exportData.map(user =>
         [
           `"${user.userType}"`,
           `"${user.count || 'N/A'}"`
         ].join(',')
       )
     ];
-    
+
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -254,13 +261,13 @@ const Users = () => {
     showSuccessToast(`Exported ${exportData.length} user records as CSV`, 2000);
   };
 
-  // ✅ Search handler - receives value directly from SearchBar
+  // ✅ Search handler — receives value directly from SearchBar.
+  // Page reset is handled by the debouncedSearchTerm effect above.
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
+  // ✅ Clear search handler — instant pagination reset when clearing
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -280,7 +287,7 @@ const Users = () => {
       try {
         const permissions = rolePermissions?.data || [];
         let permissionId = null;
-        
+
         if (Array.isArray(permissions)) {
           const permission = permissions.find(perm => {
             if (userToDelete.userType === 'Doctor' && perm.userType === 'doctor') {
@@ -293,21 +300,21 @@ const Users = () => {
           });
           permissionId = permission?.id;
         }
-        
+
         if (permissionId) {
           await deleteRolePermission(permissionId).unwrap();
           showSuccessToast(`${userToDelete.userType} role permission has been removed successfully!`, 3000);
         } else {
           showWarningToast(`No permission found for ${userToDelete.userType}.`, 3000);
         }
-        
+
         await Promise.all([
           refetchDoctors(),
           refetchStaff(),
           refetchPermissions(),
           refetchRoles()
         ]);
-        
+
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (error) {
@@ -316,11 +323,13 @@ const Users = () => {
       }
     }
   };
-  
+
+  // ✅ Active filter count uses debounced term so the badge reflects
+  //    what's actually being applied to the table.
   const getActiveFilterCount = () =>
     [
       userTypeFilter !== 'all',
-      !!searchTerm
+      !!debouncedSearchTerm,
     ].filter(Boolean).length;
 
   const activeFilterCount = getActiveFilterCount();
@@ -359,9 +368,9 @@ const Users = () => {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex-1 max-w-md">
             {/* ✅ Using global SearchBar component */}
-            <SearchBar 
-              placeholder="Search by user type..." 
-              value={searchTerm} 
+            <SearchBar
+              placeholder="Search by user type..."
+              value={searchTerm}
               onChange={handleSearchChange}
               onClear={handleClearSearch}
               className="w-full"
@@ -371,11 +380,11 @@ const Users = () => {
             <Button variant="outline" size="sm" onClick={handleRefresh} title="Refresh" disabled={isRefreshing}>
               <RefreshCcw size={16} className={isRefreshing ? "animate-spin" : ""} />
             </Button>
-            
+
             <Button variant="outline" size="sm" onClick={handleExportCSV} title="Export CSV">
               <Download size={16} />
             </Button>
-            
+
             <Button
               variant="secondary"
               size="sm"
@@ -441,7 +450,7 @@ const Users = () => {
               <h2 className="text-sm font-semibold text-gray-700">
                 All Users
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredUsers.length}</span>
-                {searchTerm && filteredUsers.length > 0 && (
+                {debouncedSearchTerm && filteredUsers.length > 0 && (
                   <span className="text-xs text-gray-400 ml-2">(Filtered)</span>
                 )}
               </h2>
@@ -486,7 +495,7 @@ const Users = () => {
                 </tbody>
               </table>
             </div>
-            
+
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="mt-4 px-6 py-3 bg-white border-t rounded-b-lg">
@@ -505,13 +514,13 @@ const Users = () => {
       </div>
 
       {/* Delete Confirmation Modal */}
-      <DeleteModal 
-        isOpen={showDeleteModal} 
-        onClose={() => setShowDeleteModal(false)} 
-        onConfirm={handleConfirmDelete} 
-        title="Delete User" 
-        message="Are you sure you want to remove this user type? This action will revoke all permissions for all users of this type and cannot be undone." 
-        itemName={userToDelete?.userType} 
+      <DeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete User"
+        message="Are you sure you want to remove this user type? This action will revoke all permissions for all users of this type and cannot be undone."
+        itemName={userToDelete?.userType}
       />
     </>
   );

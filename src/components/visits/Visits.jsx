@@ -8,9 +8,10 @@ import {
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, 
   TableHeader, TableCell, Badge, Avatar, SearchBar, 
-  Pagination, Modal, Loader, FilterBar
+  Pagination, Modal, Loader, FilterBar, useDebounce
 } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
+import DatePicker from '../ui/DatePicker';
 import DeleteModal from '../patients/DeleteModel';
 import EditVisitModal from './EditVisitModal';
 import AddVisitModal from './AddVisitModal';
@@ -92,6 +93,9 @@ const Visits = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search term (500ms) — avoids refetching + re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const { 
@@ -103,7 +107,7 @@ const Visits = () => {
     status: "accepted",
     page: currentPage,
     limit: itemsPerPage,
-    ...(searchTerm && searchTerm.trim().length >= 2 && { search_query: searchTerm }),
+    ...(debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2 && { search_query: debouncedSearchTerm }),
     ...(departmentFilter && { department: departmentFilter }),
     ...(dateFilter && { date: dateFilter })
   });
@@ -234,14 +238,14 @@ const Visits = () => {
       .sort((a, b) => (b.bookingNumber || 0) - (a.bookingNumber || 0));
   }, [bookingsResponse]);
 
-  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  // ✅ FRONTEND SEARCH FILTERING - uses debounced term to stay in sync with the API
   const filteredBySearch = useMemo(() => {
     // If no search term or search term is too short, return all data
-    if (!searchTerm || searchTerm.trim().length < 2) {
+    if (!debouncedSearchTerm || debouncedSearchTerm.trim().length < 2) {
       return allVisitsData;
     }
 
-    const searchLower = searchTerm.toLowerCase().trim();
+    const searchLower = debouncedSearchTerm.toLowerCase().trim();
     
     return allVisitsData.filter(item => {
       const searchFields = [
@@ -257,7 +261,7 @@ const Visits = () => {
 
       return searchFields.some(field => field.includes(searchLower));
     });
-  }, [allVisitsData, searchTerm]);
+  }, [allVisitsData, debouncedSearchTerm]);
 
   // ✅ Apply department and date filters (frontend fallback)
   const filteredVisits = useMemo(() => {
@@ -292,14 +296,15 @@ const Visits = () => {
     return filteredVisits.slice(startIndex, endIndex);
   }, [filteredVisits, currentPage, itemsPerPage]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter]);
+  }, [debouncedSearchTerm, departmentFilter, dateFilter]);
 
   // ✅ Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   // ✅ Clear search handler
@@ -765,15 +770,16 @@ const Visits = () => {
               placeholder="All Departments"
             />
 
-            <div>
+            <div className="flex flex-col">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date
               </label>
-              <input 
-                type="date" 
-                value={dateFilter} 
-                onChange={(e) => setDateFilter(e.target.value)} 
-                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]" 
+              <DatePicker
+                value={dateFilter}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
+                className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0]"
               />
             </div>
           </div>

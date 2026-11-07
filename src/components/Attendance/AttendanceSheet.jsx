@@ -15,9 +15,9 @@ import {
   CalendarCheck,
 } from "lucide-react";
 
-import { Pagination, SearchBar } from '../ui'; // ✅ Added SearchBar
+import { Pagination, SearchBar, useDebounce } from '../ui';
 import { useGetAttendancesQuery } from '../../../app/service/attendance';
-import { useGetHolidaysQuery } from "../../../app/service/holidayApi"; // ⚠️ adjust path if needed
+import { useGetHolidaysQuery } from "../../../app/service/holidayApi";
 import { showSuccessToast, showWarningToast } from '../ui/Toast';
 
 // ✅ Real-time attendance events
@@ -94,7 +94,6 @@ const normalizeStatus = (rawStatus) => {
   const s = String(rawStatus).toLowerCase().trim();
 
   switch (s) {
-    // ─── Present ───
     case "present":
     case "check-in":
     case "check-out":
@@ -111,7 +110,6 @@ const normalizeStatus = (rawStatus) => {
     case "half day":
       return "Present";
 
-    // ─── Absent ───
     case "absent":
     case "abs":
     case "no show":
@@ -121,7 +119,6 @@ const normalizeStatus = (rawStatus) => {
     case "week-off":
       return "Absent";
 
-    // ─── Holiday ───
     case "holiday":
     case "public holiday":
       return "Holiday";
@@ -176,6 +173,9 @@ const AttendanceSheet = ({ holidayDates = [] }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const itemsPerPage = 10;
+
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const yearRef = useRef(null);
   const monthRef = useRef(null);
@@ -469,12 +469,22 @@ const AttendanceSheet = ({ holidayDates = [] }) => {
   // ============================================================
   // FILTER + PAGINATION
   // ============================================================
+  // ✅ Filter uses the debounced term
   const filteredEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
+
+    const search = debouncedSearchTerm.trim().toLowerCase();
+    if (!search) return employees;
+
     return employees.filter((emp) =>
-      String(emp.name).toLowerCase().includes(searchTerm.toLowerCase())
+      String(emp.name).toLowerCase().includes(search)
     );
-  }, [employees, searchTerm]);
+  }, [employees, debouncedSearchTerm]);
+
+  // ✅ Reset page when debounced search term actually changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm]);
 
   const totalItems = filteredEmployees.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -510,7 +520,7 @@ const AttendanceSheet = ({ holidayDates = [] }) => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchTerm("");
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset alongside refresh
     try {
       await refetch();
     } finally {
@@ -663,19 +673,13 @@ const AttendanceSheet = ({ holidayDates = [] }) => {
 
       {/* ─────────────── SEARCH + ACTION BUTTONS ROW ─────────────── */}
       <div className="flex flex-row justify-between items-center gap-3 mb-6 w-full">
-        {/* Search — matches HolidayManagement.jsx */}
+        {/* Search */}
         <div className="w-full max-w-[320px] xl:max-w-[400px]">
           <SearchBar
             placeholder="Search employee..."
             value={searchTerm}
-            onChange={(value) => {
-              setSearchTerm(value);
-              setCurrentPage(1);
-            }}
-            onClear={() => {
-              setSearchTerm("");
-              setCurrentPage(1);
-            }}
+            onChange={setSearchTerm}
+            onClear={() => setSearchTerm("")}
           />
         </div>
 

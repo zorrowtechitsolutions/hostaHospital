@@ -11,8 +11,9 @@ import {
   Users as UsersIcon,
   Phone,
 } from "lucide-react";
-import { Pagination, SearchBar, FilterBar } from "../ui";
+import { Pagination, SearchBar, FilterBar, useDebounce } from "../ui";
 import CustomSelect from "../ui/CustomSelect";
+import DatePicker from "../ui/DatePicker";
 import ApproveRequestModal from "./ApproveRequestModel";
 import RejectRequestModal from "./RejectRequestModel";
 import { showSuccessToast, showErrorToast } from "../ui/Toast";
@@ -175,6 +176,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const [statusFilter, setStatusFilter] = useState("");
   const [showAllData, setShowAllData] = useState(false);
 
+  // ✅ Debounce search term (500ms) — prevents an API call on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -207,8 +211,10 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       page: currentPage,
       limit: itemsPerPage,
       status: "pending",
-      ...(searchTerm &&
-        searchTerm.trim().length >= 2 && { search_query: searchTerm }),
+      ...(debouncedSearchTerm &&
+        debouncedSearchTerm.trim().length >= 2 && {
+          search_query: debouncedSearchTerm,
+        }),
       ...(departmentFilter && { department: departmentFilter }),
       ...(dateFilter && { date: dateFilter }),
     },
@@ -247,9 +253,9 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   }, [bookingsResponse]);
 
   const filteredBySearch = useMemo(() => {
-    if (!searchTerm || searchTerm.trim().length < 2) return safeData;
+    if (!debouncedSearchTerm || debouncedSearchTerm.trim().length < 2) return safeData;
 
-    const searchLower = searchTerm.toLowerCase().trim();
+    const searchLower = debouncedSearchTerm.toLowerCase().trim();
 
     return safeData.filter((item) => {
       const searchFields = [
@@ -264,7 +270,7 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
       ];
       return searchFields.some((field) => field.includes(searchLower));
     });
-  }, [safeData, searchTerm]);
+  }, [safeData, debouncedSearchTerm]);
 
   const filteredByDoctor = useMemo(() => {
     if (doctorId && !showAllData) {
@@ -330,15 +336,17 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
   const hasActiveFilters =
     departmentFilter !== "" || dateFilter !== "" || statusFilter !== "";
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, departmentFilter, dateFilter, showAllData]);
+  }, [debouncedSearchTerm, departmentFilter, dateFilter, showAllData]);
 
+  // ✅ Reset optimistic removals when the underlying query changes (in lockstep with debounce)
   useEffect(() => {
     setRemovedRequestIds(new Set());
   }, [
     bookingsResponse?.pagination?.currentPage,
-    searchTerm,
+    debouncedSearchTerm,
     departmentFilter,
     dateFilter,
   ]);
@@ -691,10 +699,11 @@ const RequestTable = ({ doctorId = null, doctorName = null }) => {
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Appointment Date
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
+                onChange={(isoDate) => setDateFilter(isoDate)}
+                mode="any"
+                placeholder="DD/MM/YYYY"
                 className="w-full h-12 px-6 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent text-gray-700 text-sm bg-white"
               />
             </div>

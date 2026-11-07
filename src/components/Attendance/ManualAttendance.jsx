@@ -21,6 +21,7 @@ import {
   Button,
   CustomSelect,
   FilterBar,
+  useDebounce,
 } from '../ui';
 import DatePicker from '../ui/DatePicker';
 import CustomTimePicker from '../ui/CustomTimePicker';
@@ -260,7 +261,6 @@ const ManualAttendanceModal = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ✅ CUSTOM DATEPICKER REPLACES NATIVE <input type="date"> */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Date <span className="text-red-500">*</span>
@@ -451,6 +451,9 @@ const ManualAttendance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — prevents refetching per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [showModal, setShowModal] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
   const [deleteRecord, setDeleteRecord] = useState(null);
@@ -462,7 +465,7 @@ const ManualAttendance = () => {
     isError,
     refetch,
   } = useGetAttendancesQuery({
-    search: searchTerm || undefined,
+    search: debouncedSearchTerm?.trim() || undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date: dateFilter || undefined,
     limit: 1000,
@@ -596,9 +599,10 @@ const ManualAttendance = () => {
     });
   }, [normalizedData, deptFilter, statusFilter, dateFilter]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, deptFilter, statusFilter, dateFilter]);
+  }, [debouncedSearchTerm, deptFilter, statusFilter, dateFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -722,12 +726,12 @@ const ManualAttendance = () => {
 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
-    setCurrentPage(1);
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
   };
 
   const handleRefresh = async () => {
@@ -893,7 +897,6 @@ const ManualAttendance = () => {
               placeholder="All Status"
             />
 
-            {/* ✅ DATE FIELD ALIGNED HORIZONTALLY USING mb-1 */}
             <div className="flex flex-col">
               <label className="block text-sm font-medium text-gray-600 mb-1">
                 Date

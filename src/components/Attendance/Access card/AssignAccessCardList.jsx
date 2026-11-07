@@ -13,7 +13,15 @@ import {
   useDeactivateRfidCardAssignmentMutation,
   useActivateRfidCardAssignmentMutation,
 } from '../../../../app/service/accesscard';
-import { Button, Pagination, SearchBar, FilterBar, Modal, CustomSelect } from '../../ui';
+import {
+  Button,
+  Pagination,
+  SearchBar,
+  FilterBar,
+  Modal,
+  CustomSelect,
+  useDebounce,
+} from '../../ui';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
@@ -152,6 +160,9 @@ const AssignAccessCardList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeMenu, setActiveMenu] = useState(null);
   const itemsPerPage = 10;
+
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -317,8 +328,11 @@ const AssignAccessCardList = () => {
     return [...doctorsList, ...staffList];
   }, [doctorsResponse, staffResponse, assignmentMap, hospitalId]);
 
-  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  // ✅ Uses the debounced search term
+  const hasSearchTerm =
+    debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
 
+  // ✅ Filter uses the debounced search term
   const filteredMembers = useMemo(() => {
     let result = [...members];
 
@@ -347,7 +361,7 @@ const AssignAccessCardList = () => {
     }
 
     if (hasSearchTerm) {
-      const q = searchTerm.toLowerCase().trim();
+      const q = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter((m) =>
         [m.number, m.name, m.department, m.designation, m.email, m.phone, m.accessCardUid]
           .filter(Boolean)
@@ -360,7 +374,14 @@ const AssignAccessCardList = () => {
       const bNum = Number(b.rawNumber ?? 0);
       return aNum - bNum;
     });
-  }, [members, typeFilter, departmentFilter, statusFilter, searchTerm, hasSearchTerm]);
+  }, [
+    members,
+    typeFilter,
+    departmentFilter,
+    statusFilter,
+    debouncedSearchTerm,
+    hasSearchTerm,
+  ]);
 
   const totalFilteredItems = filteredMembers.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
@@ -370,9 +391,10 @@ const AssignAccessCardList = () => {
     return filteredMembers.slice(start, start + itemsPerPage);
   }, [filteredMembers, currentPage, itemsPerPage]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, departmentFilter, statusFilter]);
+  }, [debouncedSearchTerm, typeFilter, departmentFilter, statusFilter]);
 
   const departments = useMemo(() => {
     const set = new Set(members.map((m) => m.department).filter(Boolean));
@@ -571,7 +593,10 @@ const AssignAccessCardList = () => {
             placeholder="Search by name, number, department, card UID..."
             value={searchTerm}
             onChange={(val) => setSearchTerm(val)}
-            onClear={() => setSearchTerm('')}
+            onClear={() => {
+              setSearchTerm('');
+              setCurrentPage(1); // instant pagination reset when clearing
+            }}
             className="flex-1 max-w-md"
           />
         </div>
@@ -638,7 +663,7 @@ const AssignAccessCardList = () => {
                 options={[
                   { value: 'all', label: 'All Types' },
                   { value: 'doctor', label: 'Doctor' },
-                  { value: 'staff', label: 'Staff' }
+                  { value: 'staff', label: 'Staff' },
                 ]}
                 onChange={(value) => setTypeFilter(value)}
                 placeholder="All Types"
@@ -652,7 +677,7 @@ const AssignAccessCardList = () => {
                 value={departmentFilter}
                 options={[
                   { value: '', label: 'All Departments' },
-                  ...departments.map((dept) => ({ value: dept, label: dept }))
+                  ...departments.map((dept) => ({ value: dept, label: dept })),
                 ]}
                 onChange={(value) => setDepartmentFilter(value)}
                 placeholder="All Departments"
@@ -669,7 +694,7 @@ const AssignAccessCardList = () => {
                   { value: 'assigned', label: 'Card Assigned' },
                   { value: 'not-assigned', label: 'Not Assigned' },
                   { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' }
+                  { value: 'inactive', label: 'Inactive' },
                 ]}
                 onChange={(value) => setStatusFilter(value)}
                 placeholder="All Statuses"
@@ -690,7 +715,7 @@ const AssignAccessCardList = () => {
           </h3>
           <p className="text-gray-500 mb-4">
             {hasSearchTerm
-              ? `No results for "${searchTerm}". Try adjusting your search.`
+              ? `No results for "${debouncedSearchTerm}". Try adjusting your search.`
               : hasActiveFilters
               ? 'No members match the selected filters.'
               : 'No doctors or staff have been added yet.'}

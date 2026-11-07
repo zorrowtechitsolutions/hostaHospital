@@ -20,7 +20,8 @@ import PermissionDeniedModal from '../ui/PermissionDeniedModal';
 import {
   Badge,
   Pagination,
-  SearchBar
+  SearchBar,
+  useDebounce
 } from '../ui';
 import {
   useGetAmbulanceQuery,
@@ -118,6 +119,9 @@ const Ambulance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — prevents an API call on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   // Save view mode to localStorage
   useEffect(() => {
     localStorage.setItem('ambulanceViewMode', viewMode);
@@ -138,7 +142,7 @@ const Ambulance = () => {
   } = useGetAmbulanceQuery({
     page: currentPage,
     limit: itemsPerPage,
-    search_query: searchTerm?.trim() || undefined,
+    search_query: debouncedSearchTerm?.trim() || undefined,
     country: countryFilter || undefined,
   });
 
@@ -232,10 +236,10 @@ const Ambulance = () => {
   const totalItems = ambulancesResponse?.pagination?.totalItems || 0;
   const totalPages = ambulancesResponse?.pagination?.totalPages || 1;
 
-  // Reset page when filters change
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, countryFilter]);
+  }, [debouncedSearchTerm, countryFilter]);
 
   // Handle click outside for menu
   useEffect(() => {
@@ -251,7 +255,7 @@ const Ambulance = () => {
   // Search handler - receives value directly from SearchBar
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
+    // NOTE: page reset is handled by the debouncedSearchTerm effect above
   };
 
   // Clear search handler

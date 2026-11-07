@@ -21,7 +21,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button } from '../ui';
+import { Pagination, SearchBar, Modal, Button, useDebounce } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import MiniCalendar from './MiniCalendar';
 
@@ -108,7 +108,7 @@ const mapRow = (r) => ({
 });
 
 // ============================================================
-// 📊 STATS CARD (professional KPI card — matches LeaveRequests)
+// 📊 STATS CARD
 // ============================================================
 const StatCard = ({
   label,
@@ -369,23 +369,21 @@ const MyLeaveRequests = () => {
 
   const [activeTab, setActiveTab] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [detailsRecord, setDetailsRecord] = useState(null);
 
+  // ✅ Debounce search (400ms) — shared hook for consistency
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
   const [cancelRecord, setCancelRecord] = useState(null);
   const [deleteRecord, setDeleteRecord] = useState(null);
 
   const tabs = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
-    return () => clearTimeout(t);
-  }, [searchTerm]);
-
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, typeFilter, debouncedSearch]);
@@ -396,7 +394,7 @@ const MyLeaveRequests = () => {
     limit: itemsPerPage,
     ...(activeTab !== 'All' ? { status: activeTab } : {}),
     ...(typeFilter !== 'all' ? { leaveType: typeFilter } : {}),
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
   };
 
   const {
@@ -458,12 +456,15 @@ const MyLeaveRequests = () => {
   };
 
   const handleSearchChange = (value) => setSearchTerm(value);
-  const handleClearSearch = () => setSearchTerm('');
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchTerm('');
-    setDebouncedSearch('');
     setActiveTab('All');
     setTypeFilter('all');
     setCurrentPage(1);
@@ -523,7 +524,7 @@ const MyLeaveRequests = () => {
   const userName = auth?.name || auth?.employeeName || 'User';
 
   // ============================================================
-  // STATS CONFIG — drives the 4 KPI cards
+  // STATS CONFIG
   // ============================================================
   const statCards = [
     {

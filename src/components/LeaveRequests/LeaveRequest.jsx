@@ -19,7 +19,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Breadcrumb } from '../ui/Breadcrumb';
-import { Pagination, SearchBar, Modal, Button, FilterBar } from '../ui';
+import { Pagination, SearchBar, Modal, Button, FilterBar, useDebounce } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import DatePicker from '../ui/DatePicker';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -124,7 +124,7 @@ const mapRow = (r) => ({
 });
 
 // ============================================================
-// 📊 STATS CARD (professional KPI card)
+// 📊 STATS CARD
 // ============================================================
 const StatCard = ({
   label,
@@ -191,7 +191,7 @@ const StatCard = ({
 };
 
 // ============================================================
-// SHARED: LEAVE SUMMARY CARD (used by both action modals)
+// SHARED: LEAVE SUMMARY CARD
 // ============================================================
 const LeaveSummaryCard = ({ record }) => (
   <div className="bg-slate-50 border rounded-lg p-4 text-sm space-y-3">
@@ -306,7 +306,7 @@ const LeaveDetailsModal = ({ isOpen, onClose, record }) => {
 };
 
 // ============================================================
-// APPROVE MODAL  (approve-only)
+// APPROVE MODAL
 // ============================================================
 const ApproveModal = ({ isOpen, onClose, onSave, record, isLoading }) => {
   const [comments, setComments] = useState('');
@@ -396,7 +396,7 @@ const ApproveModal = ({ isOpen, onClose, onSave, record, isLoading }) => {
 };
 
 // ============================================================
-// REJECT MODAL  (reject-only)
+// REJECT MODAL
 // ============================================================
 const RejectModal = ({ isOpen, onClose, onSave, record, isLoading }) => {
   const [comments, setComments] = useState('');
@@ -507,23 +507,21 @@ const LeaveRequests = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (400ms) — shared hook for consistency
+  const debouncedSearch = useDebounce(searchTerm, 400);
+
   const [detailsRecord, setDetailsRecord] = useState(null);
   // ✅ Two separate action records — one per modal
   const [approveRecord, setApproveRecord] = useState(null);
   const [rejectRecord, setRejectRecord] = useState(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
-    return () => clearTimeout(t);
-  }, [searchTerm]);
-
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, deptFilter, typeFilter, statusFilter, dateFilter]);
@@ -531,7 +529,7 @@ const LeaveRequests = () => {
   const queryParams = {
     page: currentPage,
     limit: itemsPerPage,
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
     ...(deptFilter !== 'all' ? { employeeType: deptFilter } : {}),
     ...(typeFilter !== 'all' ? { leaveType: typeFilter } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
@@ -568,12 +566,14 @@ const LeaveRequests = () => {
 
   const handleSearchChange = (value) => setSearchTerm(value);
 
-  const handleClearSearch = () => setSearchTerm('');
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1);   // keep — instant pagination reset when clearing
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchTerm('');
-    setDebouncedSearch('');
     setDeptFilter('all');
     setTypeFilter('all');
     setStatusFilter('all');
@@ -640,7 +640,6 @@ const LeaveRequests = () => {
     setStatusFilter('all');
     setDateFilter('');
     setSearchTerm('');
-    setDebouncedSearch('');
     setCurrentPage(1);
   };
 
@@ -838,7 +837,6 @@ const LeaveRequests = () => {
               placeholder="All Status"
             />
 
-            {/* ✅ DATE FIELD ALIGNED HORIZONTALLY USING mb-1 */}
             <div className="flex flex-col">
               <label className="block text-sm font-medium text-gray-600 mb-1">
                 Date
@@ -947,14 +945,12 @@ const LeaveRequests = () => {
                           </button>
                           {row.status === 'Pending' && (
                             <>
-                              {/* ✅ Approve opens the APPROVE-ONLY modal */}
                               <button
                                 onClick={() => setApproveRecord(row)}
                                 className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
                               >
                                 Approve
                               </button>
-                              {/* ✅ Reject opens the REJECT-ONLY modal */}
                               <button
                                 onClick={() => setRejectRecord(row)}
                                 className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
@@ -1003,7 +999,6 @@ const LeaveRequests = () => {
         record={detailsRecord}
       />
 
-      {/* ✅ Approve Modal — only approve UI */}
       <ApproveModal
         isOpen={Boolean(approveRecord)}
         onClose={() => setApproveRecord(null)}
@@ -1012,7 +1007,6 @@ const LeaveRequests = () => {
         isLoading={isUpdating}
       />
 
-      {/* ✅ Reject Modal — only reject UI */}
       <RejectModal
         isOpen={Boolean(rejectRecord)}
         onClose={() => setRejectRecord(null)}

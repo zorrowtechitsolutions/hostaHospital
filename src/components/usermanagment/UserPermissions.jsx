@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { 
   Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, 
-  TableCell, Modal, Badge, SearchBar, Pagination 
+  TableCell, Modal, Badge, SearchBar, Pagination, useDebounce 
 } from '../ui';
 import { showSuccessToast, showWarningToast, showErrorToast, showAddToast, showDeleteToast } from '../ui/Toast';
 import {
@@ -287,6 +287,9 @@ const UserPermissions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [eventsRegistered, setEventsRegistered] = useState(false);
 
   const {
@@ -364,18 +367,17 @@ const UserPermissions = () => {
     };
   }, [refetch, eventsRegistered]);
 
-  // Reset page when search changes
+  // ✅ Reset page when debounced search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
 
-  // ✅ Search handler - receives value directly from SearchBar
+  // ✅ Search handler — page reset is handled by the debouncedSearchTerm effect above
   const handleSearchChange = (value) => {
     setSearchTerm(value);
-    setCurrentPage(1);
   };
 
-  // ✅ Clear search handler
+  // ✅ Clear search handler — instant pagination reset when clearing
   const handleClearSearch = () => {
     setSearchTerm('');
     setCurrentPage(1);
@@ -512,12 +514,13 @@ const UserPermissions = () => {
 
   const toggleDropdown = useCallback((roleId) => setOpenDropdown(openDropdown === roleId ? null : roleId), [openDropdown]);
 
-  const filterRoles = (roles, searchTerm) => {
-    if (!searchTerm.trim()) return roles;
-    const term = searchTerm.toLowerCase();
+  // ✅ Filter uses the debounced search term
+  const filterRoles = (roles, term) => {
+    if (!term.trim()) return roles;
+    const q = term.toLowerCase();
     return roles.filter(role => 
-      role.name?.toLowerCase().includes(term) ||
-      role.description?.toLowerCase().includes(term)
+      role.name?.toLowerCase().includes(q) ||
+      role.description?.toLowerCase().includes(q)
     );
   };
 
@@ -525,12 +528,12 @@ const UserPermissions = () => {
     (rolesResponse?.admin || []).filter(
       role => role?.id === ADMIN_ROLE_ID && role?.name === "Admin"
     ),
-    searchTerm
+    debouncedSearchTerm
   );
 
   const filteredHospitalRoles = filterRoles(
     rolesResponse?.data || [],
-    searchTerm
+    debouncedSearchTerm
   );
 
   const totalHospitalRoles = filteredHospitalRoles.length;
@@ -587,7 +590,7 @@ const UserPermissions = () => {
                   {totalFilteredRoles}
                 </span>
 
-                {searchTerm && totalFilteredRoles > 0 && (
+                {debouncedSearchTerm && totalFilteredRoles > 0 && (
                   <span className="text-xs text-gray-400 ml-2">
                     (Filtered)
                   </span>
@@ -648,17 +651,17 @@ const UserPermissions = () => {
         
         <div className="flex flex-col min-h-[420px]">
           {/* ✅ Show "No results" message when searching and no roles found */}
-          {searchTerm && totalFilteredRoles === 0 && (
+          {debouncedSearchTerm && totalFilteredRoles === 0 && (
             <div className="p-8 text-center">
               <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <p className="text-gray-500">No roles found matching "{searchTerm}"</p>
+              <p className="text-gray-500">No roles found matching "{debouncedSearchTerm}"</p>
             </div>
           )}
 
           {/* ✅ Show "No roles" message when not searching and no roles exist */}
-          {!searchTerm && totalFilteredRoles === 0 && (
+          {!debouncedSearchTerm && totalFilteredRoles === 0 && (
             <div className="p-8 text-center">
               <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -14,7 +14,14 @@ import {
   useDeactivateFingerprintEnrollmentMutation,
   useActivateFingerprintEnrollmentMutation,
 } from '../../../../app/service/fingerprint';
-import { Button, Pagination, SearchBar, FilterBar, CustomSelect } from '../../ui';
+import {
+  Button,
+  Pagination,
+  SearchBar,
+  FilterBar,
+  CustomSelect,
+  useDebounce,
+} from '../../ui';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { Avatar as ShadcnAvatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getS3ImageUrl } from '../../../../app/service/S3';
@@ -222,6 +229,9 @@ const AssignFingerprintList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ Debounce search (500ms) — avoids re-filtering per keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [activeMenu, setActiveMenu] = useState(null);
 
   const [confirmModal, setConfirmModal] = useState({
@@ -395,8 +405,11 @@ const AssignFingerprintList = () => {
     return [...doctorsList, ...staffList];
   }, [doctorsResponse, staffResponse, enrollmentsByEmployee, hospitalId]);
 
-  const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
+  // ✅ Uses the debounced search term
+  const hasSearchTerm =
+    debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2;
 
+  // ✅ Filter uses the debounced search term
   const filteredMembers = useMemo(() => {
     let result = [...members];
 
@@ -432,7 +445,7 @@ const AssignFingerprintList = () => {
     }
 
     if (hasSearchTerm) {
-      const q = searchTerm.toLowerCase().trim();
+      const q = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter((m) =>
         [m.number, m.name, m.department, m.designation, m.email, m.phone]
           .filter(Boolean)
@@ -445,7 +458,14 @@ const AssignFingerprintList = () => {
       const bNum = Number(b.rawNumber ?? 0);
       return aNum - bNum;
     });
-  }, [members, typeFilter, departmentFilter, statusFilter, searchTerm, hasSearchTerm]);
+  }, [
+    members,
+    typeFilter,
+    departmentFilter,
+    statusFilter,
+    debouncedSearchTerm,
+    hasSearchTerm,
+  ]);
 
   const totalFilteredItems = filteredMembers.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / itemsPerPage));
@@ -455,9 +475,10 @@ const AssignFingerprintList = () => {
     return filteredMembers.slice(start, start + itemsPerPage);
   }, [filteredMembers, currentPage, itemsPerPage]);
 
+  // ✅ Reset page when debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, departmentFilter, statusFilter]);
+  }, [debouncedSearchTerm, typeFilter, departmentFilter, statusFilter]);
 
   const departments = useMemo(() => {
     const set = new Set(members.map((m) => m.department).filter(Boolean));
@@ -684,7 +705,10 @@ const AssignFingerprintList = () => {
             placeholder="Search by name, number, department..."
             value={searchTerm}
             onChange={(val) => setSearchTerm(val)}
-            onClear={() => setSearchTerm('')}
+            onClear={() => {
+              setSearchTerm('');
+              setCurrentPage(1); // instant pagination reset when clearing
+            }}
             className="flex-1 max-w-md"
           />
         </div>
@@ -799,7 +823,7 @@ const AssignFingerprintList = () => {
           </h3>
           <p className="text-gray-500 mb-4">
             {hasSearchTerm
-              ? `No results for "${searchTerm}". Try adjusting your search.`
+              ? `No results for "${debouncedSearchTerm}". Try adjusting your search.`
               : hasActiveFilters
               ? 'No members match the selected filters.'
               : 'No doctors or staff have been added yet.'}

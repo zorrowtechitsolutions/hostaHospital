@@ -13,7 +13,7 @@ import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
 import { Country, State, City } from 'country-state-city';
-import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus } from 'lucide-react';
+import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus, Sun } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
@@ -26,15 +26,9 @@ import { registerHospitalEvents, unregisterHospitalEvents } from '../../socket/h
 const HOSPITAL_TYPE_SELECT_CLASS =
   "w-full [&>button]:border-gray-300 [&>button]:rounded-md [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-[#1C62A0]";
 
-const DEFAULT_WORKING_HOURS = {
-  monday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  tuesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  wednesday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  thursday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  friday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  saturday: { open: '09:00 AM', close: '06:00 PM', closed: false },
-  sunday: { open: '09:00 AM', close: '06:00 PM', closed: true },
-};
+/* ------------------------------------------------------------------ */
+/* Working Hours Constants & Helpers                                   */
+/* ------------------------------------------------------------------ */
 
 const DAYS = [
   { key: 'monday', label: 'Monday' },
@@ -46,45 +40,59 @@ const DAYS = [
   { key: 'sunday', label: 'Sunday' },
 ];
 
-// ✅ Convert "10:00" to "10:00 AM" with proper validation
-const convertTo12HourFormat = (time) => {
-  if (!time) return '09:00 AM';
+const DAY_KEYS = DAYS.map(d => d.key);
 
-  if (time.includes('AM') || time.includes('PM')) {
-    return time;
-  }
-
-  if (time === '24:00' || time === '00:00') {
-    return '12:00 AM';
-  }
-
-  const parts = time.split(':');
-  if (parts.length < 2) return '09:00 AM';
-
-  const hours = parseInt(parts[0], 10);
-  const minutes = parts[1] || '00';
-
-  if (isNaN(hours) || hours > 24) return '09:00 AM';
-
-  if (hours === 24) {
-    return `12:${minutes.padStart(2, '0')} AM`;
-  }
-  if (hours === 0) {
-    return `12:${minutes.padStart(2, '0')} AM`;
-  }
-
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+// Default 24h-format objects (same shape as Register)
+const DEFAULT_NORMAL_HOURS = {
+  monday:    { start: '09:00', end: '18:00', isHoliday: false },
+  tuesday:   { start: '09:00', end: '18:00', isHoliday: false },
+  wednesday: { start: '09:00', end: '18:00', isHoliday: false },
+  thursday:  { start: '09:00', end: '18:00', isHoliday: false },
+  friday:    { start: '09:00', end: '18:00', isHoliday: false },
+  saturday:  { start: '09:00', end: '18:00', isHoliday: false },
+  sunday:    { start: '09:00', end: '18:00', isHoliday: true  },
 };
 
-// ✅ Convert "11:01 AM" -> "11:01" (24-hour, for <input type="time">)
-const to24HourInput = (time12) => {
-  if (!time12) return '';
-  const trimmed = time12.trim();
+const DEFAULT_CLINIC_HOURS = {
+  monday:    { start: '09:00', end: '18:00', isHoliday: false },
+  tuesday:   { start: '09:00', end: '18:00', isHoliday: false },
+  wednesday: { start: '09:00', end: '18:00', isHoliday: false },
+  thursday:  { start: '09:00', end: '18:00', isHoliday: false },
+  friday:    { start: '09:00', end: '18:00', isHoliday: false },
+  saturday:  { start: '09:00', end: '18:00', isHoliday: false },
+  sunday:    { start: '09:00', end: '18:00', isHoliday: true  },
+};
 
-  if (!trimmed.includes('AM') && !trimmed.includes('PM')) {
-    const p = trimmed.split(':');
+const DEFAULT_CLINIC_BREAK_HOURS = {
+  monday:    { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  tuesday:   { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  wednesday: { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  thursday:  { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  friday:    { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  saturday:  { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: false },
+  sunday:    { morningStart: '09:00', morningEnd: '12:00', eveningStart: '16:00', eveningEnd: '20:00', isHoliday: true  },
+};
+
+// Convert 24h "09:00" -> "09:00 AM" (display)
+const to12Hour = (time) => {
+  if (!time || !String(time).includes(':')) return time || '';
+  const [hStr, mStr] = String(time).split(':');
+  let h = parseInt(hStr, 10);
+  const m = (mStr || '00').padStart(2, '0');
+  if (isNaN(h)) return time;
+  if (h === 24) return `12:${m} AM`;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${m} ${period}`;
+};
+
+// Convert 12h "09:00 AM" -> 24h "09:00"
+const to24Hour = (time12) => {
+  if (!time12) return '09:00';
+  const t = String(time12).trim();
+
+  if (!t.includes('AM') && !t.includes('PM')) {
+    const p = t.split(':');
     if (p.length >= 2) {
       const h = parseInt(p[0], 10);
       const m = parseInt(p[1], 10);
@@ -92,145 +100,108 @@ const to24HourInput = (time12) => {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       }
     }
-    return '';
+    return '09:00';
   }
 
-  const parts = trimmed.split(' ');
-  if (parts.length < 2) return '';
-  const [timePart, period] = parts;
+  const [timePart, period] = t.split(' ');
+  if (!timePart || !period) return '09:00';
   const [hStr, mStr] = timePart.split(':');
   let h = parseInt(hStr, 10);
   const m = parseInt(mStr || '0', 10);
-
-  if (isNaN(h) || isNaN(m)) return '';
-
+  if (isNaN(h) || isNaN(m)) return '09:00';
   if (period === 'PM' && h !== 12) h += 12;
   if (period === 'AM' && h === 12) h = 0;
-
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-// ✅ Convert "11:01" (24-hour) -> "11:01 AM"
-const from24HourInput = (time24) => {
-  if (!time24) return '';
-  const parts = time24.split(':');
-  if (parts.length < 2) return '';
-  let h = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  if (isNaN(h) || isNaN(m)) return '';
-
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 || 12;
-  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
-};
-
-// ✅ Helper: Convert time string to minutes for comparison
-const convertTimeToMinutes = (timeStr) => {
-  if (!timeStr) return 0;
-
-  const parts = timeStr.split(' ');
-  if (parts.length < 2) return 0;
-
-  const timePart = parts[0];
-  const period = parts[1];
-  const timeParts = timePart.split(':');
-
-  if (timeParts.length < 2) return 0;
-
-  let hours = parseInt(timeParts[0], 10);
-  const minutes = parseInt(timeParts[1], 10);
-
-  if (isNaN(hours) || isNaN(minutes)) return 0;
-
-  if (period === 'PM' && hours !== 12) {
-    hours += 12;
-  } else if (period === 'AM' && hours === 12) {
-    hours = 0;
-  }
-
-  return hours * 60 + minutes;
-};
-
-// ✅ Convert API array format to frontend object format with validation
-const convertApiToFrontendFormat = (apiHours) => {
-  if (!apiHours || !Array.isArray(apiHours)) return null;
-
-  const result = { ...DEFAULT_WORKING_HOURS };
-
-  apiHours.forEach(dayData => {
-    const dayKey = dayData.day?.toLowerCase();
-    if (dayKey && DAYS.some(d => d.key === dayKey)) {
-      if (dayData.is_holiday) {
-        result[dayKey] = {
-          open: DEFAULT_WORKING_HOURS[dayKey].open,
-          close: DEFAULT_WORKING_HOURS[dayKey].close,
-          closed: true,
-        };
-        return;
-      }
-
-      let openTime = convertTo12HourFormat(dayData.opening_time);
-      let closeTime = convertTo12HourFormat(dayData.closing_time);
-
-      const openMinutes = convertTimeToMinutes(openTime);
-      const closeMinutes = convertTimeToMinutes(closeTime);
-
-      if (closeMinutes <= openMinutes) {
-        console.warn(`Invalid hours for ${dayKey}: ${openTime} - ${closeTime}, using defaults`);
-        openTime = DEFAULT_WORKING_HOURS[dayKey].open;
-        closeTime = DEFAULT_WORKING_HOURS[dayKey].close;
-      }
-
-      result[dayKey] = {
-        open: openTime,
-        close: closeTime,
-        closed: false,
+// Parse whichever API field is populated into { type, hoursObject }
+const parseApiWorkingHours = (hospital) => {
+  const parseFlat = (arr) => {
+    const out = JSON.parse(JSON.stringify(DEFAULT_NORMAL_HOURS));
+    arr.forEach(d => {
+      const key = d.day?.toLowerCase();
+      if (!key || !DAY_KEYS.includes(key)) return;
+      out[key] = {
+        start: d.is_holiday ? '09:00' : to24Hour(d.opening_time || '09:00'),
+        end:   d.is_holiday ? '18:00' : to24Hour(d.closing_time || '18:00'),
+        isHoliday: !!d.is_holiday,
       };
-    }
-  });
+    });
+    return out;
+  };
 
-  return result;
-};
-
-// ✅ Normalize working hours from any format
-const normalizeWorkingHours = (hours) => {
-  if (!hours) return DEFAULT_WORKING_HOURS;
-
-  if (Array.isArray(hours)) {
-    const converted = convertApiToFrontendFormat(hours);
-    if (converted) return converted;
-    return DEFAULT_WORKING_HOURS;
-  }
-
-  const normalized = { ...DEFAULT_WORKING_HOURS };
-
-  DAYS.forEach(day => {
-    const dayData = hours[day.key];
-    if (dayData) {
-      let openTime = dayData.open || DEFAULT_WORKING_HOURS[day.key].open;
-      let closeTime = dayData.close || DEFAULT_WORKING_HOURS[day.key].close;
-      const isClosed = dayData.closed !== undefined ? dayData.closed : DEFAULT_WORKING_HOURS[day.key].closed;
-
-      if (!isClosed) {
-        const openMinutes = convertTimeToMinutes(openTime);
-        const closeMinutes = convertTimeToMinutes(closeTime);
-
-        if (closeMinutes <= openMinutes) {
-          openTime = DEFAULT_WORKING_HOURS[day.key].open;
-          closeTime = DEFAULT_WORKING_HOURS[day.key].close;
-        }
-      }
-
-      normalized[day.key] = {
-        open: openTime,
-        close: closeTime,
-        closed: isClosed,
+  const parseBreak = (arr) => {
+    const out = JSON.parse(JSON.stringify(DEFAULT_CLINIC_BREAK_HOURS));
+    arr.forEach(d => {
+      const key = d.day?.toLowerCase();
+      if (!key || !DAY_KEYS.includes(key)) return;
+      out[key] = {
+        morningStart: d.is_holiday ? '09:00' : to24Hour(d.morning_start || '09:00'),
+        morningEnd:   d.is_holiday ? '12:00' : to24Hour(d.morning_end   || '12:00'),
+        eveningStart: d.is_holiday ? '16:00' : to24Hour(d.evening_start || '16:00'),
+        eveningEnd:   d.is_holiday ? '20:00' : to24Hour(d.evening_end   || '20:00'),
+        isHoliday: !!d.is_holiday,
       };
-    }
-  });
+    });
+    return out;
+  };
 
-  return normalized;
+  if (Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length) {
+    return { type: 'normal', hours: parseFlat(hospital.working_hours_general) };
+  }
+  if (Array.isArray(hospital.working_hours_clinic) && hospital.working_hours_clinic.length) {
+    return { type: 'clinic', hours: parseFlat(hospital.working_hours_clinic) };
+  }
+  if (Array.isArray(hospital.working_hours_clinic_nobreak) && hospital.working_hours_clinic_nobreak.length) {
+    return { type: 'clinic-break', hours: parseBreak(hospital.working_hours_clinic_nobreak) };
+  }
+  if (Array.isArray(hospital.working_hours) && hospital.working_hours.length) {
+    return { type: 'normal', hours: parseFlat(hospital.working_hours) };
+  }
+  return { type: 'normal', hours: JSON.parse(JSON.stringify(DEFAULT_NORMAL_HOURS)) };
 };
+
+// Build the API payload for the currently-selected type
+const buildWorkingHoursPayload = (type, normalHours, clinicHours, clinicBreakHours) => {
+  if (type === 'normal') {
+    return {
+      field: 'working_hours_general',
+      data: DAY_KEYS.map(day => ({
+        day,
+        is_holiday: !!normalHours[day]?.isHoliday,
+        opening_time: normalHours[day]?.start || '09:00',
+        closing_time: normalHours[day]?.end || '18:00',
+      })),
+    };
+  }
+  if (type === 'clinic') {
+    return {
+      field: 'working_hours_clinic',
+      data: DAY_KEYS.map(day => ({
+        day,
+        is_holiday: !!clinicHours[day]?.isHoliday,
+        opening_time: clinicHours[day]?.start || '09:00',
+        closing_time: clinicHours[day]?.end || '18:00',
+      })),
+    };
+  }
+  // clinic-break
+  return {
+    field: 'working_hours_clinic_nobreak',
+    data: DAY_KEYS.map(day => ({
+      day,
+      is_holiday: !!clinicBreakHours[day]?.isHoliday,
+      morning_start: clinicBreakHours[day]?.morningStart || '09:00',
+      morning_end:   clinicBreakHours[day]?.morningEnd   || '12:00',
+      evening_start: clinicBreakHours[day]?.eveningStart || '16:00',
+      evening_end:   clinicBreakHours[day]?.eveningEnd   || '20:00',
+    })),
+  };
+};
+
+/* ------------------------------------------------------------------ */
+/* SearchableDropdown                                                  */
+/* ------------------------------------------------------------------ */
 
 const SearchableDropdown = ({
   label,
@@ -331,6 +302,10 @@ const SearchableDropdown = ({
   );
 };
 
+/* ------------------------------------------------------------------ */
+/* Skeleton                                                            */
+/* ------------------------------------------------------------------ */
+
 const SettingsSkeleton = () => {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -371,6 +346,10 @@ const SettingsSkeleton = () => {
   );
 };
 
+/* ------------------------------------------------------------------ */
+/* Settings component                                                  */
+/* ------------------------------------------------------------------ */
+
 const Settings = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -404,9 +383,14 @@ const Settings = () => {
     lastUpdated: 'N/A',
   });
 
-  const [workingHours, setWorkingHours] = useState(DEFAULT_WORKING_HOURS);
+  // Working Hours state (matches Register.jsx model)
+  const [workingHourType, setWorkingHourType] = useState('normal');
+  const [is24x7, setIs24x7] = useState(false);
+  const [normalHours, setNormalHours] = useState(DEFAULT_NORMAL_HOURS);
+  const [clinicHours, setClinicHours] = useState(DEFAULT_CLINIC_HOURS);
+  const [clinicBreakHours, setClinicBreakHours] = useState(DEFAULT_CLINIC_BREAK_HOURS);
+
   const [isEditing, setIsEditing] = useState(false);
-  const [is24HourMode, setIs24HourMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const [editForm, setEditForm] = useState({
@@ -421,7 +405,10 @@ const Settings = () => {
     stateName: '',
     cityName: '',
     pincode: '',
-    workingHours: DEFAULT_WORKING_HOURS,
+    workingHourType: 'normal',
+    normalHours: DEFAULT_NORMAL_HOURS,
+    clinicHours: DEFAULT_CLINIC_HOURS,
+    clinicBreakHours: DEFAULT_CLINIC_BREAK_HOURS,
   });
 
   const countries = Country.getAllCountries();
@@ -435,25 +422,20 @@ const Settings = () => {
         : [categoriesData.data])
     : [];
 
-  // ✅ Options for the Hospital Type CustomSelect
   const hospitalTypeOptions = hospitalTypes.map(category => ({
     value: category.name,
     label: category.name,
   }));
 
+  /* ---------------------------- Sockets ---------------------------- */
+
   useEffect(() => {
     registerHospitalEvents({
-      onHospitalRegistered: () => {
-      },
-      onHospitalUpdated: () => {
-        refetch();
-      },
-      onHospitalDeleted: () => {
-      },
-      onHospitalBlacklisted: () => {
-      },
-      onHospitalRecovered: () => {
-      }
+      onHospitalRegistered: () => {},
+      onHospitalUpdated: () => { refetch(); },
+      onHospitalDeleted: () => {},
+      onHospitalBlacklisted: () => {},
+      onHospitalRecovered: () => {}
     });
 
     setEventsRegistered(true);
@@ -468,22 +450,11 @@ const Settings = () => {
     const handleConnect = () => {
       if (!eventsRegistered) {
         registerHospitalEvents({
-          onHospitalRegistered: () => {
-            
-          },
-          onHospitalUpdated: () => {
-         
-            refetch();
-          },
-          onHospitalDeleted: () => {
-          
-          },
-          onHospitalBlacklisted: () => {
-          
-          },
-          onHospitalRecovered: () => {
-           
-          }
+          onHospitalRegistered: () => {},
+          onHospitalUpdated: () => { refetch(); },
+          onHospitalDeleted: () => {},
+          onHospitalBlacklisted: () => {},
+          onHospitalRecovered: () => {}
         });
         setEventsRegistered(true);
       }
@@ -501,6 +472,8 @@ const Settings = () => {
       socket.off("disconnect", handleDisconnect);
     };
   }, [refetch, eventsRegistered]);
+
+  /* --------------------------- Auth errors ------------------------- */
 
   useEffect(() => {
     if (fetchError?.status === 401) {
@@ -539,6 +512,8 @@ const Settings = () => {
     }
   }, [updateError, logout, navigate, resetUpdate]);
 
+  /* ------------------------ Hydrate from API ----------------------- */
+
   useEffect(() => {
     if (hospitalData) {
       const hospital = hospitalData.data || hospitalData;
@@ -557,29 +532,44 @@ const Settings = () => {
         lastUpdated: hospital.updatedAt ? new Date(hospital.updatedAt).toLocaleString() : 'N/A',
       });
 
-      let workingHoursData = null;
+      const parsed = parseApiWorkingHours(hospital);
 
-      if (hospital.working_hours_general && Array.isArray(hospital.working_hours_general) && hospital.working_hours_general.length > 0) {
-        workingHoursData = hospital.working_hours_general;
-      } else if (hospital.working_hours_clinic && Array.isArray(hospital.working_hours_clinic) && hospital.working_hours_clinic.length > 0) {
-        workingHoursData = hospital.working_hours_clinic;
-      } else if (hospital.working_hours_clinic_nobreak && Array.isArray(hospital.working_hours_clinic_nobreak) && hospital.working_hours_clinic_nobreak.length > 0) {
-        workingHoursData = hospital.working_hours_clinic_nobreak;
-      } else if (hospital.workingHours && typeof hospital.workingHours === 'object') {
-        workingHoursData = hospital.workingHours;
-      } else if (hospital.working_hours && Array.isArray(hospital.working_hours)) {
-        workingHoursData = hospital.working_hours;
-      }
+      // Hydrate the standalone state used by the read view
+      setWorkingHourType(parsed.type);
+      if (parsed.type === 'normal') setNormalHours(parsed.hours);
+      if (parsed.type === 'clinic') setClinicHours(parsed.hours);
+      if (parsed.type === 'clinic-break') setClinicBreakHours(parsed.hours);
 
-      const normalizedHours = normalizeWorkingHours(workingHoursData);
-      setWorkingHours(normalizedHours);
+      // Detect 24/7 mode (only for flat types)
+      const is247 =
+        parsed.type !== 'clinic-break' &&
+        DAY_KEYS.every(d => {
+          const h = parsed.hours[d.key];
+          return h && !h.isHoliday && h.start === '00:00' && (h.end === '23:59' || h.end === '24:00');
+        });
+      setIs24x7(is247);
+
+      // Build editForm from parsed data
+      const nextEditForm = {
+        name: hospital.name || '',
+        email: hospital.email || '',
+        hospitalType: hospitalType,
+        mobileNumber: hospital.phone || '',
+        workingHourType: parsed.type,
+        normalHours: parsed.type === 'normal' ? parsed.hours : DEFAULT_NORMAL_HOURS,
+        clinicHours: parsed.type === 'clinic' ? parsed.hours : DEFAULT_CLINIC_HOURS,
+        clinicBreakHours: parsed.type === 'clinic-break' ? parsed.hours : DEFAULT_CLINIC_BREAK_HOURS,
+      };
 
       if (hospital.address) {
         const country = countries.find(c => c.name === hospital.address.country);
-        const state = country ? State.getStatesOfCountry(country.isoCode).find(s => s.name === hospital.address.state) : null;
+        const state = country
+          ? State.getStatesOfCountry(country.isoCode).find(s => s.name === hospital.address.state)
+          : null;
 
         setEditForm(prev => ({
           ...prev,
+          ...nextEditForm,
           streetAddress: hospital.address.place || '',
           countryCode: country?.isoCode || '',
           countryName: hospital.address.country || '',
@@ -587,15 +577,9 @@ const Settings = () => {
           stateName: hospital.address.state || '',
           cityName: hospital.address.district || '',
           pincode: hospital.address.pincode?.toString() || '',
-          workingHours: normalizedHours,
-          hospitalType: hospitalType,
         }));
       } else {
-        setEditForm(prev => ({
-          ...prev,
-          workingHours: normalizedHours,
-          hospitalType: hospitalType,
-        }));
+        setEditForm(prev => ({ ...prev, ...nextEditForm }));
       }
     }
   }, [hospitalData, countries]);
@@ -604,137 +588,7 @@ const Settings = () => {
     if (location.state?.tab) setActiveTab(location.state.tab);
   }, [location]);
 
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-
-    const phone = String(editForm.mobileNumber || '').trim();
-
-    if (!/^\d{10}$/.test(phone)) {
-      showErrorToast('Phone number must be exactly 10 digits', 4000);
-      return;
-    }
-
-    for (const day of DAYS) {
-      const h = editForm.workingHours?.[day.key];
-      if (!h || h.closed) continue;
-
-      if (!h.open || !h.close) {
-        showErrorToast(`${day.label}: Open and Close times are required`, 4000);
-        return;
-      }
-
-      const openMin = convertTimeToMinutes(h.open);
-      const closeMin = convertTimeToMinutes(h.close);
-
-      if (closeMin <= openMin) {
-        showErrorToast(
-          `${day.label}: Close time (${h.close}) must be after open time (${h.open})`,
-          4000
-        );
-        return;
-      }
-    }
-
-    setIsSaving(true);
-
-    try {
-      const updateData = {
-        name: editForm.name,
-        email: editForm.email,
-        type: editForm.hospitalType,
-        phone: editForm.mobileNumber,
-        address: {
-          country: editForm.countryName,
-          state: editForm.stateName,
-          district: editForm.cityName,
-          place: editForm.streetAddress,
-          pincode: Number(editForm.pincode)
-        },
-        workingHours: editForm.workingHours
-      };
-
-      const result = await updateHospital({
-        id: hospitalId,
-        updateHospital: updateData
-      }).unwrap();
-
-      socket.emit("hospital_event", {
-        event: "HOSPITAL_UPDATED",
-        data: {
-          hospitalId: hospitalId,
-          hospitalName: editForm.name,
-          email: editForm.email,
-          type: editForm.hospitalType,
-          phone: editForm.mobileNumber,
-          address: updateData.address,
-          workingHours: editForm.workingHours,
-          timestamp: new Date().toISOString(),
-          staffIds: result?.data?.staffIds || [],
-          doctorIds: result?.data?.doctorIds || []
-        }
-      });
-
-      const now = new Date();
-      const formattedDate = now.toLocaleString('en-US', {
-        month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
-      });
-
-      setHospitalInfo(prev => ({
-        ...prev,
-        name: editForm.name,
-        email: editForm.email,
-        hospitalType: editForm.hospitalType,
-        mobileNumber: editForm.mobileNumber,
-        lastUpdated: formattedDate
-      }));
-
-      setWorkingHours(editForm.workingHours);
-
-      showSuccessToast('Hospital information updated successfully!', 4000);
-      setIsEditing(false);
-
-      await refetch();
-
-    } catch (error) {
-      console.error('Update error:', error);
-
-      const status = error?.status || error?.originalStatus;
-
-      if (status === 401) {
-        showErrorToast('Session expired. Redirecting to login...', 3000);
-        setTimeout(() => {
-          logout();
-          navigate('/sign-in');
-        }, 2000);
-      } else {
-        const message =
-          error?.data?.error?.details?.[0]?.message ||
-          error?.data?.details?.[0]?.message ||
-          error?.data?.errors?.[0]?.message ||
-          error?.data?.error?.message ||
-          error?.data?.message ||
-          error?.error ||
-          error?.message ||
-          'Failed to update hospital information';
-
-        showErrorToast(message, 4000);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleEditClick = () => {
-    setEditForm(prev => ({
-      ...prev,
-      name: hospitalInfo.name,
-      email: hospitalInfo.email,
-      hospitalType: hospitalInfo.hospitalType,
-      mobileNumber: hospitalInfo.mobileNumber,
-      workingHours: workingHours,
-    }));
-    setIsEditing(true);
-  };
+  /* --------------------------- Handlers ---------------------------- */
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -765,73 +619,452 @@ const Settings = () => {
     setEditForm(prev => ({ ...prev, cityName: name }));
   };
 
-  const handleWorkingHourChange = (day, field, value) => {
-    setEditForm(prev => {
-      const updatedWorkingHours = { ...prev.workingHours };
-      updatedWorkingHours[day] = {
-        ...updatedWorkingHours[day],
-        [field]: value
-      };
-      return {
-        ...prev,
-        workingHours: updatedWorkingHours
-      };
-    });
+  // Working hours handlers (per-type)
+  const handleNormalHoursChange = (day, field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      normalHours: { ...prev.normalHours, [day]: { ...prev.normalHours[day], [field]: value } },
+    }));
+  };
+  const handleClinicHoursChange = (day, field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      clinicHours: { ...prev.clinicHours, [day]: { ...prev.clinicHours[day], [field]: value } },
+    }));
+  };
+  const handleClinicBreakHoursChange = (day, field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      clinicBreakHours: { ...prev.clinicBreakHours, [day]: { ...prev.clinicBreakHours[day], [field]: value } },
+    }));
   };
 
-  const handleToggleClosed = (day) => {
-    setEditForm(prev => {
-      const updatedWorkingHours = { ...prev.workingHours };
-      updatedWorkingHours[day] = {
-        ...updatedWorkingHours[day],
-        closed: !updatedWorkingHours[day].closed
-      };
-      return {
-        ...prev,
-        workingHours: updatedWorkingHours
-      };
-    });
-  };
-
-  const handleSet24HourMode = () => {
-    if (is24HourMode) {
-      const newHours = { ...DEFAULT_WORKING_HOURS };
-      setWorkingHours(newHours);
-      setEditForm(prev => ({
-        ...prev,
-        workingHours: newHours
-      }));
-      setIs24HourMode(false);
-      showWarningToast('24/7 mode disabled. Normal working hours restored.', 3000);
+  const toggle247Mode = () => {
+    if (!is24x7) {
+      if (editForm.workingHourType === 'normal') {
+        const h = {};
+        DAY_KEYS.forEach(d => h[d] = { start: '00:00', end: '23:59', isHoliday: false });
+        setEditForm(prev => ({ ...prev, normalHours: h }));
+      } else if (editForm.workingHourType === 'clinic') {
+        const h = {};
+        DAY_KEYS.forEach(d => h[d] = { start: '00:00', end: '23:59', isHoliday: false });
+        setEditForm(prev => ({ ...prev, clinicHours: h }));
+      } else {
+        const h = {};
+        DAY_KEYS.forEach(d => h[d] = {
+          morningStart: '00:00', morningEnd: '11:59',
+          eveningStart: '12:00', eveningEnd: '23:59',
+          isHoliday: false
+        });
+        setEditForm(prev => ({ ...prev, clinicBreakHours: h }));
+      }
+      setIs24x7(true);
+      showSuccessToast('24/7 mode enabled.', 3000);
     } else {
-      const newHours = Object.fromEntries(
-        DAYS.map(day => [
-          day.key,
-          {
-            open: '12:00 AM',
-            close: '11:59 PM',
-            closed: false
-          }
-        ])
-      );
-      setWorkingHours(newHours);
-      setEditForm(prev => ({
-        ...prev,
-        workingHours: newHours
-      }));
-      setIs24HourMode(true);
-      showSuccessToast('24/7 mode enabled. Hospital will be open all day, every day.', 4000);
+      if (editForm.workingHourType === 'normal') {
+        setEditForm(prev => ({ ...prev, normalHours: JSON.parse(JSON.stringify(DEFAULT_NORMAL_HOURS)) }));
+      } else if (editForm.workingHourType === 'clinic') {
+        setEditForm(prev => ({ ...prev, clinicHours: JSON.parse(JSON.stringify(DEFAULT_CLINIC_HOURS)) }));
+      } else {
+        setEditForm(prev => ({ ...prev, clinicBreakHours: JSON.parse(JSON.stringify(DEFAULT_CLINIC_BREAK_HOURS)) }));
+      }
+      setIs24x7(false);
+      showWarningToast('24/7 mode disabled.', 3000);
     }
+  };
+
+  const handleEditClick = () => {
+    setEditForm(prev => ({
+      ...prev,
+      name: hospitalInfo.name,
+      email: hospitalInfo.email,
+      hospitalType: hospitalInfo.hospitalType,
+      mobileNumber: hospitalInfo.mobileNumber,
+      workingHourType: workingHourType,
+      normalHours: normalHours,
+      clinicHours: clinicHours,
+      clinicBreakHours: clinicBreakHours,
+    }));
+    setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm(prev => ({
       ...prev,
-      workingHours: workingHours
+      workingHourType: workingHourType,
+      normalHours: normalHours,
+      clinicHours: clinicHours,
+      clinicBreakHours: clinicBreakHours,
     }));
     showWarningToast('Edit cancelled. Changes discarded.', 2000);
   };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+
+    const phone = String(editForm.mobileNumber || '').trim();
+    if (!/^\d{10}$/.test(phone)) {
+      showErrorToast('Phone number must be exactly 10 digits', 4000);
+      return;
+    }
+
+    // Build the payload for the selected type
+    const { field, data } = buildWorkingHoursPayload(
+      editForm.workingHourType,
+      editForm.normalHours,
+      editForm.clinicHours,
+      editForm.clinicBreakHours
+    );
+
+    // Validate active type only
+    for (const row of data) {
+      if (row.is_holiday) continue;
+
+      if (editForm.workingHourType === 'clinic-break') {
+        if (!row.morning_start || !row.morning_end || !row.evening_start || !row.evening_end) {
+          showErrorToast(`${row.day}: all session times are required`, 4000);
+          return;
+        }
+        if (row.morning_end <= row.morning_start) {
+          showErrorToast(`${row.day}: morning end must be after morning start`, 4000);
+          return;
+        }
+        if (row.evening_end <= row.evening_start) {
+          showErrorToast(`${row.day}: evening end must be after evening start`, 4000);
+          return;
+        }
+      } else {
+        if (!row.opening_time || !row.closing_time) {
+          showErrorToast(`${row.day}: open and close times are required`, 4000);
+          return;
+        }
+        if (row.closing_time <= row.opening_time) {
+          showErrorToast(`${row.day}: close time must be after open time`, 4000);
+          return;
+        }
+      }
+    }
+
+    setIsSaving(true);
+
+    try {
+      const updateData = {
+        name: editForm.name,
+        email: editForm.email,
+        type: editForm.hospitalType,
+        phone: editForm.mobileNumber,
+        address: {
+          country: editForm.countryName,
+          state: editForm.stateName,
+          district: editForm.cityName,
+          place: editForm.streetAddress,
+          pincode: Number(editForm.pincode),
+        },
+        // Send the correct field for the active type
+        [field]: data,
+        workingHourType: editForm.workingHourType,
+      };
+
+      const result = await updateHospital({
+        id: hospitalId,
+        updateHospital: updateData,
+      }).unwrap();
+
+      socket.emit('hospital_event', {
+        event: 'HOSPITAL_UPDATED',
+        data: {
+          hospitalId: hospitalId,
+          hospitalName: editForm.name,
+          email: editForm.email,
+          type: editForm.hospitalType,
+          phone: editForm.mobileNumber,
+          address: updateData.address,
+          workingHourType: editForm.workingHourType,
+          [field]: data,
+          timestamp: new Date().toISOString(),
+          staffIds: result?.data?.staffIds || [],
+          doctorIds: result?.data?.doctorIds || [],
+        },
+      });
+
+      const now = new Date();
+      const formattedDate = now.toLocaleString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: 'numeric', hour12: true,
+      });
+
+      setHospitalInfo(prev => ({
+        ...prev,
+        name: editForm.name,
+        email: editForm.email,
+        hospitalType: editForm.hospitalType,
+        mobileNumber: editForm.mobileNumber,
+        lastUpdated: formattedDate,
+      }));
+
+      // Sync read-mode state
+      setWorkingHourType(editForm.workingHourType);
+      setNormalHours(editForm.normalHours);
+      setClinicHours(editForm.clinicHours);
+      setClinicBreakHours(editForm.clinicBreakHours);
+
+      showSuccessToast('Hospital information updated successfully!', 4000);
+      setIsEditing(false);
+
+      await refetch();
+    } catch (error) {
+      console.error('Update error:', error);
+
+      const status = error?.status || error?.originalStatus;
+      if (status === 401) {
+        showErrorToast('Session expired. Redirecting to login...', 3000);
+        setTimeout(() => {
+          logout();
+          navigate('/sign-in');
+        }, 2000);
+      } else {
+        const message =
+          error?.data?.error?.details?.[0]?.message ||
+          error?.data?.details?.[0]?.message ||
+          error?.data?.errors?.[0]?.message ||
+          error?.data?.error?.message ||
+          error?.data?.message ||
+          error?.error ||
+          error?.message ||
+          'Failed to update hospital information';
+
+        showErrorToast(message, 4000);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /* --------------------------- Read view --------------------------- */
+
+  const renderWorkingHoursReadView = () => {
+    const source =
+      workingHourType === 'normal' ? normalHours :
+      workingHourType === 'clinic' ? clinicHours :
+      clinicBreakHours;
+
+    const typeLabel =
+      workingHourType === 'normal' ? 'Normal Hospital' :
+      workingHourType === 'clinic' ? 'Clinic' :
+      'Clinic with Break';
+
+    return (
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+            <Clock size={18} className="text-gray-500" />
+            Working Hours
+            <span className="ml-2 text-xs font-normal text-gray-500">({typeLabel})</span>
+          </h3>
+          {is24x7 && (
+            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+              24/7
+            </span>
+          )}
+        </div>
+        <div className="space-y-2">
+          {DAYS.map(day => {
+            const h = source[day.key];
+            return (
+              <div
+                key={day.key}
+                className="flex items-center justify-between py-2.5 px-3 border-b border-gray-100 last:border-0 rounded-lg"
+              >
+                <span className="text-sm font-medium text-gray-700 w-24">{day.label}</span>
+                {h?.isHoliday ? (
+                  <span className="text-sm text-red-500 font-medium">Closed</span>
+                ) : workingHourType === 'clinic-break' ? (
+                  <span className="text-sm text-gray-600">
+                    {to12Hour(h?.morningStart)} - {to12Hour(h?.morningEnd)}
+                    <span className="text-gray-400 mx-1">|</span>
+                    {to12Hour(h?.eveningStart)} - {to12Hour(h?.eveningEnd)}
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-600">
+                    {to12Hour(h?.start)} - {to12Hour(h?.end)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  /* --------------------------- Edit view --------------------------- */
+
+  const renderWorkingHoursEditor = () => {
+    const isBreak = editForm.workingHourType === 'clinic-break';
+    const source =
+      editForm.workingHourType === 'normal' ? editForm.normalHours :
+      editForm.workingHourType === 'clinic' ? editForm.clinicHours :
+      editForm.clinicBreakHours;
+
+    const onChange =
+      editForm.workingHourType === 'normal' ? handleNormalHoursChange :
+      editForm.workingHourType === 'clinic' ? handleClinicHoursChange :
+      handleClinicBreakHoursChange;
+
+    return (
+      <div className="border-t border-gray-200 pt-4 mt-2">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-md font-semibold text-gray-900">Edit Working Hours</h3>
+          <button
+            type="button"
+            onClick={toggle247Mode}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+              is24x7
+                ? 'bg-[#154A7D] text-white hover:bg-[#0e3a61]'
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Sun size={14} />
+            {is24x7 ? '24/7 Mode: ON' : 'Set 24/7 Hours'}
+          </button>
+        </div>
+
+        {/* Working hours type selector */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Working Hours Type <span className="text-red-500">*</span>
+          </label>
+          <CustomSelect
+            hideLabel
+            value={editForm.workingHourType}
+            options={[
+              { value: 'normal', label: '🏥 Normal Hospital' },
+              { value: 'clinic', label: '🏪 Clinic' },
+              { value: 'clinic-break', label: '🏪 Clinic with Break' },
+            ]}
+            onChange={(value) => setEditForm(prev => ({ ...prev, workingHourType: value }))}
+            placeholder="Select working hours type"
+            className={HOSPITAL_TYPE_SELECT_CLASS}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            {editForm.workingHourType === 'normal' && 'Single session per day (e.g., 9:00 AM – 6:00 PM).'}
+            {editForm.workingHourType === 'clinic' && 'Single session per day without break (e.g., 9:00 AM – 6:00 PM).'}
+            {editForm.workingHourType === 'clinic-break' && 'Two sessions per day with a break (Morning & Evening).'}
+          </p>
+        </div>
+
+        {/* Per-day editor */}
+        <div className="space-y-4">
+          {DAYS.map(day => {
+            const h = source[day.key] || {};
+            return (
+              <div key={day.key} className="border-b border-gray-200 pb-4 last:border-0">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium text-gray-900">{day.label}</h3>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={h.isHoliday || false}
+                      onChange={(e) => onChange(day.key, 'isHoliday', e.target.checked)}
+                      className="rounded border-gray-300 text-[#1C62A0] focus:ring-[#1C62A0]"
+                    />
+                    <span className={`text-sm ${h.isHoliday ? 'text-red-600' : 'text-gray-600'}`}>
+                      {h.isHoliday ? 'Closed' : 'Open'}
+                    </span>
+                  </label>
+                </div>
+
+                {!h.isHoliday && !isBreak && (
+                  <div className="grid grid-cols-2 gap-4 ml-6">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Open Time</label>
+                      <input
+                        type="time"
+                        value={h.start || '09:00'}
+                        onChange={(e) => onChange(day.key, 'start', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">{to12Hour(h.start) || '—'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Close Time</label>
+                      <input
+                        type="time"
+                        value={h.end || '18:00'}
+                        onChange={(e) => onChange(day.key, 'end', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">{to12Hour(h.end) || '—'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {!h.isHoliday && isBreak && (
+                  <div className="ml-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Morning Session</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <input
+                            type="time"
+                            value={h.morningStart || '09:00'}
+                            onChange={(e) => onChange(day.key, 'morningStart', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">{to12Hour(h.morningStart) || '—'}</p>
+                        </div>
+                        <div>
+                          <input
+                            type="time"
+                            value={h.morningEnd || '12:00'}
+                            onChange={(e) => onChange(day.key, 'morningEnd', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">{to12Hour(h.morningEnd) || '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Evening Session</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <input
+                            type="time"
+                            value={h.eveningStart || '16:00'}
+                            onChange={(e) => onChange(day.key, 'eveningStart', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">{to12Hour(h.eveningStart) || '—'}</p>
+                        </div>
+                        <div>
+                          <input
+                            type="time"
+                            value={h.eveningEnd || '20:00'}
+                            onChange={(e) => onChange(day.key, 'eveningEnd', e.target.value)}
+                            className="w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">{to12Hour(h.eveningEnd) || '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {h.isHoliday && (
+                  <div className="ml-6">
+                    <p className="text-sm text-red-500">Closed for the day</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  /* --------------------------- General Tab ------------------------- */
 
   const GeneralTab = (
     <div className="space-y-8">
@@ -844,7 +1077,7 @@ const Settings = () => {
             </div>
             {!isEditing && (
               <Button variant="primary" onClick={handleEditClick} size="sm">
-                <Edit2 size={16} className="mr-2" /> Edit 
+                <Edit2 size={16} className="mr-2" /> Edit
               </Button>
             )}
           </div>
@@ -899,48 +1132,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-                    <Clock size={18} className="text-gray-500" />
-                    Working Hours
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={handleSet24HourMode}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      is24HourMode
-                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
-                        : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
-                    }`}
-                  >
-                    {is24HourMode ? 'Disable 24/7' : 'Set 24/7 Hours'}
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {DAYS.map((day) => {
-                    const hours = workingHours[day.key];
-
-                    return (
-                      <div
-                        key={day.key}
-                        className="flex items-center justify-between py-2.5 px-3 border-b border-gray-100 last:border-0 rounded-lg"
-                      >
-                        <span className="text-sm font-medium text-gray-700 w-24">
-                          {day.label}
-                        </span>
-                        {hours?.closed ? (
-                          <span className="text-sm text-red-500 font-medium">Closed</span>
-                        ) : (
-                          <span className="text-sm text-gray-600">
-                            {hours?.open || '09:00 AM'} - {hours?.close || '06:00 PM'}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              {renderWorkingHoursReadView()}
             </div>
           ) : (
             <form onSubmit={handleEditSubmit} className="space-y-6">
@@ -950,24 +1142,19 @@ const Settings = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-  Hospital Type *
-</label>
-
-<CustomSelect
-  hideLabel
-  value={editForm.hospitalType}
-  options={hospitalTypeOptions}
-  placeholder={
-    isLoadingCategories ? 'Loading categories...' : 'Select hospital type'
-  }
-  onChange={(value) => handleInputChange({ target: { name: 'hospitalType', value } })}
-  disabled={isLoadingCategories}
-  className={HOSPITAL_TYPE_SELECT_CLASS}
-/>
+                    Hospital Type *
+                  </label>
+                  <CustomSelect
+                    hideLabel
+                    value={editForm.hospitalType}
+                    options={hospitalTypeOptions}
+                    placeholder={isLoadingCategories ? 'Loading categories...' : 'Select hospital type'}
+                    onChange={(value) => handleInputChange({ target: { name: 'hospitalType', value } })}
+                    disabled={isLoadingCategories}
+                    className={HOSPITAL_TYPE_SELECT_CLASS}
+                  />
                   {categoriesError && (
-                    <p className="text-xs text-red-500 mt-1">
-                      Failed to load categories. Using defaults.
-                    </p>
+                    <p className="text-xs text-red-500 mt-1">Failed to load categories. Using defaults.</p>
                   )}
                 </div>
 
@@ -977,10 +1164,7 @@ const Settings = () => {
                   value={editForm.mobileNumber}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setEditForm(prev => ({
-                      ...prev,
-                      mobileNumber: value
-                    }));
+                    setEditForm(prev => ({ ...prev, mobileNumber: value }));
                   }}
                   type="tel"
                   required
@@ -989,7 +1173,6 @@ const Settings = () => {
 
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
-
                 <div className="space-y-4">
                   <SearchableDropdown
                     label="Country"
@@ -999,7 +1182,6 @@ const Settings = () => {
                     placeholder="Search for a country..."
                     icon={MapPin}
                   />
-
                   <SearchableDropdown
                     label="State"
                     options={states}
@@ -1009,7 +1191,6 @@ const Settings = () => {
                     icon={MapPin}
                     disabled={!editForm.countryCode}
                   />
-
                   <SearchableDropdown
                     label="District"
                     options={cities}
@@ -1022,7 +1203,6 @@ const Settings = () => {
                     getOptionValue={(option) => option.name}
                     optionKey={(option, index) => index}
                   />
-
                   <Input
                     label="Street Address"
                     name="streetAddress"
@@ -1030,7 +1210,6 @@ const Settings = () => {
                     onChange={handleInputChange}
                     placeholder="Enter street address"
                   />
-
                   <Input
                     label="Pincode"
                     name="pincode"
@@ -1042,90 +1221,15 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-4 mt-2">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-md font-semibold text-gray-900">Edit Working Hours</h3>
-                  <button
-                    type="button"
-                    onClick={handleSet24HourMode}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      is24HourMode
-                        ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200'
-                        : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
-                    }`}
-                  >
-                    {is24HourMode ? 'Disable 24/7' : 'Set 24/7 Hours'}
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {DAYS.map((day) => (
-                    <div key={day.key} className="border-b border-gray-200 pb-4 last:border-0">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-medium text-gray-900">{day.label}</h3>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={editForm.workingHours[day.key]?.closed || false}
-                            onChange={() => handleToggleClosed(day.key)}
-                            className="rounded border-gray-300 text-[#1C62A0] focus:ring-[#1C62A0]"
-                          />
-                          <span className={`text-sm ${editForm.workingHours[day.key]?.closed ? 'text-red-600' : 'text-gray-600'}`}>
-                            {editForm.workingHours[day.key]?.closed ? 'Closed' : 'Open'}
-                          </span>
-                        </label>
-                      </div>
-
-                      {!editForm.workingHours[day.key]?.closed && (
-                        <div className="grid grid-cols-2 gap-4 ml-6">
-                          <div>
-                            <label className="block text-sm text-gray-600 mb-1">Open Time</label>
-                            <input
-                              type="time"
-                              value={to24HourInput(editForm.workingHours[day.key]?.open)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (!v) return;
-                                handleWorkingHourChange(day.key, 'open', from24HourInput(v));
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">
-                              {editForm.workingHours[day.key]?.open || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <label className="block text-sm text-gray-600 mb-1">Close Time</label>
-                            <input
-                              type="time"
-                              value={to24HourInput(editForm.workingHours[day.key]?.close)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (!v) return;
-                                handleWorkingHourChange(day.key, 'close', from24HourInput(v));
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">
-                              {editForm.workingHours[day.key]?.close || '—'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {editForm.workingHours[day.key]?.closed && (
-                        <div className="ml-6">
-                          <p className="text-sm text-red-500">Closed for the day</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {renderWorkingHoursEditor()}
 
               <div className="flex space-x-3 pt-4">
                 <Button type="submit" variant="primary" disabled={isFormSaving} loading={isFormSaving}>
                   {isFormSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                  Cancel
+                </Button>
               </div>
             </form>
           )}
@@ -1152,6 +1256,8 @@ const Settings = () => {
       </Card>
     </div>
   );
+
+  /* --------------------------- Tab routing ------------------------- */
 
   const renderTabContent = () => {
     switch (activeTab) {
