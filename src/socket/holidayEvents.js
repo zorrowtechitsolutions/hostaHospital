@@ -5,17 +5,15 @@ import { socket } from "./socket";
  * Register listeners for holiday real-time events.
  *
  * Backend emits:
- *   - `holiday_event`
+ *   - holiday_event
  *
  * Payload:
  *   {
  *     event,
  *     title,
  *     message,
- *     category,
  *     severity,
- *     data,
- *     createdAt
+ *     data
  *   }
  *
  * Events:
@@ -23,56 +21,50 @@ import { socket } from "./socket";
  *   - HOLIDAY_UPDATED
  *   - HOLIDAY_DELETED
  */
+
 export const registerHolidayEvents = (handlers = {}) => {
-  socket.on("holiday_event", (payload) => {
+  const holidayListener = (payload = {}) => {
     const {
       event,
       title,
       message,
-      category,
       severity,
       data,
-      createdAt,
-    } = payload || {};
+    } = payload;
+
+    const eventData = {
+      title,
+      message,
+      category: "holiday",
+      severity,
+      data,
+    };
 
     switch (event) {
       case "HOLIDAY_CREATED":
-        handlers.onCreated?.({
-          title,
-          message,
-          category,
-          severity,
-          data,
-          createdAt,
-        });
+        handlers.onCreated?.(eventData);
         break;
 
       case "HOLIDAY_UPDATED":
-        handlers.onUpdated?.({
-          title,
-          message,
-          category,
-          severity,
-          data,
-          createdAt,
-        });
+        handlers.onUpdated?.(eventData);
         break;
 
       case "HOLIDAY_DELETED":
-        handlers.onDeleted?.({
-          title,
-          message,
-          category,
-          severity,
-          data,
-          createdAt,
-        });
+        handlers.onDeleted?.(eventData);
         break;
 
       default:
+        console.warn("Unknown holiday event:", event);
         break;
     }
-  });
+  };
+
+  socket.on("holiday_event", holidayListener);
+
+  // Return cleanup function for this listener only.
+  return () => {
+    socket.off("holiday_event", holidayListener);
+  };
 };
 
 export const unregisterHolidayEvents = () => {
