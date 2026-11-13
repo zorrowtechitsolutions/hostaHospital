@@ -356,11 +356,11 @@ const HospitalHomePage = () => {
               <ul className="space-y-2 text-sm text-green-200">
                 <li className="flex items-center space-x-2">
                   <Phone className="h-4 w-4" />
-                  <span>+1 (555) 123-4567</span>
+                  <span>+91 95679 00329</span>
                 </li>
                 <li className="flex items-center space-x-2">
                   <Mail className="h-4 w-4" />
-                  <span>support@hosta.com</span>
+                  <span>hostahealthcare@gmail.com</span>
                 </li>
               </ul>
             </div>
@@ -369,7 +369,7 @@ const HospitalHomePage = () => {
               <ul className="space-y-2 text-sm text-green-200">
                 <li className="flex items-start space-x-2">
                   <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <span>123 Healthcare Blvd, Medical City</span>
+                  <span>Kootilangadi,Malappuram-676506, Kerala, India</span>
                 </li>
               </ul>
             </div>
