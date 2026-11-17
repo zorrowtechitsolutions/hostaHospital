@@ -3,9 +3,6 @@ import { getToken } from "../../src/utils/auth";
 
 const API_URL = `${import.meta.env.VITE_API_URL}/presignurl`;
 
-export const S3_BASE_URL =
-  (import.meta.env.VITE_S3_BASE_URL as string) || "";
-
 interface UploadResponse {
   imageUrl: string;
   key: string;
@@ -27,19 +24,9 @@ export type ImageType =
 // ========================
 // GET FULL IMAGE URL
 // ========================
-export const getS3ImageUrl = (key?: string | null) => {
-  if (!key) return null;
-
-  if (key.startsWith("http://") || key.startsWith("https://")) {
-    return key;
-  }
-
-  if (!S3_BASE_URL) {
-    console.warn("VITE_S3_BASE_URL is not configured");
-    return key;
-  }
-
-  return `${S3_BASE_URL}/${encodeURIComponent(key)}`;
+export const getS3ImageUrl = (imageUrl?: string | null) => {
+  if (!imageUrl) return null;
+  return imageUrl;
 };
 
 // ========================
@@ -195,7 +182,7 @@ export const uploadToS3 = async (
 
     return {
       key: data.key,
-      imageUrl: getS3ImageUrl(data.key) as string,
+      imageUrl: data.imageUrl,
     };
   } catch (err) {
     console.error("S3 Upload Error:", err);
