@@ -22,7 +22,7 @@ import { useAssignPermissionsMutation } from '../../../app/service/rolePermissio
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 import { Country, State, City } from 'country-state-city';
-import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+import { uploadToS3 } from '../../../app/service/S3';
 
 // ✅ Gender options — capitalized to match EditDoctor's existing submit convention
 // (handleSubmit does formData.gender?.toLowerCase())
@@ -53,15 +53,14 @@ const getAuthId = () => {
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// Helper function to get full image URL with cache-busting
+// Helper function to get full image URL with cache-busting.
+// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
 
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+  // Add a cache-buster so the preview refreshes after edits/uploads.
+  const separator = imageKey.includes('?') ? '&' : '?';
+  return `${imageKey}${separator}t=${Date.now()}`;
 };
 
 // Lazy load heavy components

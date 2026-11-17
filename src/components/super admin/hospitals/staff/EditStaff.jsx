@@ -37,19 +37,16 @@ import {
 import { useAssignPermissionsMutation } from '../../../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../../../app/service/role';
 import { getHospitalId, getAuthUser } from '../../../../utils/auth';
-import { uploadToS3, S3_BASE_URL } from '../../../../../app/service/S3';
+import { uploadToS3 } from '../../../../../app/service/S3';
 
-// FIX: Enhanced helper function to get full image URL with cache-busting
+// Helper to get full image URL with cache-busting.
+// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  
-  // If it's already a full URL, add cache-busting
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  
-  // Otherwise, construct the S3 URL with cache-busting
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+
+  // Add a cache-buster so newly edited/uploaded images refresh.
+  const separator = imageKey.includes('?') ? '&' : '?';
+  return `${imageKey}${separator}t=${Date.now()}`;
 };
 
 // Tabs Component
@@ -411,7 +408,7 @@ const EditStaff = () => {
       imageKey: imageKey,
     });
     
-    // FIX: Set preview image using getFullImageUrl with cache-busting
+    // Set preview image using getFullImageUrl with cache-busting
     if (imageKey) {
       const fullUrl = getFullImageUrl(imageKey);
       setPreviewImage(fullUrl);

@@ -20,7 +20,7 @@ import {
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
-import { uploadToS3, S3_BASE_URL } from '../../../app/service/S3';
+import { uploadToS3 } from '../../../app/service/S3';
 import { Country, State, City } from 'country-state-city';
 
 // ✅ Options for the Gender CustomSelect — capitalized values (matches this file's convention)
@@ -46,12 +46,14 @@ const getAuthId = () => {
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
+// Helper to get full image URL with cache-busting.
+// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+
+  // Add a cache-buster so the preview refreshes after edits/uploads.
+  const separator = imageKey.includes('?') ? '&' : '?';
+  return `${imageKey}${separator}t=${Date.now()}`;
 };
 
 // Status Toggle Component
