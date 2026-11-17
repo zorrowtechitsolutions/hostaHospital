@@ -55,7 +55,7 @@ import {
   AvatarFallback
 } from "@/components/ui/avatar";
 
-import { getS3ImageUrl, S3_BASE_URL } from '../../../app/service/S3';
+import { getS3ImageUrl } from '../../../app/service/S3';
 import { getAuthUser } from '../../../src/utils/auth';
 
 // Import the export function
@@ -116,15 +116,14 @@ const getAuthId = () => {
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// FIX: Enhanced getS3ImageUrl with cache-busting
+// FIX: Enhanced image URL helper with cache-busting.
+// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
 const getS3ImageUrlWithCache = (imageKey) => {
   if (!imageKey) return null;
 
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
-    return `${imageKey}?t=${Date.now()}`;
-  }
-
-  return `${S3_BASE_URL}/${encodeURIComponent(imageKey)}?t=${Date.now()}`;
+  // Add a cache-buster so newly edited/uploaded images refresh.
+  const separator = imageKey.includes('?') ? '&' : '?';
+  return `${imageKey}${separator}t=${Date.now()}`;
 };
 
 // ✅ Helper to format shift time for display

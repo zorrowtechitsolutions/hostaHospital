@@ -1,4 +1,4 @@
-// app/service/request.ts - Booking/Request API service
+// app/service/request.ts 
 // UPDATED: All CRUD operations use database id; bookingNumber is display/lookup only.
 
 import { api } from "./api";
