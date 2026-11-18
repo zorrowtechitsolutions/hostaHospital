@@ -31,7 +31,19 @@ const PERMISSIONS = {
 
 // ✅ Module-level cache: S3 key → signed URL
 // Avoids re-fetching the signed URL on every render of every card.
-const signedUrlCache = new Map();
+// In Doctors.jsx
+const signedUrlCache = new Map(); // key -> { url, expiresAt }
+const URL_TTL_MS = 55 * 60 * 1000; // 55 min (presign TTL minus buffer)
+
+const getCached = (key) => {
+  const hit = signedUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) { signedUrlCache.delete(key); return null; }
+  return hit.url;
+};
+
+const setCached = (key, url) => signedUrlCache.set(key, { url, expiresAt: Date.now() + URL_TTL_MS });
+
 
 // ✅ DoctorAvatar — resolves the S3 key to a signed view URL asynchronously.
 // IMPORTANT: never append query params (e.g. ?t=timestamp) to a signed URL —
@@ -49,7 +61,7 @@ const DoctorAvatar = ({ imageKey, name, className }) => {
       return imageKey;
     }
 
-    return signedUrlCache.get(imageKey) || null;
+    return getCached(imageKey) || null;
   });
 
   useEffect(() => {
@@ -69,7 +81,7 @@ const DoctorAvatar = ({ imageKey, name, className }) => {
     }
 
     // Cache hit
-    const cached = signedUrlCache.get(imageKey);
+    const cached = getCached(imageKey);
     if (cached) {
       setImageSrc(cached);
       return;
@@ -81,7 +93,7 @@ const DoctorAvatar = ({ imageKey, name, className }) => {
       try {
         const url = await getS3ImageUrlRaw(imageKey);
         if (cancelled) return;
-        if (url) signedUrlCache.set(imageKey, url);
+        if (url) setCached(imageKey, url);
         setImageSrc(url);
       } catch (error) {
         console.error("Doctor image loading error:", error);

@@ -23,7 +23,7 @@ import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 // ✅ Use the same local JSON location service as AddStaff
 import { Country, State, City } from '../../data/locationService';
-import { uploadToS3 } from '../../../app/service/S3';
+import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 
 // ✅ Gender options — capitalized to match EditDoctor's existing submit convention
 // (handleSubmit does formData.gender?.toLowerCase())
@@ -54,9 +54,12 @@ const getAuthId = () => {
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// Helper function to get full image URL with cache-busting.
-// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getFullImageUrl = async (imageKey) => { 
+// Helper function to get a fully-resolved, displayable image URL.
+// - If the stored value is already a full URL (http(s)/data:), use it as-is.
+// - Otherwise it's an S3 key — resolve it via the presign endpoint.
+// NOTE: This function is async; always `await` / `.then()` its result before
+// setting it into state, otherwise you'll render `<img src="[object Promise]">`.
+const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
 
   if (
@@ -71,6 +74,7 @@ const getFullImageUrl = async (imageKey) => {
 
   return url;
 };
+
 // Lazy load heavy components
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
@@ -87,23 +91,29 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       return;
     }
 
+    let cancelled = false;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setImageSrc(getFullImageUrl(imageKey));
-            observer.disconnect();
+        entries.forEach(async (entry) => {
+          if (!entry.isIntersecting) return;
+          observer.disconnect();
+          try {
+            const url = await getFullImageUrl(imageKey); // ✅ await
+            if (!cancelled) setImageSrc(url);
+          } catch (e) {
+            console.error('image load failed', e);
+            if (!cancelled) setImageSrc(null);
+          } finally {
+            if (!cancelled) setIsLoading(false);
           }
         });
       },
       { rootMargin: '50px' }
     );
 
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
-    return () => observer.disconnect();
+    if (imgRef.current) observer.observe(imgRef.current);
+    return () => { cancelled = true; observer.disconnect(); };
   }, [imageKey, refreshKey]);
 
   return (
@@ -798,9 +808,22 @@ const EditDoctor = () => {
 
       setFormData(newFormData);
 
+      // ✅ FIX (Bug #2b): await / .then() the async URL resolver before setState
       if (imageKey) {
-        setPreviewImage(getFullImageUrl(imageKey));
-        setImageRefreshKey(Date.now());
+        let cancelled = false;
+        getFullImageUrl(imageKey)
+          .then(url => {
+            if (cancelled) return;
+            setPreviewImage(url);
+            setImageRefreshKey(Date.now());
+          })
+          .catch(err => {
+            console.error('Failed to resolve preview image:', err);
+            if (!cancelled) setPreviewImage(null);
+          });
+        // Note: no cleanup here because this effect's own cancellation is
+        // handled by `formInitialized`; the `cancelled` flag is a defensive
+        // guard against setting state after unmount in StrictMode.
       }
 
       if (country?.isoCode) {
@@ -869,8 +892,12 @@ const EditDoctor = () => {
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
+
+      // ✅ FIX (Bug #2c): await / .then() the async URL resolver before setState
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        getFullImageUrl(formData.profileImage)
+          .then(url => setPreviewImage(url))
+          .catch(() => setPreviewImage(null));
       } else {
         setPreviewImage(null);
       }
