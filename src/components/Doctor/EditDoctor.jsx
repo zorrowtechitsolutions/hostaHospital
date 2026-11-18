@@ -56,11 +56,21 @@ const getAuthId = () => {
 
 // Helper function to get full image URL with cache-busting.
 // NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getFullImageUrl = (imageKey) => {
+const getFullImageUrl = async (imageKey) => { 
   if (!imageKey) return null;
-  return imageKey;
-};
 
+  if (
+    imageKey.startsWith("http://") ||
+    imageKey.startsWith("https://") ||
+    imageKey.startsWith("data:")
+  ) {
+    return imageKey;
+  }
+
+  const url = await getS3ImageUrl(imageKey);
+
+  return url;
+};
 // Lazy load heavy components
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
