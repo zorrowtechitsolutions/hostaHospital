@@ -1,18 +1,18 @@
 // app/service/s3.ts
 import { getToken } from "../../src/utils/auth";
 
-const API_URL = `${import.meta.env.VITE_API_URL}/presignurl`;
+const API_URL = `${import.meta.env.VITE_API_URL}`.replace(/\/$/, "");
+const PRESIGN_URL = `${API_URL}/presignurl`;
+const IMAGE_VIEW_URL = `${PRESIGN_URL}/view`;
 
 interface UploadResponse {
-  imageUrl: string;
+  imageUrl?: string | null;
   key: string;
 }
 
 // ========================
 // IMAGE TYPE
 // ========================
-// The presign backend validates imageType only for the "device" role.
-// Other roles (doctor, staff, hospital, etc.) don't send it.
 export type ImageType =
   | "deviceImage"
   | "locationImage"
@@ -24,9 +24,47 @@ export type ImageType =
 // ========================
 // GET FULL IMAGE URL
 // ========================
-export const getS3ImageUrl = (imageUrl?: string | null) => {
-  if (!imageUrl) return null;
-  return imageUrl;
+export const getS3ImageUrl = async (
+  imageKey?: string | null
+): Promise<string | null> => {
+  if (!imageKey) return null;
+
+  // Support existing full URLs and temporary local previews.
+  if (
+    imageKey.startsWith("http://") ||
+    imageKey.startsWith("https://") ||
+    imageKey.startsWith("data:")
+  ) {
+    return imageKey;
+  }
+
+  try {
+    const token = getToken();
+
+    const response = await fetch(
+      `${IMAGE_VIEW_URL}?key=${encodeURIComponent(imageKey)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to get image URL (${response.status}): ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+
+    return data.imageUrl || null;
+  } catch (error) {
+    console.error("Get S3 image URL error:", error);
+    return null;
+  }
 };
 
 // ========================
@@ -136,7 +174,7 @@ export const uploadToS3 = async (
       body.imageType = imageType;
     }
 
-    const res = await fetch(API_URL, {
+    const res = await fetch(PRESIGN_URL, {
       method: key ? "PUT" : "POST",
       headers: {
         "Content-Type": "application/json",
@@ -217,7 +255,7 @@ export const deleteFromS3 = async (
     body.imageType = imageType;
   }
 
-  const res = await fetch(API_URL, {
+  const res = await fetch(PRESIGN_URL, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",

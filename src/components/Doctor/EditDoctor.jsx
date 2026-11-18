@@ -58,10 +58,7 @@ const getAuthId = () => {
 // NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
 const getFullImageUrl = (imageKey) => {
   if (!imageKey) return null;
-
-  // Add a cache-buster so the preview refreshes after edits/uploads.
-  const separator = imageKey.includes('?') ? '&' : '?';
-  return `${imageKey}${separator}t=${Date.now()}`;
+  return imageKey;
 };
 
 // Lazy load heavy components
