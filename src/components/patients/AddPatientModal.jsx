@@ -1,6 +1,6 @@
 // AddPatient.jsx - with global DatePicker wrapper for Date of Birth
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User, Mail, Phone, Calendar, MapPin,
@@ -16,7 +16,8 @@ import {
   showSuccessToast, showErrorToast, showWarningToast, showInfoToast
 } from '../ui/Toast';
 import { useCreatePatientMutation } from '../../../app/service/patients';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / Register / Settings
+import { Country, State, City } from '../../data/locationService';
 import { getAuthUser } from '../../utils/auth';
 
 // SearchableDropdown Component (keep as is)
@@ -197,9 +198,16 @@ const AddPatient = () => {
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(formData.countryCode),
+    [formData.countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(formData.countryCode, formData.stateCode),
+    [formData.countryCode, formData.stateCode]
+  );
 
   const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
   const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Widowed'];

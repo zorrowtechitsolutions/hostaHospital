@@ -1,7 +1,8 @@
 // src/components/Ambulance/AddAmbulanceModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal, Input, Button, CustomSelect } from '../ui';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / EditAmbulanceModal
+import { Country, State, City } from '../../data/locationService';
 import { showErrorToast } from '../ui/Toast';
 
 const AddAmbulanceModal = ({ 
@@ -28,25 +29,32 @@ const AddAmbulanceModal = ({
   const [stateCode, setStateCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(countryCode);
-  const cities = City.getCitiesOfState(countryCode, stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(countryCode),
+    [countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(countryCode, stateCode),
+    [countryCode, stateCode]
+  );
 
   // ---- Options for CustomSelect ----
-  const countryOptions = countries.map(c => ({
-    value: c.isoCode,
-    label: c.name
-  }));
+  const countryOptions = useMemo(
+    () => countries.map(c => ({ value: c.isoCode, label: c.name })),
+    [countries]
+  );
 
-  const stateOptions = states.map(s => ({
-    value: s.isoCode,
-    label: s.name
-  }));
+  const stateOptions = useMemo(
+    () => states.map(s => ({ value: s.isoCode, label: s.name })),
+    [states]
+  );
 
-  const districtOptions = cities.map(c => ({
-    value: c.name,
-    label: c.name
-  }));
+  const districtOptions = useMemo(
+    () => cities.map(c => ({ value: c.name, label: c.name })),
+    [cities]
+  );
 
   // Validation functions
   const validateServiceName = (name) => {

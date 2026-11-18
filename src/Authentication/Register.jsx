@@ -1,6 +1,6 @@
 // src/Authentication/Register.jsx - COMPLETE FIXED VERSION
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Mail, Lock, Building, MapPin, Globe, Landmark, Home, CreditCard,
@@ -10,7 +10,8 @@ import {
 import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
 import { Input, Select, Textarea, Button, Alert, Card, CustomSelect } from '../components/ui'; // ✅ added CustomSelect
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / Ambulance modals
+import { Country, State, City } from '../data/locationService';
 import { useRegisterMutation } from '../../app/service/hospitalApi';  
 import { useAuth } from '../context/AuthContext'; 
 import { useGetCategoryQuery } from '../../app/service/category';
@@ -266,9 +267,16 @@ const Register = () => {
   const [cityName, setCityName] = useState("");
   const [pincode, setPincode] = useState("");
   
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(countryCode);
-  const cities = City.getCitiesOfState(countryCode, stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(countryCode),
+    [countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(countryCode, stateCode),
+    [countryCode, stateCode]
+  );
   
   // ✅ Normal Hours (for "normal" type)
   const [normalHours, setNormalHours] = useState({

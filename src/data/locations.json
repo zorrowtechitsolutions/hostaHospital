@@ -1,0 +1,427 @@
+{
+  "countries": [
+    {
+      "name": "India",
+      "isoCode": "IN",
+      "phonecode": "91",
+      "currency": "INR"
+    }
+  ],
+  "states": {
+    "IN": [
+      {
+        "name": "Kerala",
+        "isoCode": "KL",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Tamil Nadu",
+        "isoCode": "TN",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Karnataka",
+        "isoCode": "KA",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Maharashtra",
+        "isoCode": "MH",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Delhi",
+        "isoCode": "DL",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Telangana",
+        "isoCode": "TG",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Andhra Pradesh",
+        "isoCode": "AP",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Gujarat",
+        "isoCode": "GJ",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Rajasthan",
+        "isoCode": "RJ",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Uttar Pradesh",
+        "isoCode": "UP",
+        "countryCode": "IN"
+      },
+      {
+        "name": "West Bengal",
+        "isoCode": "WB",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Punjab",
+        "isoCode": "PB",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Haryana",
+        "isoCode": "HR",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Madhya Pradesh",
+        "isoCode": "MP",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Bihar",
+        "isoCode": "BR",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Odisha",
+        "isoCode": "OD",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Assam",
+        "isoCode": "AS",
+        "countryCode": "IN"
+      },
+      {
+        "name": "Goa",
+        "isoCode": "GA",
+        "countryCode": "IN"
+      }
+    ]
+  },
+  "cities": {
+    "IN-KL": [
+      {
+        "name": "Kochi",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Thiruvananthapuram",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Kozhikode",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Thrissur",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Kollam",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Kannur",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Alappuzha",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      },
+      {
+        "name": "Palakkad",
+        "countryCode": "IN",
+        "stateCode": "KL"
+      }
+    ],
+    "IN-TN": [
+      {
+        "name": "Chennai",
+        "countryCode": "IN",
+        "stateCode": "TN"
+      },
+      {
+        "name": "Coimbatore",
+        "countryCode": "IN",
+        "stateCode": "TN"
+      },
+      {
+        "name": "Madurai",
+        "countryCode": "IN",
+        "stateCode": "TN"
+      },
+      {
+        "name": "Tiruchirappalli",
+        "countryCode": "IN",
+        "stateCode": "TN"
+      },
+      {
+        "name": "Salem",
+        "countryCode": "IN",
+        "stateCode": "TN"
+      }
+    ],
+    "IN-KA": [
+      {
+        "name": "Bengaluru",
+        "countryCode": "IN",
+        "stateCode": "KA"
+      },
+      {
+        "name": "Mysuru",
+        "countryCode": "IN",
+        "stateCode": "KA"
+      },
+      {
+        "name": "Mangaluru",
+        "countryCode": "IN",
+        "stateCode": "KA"
+      },
+      {
+        "name": "Hubballi",
+        "countryCode": "IN",
+        "stateCode": "KA"
+      }
+    ],
+    "IN-MH": [
+      {
+        "name": "Mumbai",
+        "countryCode": "IN",
+        "stateCode": "MH"
+      },
+      {
+        "name": "Pune",
+        "countryCode": "IN",
+        "stateCode": "MH"
+      },
+      {
+        "name": "Nagpur",
+        "countryCode": "IN",
+        "stateCode": "MH"
+      },
+      {
+        "name": "Nashik",
+        "countryCode": "IN",
+        "stateCode": "MH"
+      }
+    ],
+    "IN-DL": [
+      {
+        "name": "New Delhi",
+        "countryCode": "IN",
+        "stateCode": "DL"
+      },
+      {
+        "name": "Dwarka",
+        "countryCode": "IN",
+        "stateCode": "DL"
+      },
+      {
+        "name": "Rohini",
+        "countryCode": "IN",
+        "stateCode": "DL"
+      }
+    ],
+    "IN-TG": [
+      {
+        "name": "Hyderabad",
+        "countryCode": "IN",
+        "stateCode": "TG"
+      },
+      {
+        "name": "Warangal",
+        "countryCode": "IN",
+        "stateCode": "TG"
+      },
+      {
+        "name": "Nizamabad",
+        "countryCode": "IN",
+        "stateCode": "TG"
+      }
+    ],
+    "IN-AP": [
+      {
+        "name": "Visakhapatnam",
+        "countryCode": "IN",
+        "stateCode": "AP"
+      },
+      {
+        "name": "Vijayawada",
+        "countryCode": "IN",
+        "stateCode": "AP"
+      },
+      {
+        "name": "Guntur",
+        "countryCode": "IN",
+        "stateCode": "AP"
+      }
+    ],
+    "IN-GJ": [
+      {
+        "name": "Ahmedabad",
+        "countryCode": "IN",
+        "stateCode": "GJ"
+      },
+      {
+        "name": "Surat",
+        "countryCode": "IN",
+        "stateCode": "GJ"
+      },
+      {
+        "name": "Vadodara",
+        "countryCode": "IN",
+        "stateCode": "GJ"
+      }
+    ],
+    "IN-RJ": [
+      {
+        "name": "Jaipur",
+        "countryCode": "IN",
+        "stateCode": "RJ"
+      },
+      {
+        "name": "Jodhpur",
+        "countryCode": "IN",
+        "stateCode": "RJ"
+      },
+      {
+        "name": "Udaipur",
+        "countryCode": "IN",
+        "stateCode": "RJ"
+      }
+    ],
+    "IN-UP": [
+      {
+        "name": "Lucknow",
+        "countryCode": "IN",
+        "stateCode": "UP"
+      },
+      {
+        "name": "Kanpur",
+        "countryCode": "IN",
+        "stateCode": "UP"
+      },
+      {
+        "name": "Varanasi",
+        "countryCode": "IN",
+        "stateCode": "UP"
+      },
+      {
+        "name": "Agra",
+        "countryCode": "IN",
+        "stateCode": "UP"
+      }
+    ],
+    "IN-WB": [
+      {
+        "name": "Kolkata",
+        "countryCode": "IN",
+        "stateCode": "WB"
+      },
+      {
+        "name": "Howrah",
+        "countryCode": "IN",
+        "stateCode": "WB"
+      },
+      {
+        "name": "Siliguri",
+        "countryCode": "IN",
+        "stateCode": "WB"
+      }
+    ],
+    "IN-PB": [
+      {
+        "name": "Ludhiana",
+        "countryCode": "IN",
+        "stateCode": "PB"
+      },
+      {
+        "name": "Amritsar",
+        "countryCode": "IN",
+        "stateCode": "PB"
+      }
+    ],
+    "IN-HR": [
+      {
+        "name": "Gurugram",
+        "countryCode": "IN",
+        "stateCode": "HR"
+      },
+      {
+        "name": "Faridabad",
+        "countryCode": "IN",
+        "stateCode": "HR"
+      }
+    ],
+    "IN-MP": [
+      {
+        "name": "Indore",
+        "countryCode": "IN",
+        "stateCode": "MP"
+      },
+      {
+        "name": "Bhopal",
+        "countryCode": "IN",
+        "stateCode": "MP"
+      }
+    ],
+    "IN-BR": [
+      {
+        "name": "Patna",
+        "countryCode": "IN",
+        "stateCode": "BR"
+      },
+      {
+        "name": "Gaya",
+        "countryCode": "IN",
+        "stateCode": "BR"
+      }
+    ],
+    "IN-OD": [
+      {
+        "name": "Bhubaneswar",
+        "countryCode": "IN",
+        "stateCode": "OD"
+      },
+      {
+        "name": "Cuttack",
+        "countryCode": "IN",
+        "stateCode": "OD"
+      }
+    ],
+    "IN-AS": [
+      {
+        "name": "Guwahati",
+        "countryCode": "IN",
+        "stateCode": "AS"
+      },
+      {
+        "name": "Dibrugarh",
+        "countryCode": "IN",
+        "stateCode": "AS"
+      }
+    ],
+    "IN-GA": [
+      {
+        "name": "Panaji",
+        "countryCode": "IN",
+        "stateCode": "GA"
+      },
+      {
+        "name": "Margao",
+        "countryCode": "IN",
+        "stateCode": "GA"
+      }
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 // src/components/Settings/Settings.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Button,
@@ -12,7 +12,8 @@ import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / Register
+import { Country, State, City } from '../../data/locationService';
 import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus, Sun } from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
 import { useAuth } from '../../context/AuthContext';
@@ -411,9 +412,16 @@ const Settings = () => {
     clinicBreakHours: DEFAULT_CLINIC_BREAK_HOURS,
   });
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(editForm.countryCode);
-  const cities = City.getCitiesOfState(editForm.countryCode, editForm.stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(editForm.countryCode),
+    [editForm.countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(editForm.countryCode, editForm.stateCode),
+    [editForm.countryCode, editForm.stateCode]
+  );
   const isFormSaving = isSaving || isUpdating;
 
   const hospitalTypes = categoriesData?.data

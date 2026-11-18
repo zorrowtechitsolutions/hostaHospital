@@ -1,5 +1,5 @@
 // src/components/staffs/AddStaff.jsx - Single Tab Version with Shift Times
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -38,7 +38,9 @@ import { useAssignPermissionsMutation } from '../../../app/service/rolePermissio
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
-import { Country, State, City } from 'country-state-city';
+
+// ✅ Local JSON-backed location service (replaces country-state-city)
+import { Country, State, City } from '../../data/locationService';
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -63,7 +65,7 @@ const GENDER_SELECT_OPTIONS = genders.map(g => ({
   label: g.charAt(0).toUpperCase() + g.slice(1),
 }));
 
-// Styling override so CustomSelect matches the "border-gray-300 rounded-lg focus:ring-[#1C62A0]" inputs
+// Styling override so CustomSelect matches the inputs
 const SELECT_FORM_CLASS =
   "[&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
 
@@ -412,9 +414,18 @@ const AddStaff = () => {
     shiftStartTime: '', shiftEndTime: '',
   });
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+
+  const states = useMemo(
+    () => State.getStatesOfCountry(formData.countryCode),
+    [formData.countryCode]
+  );
+
+  const cities = useMemo(
+    () => City.getCitiesOfState(formData.countryCode, formData.stateCode),
+    [formData.countryCode, formData.stateCode]
+  );
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -902,7 +913,6 @@ const AddStaff = () => {
               </div>
 
               <div className={GRID_CLASS}>
-                {/* ✅ Replaced native (Gender) with CustomSelect */}
                 <CustomSelect
                   label="Gender"
                   icon={Users}
@@ -922,7 +932,6 @@ const AddStaff = () => {
 
               {/* Designation and Joining Date */}
               <div className={GRID_CLASS}>
-                {/* ✅ Replaced native  (Designation) with CustomSelect */}
                 <CustomSelect
                   label="Designation"
                   icon={Briefcase}
@@ -956,7 +965,6 @@ const AddStaff = () => {
 
               {/* Staff Type and Job Type */}
               <div className={GRID_CLASS}>
-                {/* ✅ Replaced native  (Staff Type) with CustomSelect */}
                 <CustomSelect
                   label="Staff Type"
                   icon={Users}
@@ -967,7 +975,6 @@ const AddStaff = () => {
                   className={SELECT_FORM_CLASS}
                 />
 
-                {/* ✅ Replaced native  (Job Type) with CustomSelect */}
                 <CustomSelect
                   label="Job Type"
                   icon={Briefcase}
@@ -992,7 +999,6 @@ const AddStaff = () => {
               )}
 
               {/* Role */}
-              {/* ✅ Replaced native  (Role) with CustomSelect */}
               <CustomSelect
                 label="Assign Role"
                 icon={Shield}
