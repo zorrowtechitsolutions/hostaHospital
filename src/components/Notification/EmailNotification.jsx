@@ -492,9 +492,10 @@ const EmailComposer = () => {
     location.pathname,
   ]);
 
-  if (isLoading) {
-    return <EmailComposerSkeleton />;
-  }
+  // ⚠️ NOTE: the `if (isLoading) return <EmailComposerSkeleton />;` block was
+  // REMOVED from here. It used to sit before the two useMemo hooks below,
+  // causing "Rendered more hooks than during the previous render".
+  // The loading check now lives AFTER every hook, just before the main return.
 
   const convertMessageToHtml = (text) => {
     if (!text) return "";
@@ -896,6 +897,15 @@ const EmailComposer = () => {
   const selectedStaffObjects = staff.filter(s => selectedStaff.includes(Number(s.id)));
 
   const isEditingDraft = !!draftId || !!editingEmail;
+
+  // ============================================================
+  // ⚠️ ALL HOOKS HAVE NOW RUN — safe to do conditional returns
+  // ============================================================
+
+  // Loading state — after ALL hooks have executed
+  if (isLoading) {
+    return <EmailComposerSkeleton />;
+  }
 
   if (doctorsError || staffError || rolesError || templatesError) {
     return (

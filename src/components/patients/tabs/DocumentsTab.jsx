@@ -130,6 +130,10 @@ const DocumentsTab = ({ patient }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const itemsPerPage = 5;
 
+  // ✅ Resolved signed URL for the document currently in the viewer
+  const [viewingFileUrl, setViewingFileUrl] = useState(null);
+  const [isResolvingFileUrl, setIsResolvingFileUrl] = useState(false);
+
   // Get auth user for hospitalId
   const authUser = getAuthUser();
   const hospitalId = authUser?.hospitalId || authUser?.id;
@@ -208,6 +212,58 @@ const DocumentsTab = ({ patient }) => {
       unregisterDocumentEvents();
     };
   }, [patient?.id, hospitalId, refreshDocs]);
+
+  // ========================
+  // RESOLVE SIGNED URL FOR VIEWER
+  // ========================
+  useEffect(() => {
+    let isActive = true;
+
+    const resolveFileUrl = async () => {
+      if (!viewingDocument) {
+        setViewingFileUrl(null);
+        return;
+      }
+
+      const fileKey =
+        viewingDocument.fileKey ||
+        viewingDocument.imageUrl ||
+        viewingDocument.fileUrl;
+
+      if (!fileKey || typeof fileKey !== "string") {
+        setViewingFileUrl(null);
+        return;
+      }
+
+      try {
+        setIsResolvingFileUrl(true);
+
+        const url = await getS3ImageUrl(fileKey);
+
+        if (isActive) {
+          setViewingFileUrl(
+            typeof url === "string" ? url : null
+          );
+        }
+      } catch (error) {
+        console.error("Failed to resolve document URL:", error);
+
+        if (isActive) {
+          setViewingFileUrl(null);
+        }
+      } finally {
+        if (isActive) {
+          setIsResolvingFileUrl(false);
+        }
+      }
+    };
+
+    resolveFileUrl();
+
+    return () => {
+      isActive = false;
+    };
+  }, [viewingDocument]);
 
   // ========================
   // HELPER FUNCTIONS
@@ -597,15 +653,31 @@ const DocumentsTab = ({ patient }) => {
     setShowViewModal(true);
   };
 
-  const handleDownloadDocument = (item) => {
-    const url = getS3ImageUrl(item.fileKey || item.imageUrl);
+  // ✅ FIX: await the async signed-URL resolution before opening
+  const handleDownloadDocument = async (item) => {
+    try {
+      const fileKey =
+        item.fileKey ||
+        item.imageUrl ||
+        item.fileUrl;
 
-    if (!url) {
-      showWarningToast("No file attached to download");
-      return;
+      if (!fileKey || typeof fileKey !== "string") {
+        showWarningToast("No file attached to download");
+        return;
+      }
+
+      const url = await getS3ImageUrl(fileKey);
+
+      if (!url || typeof url !== "string") {
+        showWarningToast("Unable to load document URL");
+        return;
+      }
+
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Download error:", error);
+      showErrorToast("Failed to open document");
     }
-
-    window.open(url, '_blank');
   };
 
   // ========================
@@ -632,6 +704,8 @@ const DocumentsTab = ({ patient }) => {
   const resetViewForm = () => {
     setShowViewModal(false);
     setViewingDocument(null);
+    setViewingFileUrl(null);
+    setIsResolvingFileUrl(false);
   };
 
   // ========================
@@ -869,11 +943,7 @@ const DocumentsTab = ({ patient }) => {
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
                     {isImageFile(editingDocument.fileType || editingDocument.type) ? (
-                      <img 
-                        src={getS3ImageUrl(editingDocument.fileKey)} 
-                        alt="Current" 
-                        className="h-12 w-12 object-cover rounded"
-                      />
+                      <File size={20} className="text-blue-500" />
                     ) : (
                       <File size={20} className="text-blue-500" />
                     )}
@@ -883,14 +953,12 @@ const DocumentsTab = ({ patient }) => {
                         {editingDocument.fileName || "File"} • {editingDocument.fileSize || "N/A"}
                       </p>
                     </div>
-                    <a
-                      href={getS3ImageUrl(editingDocument.fileKey)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => handleDownloadDocument(editingDocument)}
                       className="text-blue-600 hover:text-blue-800 text-xs underline"
                     >
                       View
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1008,8 +1076,20 @@ const DocumentsTab = ({ patient }) => {
             <div className="p-6 overflow-y-auto max-h-[75vh]">
               <div className="flex flex-col items-center">
                 {(() => {
-                  const fileUrl = getS3ImageUrl(viewingDocument.fileKey || viewingDocument.imageUrl);
-                  
+                  // ✅ FIX: use the async-resolved signed URL from state
+                  const fileUrl = viewingFileUrl;
+
+                  if (isResolvingFileUrl) {
+                    return (
+                      <div className="flex items-center justify-center p-12 w-full">
+                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                        <span className="ml-3 text-gray-600">
+                          Loading document...
+                        </span>
+                      </div>
+                    );
+                  }
+
                   if (!fileUrl) {
                     return (
                       <div className="flex flex-col items-center justify-center p-12 bg-gray-100 rounded-lg w-full">
@@ -1053,7 +1133,7 @@ const DocumentsTab = ({ patient }) => {
                     );
                   }
 
-                  const isImg = fileUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                  const isImg = fileUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i) ||
                                viewingDocument.fileType?.startsWith('image/');
 
                   if (isImg) {
