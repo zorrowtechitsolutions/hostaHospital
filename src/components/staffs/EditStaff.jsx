@@ -20,7 +20,10 @@ import {
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
-import { uploadToS3 } from '../../../app/service/S3';
+import {
+  uploadToS3,
+  getS3ImageUrl,
+} from '../../../app/service/S3';
 // ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor
 import { Country, State, City } from '../../data/locationService';
 
@@ -45,16 +48,6 @@ const getHospitalId = () => {
 const getAuthId = () => {
   const authUser = getAuthUser();
   return authUser?.id || authUser?.userId || authUser?._id || null;
-};
-
-// Helper to get full image URL with cache-busting.
-// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getFullImageUrl = (imageKey) => {
-  if (!imageKey) return null;
-
-  // Add a cache-buster so the preview refreshes after edits/uploads.
-  const separator = imageKey.includes('?') ? '&' : '?';
-  return `${imageKey}${separator}t=${Date.now()}`;
 };
 
 // Status Toggle Component
@@ -486,10 +479,17 @@ const EditStaff = () => {
       };
 
       setFormData(newFormData);
+
       if (imageKey) {
-        setPreviewImage(getFullImageUrl(imageKey));
-        setImageRefreshKey(Date.now());
+        getS3ImageUrl(imageKey).then((viewUrl) => {
+          setPreviewImage(viewUrl);
+          setImageLoaded(false);
+          setImageRefreshKey(Date.now());
+        });
+      } else {
+        setPreviewImage(null);
       }
+
       setFormInitialized(true);
     }
   }, [staff, formInitialized, countries]);
@@ -529,22 +529,41 @@ const EditStaff = () => {
     try {
       setUploadProgress(30);
       const uploaded = await uploadToS3(file, formData.imageKey || null, Number(staffId), "staff");
-      setUploadProgress(100);
+
+      setUploadProgress(80);
+
+      // Keep the S3 key in the form/database.
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
+
+      // Ask backend for the actual viewable image URL.
+      const viewUrl = await getS3ImageUrl(uploaded.key);
+
+      if (!viewUrl) {
+        throw new Error("Image uploaded, but could not retrieve its view URL.");
+      }
+
+      setPreviewImage(viewUrl);
+      setImageLoaded(false);
       setImageRefreshKey(Date.now());
+
+      setUploadProgress(100);
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 3000);
     } catch (error) {
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
-      if (formData.profileImage) setPreviewImage(getFullImageUrl(formData.profileImage));
-      else setPreviewImage(null);
+      if (formData.profileImage) {
+        const viewUrl = await getS3ImageUrl(formData.profileImage);
+        setPreviewImage(viewUrl);
+      } else {
+        setPreviewImage(null);
+      }
     }
   };
 

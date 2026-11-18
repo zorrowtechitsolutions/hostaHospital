@@ -116,14 +116,61 @@ const getAuthId = () => {
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// FIX: Enhanced image URL helper with cache-busting.
-// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getS3ImageUrlWithCache = (imageKey) => {
-  if (!imageKey) return null;
+// ✅ Resolve an S3 key to a signed view URL.
+// - Returns the URL immediately for http(s)/data URIs.
+// - Otherwise fetches the signed URL from the backend and stores it in state.
+// - Cached per key via a Map so grid/list/modal don't refetch on every render.
+const signedUrlCache = new Map();
 
-  // Add a cache-buster so newly edited/uploaded images refresh.
-  const separator = imageKey.includes('?') ? '&' : '?';
-  return `${imageKey}${separator}t=${Date.now()}`;
+const useSignedImageUrl = (imageKey) => {
+  const [url, setUrl] = useState(() => {
+    if (!imageKey) return null;
+    if (
+      imageKey.startsWith('http://') ||
+      imageKey.startsWith('https://') ||
+      imageKey.startsWith('data:')
+    ) {
+      return imageKey;
+    }
+    return signedUrlCache.get(imageKey) || null;
+  });
+
+  useEffect(() => {
+    if (!imageKey) {
+      setUrl(null);
+      return;
+    }
+
+    // Already a full URL or local preview — nothing to resolve.
+    if (
+      imageKey.startsWith('http://') ||
+      imageKey.startsWith('https://') ||
+      imageKey.startsWith('data:')
+    ) {
+      setUrl(imageKey);
+      return;
+    }
+
+    // Cache hit
+    const cached = signedUrlCache.get(imageKey);
+    if (cached) {
+      setUrl(cached);
+      return;
+    }
+
+    let cancelled = false;
+    getS3ImageUrl(imageKey).then((signed) => {
+      if (cancelled) return;
+      if (signed) signedUrlCache.set(imageKey, signed);
+      setUrl(signed);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey]);
+
+  return url;
 };
 
 // ✅ Helper to format shift time for display
@@ -181,6 +228,21 @@ const StaffActionMenu = React.memo(({ staff, activeMenu, onView, onEdit, onDelet
     </div>
   );
 });
+
+// ✅ Small helper component for rendering the avatar with a signed URL
+const StaffAvatar = ({ imageKey, name, className = 'w-16 h-16', isBlacklisted = false, textSize = 'text-sm font-medium' }) => {
+  const imageUrl = useSignedImageUrl(imageKey);
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={imageUrl || undefined} alt={name} />
+      <AvatarFallback
+        className={`${textSize} ${isBlacklisted ? 'bg-gray-200 text-gray-500' : ''}`}
+      >
+        {name?.charAt(0)?.toUpperCase() || '?'}
+      </AvatarFallback>
+    </Avatar>
+  );
+};
 
 // ✅ Skeleton Loader Component
 const StaffSkeletonLoader = ({ viewMode = 'grid', itemsPerPage = 10 }) => {
@@ -279,7 +341,6 @@ const Staffs = () => {
   const itemsPerPage = 10;
 
   const [eventsRegistered, setEventsRegistered] = useState(false);
-  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState(null);
 
   const [showPermissionDeniedModal, setShowPermissionDeniedModal] = useState(false);
@@ -344,19 +405,15 @@ const Staffs = () => {
     registerStaffEvents({
       onStaffRegistered: async () => {
         await refetch();
-        setImageRefreshKey(Date.now());
       },
       onStaffUpdated: async () => {
         await refetch();
-        setImageRefreshKey(Date.now());
       },
       onStaffDeleted: async () => {
         await refetch();
-        setImageRefreshKey(Date.now());
       },
       onStaffRecovered: async () => {
         await refetch();
-        setImageRefreshKey(Date.now());
       },
       onStaffPasswordReset: async () => {
         await refetch();
@@ -381,19 +438,15 @@ const Staffs = () => {
         registerStaffEvents({
           onStaffRegistered: async () => {
             await refetch();
-            setImageRefreshKey(Date.now());
           },
           onStaffUpdated: async () => {
             await refetch();
-            setImageRefreshKey(Date.now());
           },
           onStaffDeleted: async () => {
             await refetch();
-            setImageRefreshKey(Date.now());
           },
           onStaffRecovered: async () => {
             await refetch();
-            setImageRefreshKey(Date.now());
           },
           onStaffPasswordReset: async () => {
             await refetch();
@@ -584,7 +637,6 @@ const Staffs = () => {
   const handleRefresh = () => {
     clearAllFilters();
     refetch();
-    setImageRefreshKey(Date.now());
     showSuccessToast("Refreshed staff list", 2000);
   };
 
@@ -687,7 +739,6 @@ const Staffs = () => {
         await deleteStaff(staffToDelete.id).unwrap();
         showSuccessToast(`${staffToDelete.name} has been deleted successfully!`, 2000);
         refetch();
-        setImageRefreshKey(Date.now());
         setShowDeleteModal(false);
         setStaffToDelete(null);
       } catch {
@@ -701,7 +752,6 @@ const Staffs = () => {
       await recoverStaff(staff.id).unwrap();
       showSuccessToast(`${staff.name} recovered successfully!`, 2000);
       refetch();
-      setImageRefreshKey(Date.now());
       setActiveMenu(null);
     } catch {
       showErrorToast('Failed to recover staff member', 3000);
@@ -733,21 +783,17 @@ const Staffs = () => {
   const StaffDetailsModal = ({ staff, onClose }) => {
     if (!staff) return null;
 
-    const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
     const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
 
     return (
       <Modal isOpen={showDetailsModal} onClose={onClose} title="Staff Details" size="lg">
         <div className="flex items-center gap-4 mb-6">
-          <Avatar className="w-16 h-16">
-            <AvatarImage
-              src={imageUrl || undefined}
-              alt={staff.name}
-            />
-            <AvatarFallback className="text-xl font-medium">
-              {staff.name?.charAt(0)?.toUpperCase() || '?'}
-            </AvatarFallback>
-          </Avatar>
+          <StaffAvatar
+            imageKey={staff.imageKey}
+            name={staff.name}
+            className="w-16 h-16"
+            textSize="text-xl font-medium"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-gray-800 text-lg">{staff.name}</h3>
@@ -1097,7 +1143,6 @@ const Staffs = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {displayStaffsData.map((staff) => {
                 const isBlacklisted = staff.isDelete;
-                const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                 const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
 
                 return (
@@ -1131,17 +1176,12 @@ const Staffs = () => {
                     </div>
 
                     <div className="relative mb-3">
-                      <Avatar className="w-16 h-16">
-                        <AvatarImage
-                          src={imageUrl || undefined}
-                          alt={staff.name}
-                        />
-                        <AvatarFallback className={`text-sm font-medium ${
-                          isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
-                        }`}>
-                          {staff.name?.charAt(0)?.toUpperCase() || '?'}
-                        </AvatarFallback>
-                      </Avatar>
+                      <StaffAvatar
+                        imageKey={staff.imageKey}
+                        name={staff.name}
+                        className="w-16 h-16"
+                        isBlacklisted={isBlacklisted}
+                      />
                       <div
                         className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
                           isBlacklisted
@@ -1269,7 +1309,6 @@ const Staffs = () => {
                   </thead>
                   <tbody>
                     {displayStaffsData.map((staff) => {
-                      const imageUrl = getS3ImageUrlWithCache(staff.imageKey);
                       const isBlacklisted = staff.isDelete;
                       const hasShiftTiming = staff.shiftStartTime && staff.shiftEndTime;
 
@@ -1287,17 +1326,12 @@ const Staffs = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="w-8 h-8">
-                                <AvatarImage
-                                  src={imageUrl || undefined}
-                                  alt={staff.name}
-                                />
-                                <AvatarFallback className={`text-sm font-medium ${
-                                  isBlacklisted ? 'bg-gray-200 text-gray-500' : ''
-                                }`}>
-                                  {staff.name?.charAt(0)?.toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
+                              <StaffAvatar
+                                imageKey={staff.imageKey}
+                                name={staff.name}
+                                className="w-8 h-8"
+                                isBlacklisted={isBlacklisted}
+                              />
                               <span
                                 onClick={() => {
                                   if (!checkPermission(PERMISSIONS.VIEW, 'view staff details')) {

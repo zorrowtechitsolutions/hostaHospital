@@ -29,11 +29,81 @@ const PERMISSIONS = {
   DELETE: 4
 };
 
-// ✅ Local wrapper adds cache-busting (?t=timestamp)
-const getS3ImageUrl = (imageKey) => {
-  const url = getS3ImageUrlRaw(imageKey);
-  if (!url) return "";
-  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+// ✅ Module-level cache: S3 key → signed URL
+// Avoids re-fetching the signed URL on every render of every card.
+const signedUrlCache = new Map();
+
+// ✅ DoctorAvatar — resolves the S3 key to a signed view URL asynchronously.
+// IMPORTANT: never append query params (e.g. ?t=timestamp) to a signed URL —
+// it invalidates the signature.
+const DoctorAvatar = ({ imageKey, name, className }) => {
+  const [imageSrc, setImageSrc] = useState(() => {
+    if (!imageKey) return null;
+
+    // Already a full URL / data URI — use as-is.
+    if (
+      imageKey.startsWith("http://") ||
+      imageKey.startsWith("https://") ||
+      imageKey.startsWith("data:")
+    ) {
+      return imageKey;
+    }
+
+    return signedUrlCache.get(imageKey) || null;
+  });
+
+  useEffect(() => {
+    if (!imageKey) {
+      setImageSrc(null);
+      return;
+    }
+
+    // Already a full URL / data URI — no resolution needed.
+    if (
+      imageKey.startsWith("http://") ||
+      imageKey.startsWith("https://") ||
+      imageKey.startsWith("data:")
+    ) {
+      setImageSrc(imageKey);
+      return;
+    }
+
+    // Cache hit
+    const cached = signedUrlCache.get(imageKey);
+    if (cached) {
+      setImageSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadImage = async () => {
+      try {
+        const url = await getS3ImageUrlRaw(imageKey);
+        if (cancelled) return;
+        if (url) signedUrlCache.set(imageKey, url);
+        setImageSrc(url);
+      } catch (error) {
+        console.error("Doctor image loading error:", error);
+        if (!cancelled) setImageSrc(null);
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey]);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={imageSrc || undefined} alt={name || "Doctor"} />
+      <AvatarFallback>
+        {(name?.[0] || "D").toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  );
 };
 
 const getHospitalId = () => {
@@ -932,15 +1002,12 @@ const Doctors = () => {
                       </div>
                     </div>
                     <div className="relative mb-3">
-                      <Avatar className="w-16 h-16">
-                        <AvatarImage
-                          src={doctor.imageUrl}
-                          alt={getDoctorName(doctor)}
-                        />
-                        <AvatarFallback>
-                          {(doctor.firstName?.[0] || "D").toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      {/* ✅ Signed URL resolved asynchronously — no cache-busting */}
+                      <DoctorAvatar
+                        imageKey={doctor.imageUrl}
+                        name={getDoctorName(doctor)}
+                        className="w-16 h-16"
+                      />
                       <div
                         className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
                           isBlacklisted
@@ -1184,15 +1251,12 @@ const Doctors = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="w-8 h-8">
-                                <AvatarImage
-                                  src={getS3ImageUrl(doctor.imageUrl)}
-                                  alt={getDoctorName(doctor)}
-                                />
-                                <AvatarFallback>
-                                  {(doctor.firstName?.[0] || "D").toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
+                              {/* ✅ Signed URL resolved asynchronously — no cache-busting */}
+                              <DoctorAvatar
+                                imageKey={doctor.imageUrl}
+                                name={getDoctorName(doctor)}
+                                className="w-8 h-8"
+                              />
                               <span
                                 onClick={() => {
                                   if (!hasPermission(PERMISSIONS.VIEW)) {
