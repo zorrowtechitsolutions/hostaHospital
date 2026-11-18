@@ -934,7 +934,7 @@ const Doctors = () => {
                     <div className="relative mb-3">
                       <Avatar className="w-16 h-16">
                         <AvatarImage
-                          src={getS3ImageUrl(doctor.imageUrl)}
+                          src={doctor.imageUrl}
                           alt={getDoctorName(doctor)}
                         />
                         <AvatarFallback>
