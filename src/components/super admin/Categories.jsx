@@ -103,20 +103,6 @@ const getInitialColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Get S3 image URL with cache busting
-const getImageUrlWithCache = (imageUrl) => {
-  if (!imageUrl) {
-    return null;
-  }
-  const url = getS3ImageUrl(imageUrl);
-  if (!url) {
-    return null;
-  }
-  const separator = url.includes('?') ? '&' : '?';
-  const finalUrl = `${url}${separator}_t=${Date.now()}`;
-  return finalUrl;
-};
-
 // ================= IMAGE UPLOAD COMPONENT =================
 
 const ImageUpload = ({
@@ -286,6 +272,9 @@ const Categories = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
+  // Resolved image URLs keyed by category ID
+  const [resolvedImages, setResolvedImages] = useState({});
+
   const {
     data: categoriesData,
     isLoading,
@@ -387,6 +376,79 @@ const Categories = () => {
     return category.id || category._id || null;
   };
 
+  console.log('Category imageUrl:', category.imageUrl);
+console.log('Category:', category);
+
+  // ================= ASYNC IMAGE URL HELPER =================
+  const getFullImageUrl = async (imageKey) => {
+    if (!imageKey || typeof imageKey !== 'string') {
+      return null;
+    }
+
+    if (
+      imageKey.startsWith('http://') ||
+      imageKey.startsWith('https://') ||
+      imageKey.startsWith('data:') ||
+      imageKey.startsWith('blob:')
+    ) {
+      return imageKey;
+    }
+
+    return await getS3ImageUrl(imageKey);
+  };
+
+  // ================= ASYNC IMAGE LOADING =================
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCategoryImages = async () => {
+      const imageCategories = categories.filter(
+        (category) =>
+          category.imageUrl &&
+          typeof category.imageUrl === 'string'
+      );
+
+      const imageEntries = await Promise.all(
+        imageCategories.map(async (category) => {
+          const categoryId = getCategoryId(category);
+
+          try {
+            const url = await getFullImageUrl(category.imageUrl);
+
+            if (!url) {
+              return [categoryId, null];
+            }
+
+            const separator = url.includes('?') ? '&' : '?';
+
+            return [
+              categoryId,
+              `${url}${separator}_t=${Date.now()}`,
+            ];
+          } catch (error) {
+            console.error(
+              'Category image loading failed:',
+              category.name,
+              error
+            );
+
+            return [categoryId, null];
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setResolvedImages(Object.fromEntries(imageEntries));
+      }
+    };
+
+    loadCategoryImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categories]);
+
   const handleOpenCreateModal = () => {
     setEditingCategory(null);
     setFormData({ name: '', isActive: true, imageUrl: null });
@@ -396,7 +458,8 @@ const Categories = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (category) => {
+  // ================= ASYNC EDIT MODAL =================
+  const handleOpenEditModal = async (category) => {
     const categoryId = getCategoryId(category);
 
     if (!categoryId) {
@@ -404,21 +467,33 @@ const Categories = () => {
       return;
     }
 
-    const existingImageUrl = category.imageUrl
-      ? getImageUrlWithCache(category.imageUrl)
-      : null;
-
     setEditingCategory(category);
+
     setFormData({
       name: category.name || '',
-      isActive: category.isActive !== undefined ? category.isActive : true,
+      isActive: category.isActive !== undefined
+        ? category.isActive
+        : true,
       imageUrl: category.imageUrl || null,
     });
-    setImagePreview(existingImageUrl);
+
+    setImagePreview(null);
     setImageFile(null);
     setRemoveExistingImage(false);
+
     setIsModalOpen(true);
     setOpenMenuId(null);
+
+    if (category.imageUrl) {
+      try {
+        const url = await getFullImageUrl(category.imageUrl);
+
+        setImagePreview(url);
+      } catch (error) {
+        console.error('Failed to load category preview:', error);
+        setImagePreview(null);
+      }
+    }
   };
 
   const handleCloseModal = () => {
@@ -750,9 +825,7 @@ const Categories = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {paginatedCategories.map((category) => {
               const categoryId = getCategoryId(category);
-              const imageUrl = category.imageUrl
-                ? getImageUrlWithCache(category.imageUrl)
-                : null;
+              const imageUrl = resolvedImages[categoryId] || null;
 
               return (
                 <div
@@ -806,12 +879,11 @@ const Categories = () => {
                           src={imageUrl}
                           alt={category.name}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback: try without cache-busting
-                            const fallbackUrl = getS3ImageUrl(category.imageUrl);
-                            if (fallbackUrl && e.target.src !== fallbackUrl) {
-                              e.target.src = fallbackUrl;
-                            }
+                          onError={() => {
+                            setResolvedImages((prev) => ({
+                              ...prev,
+                              [categoryId]: null,
+                            }));
                           }}
                         />
                       </div>

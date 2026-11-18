@@ -65,6 +65,93 @@ const PERMISSIONS = {
   DELETE: 16
 };
 
+// ✅ Module-level cache: S3 key → signed URL
+// Avoids re-fetching the signed URL on every render of every card.
+const signedUrlCache = new Map(); // key -> { url, expiresAt }
+const URL_TTL_MS = 55 * 60 * 1000; // 55 min (presign TTL minus buffer)
+
+const getCached = (key) => {
+  const hit = signedUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) { signedUrlCache.delete(key); return null; }
+  return hit.url;
+};
+
+const setCached = (key, url) => signedUrlCache.set(key, { url, expiresAt: Date.now() + URL_TTL_MS });
+
+// ✅ PatientAvatar — resolves the S3 key to a signed view URL asynchronously.
+// IMPORTANT: never append query params (e.g. ?t=timestamp) to a signed URL —
+// it invalidates the signature.
+const PatientAvatar = ({ imageKey, name, className }) => {
+  const [imageSrc, setImageSrc] = useState(() => {
+    if (!imageKey) return null;
+
+    // Already a full URL / data URI — use as-is.
+    if (
+      imageKey.startsWith("http://") ||
+      imageKey.startsWith("https://") ||
+      imageKey.startsWith("data:")
+    ) {
+      return imageKey;
+    }
+
+    return getCached(imageKey) || null;
+  });
+
+  useEffect(() => {
+    if (!imageKey) {
+      setImageSrc(null);
+      return;
+    }
+
+    // Already a full URL / data URI — no resolution needed.
+    if (
+      imageKey.startsWith("http://") ||
+      imageKey.startsWith("https://") ||
+      imageKey.startsWith("data:")
+    ) {
+      setImageSrc(imageKey);
+      return;
+    }
+
+    // Cache hit
+    const cached = getCached(imageKey);
+    if (cached) {
+      setImageSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadImage = async () => {
+      try {
+        const url = await getS3ImageUrlRaw(imageKey);
+        if (cancelled) return;
+        if (url) setCached(imageKey, url);
+        setImageSrc(url);
+      } catch (error) {
+        console.error("Patient image loading error:", error);
+        if (!cancelled) setImageSrc(null);
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey]);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={imageSrc || undefined} alt={name || "Patient"} />
+      <AvatarFallback>
+        {(name?.[0] || "P").toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  );
+};
+
 // ✅ Static Status filter options — "All" is a real value (default + reset)
 const STATUS_FILTER_OPTIONS = [
   { value: 'All', label: 'Status' },
@@ -79,13 +166,6 @@ const SELECT_FILTER_CLASS =
   "[&_button]:!h-10 [&_button]:!min-h-10 [&_button]:!w-full " +
   "[&_button]:!whitespace-nowrap [&_button]:!px-3 " +
   "[&_button]:!border-slate-200 [&_button]:!text-sm [&_button]:!text-slate-600";
-
-// ✅ Local wrapper adds cache-busting (?t=timestamp) on top of shared helper
-const getS3ImageUrl = (imageKey) => {
-  const url = getS3ImageUrlRaw(imageKey);
-  if (!url) return "";
-  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-};
 
 // ✅ Enhanced Helper function to format address
 const formatAddress = (address) => {
@@ -1017,15 +1097,12 @@ const Patients = () => {
                     </div>
 
                     <div className="relative mb-3">
-                      <Avatar className="w-16 h-16">
-                        <AvatarImage
-                          src={getS3ImageUrl(patient.imageKey)}
-                          alt={getPatientName(patient)}
-                        />
-                        <AvatarFallback>
-                          {(patient.name?.[0] || "P").toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      {/* ✅ Signed URL resolved asynchronously — no cache-busting */}
+                      <PatientAvatar
+                        imageKey={patient.imageKey}
+                        name={getPatientName(patient)}
+                        className="w-16 h-16"
+                      />
                       <div
                         className={`absolute bottom-0.5 right-0.5 w-3 h-3 border-2 border-white rounded-full ${
                           isBlacklisted
@@ -1161,15 +1238,12 @@ const Patients = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="w-8 h-8">
-                                <AvatarImage
-                                  src={getS3ImageUrl(patient.imageKey)}
-                                  alt={getPatientName(patient)}
-                                />
-                                <AvatarFallback>
-                                  {(patient.name?.[0] || "P").toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
+                              {/* ✅ Signed URL resolved asynchronously — no cache-busting */}
+                              <PatientAvatar
+                                imageKey={patient.imageKey}
+                                name={getPatientName(patient)}
+                                className="w-8 h-8"
+                              />
                               <span
                                 onClick={() => {
                                   if (!hasPermission(PERMISSIONS.VIEW)) {

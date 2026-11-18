@@ -27,13 +27,23 @@ export type ImageType =
 export const getS3ImageUrl = async (
   imageKey?: string | null
 ): Promise<string | null> => {
-  if (!imageKey) return null;
+  // Validate image key before sending any request
+  if (
+    !imageKey ||
+    typeof imageKey !== "string" ||
+    !imageKey.trim()
+  ) {
+    return null;
+  }
+
+  imageKey = imageKey.trim();
 
   // Support existing full URLs and temporary local previews.
   if (
     imageKey.startsWith("http://") ||
     imageKey.startsWith("https://") ||
-    imageKey.startsWith("data:")
+    imageKey.startsWith("data:") ||
+    imageKey.startsWith("blob:")
   ) {
     return imageKey;
   }

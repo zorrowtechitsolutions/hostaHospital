@@ -346,6 +346,10 @@ const LabResultsTab = ({ patient }) => {
   const [editFile, setEditFile] = useState(null);
   const [editFilePreview, setEditFilePreview] = useState(null);
 
+  // ✅ Resolved signed URL for the current file in the EDIT modal preview
+  const [currentFileUrl, setCurrentFileUrl] = useState(null);
+  const [isResolvingCurrentFile, setIsResolvingCurrentFile] = useState(false);
+
   const itemsPerPage = 5;
 
   const authUser = getAuthUser();
@@ -538,13 +542,10 @@ const LabResultsTab = ({ patient }) => {
 
       setUploadProgress(30);
 
-      const timestamp = Date.now();
-      const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileKey = `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
-
+      // ✅ FIX: pass null so the backend generates a valid S3 key (POST presign)
       const s3Result = await uploadToS3(
         selectedFile,
-        fileKey,
+        null,
         labResultId,
         "labresults"
       );
@@ -605,8 +606,47 @@ const LabResultsTab = ({ patient }) => {
     setEditLabName(labResult.labName || "");
     setEditFile(null);
     setEditFilePreview(null);
+    setCurrentFileUrl(null);
     setShowEditModal(true);
   };
+
+  // ✅ Resolve the current file's signed URL for the EDIT modal preview
+  useEffect(() => {
+    let isActive = true;
+
+    const resolveCurrentFile = async () => {
+      const fileKey =
+        editingLabResult?.fileKey ||
+        editingLabResult?.imageUrl ||
+        editingLabResult?.fileUrl;
+
+      if (!fileKey || typeof fileKey !== "string") {
+        setCurrentFileUrl(null);
+        return;
+      }
+
+      try {
+        setIsResolvingCurrentFile(true);
+
+        const url = await getS3ImageUrl(fileKey);
+
+        if (isActive) {
+          setCurrentFileUrl(typeof url === "string" ? url : null);
+        }
+      } catch (error) {
+        console.error("Failed to resolve lab result file URL:", error);
+        if (isActive) setCurrentFileUrl(null);
+      } finally {
+        if (isActive) setIsResolvingCurrentFile(false);
+      }
+    };
+
+    resolveCurrentFile();
+
+    return () => {
+      isActive = false;
+    };
+  }, [editingLabResult]);
 
   const handleEditFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -719,21 +759,12 @@ const LabResultsTab = ({ patient }) => {
       };
 
       if (editFile) {
-        const timestamp = Date.now();
-
-        const safeFileName = editFile.name.replace(
-          /[^a-zA-Z0-9.-]/g,
-          "_"
-        );
-
-        const fileKey =
-          `lab-results/${labResultId}/${timestamp}_${safeFileName}`;
-
         setUploadProgress(20);
 
+        // ✅ FIX: pass null so the backend generates a valid S3 key (POST presign)
         const s3Result = await uploadToS3(
           editFile,
-          fileKey,
+          null,
           labResultId,
           "labresults"
         );
@@ -889,13 +920,31 @@ const LabResultsTab = ({ patient }) => {
     setShowLabModal(true);
   };
 
-  const handleDownloadFile = (item) => {
-    const url = getS3ImageUrl(item.fileKey || item.imageUrl);
-    if (!url) {
-      showWarningToast("No file attached to download");
-      return;
+  // ✅ FIX: await the async signed-URL resolution before opening
+  const handleDownloadFile = async (item) => {
+    try {
+      const fileKey =
+        item.fileKey ||
+        item.imageUrl ||
+        item.fileUrl;
+
+      if (!fileKey || typeof fileKey !== "string") {
+        showWarningToast("No file attached to download");
+        return;
+      }
+
+      const url = await getS3ImageUrl(fileKey);
+
+      if (!url || typeof url !== "string") {
+        showWarningToast("Unable to load file URL");
+        return;
+      }
+
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Download error:", error);
+      showErrorToast("Failed to open file");
     }
-    window.open(url, '_blank');
   };
 
   // ========================
@@ -1034,6 +1083,8 @@ const LabResultsTab = ({ patient }) => {
     setEditLabName("");
     setEditFile(null);
     setEditFilePreview(null);
+    setCurrentFileUrl(null);
+    setIsResolvingCurrentFile(false);
     setUploadProgress(0);
   };
 
@@ -1190,7 +1241,6 @@ const LabResultsTab = ({ patient }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
                 </label>
-                {/* ✅ Replaced native  with CustomSelect (ADD modal) */}
                 <CustomSelect
                   hideLabel
                   value={status}
@@ -1377,7 +1427,6 @@ const LabResultsTab = ({ patient }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status <span className="text-red-500">*</span>
                 </label>
-                {/* ✅ Replaced native  with CustomSelect (EDIT modal) */}
                 <CustomSelect
                   hideLabel
                   value={editStatus}
@@ -1392,9 +1441,13 @@ const LabResultsTab = ({ patient }) => {
               {editingLabResult.fileKey && (
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-3">
-                    {isImageFile(editingLabResult.fileType || editingLabResult.type) ? (
+                    {isResolvingCurrentFile ? (
+                      <div className="h-12 w-12 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-[#1C62A0] border-t-transparent"></div>
+                      </div>
+                    ) : isImageFile(editingLabResult.fileType || editingLabResult.type) && currentFileUrl ? (
                       <img
-                        src={getS3ImageUrl(editingLabResult.fileKey)}
+                        src={currentFileUrl}
                         alt="Current"
                         className="h-12 w-12 object-cover rounded"
                       />
@@ -1409,14 +1462,13 @@ const LabResultsTab = ({ patient }) => {
                         {editingLabResult.fileName || "File"} • {editingLabResult.fileSize || "N/A"}
                       </p>
                     </div>
-                    <a
-                      href={getS3ImageUrl(editingLabResult.fileKey)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadFile(editingLabResult)}
                       className="text-blue-600 hover:text-blue-800 text-xs underline"
                     >
                       View
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
