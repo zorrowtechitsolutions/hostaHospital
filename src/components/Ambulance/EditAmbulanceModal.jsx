@@ -1,7 +1,8 @@
 // src/components/Ambulance/EditAmbulanceModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Input, Button, CustomSelect } from '../ui';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor
+import { Country, State, City } from '../../data/locationService';
 import { showErrorToast } from '../ui/Toast';
 
 const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance }) => {
@@ -25,9 +26,16 @@ const EditAmbulanceModal = ({ isOpen, onClose, onSave, ambulance }) => {
   const [stateCode, setStateCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(countryCode);
-  const cities = City.getCitiesOfState(countryCode, stateCode);
+  // ✅ Memoized location lookups from local JSON
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(countryCode),
+    [countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(countryCode, stateCode),
+    [countryCode, stateCode]
+  );
 
   // Populate form when ambulance data changes
   useEffect(() => {

@@ -21,7 +21,8 @@ import { useAssignPermissionsMutation } from '../../../app/service/rolePermissio
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor
+import { Country, State, City } from '../../data/locationService';
 
 // ✅ Options for the Gender CustomSelect — capitalized values (matches this file's convention)
 const GENDER_SELECT_OPTIONS = ['male', 'female', 'other'].map(g => ({
@@ -373,6 +374,7 @@ const EditStaff = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  // ✅ Memoized location lookups from local JSON
   const countries = useMemo(() => Country.getAllCountries(), []);
   const states = useMemo(() => State.getStatesOfCountry(formData.countryCode), [formData.countryCode]);
   const cities = useMemo(() => City.getCitiesOfState(formData.countryCode, formData.stateCode), [formData.countryCode, formData.stateCode]);

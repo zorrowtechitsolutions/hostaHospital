@@ -1,5 +1,5 @@
 // src/components/Doctor/AddDoctors.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User, Mail, Phone, Calendar, MapPin, Lock, Image,
@@ -23,7 +23,8 @@ import { useAddNewDoctorMutation, useGetSpecialitiesQuery } from "../../../app/s
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getHospitalId, getAuthUser } from '../../utils/auth';
-import { Country, State, City } from 'country-state-city';
+// ✅ Use the same local JSON location service as AddStaff
+import { Country, State, City } from '../../data/locationService';
 import { uploadToS3 } from '../../../app/service/S3';
 
 // ============ SKELETON LOADING COMPONENTS ============
@@ -573,9 +574,16 @@ const AddDoctor = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState('');
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  // ✅ Use the local JSON service — memoized like AddStaff
+  const countries = useMemo(() => Country.getAllCountries(), []);
+  const states = useMemo(
+    () => State.getStatesOfCountry(formData.countryCode),
+    [formData.countryCode]
+  );
+  const cities = useMemo(
+    () => City.getCitiesOfState(formData.countryCode, formData.stateCode),
+    [formData.countryCode, formData.stateCode]
+  );
 
   const updateScheduleForDay = (day, newSchedule) => {
     setFormData(prev => ({
