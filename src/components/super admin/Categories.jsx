@@ -376,8 +376,6 @@ const Categories = () => {
     return category.id || category._id || null;
   };
 
-  console.log('Category imageUrl:', category.imageUrl);
-console.log('Category:', category);
 
   // ================= ASYNC IMAGE URL HELPER =================
   const getFullImageUrl = async (imageKey) => {
@@ -824,10 +822,13 @@ console.log('Category:', category);
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {paginatedCategories.map((category) => {
-              const categoryId = getCategoryId(category);
-              const imageUrl = resolvedImages[categoryId] || null;
+  console.log("Category imageUrl:", category.imageUrl);
+  console.log("Category:", category);
 
-              return (
+  const categoryId = getCategoryId(category);
+  const imageUrl = resolvedImages[categoryId] || null;
+
+  return (
                 <div
                   key={categoryId || Math.random().toString()}
                   className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative"
