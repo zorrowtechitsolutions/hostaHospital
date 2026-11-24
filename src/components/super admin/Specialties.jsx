@@ -25,7 +25,10 @@ import {
   useDeleteSpecialityMutation,
 } from '../../../app/service/speciality';
 import { socket } from '../../socket/socket';
-import { registerSpecialityEvents, unregisterSpecialityEvents } from '../../socket/specialityEvents';
+import {
+  registerSpecialityEvents,
+  unregisterSpecialityEvents,
+} from '../../socket/specialityEvents';
 import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../app/service/S3';
 
 // ================= HELPER FUNCTIONS =================
@@ -35,31 +38,40 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
   });
 };
 
-const toTitleCase = (text = "") => {
-  if (!text) return "";
+const toTitleCase = (text = '') => {
+  if (!text) return '';
   return text.replace(/\w\S*/g, (word) =>
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   );
 };
 
-const getImageUrlWithCache = (imageUrl) => {
-  if (!imageUrl) return null;
-  const url = getS3ImageUrl(imageUrl);
-  if (!url) return null;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+// ✅ Replaces getImageUrlWithCache — no cache-busting on signed URLs
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey || typeof imageKey !== 'string') return null;
+
+  // Already a complete URL (or data/blob) — return as-is
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  const url = await getS3ImageUrl(imageKey);
+  return url || null;
 };
 
-// ✅ Added helper for the colored initial circle
-const getInitialColor = (name = "") => {
+const getInitialColor = (name = '') => {
   const colors = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
     '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA',
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -75,9 +87,9 @@ const ImageUpload = ({
   onImageChange,
   onImageRemove,
   isUploading,
-  label = "Speciality Image",
+  label = 'Speciality Image',
   disabled = false,
-  required = false
+  required = false,
 }) => {
   const fileInputRef = useRef(null);
 
@@ -104,7 +116,9 @@ const ImageUpload = ({
     <div className="space-y-2">
       <label className="block text-sm font-medium text-gray-700">
         {label} {required && <span className="text-red-500">*</span>}
-        {!required && <span className="text-gray-400 text-xs">(Optional)</span>}
+        {!required && (
+          <span className="text-gray-400 text-xs">(Optional)</span>
+        )}
       </label>
 
       <div className="flex items-start gap-4">
@@ -115,10 +129,14 @@ const ImageUpload = ({
                 src={imageUrl}
                 alt="Speciality"
                 className="w-full h-full object-cover rounded-lg border border-gray-200"
-                onError={(e) => {
-                  const fallbackUrl = getS3ImageUrl(imageUrl);
-                  if (fallbackUrl && e.target.src !== fallbackUrl) {
-                    e.target.src = fallbackUrl;
+                onError={async (e) => {
+                  // Fallback: try the raw key once
+                  if (imageUrl && !e.target.dataset.fallback) {
+                    e.target.dataset.fallback = 'true';
+                    const fallback = await getS3ImageUrl(imageUrl);
+                    if (fallback && e.target.src !== fallback) {
+                      e.target.src = fallback;
+                    }
                   }
                 }}
               />
@@ -167,7 +185,9 @@ const ImageUpload = ({
               </span>
             )}
           </button>
-          <p className="mt-1 text-xs text-gray-500">PNG, JPG, WEBP (Max 5MB)</p>
+          <p className="mt-1 text-xs text-gray-500">
+            PNG, JPG, WEBP (Max 5MB)
+          </p>
         </div>
       </div>
     </div>
@@ -177,20 +197,45 @@ const ImageUpload = ({
 // ================= MODAL COMPONENTS =================
 
 const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
+  const [imageUrl, setImageUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!speciality?.imageUrl) {
+        setImageUrl(null);
+        return;
+      }
+      const url = await getFullImageUrl(speciality.imageUrl);
+      if (!cancelled) setImageUrl(url);
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [speciality]);
+
   if (!speciality) return null;
 
-  const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Speciality Details" size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Speciality Details"
+      size="md"
+    >
       <div className="space-y-4">
         <div className="flex justify-center mb-4">
           {imageUrl ? (
             <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-green-200">
-              <img src={imageUrl} alt={speciality.name} className="w-full h-full object-cover" />
+              <img
+                src={imageUrl}
+                alt={speciality.name}
+                className="w-full h-full object-cover"
+              />
             </div>
           ) : (
-            <div 
+            <div
               className="w-32 h-32 rounded-full flex items-center justify-center text-5xl font-bold text-white border-2 border-gray-200"
               style={{ backgroundColor: getInitialColor(speciality.name) }}
             >
@@ -201,37 +246,61 @@ const ViewSpecialityModal = ({ isOpen, onClose, speciality }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500">Speciality ID</label>
-            <p className="text-sm font-semibold text-gray-800">#{speciality.id}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              Speciality ID
+            </label>
+            <p className="text-sm font-semibold text-gray-800">
+              #{speciality.id}
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Status</label>
+            <label className="block text-xs font-medium text-gray-500">
+              Status
+            </label>
             <Badge variant={speciality.isActive ? 'success' : 'danger'}>
               {speciality.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-500">Speciality Name</label>
-            <p className="text-sm text-gray-800 font-medium">{toTitleCase(speciality.name)}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              Speciality Name
+            </label>
+            <p className="text-sm text-gray-800 font-medium">
+              {toTitleCase(speciality.name)}
+            </p>
           </div>
           {speciality.imageUrl && (
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500">Image URL</label>
-              <p className="text-sm text-gray-600 truncate">{imageUrl}</p>
+              <label className="block text-xs font-medium text-gray-500">
+                Image URL
+              </label>
+              <p className="text-sm text-gray-600 truncate">
+                {speciality.imageUrl}
+              </p>
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-gray-500">Created At</label>
-            <p className="text-sm text-gray-600">{formatDate(speciality.createdAt)}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              Created At
+            </label>
+            <p className="text-sm text-gray-600">
+              {formatDate(speciality.createdAt)}
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Last Updated</label>
-            <p className="text-sm text-gray-600">{formatDate(speciality.updatedAt)}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              Last Updated
+            </label>
+            <p className="text-sm text-gray-600">
+              {formatDate(speciality.updatedAt)}
+            </p>
           </div>
         </div>
 
         <div className="flex gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
+          <Button variant="outline" onClick={onClose} fullWidth>
+            Close
+          </Button>
         </div>
       </div>
     </Modal>
@@ -278,7 +347,12 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       let imageKey = null;
       if (imageFile) {
         setUploadProgress(30);
-        const uploadResult = await uploadToS3(imageFile, null, null, "speciality");
+        const uploadResult = await uploadToS3(
+          imageFile,
+          null,
+          null,
+          'speciality'
+        );
         imageKey = uploadResult.key;
         setUploadProgress(80);
       }
@@ -286,7 +360,7 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
       const specialityData = {
         name: formData.name.trim(),
         isActive: formData.isActive,
-        imageUrl: imageKey
+        imageUrl: imageKey,
       };
 
       await onSave(specialityData);
@@ -302,14 +376,21 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Speciality" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add New Speciality"
+      size="lg"
+    >
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
             <ImageIcon className="w-5 h-5 text-green-600" />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-gray-800">Add New Speciality</h3>
+            <h3 className="text-md font-semibold text-gray-800">
+              Add New Speciality
+            </h3>
             <p className="text-xs text-gray-500">Enter speciality details</p>
           </div>
         </div>
@@ -328,7 +409,9 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
           label="Speciality Name *"
           name="name"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, name: e.target.value })
+          }
           placeholder="Enter speciality name (e.g., Cardiology)"
           required
           disabled={isUploading || isSaving}
@@ -350,7 +433,12 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
         )}
 
         <div className="flex gap-3 pt-4 border-t">
-          <Button variant="outline" onClick={onClose} fullWidth disabled={isUploading || isSaving}>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            fullWidth
+            disabled={isUploading || isSaving}
+          >
             Cancel
           </Button>
           <Button
@@ -360,7 +448,11 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
             loading={isSaving || isUploading}
             fullWidth
           >
-            {isUploading ? 'Uploading Image...' : isSaving ? 'Adding...' : 'Add Speciality'}
+            {isUploading
+              ? 'Uploading Image...'
+              : isSaving
+              ? 'Adding...'
+              : 'Add Speciality'}
           </Button>
         </div>
       </div>
@@ -368,8 +460,18 @@ const AddSpecialityModal = ({ isOpen, onClose, onSave, isSaving }) => {
   );
 };
 
-const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) => {
-  const [formData, setFormData] = useState({ name: '', isActive: true, imageUrl: null });
+const EditSpecialityModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  speciality,
+  isSaving,
+}) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    isActive: true,
+    imageUrl: null,
+  });
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -377,19 +479,34 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
-    if (speciality && isOpen) {
-      const existingImageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
-      setFormData({
-        name: speciality.name || '',
-        isActive: speciality.isActive !== undefined ? speciality.isActive : true,
-        imageUrl: speciality.imageUrl || null
-      });
-      setImagePreview(existingImageUrl);
-      setRemoveExistingImage(false);
-      setImageFile(null);
-      setUploadProgress(0);
-      setIsUploading(false);
-    }
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      if (speciality && isOpen) {
+        setFormData({
+          name: speciality.name || '',
+          isActive:
+            speciality.isActive !== undefined ? speciality.isActive : true,
+          imageUrl: speciality.imageUrl || null,
+        });
+        setRemoveExistingImage(false);
+        setImageFile(null);
+        setUploadProgress(0);
+        setIsUploading(false);
+
+        if (speciality.imageUrl) {
+          const url = await getFullImageUrl(speciality.imageUrl);
+          if (!cancelled) setImagePreview(url);
+        } else {
+          setImagePreview(null);
+        }
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
   }, [speciality, isOpen]);
 
   const handleImageChange = (file) => {
@@ -423,7 +540,7 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
 
       if (removeExistingImage && formData.imageUrl) {
         setUploadProgress(20);
-        await deleteFromS3(formData.imageUrl, specialityId, "speciality");
+        await deleteFromS3(formData.imageUrl, specialityId, 'speciality');
         finalImageUrl = null;
         setUploadProgress(40);
       }
@@ -431,10 +548,15 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       if (imageFile) {
         setUploadProgress(50);
         if (formData.imageUrl && !removeExistingImage) {
-          await deleteFromS3(formData.imageUrl, specialityId, "speciality");
+          await deleteFromS3(formData.imageUrl, specialityId, 'speciality');
           setUploadProgress(60);
         }
-        const uploadResult = await uploadToS3(imageFile, null, specialityId, "speciality");
+        const uploadResult = await uploadToS3(
+          imageFile,
+          null,
+          specialityId,
+          'speciality'
+        );
         finalImageUrl = uploadResult.key;
         setUploadProgress(80);
       }
@@ -442,7 +564,7 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
       const updatedData = {
         name: formData.name.trim(),
         isActive: formData.isActive,
-        imageUrl: finalImageUrl
+        imageUrl: finalImageUrl,
       };
 
       await onSave({ ...speciality, ...updatedData });
@@ -459,15 +581,24 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit Speciality" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Edit Speciality"
+      size="lg"
+    >
       <div className="space-y-4 max-h-[70vh] overflow-y-auto px-2">
         <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
             <ImageIcon className="w-5 h-5 text-green-600" />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-gray-800">Edit Speciality</h3>
-            <p className="text-xs text-gray-500">Update speciality details</p>
+            <h3 className="text-md font-semibold text-gray-800">
+              Edit Speciality
+            </h3>
+            <p className="text-xs text-gray-500">
+              Update speciality details
+            </p>
           </div>
         </div>
 
@@ -485,7 +616,9 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
           label="Speciality Name *"
           name="name"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, name: e.target.value })
+          }
           placeholder="Enter speciality name"
           required
           disabled={isUploading || isSaving}
@@ -507,7 +640,12 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
         )}
 
         <div className="flex gap-3 pt-4 border-t">
-          <Button variant="outline" onClick={onClose} fullWidth disabled={isUploading || isSaving}>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            fullWidth
+            disabled={isUploading || isSaving}
+          >
             Cancel
           </Button>
           <Button
@@ -517,7 +655,11 @@ const EditSpecialityModal = ({ isOpen, onClose, onSave, speciality, isSaving }) 
             loading={isSaving || isUploading}
             fullWidth
           >
-            {isUploading ? 'Uploading Image...' : isSaving ? 'Updating...' : 'Update Speciality'}
+            {isUploading
+              ? 'Uploading Image...'
+              : isSaving
+              ? 'Updating...'
+              : 'Update Speciality'}
           </Button>
         </div>
       </div>
@@ -547,7 +689,10 @@ const SpecialitiesSkeleton = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="bg-white rounded-3xl border border-gray-100 p-6 animate-pulse relative">
+          <div
+            key={i}
+            className="bg-white rounded-3xl border border-gray-100 p-6 animate-pulse relative"
+          >
             <div className="w-8 h-8 bg-gray-200 rounded-lg absolute top-3 right-3"></div>
             <div className="flex flex-col items-center gap-3 mt-4">
               <div className="w-32 h-32 bg-gray-200 rounded-full"></div>
@@ -578,7 +723,10 @@ const Specialties = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedSpeciality, setSelectedSpeciality] = useState(null);
 
-  const [eventsRegistered, setEventsRegistered] = useState(false);
+  // Async resolved S3 image URLs keyed by speciality ID
+  const [resolvedImages, setResolvedImages] = useState({});
+
+  const eventsRegisteredRef = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -592,71 +740,116 @@ const Specialties = () => {
     data: specialitiesResponse,
     isLoading: loading,
     refetch,
-    isFetching
+    isFetching,
   } = useGetSpecialitiesQuery({
     name: debouncedSearchTerm || undefined,
     page: currentPage,
-    limit: itemsPerPage
+    limit: itemsPerPage,
   });
 
-  const [registerSpeciality, { isLoading: isAdding }] = useRegisterSpecialityMutation();
-  const [updateSpeciality, { isLoading: isUpdating }] = useUpdateSpecialityMutation();
-  const [deleteSpeciality, { isLoading: isDeleting }] = useDeleteSpecialityMutation();
+  const [registerSpeciality, { isLoading: isAdding }] =
+    useRegisterSpecialityMutation();
+  const [updateSpeciality, { isLoading: isUpdating }] =
+    useUpdateSpecialityMutation();
+  const [deleteSpeciality, { isLoading: isDeleting }] =
+    useDeleteSpecialityMutation();
 
-  const specialities = specialitiesResponse?.data || specialitiesResponse?.results || specialitiesResponse?.items || [];
-  const totalItems = specialitiesResponse?.count || specialitiesResponse?.total || specialitiesResponse?.totalCount || specialities.length;
-  const totalPages = specialitiesResponse?.totalPages || specialitiesResponse?.pages || Math.ceil(totalItems / itemsPerPage) || 1;
+  const specialities =
+    specialitiesResponse?.data ||
+    specialitiesResponse?.results ||
+    specialitiesResponse?.items ||
+    [];
+  const totalItems =
+    specialitiesResponse?.count ||
+    specialitiesResponse?.total ||
+    specialitiesResponse?.totalCount ||
+    specialities.length;
+  const totalPages =
+    specialitiesResponse?.totalPages ||
+    specialitiesResponse?.pages ||
+    Math.ceil(totalItems / itemsPerPage) ||
+    1;
+
+  // ================= SOCKET REGISTRATION =================
+
+  const buildSocketHandlers = () => ({
+    onSpecialityRegistered: () => refetch(),
+    onSpecialityUpdated: () => refetch(),
+    onSpecialityDeleted: () => refetch(),
+  });
 
   useEffect(() => {
-    registerSpecialityEvents({
-      onSpecialityRegistered: (data) => {
-        refetch();
-      },
-      onSpecialityUpdated: (data) => {
-        refetch();
-      },
-      onSpecialityDeleted: () => {
-        refetch();
-      }
-    });
-    setEventsRegistered(true);
+    registerSpecialityEvents(buildSocketHandlers());
+    eventsRegisteredRef.current = true;
+
     return () => {
       unregisterSpecialityEvents();
-      setEventsRegistered(false);
+      eventsRegisteredRef.current = false;
     };
   }, [refetch]);
 
   useEffect(() => {
     const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerSpecialityEvents({
-          onSpecialityRegistered: (data) => {
-            refetch();
-          },
-          onSpecialityUpdated: (data) => {
-            refetch();
-          },
-          onSpecialityDeleted: () => {
-            refetch();
-          }
-        });
-        setEventsRegistered(true);
+      if (!eventsRegisteredRef.current) {
+        registerSpecialityEvents(buildSocketHandlers());
+        eventsRegisteredRef.current = true;
       }
     };
-    socket.on("connect", handleConnect);
+    socket.on('connect', handleConnect);
     return () => {
-      socket.off("connect", handleConnect);
+      socket.off('connect', handleConnect);
     };
-  }, [refetch, eventsRegistered]);
+  }, [refetch]);
+
+  // ================= ASYNC IMAGE LOADING =================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSpecialityImages = async () => {
+      const imageItems = specialities.filter(
+        (s) => s.imageUrl && typeof s.imageUrl === 'string'
+      );
+
+      const entries = await Promise.all(
+        imageItems.map(async (s) => {
+          try {
+            const url = await getFullImageUrl(s.imageUrl);
+            return [s.id, url];
+          } catch (error) {
+            console.error(
+              'Speciality image loading failed:',
+              s.name,
+              error
+            );
+            return [s.id, null];
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setResolvedImages(Object.fromEntries(entries));
+      }
+    };
+
+    loadSpecialityImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [specialities]);
 
   // Click outside to close 3-dot menu
   useEffect(() => {
     const handleClickOutside = (event) => {
-      const menuContainer = event.target.closest('.speciality-menu-container');
+      const menuContainer = event.target.closest(
+        '.speciality-menu-container'
+      );
       if (!menuContainer) setOpenMenuId(null);
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () =>
+      document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleSpecialtyClick = (speciality) => {
@@ -671,21 +864,24 @@ const Specialties = () => {
   const handleAddSpeciality = async (newSpeciality) => {
     try {
       const response = await registerSpeciality(newSpeciality).unwrap();
-      socket.emit("speciality_event", {
-        event: "SPECIALITY_REGISTERED",
+      socket.emit('speciality_event', {
+        event: 'SPECIALITY_REGISTERED',
         data: {
           specialityId: response.data?.id || response.id,
           name: newSpeciality.name,
           isActive: newSpeciality.isActive,
           imageUrl: newSpeciality.imageUrl,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
       showSuccessToast('Speciality created successfully!', 3000);
       refetch();
       setShowAddModal(false);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to create speciality', 3000);
+      showErrorToast(
+        error?.data?.message || 'Failed to create speciality',
+        3000
+      );
     }
   };
 
@@ -693,18 +889,18 @@ const Specialties = () => {
     try {
       await updateSpeciality({
         id: updatedSpeciality.id,
-        data: updatedSpeciality
+        data: updatedSpeciality,
       }).unwrap();
 
-      socket.emit("speciality_event", {
-        event: "SPECIALITY_UPDATED",
+      socket.emit('speciality_event', {
+        event: 'SPECIALITY_UPDATED',
         data: {
           specialityId: updatedSpeciality.id,
           name: updatedSpeciality.name,
           isActive: updatedSpeciality.isActive,
           imageUrl: updatedSpeciality.imageUrl,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
       showSuccessToast('Speciality updated successfully!', 3000);
@@ -712,7 +908,10 @@ const Specialties = () => {
       setShowEditModal(false);
       setSelectedSpeciality(null);
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to update speciality', 3000);
+      showErrorToast(
+        error?.data?.message || 'Failed to update speciality',
+        3000
+      );
     }
   };
 
@@ -722,24 +921,32 @@ const Specialties = () => {
       const newStatus = !speciality.isActive;
       await updateSpeciality({
         id: speciality.id,
-        data: { isActive: newStatus }
+        data: { isActive: newStatus },
       }).unwrap();
 
-      socket.emit("speciality_event", {
-        event: "SPECIALITY_UPDATED",
+      socket.emit('speciality_event', {
+        event: 'SPECIALITY_UPDATED',
         data: {
           specialityId: speciality.id,
           name: speciality.name,
           isActive: newStatus,
           statusChanged: true,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
-      showSuccessToast(`Speciality ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
+      showSuccessToast(
+        `Speciality ${
+          newStatus ? 'activated' : 'deactivated'
+        } successfully!`,
+        3000
+      );
       refetch();
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to update speciality status', 3000);
+      showErrorToast(
+        error?.data?.message || 'Failed to update speciality status',
+        3000
+      );
     }
   };
 
@@ -747,17 +954,21 @@ const Specialties = () => {
     if (selectedSpeciality) {
       try {
         if (selectedSpeciality.imageUrl) {
-          await deleteFromS3(selectedSpeciality.imageUrl, selectedSpeciality.id, "speciality");
+          await deleteFromS3(
+            selectedSpeciality.imageUrl,
+            selectedSpeciality.id,
+            'speciality'
+          );
         }
         await deleteSpeciality(selectedSpeciality.id).unwrap();
 
-        socket.emit("speciality_event", {
-          event: "SPECIALITY_DELETED",
+        socket.emit('speciality_event', {
+          event: 'SPECIALITY_DELETED',
           data: {
             specialityId: selectedSpeciality.id,
             name: selectedSpeciality.name,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
 
         showSuccessToast('Speciality deleted successfully!', 3000);
@@ -765,36 +976,46 @@ const Specialties = () => {
         setShowDeleteModal(false);
         setSelectedSpeciality(null);
       } catch (error) {
-        showErrorToast(error?.data?.message || 'Failed to delete speciality', 3000);
+        showErrorToast(
+          error?.data?.message || 'Failed to delete speciality',
+          3000
+        );
       }
     }
   };
 
   const handleRefresh = () => {
-    setSearchTerm("");
-    setDebouncedSearchTerm("");
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
     setCurrentPage(1);
     refetch();
-    showSuccessToast("Specialities refreshed", 2000);
+    showSuccessToast('Specialities refreshed', 2000);
   };
 
   const handleExport = () => {
-    const exportData = specialities.map(speciality => ({
-      'ID': speciality.id,
-      'Name': speciality.name,
+    const exportData = specialities.map((speciality) => ({
+      ID: speciality.id,
+      Name: speciality.name,
       'Has Image': speciality.imageUrl ? 'Yes' : 'No',
-      'Status': speciality.isActive ? 'Active' : 'Inactive',
+      Status: speciality.isActive ? 'Active' : 'Inactive',
       'Created At': speciality.createdAt,
-      'Updated At': speciality.updatedAt
+      'Updated At': speciality.updatedAt,
     }));
     const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `specialities_export_${new Date().toISOString().split('T')[0]}.json`;
+    const dataUri =
+      'data:application/json;charset=utf-8,' +
+      encodeURIComponent(dataStr);
+    const exportFileDefaultName = `specialities_export_${
+      new Date().toISOString().split('T')[0]
+    }.json`;
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} speciality records`, 2000);
+    showSuccessToast(
+      `Exported ${exportData.length} speciality records`,
+      2000
+    );
   };
 
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
@@ -828,8 +1049,12 @@ const Specialties = () => {
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Specialities Management</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage medical specialities</p>
+        <h1 className="text-2xl font-bold text-gray-800">
+          Specialities Management
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage medical specialities
+        </p>
         {totalItems > 0 && (
           <p className="text-sm text-gray-500 mt-1">
             Showing {specialities.length} of {totalItems} specialities
@@ -875,9 +1100,15 @@ const Specialties = () => {
             className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
             disabled={isFetching}
           >
-            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+            <RefreshCcw
+              size={16}
+              className={isFetching ? 'animate-spin' : ''}
+            />
           </button>
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          <button
+            onClick={handleExport}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+          >
             <Download size={16} />
           </button>
           <button
@@ -894,7 +1125,8 @@ const Specialties = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {specialities.map((speciality) => {
-              const imageUrl = speciality.imageUrl ? getImageUrlWithCache(speciality.imageUrl) : null;
+              const imageUrl =
+                resolvedImages[speciality.id] || null;
 
               return (
                 <div
@@ -912,7 +1144,10 @@ const Specialties = () => {
                       className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                       title="More options"
                     >
-                      <MoreVertical size={18} className="text-gray-600" />
+                      <MoreVertical
+                        size={18}
+                        className="text-gray-600"
+                      />
                     </button>
 
                     {openMenuId === speciality.id && (
@@ -953,7 +1188,11 @@ const Specialties = () => {
                           <span className="w-4 h-4 flex items-center justify-center text-xs font-bold text-gray-600">
                             {speciality.isActive ? '×' : '✓'}
                           </span>
-                          <span>{speciality.isActive ? 'Deactivate' : 'Activate'}</span>
+                          <span>
+                            {speciality.isActive
+                              ? 'Deactivate'
+                              : 'Activate'}
+                          </span>
                         </button>
 
                         <div className="border-t border-gray-100 my-1"></div>
@@ -975,27 +1214,33 @@ const Specialties = () => {
                   </div>
 
                   <div className="flex flex-col items-center mt-4">
-                    {/* Image or Initial Fallback (Exactly like Categories) */}
+                    {/* Image or Initial Fallback */}
                     {imageUrl ? (
                       <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 mb-4">
                         <img
                           src={imageUrl}
                           alt={speciality.name}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const fallbackUrl = getS3ImageUrl(speciality.imageUrl);
-                            if (fallbackUrl && e.target.src !== fallbackUrl) {
-                              e.target.src = fallbackUrl;
-                            }
+                          onError={() => {
+                            setResolvedImages((prev) => ({
+                              ...prev,
+                              [speciality.id]: null,
+                            }));
                           }}
                         />
                       </div>
                     ) : (
                       <div
                         className="w-32 h-32 rounded-full flex items-center justify-center mb-4 text-5xl font-bold text-white"
-                        style={{ backgroundColor: getInitialColor(speciality.name) }}
+                        style={{
+                          backgroundColor: getInitialColor(
+                            speciality.name
+                          ),
+                        }}
                       >
-                        <span>{speciality.name.charAt(0).toUpperCase()}</span>
+                        <span>
+                          {speciality.name.charAt(0).toUpperCase()}
+                        </span>
                       </div>
                     )}
 
@@ -1004,13 +1249,15 @@ const Specialties = () => {
                       {toTitleCase(speciality.name)}
                     </h3>
 
-                    {/* Status Badge (No ID or Date) */}
+                    {/* Status Badge */}
                     <div className="mt-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        speciality.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          speciality.isActive
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
                         {speciality.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
@@ -1034,9 +1281,13 @@ const Specialties = () => {
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No specialities found</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No specialities found
+          </h3>
           <p className="text-gray-500">
-            {searchTerm ? `No results found for "${searchTerm}"` : 'Click "Add Speciality" to create your first speciality'}
+            {searchTerm
+              ? `No results found for "${searchTerm}"`
+              : 'Click "Add Speciality" to create your first speciality'}
           </p>
         </div>
       )}

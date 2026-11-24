@@ -378,11 +378,13 @@ const Categories = () => {
 
 
   // ================= ASYNC IMAGE URL HELPER =================
+  // ✅ FIXED: Never append cache-busting params to signed S3 URLs
   const getFullImageUrl = async (imageKey) => {
     if (!imageKey || typeof imageKey !== 'string') {
       return null;
     }
 
+    // Already a complete URL (or data/blob) — return as-is
     if (
       imageKey.startsWith('http://') ||
       imageKey.startsWith('https://') ||
@@ -392,7 +394,9 @@ const Categories = () => {
       return imageKey;
     }
 
-    return await getS3ImageUrl(imageKey);
+    // Get signed URL from S3 — return unmodified
+    const url = await getS3ImageUrl(imageKey);
+    return url || null;
   };
 
   // ================= ASYNC IMAGE LOADING =================
@@ -417,12 +421,8 @@ const Categories = () => {
               return [categoryId, null];
             }
 
-            const separator = url.includes('?') ? '&' : '?';
-
-            return [
-              categoryId,
-              `${url}${separator}_t=${Date.now()}`,
-            ];
+            // ✅ FIXED: Do NOT append `_t` — it breaks the S3 signature
+            return [categoryId, url];
           } catch (error) {
             console.error(
               'Category image loading failed:',
@@ -822,13 +822,10 @@ const Categories = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {paginatedCategories.map((category) => {
-  console.log("Category imageUrl:", category.imageUrl);
-  console.log("Category:", category);
+              const categoryId = getCategoryId(category);
+              const imageUrl = resolvedImages[categoryId] || null;
 
-  const categoryId = getCategoryId(category);
-  const imageUrl = resolvedImages[categoryId] || null;
-
-  return (
+              return (
                 <div
                   key={categoryId || Math.random().toString()}
                   className="group bg-white rounded-3xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 relative"

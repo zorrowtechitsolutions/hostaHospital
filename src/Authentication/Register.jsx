@@ -1,17 +1,16 @@
-// src/Authentication/Register.jsx - COMPLETE FIXED VERSION
+// src/Authentication/Register.jsx - COMPLETE FIXED VERSION WITH PINCODE API
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Mail, Lock, Building, MapPin, Globe, Landmark, Home, CreditCard,
   Phone, AlertCircle, Eye, EyeOff, Navigation,
   Clock, Sun, Briefcase, ChevronDown, CheckCircle, XCircle, Search, FileText
-} from 'lucide-react'; // ✅ removed Building2
+} from 'lucide-react';
 import GoogleMapsLocationPicker from './GoogleMapsLocationPicker';
-import { Input, Select, Textarea, Button, Alert, Card, CustomSelect } from '../components/ui'; // ✅ added CustomSelect
+import { Input, Select, Textarea, Button, Alert, Card, CustomSelect } from '../components/ui';
 import { showAddToast, showErrorToast, showWarningToast, showSuccessToast, showInfoToast } from '../components/ui/Toast';
-// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / Ambulance modals
-import { Country, State, City } from '../data/locationService';
+import { useGetPincodeQuery } from '../../app/service/pincodeApi';
 import { useRegisterMutation } from '../../app/service/hospitalApi';  
 import { useAuth } from '../context/AuthContext'; 
 import { useGetCategoryQuery } from '../../app/service/category';
@@ -260,23 +259,53 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
-  const [countryCode, setCountryCode] = useState("");
-  const [countryName, setCountryName] = useState("");
-  const [stateCode, setStateCode] = useState("");
+  // ✅ Location states (replaced with pincode-based)
+  const [countryName, setCountryName] = useState("India");
   const [stateName, setStateName] = useState("");
   const [cityName, setCityName] = useState("");
   const [pincode, setPincode] = useState("");
-  
-  // ✅ Memoized location lookups from local JSON
-  const countries = useMemo(() => Country.getAllCountries(), []);
-  const states = useMemo(
-    () => State.getStatesOfCountry(countryCode),
-    [countryCode]
-  );
-  const cities = useMemo(
-    () => City.getCitiesOfState(countryCode, stateCode),
-    [countryCode, stateCode]
-  );
+  const [localArea, setLocalArea] = useState("");
+
+  // ✅ Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(pincode, {
+    skip: !/^\d{6}$/.test(pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === "Success"
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // ✅ Automatically populate state and district
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+
+      setStateName(firstOffice.State);
+      setCityName(firstOffice.District);
+      setLocalArea("");
+    } else if (pincode.length === 6 && pincodeData) {
+      setStateName("");
+      setCityName("");
+      setLocalArea("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
+
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 6);
+
+    setPincode(cleaned);
+
+    setStateName("");
+    setCityName("");
+    setLocalArea("");
+  };
   
   // ✅ Normal Hours (for "normal" type)
   const [normalHours, setNormalHours] = useState({
@@ -507,11 +536,38 @@ const Register = () => {
     if (!/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/.test(email)) { setRegisterError('Please enter a valid email address'); showWarningToast('Please enter a valid email address', 3000); return false; }
     if (!phone) { setRegisterError('Phone number is required'); showWarningToast('Phone number is required', 3000); return false; }
     if (!streetAddress) { setRegisterError('Street address is required'); showWarningToast('Street address is required', 3000); return false; }
-    if (!countryCode) { setRegisterError('Country is required'); showWarningToast('Country is required', 3000); return false; }
-    if (!stateCode) { setRegisterError('State is required'); showWarningToast('State is required', 3000); return false; }
-    if (!cityName) { setRegisterError('City is required'); showWarningToast('City is required', 3000); return false; }
-    if (!pincode) { setRegisterError('Pincode is required'); showWarningToast('Pincode is required', 3000); return false; }
-    if (!/^\d{5,6}$/.test(pincode)) { setRegisterError('Please enter a valid pincode (5-6 digits)'); showWarningToast('Please enter a valid pincode (5-6 digits)', 3000); return false; }
+
+    // ✅ Updated location validation
+    if (!countryName) {
+      setRegisterError("Country is required");
+      showWarningToast("Country is required", 3000);
+      return false;
+    }
+
+    if (!stateName) {
+      setRegisterError("State is required");
+      showWarningToast("State is required", 3000);
+      return false;
+    }
+
+    if (!cityName) {
+      setRegisterError("District is required");
+      showWarningToast("District is required", 3000);
+      return false;
+    }
+
+    if (!/^\d{6}$/.test(pincode)) {
+      setRegisterError("Please enter a valid 6-digit pincode");
+      showWarningToast("Please enter a valid 6-digit pincode", 3000);
+      return false;
+    }
+
+    if (!localArea) {
+      setRegisterError("Please select your local area");
+      showWarningToast("Please select your local area", 3000);
+      return false;
+    }
+
     if (!selectedCategory) { setRegisterError('Please select a hospital category'); showWarningToast('Please select a hospital category', 3000); return false; }
     if (!password) { setRegisterError('Password is required'); showWarningToast('Password is required', 3000); return false; }
     if (password.length < 8) { setRegisterError('Password must be at least 8 characters'); showWarningToast('Password must be at least 8 characters', 3000); return false; }
@@ -529,24 +585,6 @@ const Register = () => {
       setSelectedCategory(null);
       setHospitalType("");
     }
-  };
-
-  const handleCountryChange = (code, name) => {
-    setCountryCode(code);
-    setCountryName(name);
-    setStateCode("");
-    setStateName("");
-    setCityName("");
-  };
-
-  const handleStateChange = (code, name) => {
-    setStateCode(code);
-    setStateName(name);
-    setCityName("");
-  };
-
-  const handleCityChange = (name) => {
-    setCityName(name);
   };
 
   // ✅ Convert 24-hour time to 12-hour format with AM/PM
@@ -658,8 +696,9 @@ const Register = () => {
           country: countryName,
           state: stateName,
           district: cityName,
+          localArea: localArea,
           place: streetAddress,
-          pincode: Number(pincode)
+          pincode: Number(pincode),
         },
         type: hospitalType,
         categoryId: selectedCategory?.id || null,
@@ -957,13 +996,151 @@ const Register = () => {
             </div>
           </div>
 
+          {/* ✅ REPLACED: Address Information with Pincode API */}
           <div className="rounded-2xl bg-slate-50 p-6 space-y-5">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2"><MapPin className="h-5 w-5 text-[#154A7D]" /> Address Information</h2>
-            <SearchableDropdown label="Country" options={countries} value={countryCode} onChange={handleCountryChange} placeholder="Search for a country..." icon={Globe} required={true} getOptionLabel={(option) => option.name} getOptionValue={(option) => option.isoCode} optionKey={(option) => option.isoCode} />
-            <SearchableDropdown label="State" options={states} value={stateCode} onChange={handleStateChange} placeholder="Search for a state..." icon={Landmark} required={true} disabled={!countryCode} getOptionLabel={(option) => option.name} getOptionValue={(option) => option.isoCode} optionKey={(option) => option.isoCode} />
-            <SearchableCityDropdown label="District" options={cities} value={cityName} onChange={handleCityChange} placeholder="Search for a District..." required={true} disabled={!stateCode} />
-            <div className="space-y-2"><label className="block text-sm font-medium text-gray-700">Street Address <span className="text-red-500">*</span></label><textarea value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="Enter hospital street address" rows={3} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium resize-none" /></div>
-            <div className="relative"><CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" /><input type="text" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="Pincode * (5-6 digits)" maxLength={6} className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium" /></div>
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-[#154A7D]" />
+              Address Information
+            </h2>
+
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Country
+              </label>
+
+              <div className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-100 flex justify-between">
+                <span>🇮🇳 India</span>
+                <span className="text-green-600 font-medium">
+                  ✓ Default
+                </span>
+              </div>
+            </div>
+
+            {/* Pincode */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pincode *
+              </label>
+
+              <div className="relative">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={pincode}
+                  onChange={(e) => handlePincodeChange(e.target.value)}
+                  placeholder="Enter 6 digit pincode"
+                  maxLength={6}
+                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium"
+                />
+
+                {isPincodeLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600" />
+                  </div>
+                )}
+
+                {!isPincodeLoading && postOffices.length > 0 && (
+                  <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                )}
+              </div>
+
+              <p className="text-xs text-gray-400 mt-2">
+                Enter pincode to automatically find your location.
+              </p>
+
+              {isPincodeLoading && (
+                <p className="text-xs text-blue-600 mt-2">
+                  Finding your location...
+                </p>
+              )}
+
+              {isPincodeError && (
+                <p className="text-xs text-red-500 mt-2">
+                  Unable to fetch pincode details. Please try again.
+                </p>
+              )}
+
+              {pincode.length === 6 &&
+                !isPincodeLoading &&
+                !isPincodeError &&
+                postOffices.length === 0 && (
+                  <p className="text-xs text-red-500 mt-2">
+                    Invalid pincode or no location found.
+                  </p>
+                )}
+            </div>
+
+            {/* State */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                State
+              </label>
+
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+                <input
+                  value={stateName}
+                  readOnly
+                  placeholder="Automatically detected state"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-100 text-gray-600"
+                />
+              </div>
+            </div>
+
+            {/* District */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                District *
+              </label>
+
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+                <input
+                  value={cityName}
+                  readOnly
+                  placeholder="Automatically detected district"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-100 text-gray-600"
+                />
+              </div>
+            </div>
+
+            {/* Local Area / Place */}
+            <SearchableCityDropdown
+              label="Local Area / Place"
+              options={[
+                ...new Map(
+                  postOffices.map((office) => [
+                    office.Name,
+                    { name: office.Name }
+                  ])
+                ).values()
+              ]}
+              value={localArea}
+              onChange={setLocalArea}
+              placeholder="Select your local area"
+              required={true}
+              disabled={postOffices.length === 0}
+            />
+
+            {/* Street Address */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Street Address *
+              </label>
+
+              <textarea
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder="Enter hospital street address"
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#154A7D] bg-white text-black font-medium resize-none"
+              />
+            </div>
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-6 space-y-5">

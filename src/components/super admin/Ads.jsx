@@ -1,17 +1,29 @@
 // src/components/super-admin/Ads.jsx
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Image, Plus, Download, MoreVertical, Eye,
-  Edit, RefreshCcw, Upload, Trash2, Calendar,
-  MapPin, X, Building
+  Image,
+  Plus,
+  Download,
+  MoreVertical,
+  Eye,
+  Edit,
+  RefreshCcw,
+  Trash2,
+  Calendar,
+  MapPin,
+  X,
+  Building,
 } from 'lucide-react';
-import {
-  Button, Badge, Card, Modal, Input
-} from '../ui';
+import { Button, Badge, Card, Modal, Input, Pagination } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
 import DeleteModal from '../patients/DeleteModel';
-import { showSuccessToast, showErrorToast, showWarningToast } from '../ui/Toast';
+import {
+  showSuccessToast,
+  showErrorToast,
+  showWarningToast,
+} from '../ui/Toast';
 import {
   useGetAdsQuery,
   useCreateAdMutation,
@@ -23,37 +35,52 @@ import { getS3ImageUrl, uploadToS3 } from '../../../app/service/S3';
 import { socket } from '../../socket/socket';
 import { registerAdEvents, unregisterAdEvents } from '../../socket/adEvents';
 
-// Styling override so CustomSelect matches the "border-gray-300 rounded-lg focus:ring-[#1C62A0]" inputs
+// Styling override so CustomSelect matches the inputs
 const HOSPITAL_SELECT_CLASS =
-  "w-full [&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+  'w-full [&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:px-4 [&>button]:py-2 [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent';
 
-// Helper to normalise the raw hospitals array into {value, label} pairs for CustomSelect
 const toHospitalOptions = (hospitals) => {
   if (!Array.isArray(hospitals)) return [];
-  return hospitals.map(h => ({
+  return hospitals.map((h) => ({
     value: String(h.id),
     label: h.name || h.hospitalName || h.email || `Hospital ${h.id}`,
   }));
 };
 
-// Helper function to format date
 const formatDate = (date) => {
   if (!date) return 'N/A';
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
   });
 };
 
-// Resolve an ad image key to a displayable URL
-const resolveAdImageUrl = (rawImageUrl) => {
-  if (!rawImageUrl) {
-    return null;
-  }
-  const resolved = getS3ImageUrl(rawImageUrl);
-  return resolved || rawImageUrl;
+const toTitleCase = (text = '') => {
+  if (!text) return '';
+  return text.replace(/\w\S*/g, (word) =>
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
 };
+
+// ✅ Async resolver — never appends cache-busting params to signed S3 URLs
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey || typeof imageKey !== 'string') return null;
+
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  const url = await getS3ImageUrl(imageKey);
+  return url || null;
+};
+
+const PLACEHOLDER_IMG = 'https://placehold.co/400x200?text=No+Image';
 
 // ===================
 // Add Ad Modal
@@ -66,11 +93,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     startDate: '',
     endDate: '',
     kilometer: 5,
-    isActive: true
+    isActive: true,
   });
   const [previewImage, setPreviewImage] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
@@ -79,10 +104,24 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
   const hospitalOptions = toHospitalOptions(hospitals);
 
   useEffect(() => {
-    // intentionally left blank (was previously logging)
-  }, [isOpen, hospitalOptions]);
+    if (isOpen) {
+      setFormData({
+        imageUrl: '',
+        imageKey: '',
+        hospitalId: '',
+        startDate: '',
+        endDate: '',
+        kilometer: 5,
+        isActive: true,
+      });
+      setPreviewImage(null);
+      setUploadedImageKey(null);
+      setSelectedFile(null);
+      setUploadError(null);
+    }
+  }, [isOpen]);
 
-  const handleImageUpload = async (file) => {
+  const handleImageUpload = (file) => {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -92,16 +131,17 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      showErrorToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
+      showErrorToast(
+        'Only JPEG, PNG, GIF, and WEBP files are allowed',
+        3000
+      );
       return;
     }
 
     setSelectedFile(file);
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewImage(reader.result);
-    };
+    reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
 
     setUploadError(null);
@@ -116,15 +156,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
     setPreviewImage(null);
     setUploadedImageKey(null);
     setSelectedFile(null);
-    setFormData(prev => ({
-      ...prev,
-      imageUrl: '',
-      imageKey: ''
-    }));
+    setFormData((prev) => ({ ...prev, imageUrl: '', imageKey: '' }));
     setUploadError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = () => {
@@ -149,43 +183,25 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
       startDate: formData.startDate,
       endDate: formData.endDate,
       kilometer: formData.kilometer,
-      isActive: formData.isActive
+      isActive: formData.isActive,
     };
     onSave(payload);
-
-    setFormData({
-      imageUrl: '',
-      imageKey: '',
-      hospitalId: '',
-      startDate: '',
-      endDate: '',
-      kilometer: 5,
-      isActive: true
-    });
-    setPreviewImage(null);
-    setUploadedImageKey(null);
-    setSelectedFile(null);
-    setUploadError(null);
   };
 
   const handleHospitalChange = (e) => {
     const hospitalId = e.target.value;
 
-    setFormData(prev => ({
-      ...prev,
-      hospitalId: hospitalId
-    }));
+    setFormData((prev) => ({ ...prev, hospitalId }));
 
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
       setSelectedFile(null);
-      setFormData(prev => ({
-        ...prev,
-        imageUrl: '',
-        imageKey: ''
-      }));
-      showWarningToast('Image cleared - please re-upload for the selected hospital', 2000);
+      setFormData((prev) => ({ ...prev, imageUrl: '', imageKey: '' }));
+      showWarningToast(
+        'Image cleared - please re-upload for the selected hospital',
+        2000
+      );
     }
   };
 
@@ -197,19 +213,25 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             <Image className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-gray-800">Add New Advertisement</h3>
-            <p className="text-xs text-gray-500">Enter ad details and targeting parameters</p>
+            <h3 className="text-md font-semibold text-gray-800">
+              Add New Advertisement
+            </h3>
+            <p className="text-xs text-gray-500">
+              Enter ad details and targeting parameters
+            </p>
           </div>
         </div>
 
-        {/* Image Upload Section */}
+        {/* Image Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
           </label>
-          <div className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
-            uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
-          }`}>
+          <div
+            className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
+              uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+            }`}
+          >
             {previewImage ? (
               <div className="relative">
                 <img
@@ -228,8 +250,12 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             ) : (
               <div className="text-center">
                 <Image className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
-                <p className="text-xs text-gray-400">JPEG, PNG, GIF, WEBP up to 5MB (Optional)</p>
+                <p className="text-sm text-gray-500">
+                  Click to upload or drag and drop
+                </p>
+                <p className="text-xs text-gray-400">
+                  JPEG, PNG, GIF, WEBP up to 5MB (Optional)
+                </p>
               </div>
             )}
             <input
@@ -243,42 +269,42 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => document.getElementById('image-upload').click()}
-              disabled={isUploading || !formData.hospitalId}
+              onClick={() =>
+                document.getElementById('image-upload').click()
+              }
+              disabled={!formData.hospitalId}
             >
-              {isUploading ? 'Uploading...' : previewImage ? 'Change Image' : 'Choose Image'}
+              {previewImage ? 'Change Image' : 'Choose Image'}
             </Button>
-            {!formData.hospitalId && !isUploading && (
-              <p className="text-xs text-yellow-500">Please select a hospital first before uploading</p>
-            )}
-            {isUploading && (
-              <div className="w-full">
-                <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#1C62A0] transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 text-center mt-1">Uploading... {uploadProgress}%</p>
-              </div>
+            {!formData.hospitalId && (
+              <p className="text-xs text-yellow-500">
+                Please select a hospital first before uploading
+              </p>
             )}
             {uploadError && (
-              <p className="text-xs text-red-500 text-center mt-1">{uploadError}</p>
+              <p className="text-xs text-red-500 text-center mt-1">
+                {uploadError}
+              </p>
             )}
           </div>
         </div>
 
-        {/* Hospital Selection */}
+        {/* Hospital */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Hospital * <span className="text-red-500">Select first before uploading image</span>
+            Hospital *{' '}
+            <span className="text-red-500">
+              Select first before uploading image
+            </span>
           </label>
           <CustomSelect
             hideLabel
             value={formData.hospitalId ? String(formData.hospitalId) : ''}
             options={hospitalOptions}
             placeholder="Select Hospital"
-            onChange={(value) => handleHospitalChange({ target: { value } })}
+            onChange={(value) =>
+              handleHospitalChange({ target: { value } })
+            }
             className={HOSPITAL_SELECT_CLASS}
           />
         </div>
@@ -289,7 +315,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             name="startDate"
             type="date"
             value={formData.startDate}
-            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, startDate: e.target.value })
+            }
             required
           />
           <Input
@@ -297,7 +325,9 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
             name="endDate"
             type="date"
             value={formData.endDate}
-            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, endDate: e.target.value })
+            }
             required
           />
         </div>
@@ -308,14 +338,27 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
           type="number"
           min="1"
           value={formData.kilometer}
-          onChange={(e) => setFormData({ ...formData, kilometer: parseFloat(e.target.value) })}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              kilometer: parseFloat(e.target.value),
+            })
+          }
           placeholder="Target radius in kilometers"
           required
         />
 
         <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isSaving || isUploading} loading={isSaving} fullWidth>
+          <Button variant="outline" onClick={onClose} fullWidth>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={isSaving}
+            loading={isSaving}
+            fullWidth
+          >
             {isSaving ? 'Adding...' : 'Add Ad'}
           </Button>
         </div>
@@ -327,7 +370,14 @@ const AddAdModal = ({ isOpen, onClose, onSave, isSaving, hospitals }) => {
 // ===================
 // Edit Ad Modal
 // ===================
-const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
+const EditAdModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  ad,
+  isSaving,
+  hospitals,
+}) => {
   const [formData, setFormData] = useState({
     imageUrl: '',
     imageKey: '',
@@ -335,11 +385,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     startDate: '',
     endDate: '',
     kilometer: 5,
-    isActive: true
+    isActive: true,
   });
   const [previewImage, setPreviewImage] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadedImageKey, setUploadedImageKey] = useState(null);
@@ -348,7 +396,11 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
   const hospitalOptions = toHospitalOptions(hospitals);
 
   useEffect(() => {
-    if (ad) {
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      if (!ad || !isOpen) return;
+
       setFormData({
         imageUrl: ad.imageUrl || '',
         imageKey: ad.imageKey || '',
@@ -356,15 +408,28 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
         startDate: ad.startDate ? ad.startDate.split('T')[0] : '',
         endDate: ad.endDate ? ad.endDate.split('T')[0] : '',
         kilometer: ad.kilometer || 5,
-        isActive: ad.isActive !== undefined ? ad.isActive : true
+        isActive: ad.isActive !== undefined ? ad.isActive : true,
       });
-      const resolved = ad.imageUrl ? getS3ImageUrl(ad.imageUrl) : null;
-      setPreviewImage(resolved);
-      setUploadedImageKey(ad.imageKey || null);
-    }
-  }, [ad]);
 
-  const handleImageUpload = async (file) => {
+      setUploadedImageKey(ad.imageKey || null);
+      setSelectedFile(null);
+      setUploadError(null);
+
+      if (ad.imageUrl) {
+        const url = await getFullImageUrl(ad.imageUrl);
+        if (!cancelled) setPreviewImage(url);
+      } else {
+        setPreviewImage(null);
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [ad, isOpen]);
+
+  const handleImageUpload = (file) => {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -374,16 +439,17 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      showErrorToast('Only JPEG, PNG, GIF, and WEBP files are allowed', 3000);
+      showErrorToast(
+        'Only JPEG, PNG, GIF, and WEBP files are allowed',
+        3000
+      );
       return;
     }
 
     setSelectedFile(file);
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewImage(reader.result);
-    };
+    reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
 
     setUploadError(null);
@@ -398,15 +464,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
     setPreviewImage(null);
     setUploadedImageKey(null);
     setSelectedFile(null);
-    setFormData(prev => ({
-      ...prev,
-      imageUrl: '',
-      imageKey: ''
-    }));
+    setFormData((prev) => ({ ...prev, imageUrl: '', imageKey: '' }));
     setUploadError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = () => {
@@ -429,31 +489,27 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
       imageFile: selectedFile,
       imageKey: selectedFile
         ? null
-        : (uploadedImageKey || formData.imageKey || null),
+        : uploadedImageKey || formData.imageKey || null,
       imageUrl: selectedFile
         ? null
-        : (uploadedImageKey || formData.imageKey || null)
+        : uploadedImageKey || formData.imageKey || null,
     };
     onSave(payload);
   };
 
   const handleHospitalChange = (e) => {
     const hospitalId = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      hospitalId: hospitalId
-    }));
+    setFormData((prev) => ({ ...prev, hospitalId }));
 
     if (uploadedImageKey) {
       setUploadedImageKey(null);
       setPreviewImage(null);
       setSelectedFile(null);
-      setFormData(prev => ({
-        ...prev,
-        imageUrl: '',
-        imageKey: ''
-      }));
-      showWarningToast('Image cleared - please re-upload for the selected hospital', 2000);
+      setFormData((prev) => ({ ...prev, imageUrl: '', imageKey: '' }));
+      showWarningToast(
+        'Image cleared - please re-upload for the selected hospital',
+        2000
+      );
     }
   };
 
@@ -465,8 +521,12 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             <Image className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-gray-800">Edit Advertisement</h3>
-            <p className="text-xs text-gray-500">Update ad details and targeting parameters</p>
+            <h3 className="text-md font-semibold text-gray-800">
+              Edit Advertisement
+            </h3>
+            <p className="text-xs text-gray-500">
+              Update ad details and targeting parameters
+            </p>
           </div>
         </div>
 
@@ -474,15 +534,20 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Ad Image <span className="text-gray-400 text-xs">(Optional)</span>
           </label>
-          <div className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
-            uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
-          }`}>
+          <div
+            className={`flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg bg-gray-50 ${
+              uploadError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+            }`}
+          >
             {previewImage ? (
               <div className="relative">
                 <img
                   src={previewImage}
                   alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.src = PLACEHOLDER_IMG;
+                  }}
                 />
                 <button
                   type="button"
@@ -495,8 +560,12 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             ) : (
               <div className="text-center">
                 <Image className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
-                <p className="text-xs text-gray-400">JPEG, PNG, GIF, WEBP up to 5MB (Optional)</p>
+                <p className="text-sm text-gray-500">
+                  Click to upload or drag and drop
+                </p>
+                <p className="text-xs text-gray-400">
+                  JPEG, PNG, GIF, WEBP up to 5MB (Optional)
+                </p>
               </div>
             )}
             <input
@@ -510,24 +579,16 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => document.getElementById('edit-image-upload').click()}
-              disabled={isUploading}
+              onClick={() =>
+                document.getElementById('edit-image-upload').click()
+              }
             >
-              {isUploading ? 'Uploading...' : previewImage ? 'Change Image' : 'Choose Image'}
+              {previewImage ? 'Change Image' : 'Choose Image'}
             </Button>
-            {isUploading && (
-              <div className="w-full">
-                <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#1C62A0] transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 text-center mt-1">Uploading... {uploadProgress}%</p>
-              </div>
-            )}
             {uploadError && (
-              <p className="text-xs text-red-500 text-center mt-1">{uploadError}</p>
+              <p className="text-xs text-red-500 text-center mt-1">
+                {uploadError}
+              </p>
             )}
           </div>
         </div>
@@ -541,7 +602,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             value={formData.hospitalId ? String(formData.hospitalId) : ''}
             options={hospitalOptions}
             placeholder="Select Hospital"
-            onChange={(value) => handleHospitalChange({ target: { value } })}
+            onChange={(value) =>
+              handleHospitalChange({ target: { value } })
+            }
             className={HOSPITAL_SELECT_CLASS}
           />
         </div>
@@ -552,7 +615,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             name="startDate"
             type="date"
             value={formData.startDate}
-            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, startDate: e.target.value })
+            }
             required
           />
           <Input
@@ -560,7 +625,9 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
             name="endDate"
             type="date"
             value={formData.endDate}
-            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, endDate: e.target.value })
+            }
             required
           />
         </div>
@@ -571,13 +638,26 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
           type="number"
           min="1"
           value={formData.kilometer}
-          onChange={(e) => setFormData({ ...formData, kilometer: parseFloat(e.target.value) })}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              kilometer: parseFloat(e.target.value),
+            })
+          }
           required
         />
 
         <div className="flex gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} fullWidth>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isSaving || isUploading} loading={isSaving} fullWidth>
+          <Button variant="outline" onClick={onClose} fullWidth>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={isSaving}
+            loading={isSaving}
+            fullWidth
+          >
             {isSaving ? 'Updating...' : 'Update Ad'}
           </Button>
         </div>
@@ -590,9 +670,25 @@ const EditAdModal = ({ isOpen, onClose, onSave, ad, isSaving, hospitals }) => {
 // View Ad Modal
 // ===================
 const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
-  if (!ad) return null;
+  const [viewUrl, setViewUrl] = useState(null);
 
-  const viewUrl = ad.imageUrl ? resolveAdImageUrl(ad.imageUrl) : null;
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!ad?.imageUrl) {
+        setViewUrl(null);
+        return;
+      }
+      const url = await getFullImageUrl(ad.imageUrl);
+      if (!cancelled) setViewUrl(url);
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [ad]);
+
+  if (!ad) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ad Details" size="md">
@@ -600,11 +696,11 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
         {ad.imageUrl && (
           <div className="flex justify-center mb-4">
             <img
-              src={viewUrl || ad.imageUrl}
-              alt={ad.id}
+              src={viewUrl || PLACEHOLDER_IMG}
+              alt={`Ad ${ad.id}`}
               className="w-full max-h-48 object-cover rounded-lg"
               onError={(e) => {
-                e.target.src = 'https://placehold.co/400x200?text=No+Image';
+                e.target.src = PLACEHOLDER_IMG;
               }}
             />
           </div>
@@ -612,29 +708,45 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500">Ad ID</label>
+            <label className="block text-xs font-medium text-gray-500">
+              Ad ID
+            </label>
             <p className="text-sm font-semibold text-gray-800">#{ad.id}</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Status</label>
+            <label className="block text-xs font-medium text-gray-500">
+              Status
+            </label>
             <Badge variant={ad.isActive ? 'success' : 'danger'}>
               {ad.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Start Date</label>
-            <p className="text-sm text-gray-600">{formatDate(ad.startDate)}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              Start Date
+            </label>
+            <p className="text-sm text-gray-600">
+              {formatDate(ad.startDate)}
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">End Date</label>
-            <p className="text-sm text-gray-600">{formatDate(ad.endDate)}</p>
+            <label className="block text-xs font-medium text-gray-500">
+              End Date
+            </label>
+            <p className="text-sm text-gray-600">
+              {formatDate(ad.endDate)}
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Target Radius</label>
+            <label className="block text-xs font-medium text-gray-500">
+              Target Radius
+            </label>
             <p className="text-sm text-gray-600">{ad.kilometer} KM</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500">Hospital</label>
+            <label className="block text-xs font-medium text-gray-500">
+              Hospital
+            </label>
             <p className="text-sm text-gray-600 flex items-center gap-1">
               <Building size={12} className="text-gray-400" />
               {hospitalName || `Hospital ID: ${ad.hospitalId}`}
@@ -643,7 +755,9 @@ const ViewAdModal = ({ isOpen, onClose, ad, hospitalName }) => {
         </div>
 
         <div className="flex gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={onClose} fullWidth>Close</Button>
+          <Button variant="outline" onClick={onClose} fullWidth>
+            Close
+          </Button>
         </div>
       </div>
     </Modal>
@@ -673,7 +787,10 @@ const AdsSkeleton = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+          <div
+            key={i}
+            className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse"
+          >
             <div className="h-48 bg-gray-200 rounded-lg mb-4"></div>
             <div className="h-5 w-32 bg-gray-200 rounded mb-2"></div>
             <div className="h-4 w-24 bg-gray-200 rounded"></div>
@@ -700,26 +817,32 @@ const Ads = () => {
   const [selectedAd, setSelectedAd] = useState(null);
 
   const [activeMenu, setActiveMenu] = useState(null);
-  const [eventsRegistered, setEventsRegistered] = useState(false);
+  const eventsRegisteredRef = useRef(false);
+
+  // Async resolved S3 image URLs keyed by ad ID
+  const [resolvedImages, setResolvedImages] = useState({});
 
   const {
     data: adsResponse,
     isLoading: loading,
     refetch,
-    isFetching
+    isFetching,
   } = useGetAdsQuery({
     page: currentPage,
     limit: itemsPerPage,
-    search_query: searchTerm || undefined
+    search_query: searchTerm || undefined,
   });
 
   const ads = adsResponse?.data || adsResponse?.ads || [];
-  const totalPages = adsResponse?.pagination?.totalPages ||
-                     adsResponse?.totalPages ||
-                     Math.ceil(ads.length / itemsPerPage) || 1;
-  const totalItems = adsResponse?.pagination?.totalItems ||
-                     adsResponse?.totalItems ||
-                     ads.length;
+  const totalPages =
+    adsResponse?.pagination?.totalPages ||
+    adsResponse?.totalPages ||
+    Math.ceil(ads.length / itemsPerPage) ||
+    1;
+  const totalItems =
+    adsResponse?.pagination?.totalItems ||
+    adsResponse?.totalItems ||
+    ads.length;
 
   const { data: hospitalsData } = useGetAllHospitalsQuery();
 
@@ -728,7 +851,10 @@ const Ads = () => {
     hospitals = hospitalsData;
   } else if (hospitalsData?.data && Array.isArray(hospitalsData.data)) {
     hospitals = hospitalsData.data;
-  } else if (hospitalsData?.hospitals && Array.isArray(hospitalsData.hospitals)) {
+  } else if (
+    hospitalsData?.hospitals &&
+    Array.isArray(hospitalsData.hospitals)
+  ) {
     hospitals = hospitalsData.hospitals;
   }
 
@@ -739,8 +865,11 @@ const Ads = () => {
   const hospitalMap = useMemo(() => {
     const map = new Map();
     if (Array.isArray(hospitals)) {
-      hospitals.forEach(hospital => {
-        map.set(hospital.id, hospital.name || hospital.hospitalName || hospital.email);
+      hospitals.forEach((hospital) => {
+        map.set(
+          hospital.id,
+          hospital.name || hospital.hospitalName || hospital.email
+        );
       });
     }
     return map;
@@ -750,51 +879,70 @@ const Ads = () => {
     return hospitalMap.get(hospitalId) || `Hospital ID: ${hospitalId}`;
   };
 
-  useEffect(() => {
-    registerAdEvents({
-      onAdCreated: () => {
-        refetch();
-      },
-      onAdUpdated: () => {
-        refetch();
-      },
-      onAdDeleted: () => {
-        refetch();
-      }
-    });
+  // ================= SOCKET REGISTRATION =================
 
-    setEventsRegistered(true);
+  const buildSocketHandlers = () => ({
+    onAdCreated: () => refetch(),
+    onAdUpdated: () => refetch(),
+    onAdDeleted: () => refetch(),
+  });
+
+  useEffect(() => {
+    registerAdEvents(buildSocketHandlers());
+    eventsRegisteredRef.current = true;
 
     return () => {
       unregisterAdEvents();
-      setEventsRegistered(false);
+      eventsRegisteredRef.current = false;
     };
   }, [refetch]);
 
   useEffect(() => {
     const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerAdEvents({
-          onAdCreated: () => {
-            refetch();
-          },
-          onAdUpdated: () => {
-            refetch();
-          },
-          onAdDeleted: () => {
-            refetch();
+      if (!eventsRegisteredRef.current) {
+        registerAdEvents(buildSocketHandlers());
+        eventsRegisteredRef.current = true;
+      }
+    };
+    socket.on('connect', handleConnect);
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, [refetch]);
+
+  // ================= ASYNC IMAGE LOADING =================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAdImages = async () => {
+      const imageItems = ads.filter(
+        (ad) => ad.imageUrl && typeof ad.imageUrl === 'string'
+      );
+
+      const entries = await Promise.all(
+        imageItems.map(async (ad) => {
+          try {
+            const url = await getFullImageUrl(ad.imageUrl);
+            return [ad.id, url];
+          } catch (error) {
+            console.error('Ad image loading failed:', ad.id, error);
+            return [ad.id, null];
           }
-        });
-        setEventsRegistered(true);
+        })
+      );
+
+      if (!cancelled) {
+        setResolvedImages(Object.fromEntries(entries));
       }
     };
 
-    socket.on("connect", handleConnect);
+    loadAdImages();
 
     return () => {
-      socket.off("connect", handleConnect);
+      cancelled = true;
     };
-  }, [refetch, eventsRegistered]);
+  }, [ads]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -807,8 +955,11 @@ const Ads = () => {
       }
     };
     document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    return () =>
+      document.removeEventListener('click', handleClickOutside);
   }, [activeMenu]);
+
+  // ================= CRUD HANDLERS =================
 
   const handleAddAd = async (newAd) => {
     try {
@@ -819,13 +970,13 @@ const Ads = () => {
         startDate: newAd.startDate,
         endDate: newAd.endDate,
         kilometer: newAd.kilometer,
-        isActive: newAd.isActive
+        isActive: newAd.isActive,
       }).unwrap();
 
       const createdAd = result.ad || result.data || result;
 
       if (!createdAd?.id) {
-        throw new Error("Ad was created but no ad ID was returned");
+        throw new Error('Ad was created but no ad ID was returned');
       }
 
       if (newAd.imageFile) {
@@ -833,20 +984,20 @@ const Ads = () => {
           newAd.imageFile,
           null,
           Number(createdAd.id),
-          "ad"
+          'ad'
         );
 
-        const upd = await updateAd({
+        await updateAd({
           id: createdAd.id,
           data: {
             imageUrl: uploaded.key,
-            imageKey: uploaded.key
-          }
+            imageKey: uploaded.key,
+          },
         }).unwrap();
       }
 
-      socket.emit("ad_event", {
-        event: "AD_CREATED",
+      socket.emit('ad_event', {
+        event: 'AD_CREATED',
         data: {
           adId: createdAd.id,
           hospitalId: newAd.hospitalId,
@@ -854,19 +1005,18 @@ const Ads = () => {
           startDate: newAd.startDate,
           endDate: newAd.endDate,
           kilometer: newAd.kilometer,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
       showSuccessToast('Ad created successfully!', 3000);
-      refetch();
       setShowAddModal(false);
-
+      refetch();
     } catch (error) {
       showErrorToast(
         error?.data?.message ||
-        error?.message ||
-        'Failed to create ad',
+          error?.message ||
+          'Failed to create ad',
         3000
       );
     }
@@ -881,19 +1031,16 @@ const Ads = () => {
         kilometer: updatedAd.kilometer,
         isActive: updatedAd.isActive,
         ...(updatedAd.imageFile
-          ? {
-              imageUrl: null,
-              imageKey: null
-            }
+          ? { imageUrl: null, imageKey: null }
           : {
               imageUrl: updatedAd.imageUrl || null,
-              imageKey: updatedAd.imageKey || null
-            })
+              imageKey: updatedAd.imageKey || null,
+            }),
       };
 
       await updateAd({
         id: updatedAd.id,
-        data: firstPayload
+        data: firstPayload,
       }).unwrap();
 
       if (updatedAd.imageFile) {
@@ -901,20 +1048,20 @@ const Ads = () => {
           updatedAd.imageFile,
           null,
           Number(updatedAd.id),
-          "ad"
+          'ad'
         );
 
-        const second = await updateAd({
+        await updateAd({
           id: updatedAd.id,
           data: {
             imageUrl: uploaded.key,
-            imageKey: uploaded.key
-          }
+            imageKey: uploaded.key,
+          },
         }).unwrap();
       }
 
-      socket.emit("ad_event", {
-        event: "AD_UPDATED",
+      socket.emit('ad_event', {
+        event: 'AD_UPDATED',
         data: {
           adId: updatedAd.id,
           hospitalId: updatedAd.hospitalId,
@@ -923,49 +1070,55 @@ const Ads = () => {
           endDate: updatedAd.endDate,
           kilometer: updatedAd.kilometer,
           isActive: updatedAd.isActive,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
       showSuccessToast('Ad updated successfully!', 3000);
-      refetch();
       setShowEditModal(false);
       setSelectedAd(null);
-
+      refetch();
     } catch (error) {
       showErrorToast(
         error?.data?.message ||
-        error?.message ||
-        'Failed to update ad',
+          error?.message ||
+          'Failed to update ad',
         3000
       );
     }
   };
 
   const handleToggleStatus = async (ad) => {
+    setActiveMenu(null);
     try {
       const newStatus = !ad.isActive;
       await updateAd({
         id: ad.id,
-        data: { isActive: newStatus }
+        data: { isActive: newStatus },
       }).unwrap();
 
-      socket.emit("ad_event", {
-        event: "AD_UPDATED",
+      socket.emit('ad_event', {
+        event: 'AD_UPDATED',
         data: {
           adId: ad.id,
           hospitalId: ad.hospitalId,
           hospitalName: getHospitalName(ad.hospitalId),
           isActive: newStatus,
           statusChanged: true,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
-      showSuccessToast(`Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`, 3000);
+      showSuccessToast(
+        `Ad ${newStatus ? 'activated' : 'deactivated'} successfully!`,
+        3000
+      );
       refetch();
     } catch (error) {
-      showErrorToast(error?.data?.message || 'Failed to update ad status', 3000);
+      showErrorToast(
+        error?.data?.message || 'Failed to update ad status',
+        3000
+      );
     }
   };
 
@@ -974,22 +1127,25 @@ const Ads = () => {
       try {
         await deleteAd(selectedAd.id).unwrap();
 
-        socket.emit("ad_event", {
-          event: "AD_DELETED",
+        socket.emit('ad_event', {
+          event: 'AD_DELETED',
           data: {
             adId: selectedAd.id,
             hospitalId: selectedAd.hospitalId,
             hospitalName: getHospitalName(selectedAd.hospitalId),
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
 
         showSuccessToast('Ad deleted successfully!', 3000);
-        refetch();
         setShowDeleteModal(false);
         setSelectedAd(null);
+        refetch();
       } catch (error) {
-        showErrorToast(error?.data?.message || 'Failed to delete ad', 3000);
+        showErrorToast(
+          error?.data?.message || 'Failed to delete ad',
+          3000
+        );
       }
     }
   };
@@ -1000,35 +1156,47 @@ const Ads = () => {
   };
 
   const handleRefresh = () => {
-    setSearchTerm("");
+    setSearchTerm('');
     setCurrentPage(1);
     refetch();
-    showSuccessToast("Ads refreshed", 2000);
+    showSuccessToast('Ads refreshed', 2000);
   };
 
   const handleExport = () => {
-    const exportData = ads.map(ad => ({
-      'ID': ad.id,
+    const exportData = ads.map((ad) => ({
+      ID: ad.id,
       'Hospital Name': getHospitalName(ad.hospitalId),
       'Hospital ID': ad.hospitalId,
       'Image URL': ad.imageUrl || 'No image',
       'Start Date': ad.startDate,
       'End Date': ad.endDate,
       'Radius (KM)': ad.kilometer,
-      'Status': ad.isActive ? 'Active' : 'Inactive',
+      Status: ad.isActive ? 'Active' : 'Inactive',
       'Created At': ad.createdAt,
-      'Updated At': ad.updatedAt
+      'Updated At': ad.updatedAt,
     }));
 
     const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `ads_export_${new Date().toISOString().split('T')[0]}.json`;
+    const dataUri =
+      'data:application/json;charset=utf-8,' +
+      encodeURIComponent(dataStr);
+    const exportFileDefaultName = `ads_export_${
+      new Date().toISOString().split('T')[0]
+    }.json`;
 
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
-    showSuccessToast(`Exported ${exportData.length} ad records`, 2000);
+    showSuccessToast(
+      `Exported ${exportData.length} ad records`,
+      2000
+    );
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) {
@@ -1039,11 +1207,15 @@ const Ads = () => {
     <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Advertisement Management</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your hospital advertisements and targeting</p>
+        <h1 className="text-2xl font-bold text-gray-800">
+          Advertisement Management
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage your hospital advertisements and targeting
+        </p>
       </div>
 
-      {/* Search and Action Buttons */}
+      {/* Search + Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
         <div className="relative flex-1 max-w-md">
           <input
@@ -1064,15 +1236,28 @@ const Ads = () => {
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
-          <button onClick={handleRefresh} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
-            <RefreshCcw size={16} className={isFetching ? "animate-spin" : ""} />
+          <button
+            onClick={handleRefresh}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+            disabled={isFetching}
+          >
+            <RefreshCcw
+              size={16}
+              className={isFetching ? 'animate-spin' : ''}
+            />
           </button>
 
-          <button onClick={handleExport} className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+          <button
+            onClick={handleExport}
+            className="p-2 border border-gray-200 rounded-md bg-white text-gray-500 hover:bg-gray-50"
+          >
             <Download size={16} />
           </button>
 
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D]">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-[#1C62A0] rounded-md flex items-center gap-2 hover:bg-[#154A7D]"
+          >
             <Plus size={16} /> Add Ad
           </button>
         </div>
@@ -1080,119 +1265,140 @@ const Ads = () => {
 
       {/* Ads Grid */}
       {ads.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {ads.map((ad) => {
-            const cardUrl = ad.imageUrl
-              ? resolveAdImageUrl(ad.imageUrl)
-              : null;
-            return (
-              <Card key={ad.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative">
-                  {ad.imageUrl ? (
-                    <img
-                      src={cardUrl || ad.imageUrl}
-                      alt={`Ad ${ad.id}`}
-                      className="w-full h-48 object-cover"
-                      onError={(e) => {
-                        e.target.src = 'https://placehold.co/400x200?text=No+Image';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
-                      <Image className="w-12 h-12 text-gray-400" />
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2 menu-container">
-                    <button onClick={(e) => toggleMenu(ad.id, e)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100">
-                      <MoreVertical size={16} className="text-gray-600" />
-                    </button>
-                    {activeMenu === ad.id && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
-                        <button onClick={() => { setSelectedAd(ad); setShowViewModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <Eye size={16} /> View Details
-                        </button>
-                        <button onClick={() => { setSelectedAd(ad); setShowEditModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <Edit size={16} /> Edit
-                        </button>
-                        <button onClick={() => handleToggleStatus(ad)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <RefreshCcw size={16} /> {ad.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <button onClick={() => { setSelectedAd(ad); setShowDeleteModal(true); setActiveMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2">
-                          <Trash2 size={16} /> Delete
-                        </button>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {ads.map((ad) => {
+              const cardUrl = resolvedImages[ad.id] || null;
+
+              return (
+                <Card
+                  key={ad.id}
+                  className="overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <div className="relative">
+                    {ad.imageUrl ? (
+                      <img
+                        src={cardUrl || PLACEHOLDER_IMG}
+                        alt={`Ad ${ad.id}`}
+                        className="w-full h-48 object-cover"
+                        onError={() => {
+                          setResolvedImages((prev) => ({
+                            ...prev,
+                            [ad.id]: null,
+                          }));
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+                        <Image className="w-12 h-12 text-gray-400" />
                       </div>
                     )}
-                  </div>
-                  <div className="absolute top-2 left-2">
-                    <Badge variant={ad.isActive ? 'success' : 'danger'}>
-                      {ad.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-gray-500">ID: #{ad.id}</p>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <MapPin size={12} />
-                      <span>{ad.kilometer} km radius</span>
+                    <div className="absolute top-2 right-2 menu-container">
+                      <button
+                        onClick={(e) => toggleMenu(ad.id, e)}
+                        className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100"
+                      >
+                        <MoreVertical
+                          size={16}
+                          className="text-gray-600"
+                        />
+                      </button>
+                      {activeMenu === ad.id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                          <button
+                            onClick={() => {
+                              setSelectedAd(ad);
+                              setShowViewModal(true);
+                              setActiveMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <Eye size={16} /> View Details
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedAd(ad);
+                              setShowEditModal(true);
+                              setActiveMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <Edit size={16} /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(ad)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <RefreshCcw size={16} />{' '}
+                            {ad.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <div className="border-t border-gray-100 my-1"></div>
+                          <button
+                            onClick={() => {
+                              setSelectedAd(ad);
+                              setShowDeleteModal(true);
+                              setActiveMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <Trash2 size={16} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute top-2 left-2">
+                      <Badge variant={ad.isActive ? 'success' : 'danger'}>
+                        {ad.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
-                    <Building size={12} />
-                    <span className="truncate">{getHospitalName(ad.hospitalId)}</span>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-500">ID: #{ad.id}</p>
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <MapPin size={12} />
+                        <span>{ad.kilometer} km radius</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
+                      <Building size={12} />
+                      <span className="truncate">
+                        {getHospitalName(ad.hospitalId)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                      <Calendar size={12} />
+                      <span>
+                        {formatDate(ad.startDate)} -{' '}
+                        {formatDate(ad.endDate)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                    <Calendar size={12} />
-                    <span>{formatDate(ad.startDate)} - {formatDate(ad.endDate)}</span>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              isLoading={loading || isFetching}
+            />
+          )}
+        </>
       ) : (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Image className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No ads found</h3>
-          <p className="text-gray-500">Click "Add Ad" to create your first advertisement</p>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {ads.length > 0 && totalPages > 1 && (
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-sm text-gray-500">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to{" "}
-            {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} records
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                currentPage === 1
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-              }`}
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1 bg-[#1C62A0] text-white rounded-md text-sm">
-              {currentPage}
-            </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className={`px-3 py-1 border rounded-md text-sm transition-all ${
-                currentPage === totalPages || totalPages === 0
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-600 hover:bg-gray-50 border-gray-300"
-              }`}
-            >
-              Next
-            </button>
-          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No ads found
+          </h3>
+          <p className="text-gray-500">
+            Click "Add Ad" to create your first advertisement
+          </p>
         </div>
       )}
 
@@ -1224,7 +1430,9 @@ const Ads = () => {
           setSelectedAd(null);
         }}
         ad={selectedAd}
-        hospitalName={selectedAd ? getHospitalName(selectedAd.hospitalId) : null}
+        hospitalName={
+          selectedAd ? getHospitalName(selectedAd.hospitalId) : null
+        }
       />
 
       <DeleteModal
@@ -1236,7 +1444,10 @@ const Ads = () => {
         onConfirm={handleDeleteAd}
         title="Delete Ad"
         message="Are you sure you want to delete this advertisement? This action cannot be undone."
-        itemName={`Ad #${selectedAd?.id} - ${selectedAd ? getHospitalName(selectedAd.hospitalId) : ''}`}
+        itemName={`Ad #${selectedAd?.id} - ${
+          selectedAd ? getHospitalName(selectedAd.hospitalId) : ''
+        }`}
+        isDeleting={isDeleting}
       />
     </div>
   );

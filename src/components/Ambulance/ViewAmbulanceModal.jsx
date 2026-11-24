@@ -1,7 +1,7 @@
 // src/components/Ambulance/ViewAmbulanceModal.jsx
 import React from 'react';
 import { Modal, Badge, Button } from '../ui';
-import { Phone, MapPin, Truck, Calendar, Hash, Building, Clock } from 'lucide-react';
+import { Phone, MapPin, Truck, Calendar, Hash, Building, Clock, Home } from 'lucide-react';
 
 const ViewAmbulanceModal = ({ isOpen, onClose, ambulance }) => {
   if (!ambulance) return null;
@@ -62,18 +62,12 @@ const ViewAmbulanceModal = ({ isOpen, onClose, ambulance }) => {
           <InfoRow icon={Building} label="Country" value={ambulance.address?.country} />
           <InfoRow icon={MapPin} label="State" value={ambulance.address?.state} />
           <InfoRow icon={MapPin} label="District" value={ambulance.address?.district} />
+          {/* ✅ Local Area (NEW) */}
+          <InfoRow icon={Home} label="Local Area" value={ambulance.address?.localArea} />
           <InfoRow icon={MapPin} label="Place / Locality" value={ambulance.address?.place} />
           <InfoRow icon={Hash} label="Pincode" value={ambulance.address?.pincode} />
         </div>
 
-        {/* Timeline Information */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Timeline
-          </h4>
-          <InfoRow icon={Calendar} label="Created At" value={ambulance.createdAt} />
-          <InfoRow icon={Calendar} label="Last Updated" value={ambulance.lastUpdated} />
-        </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
