@@ -39,18 +39,40 @@ const validatePhone = (phone) => {
   return '';
 };
 
-const getFullImageUrl = (imageKey) => {
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
-  
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+
+  // Extract key if backend returns an object
+  if (typeof imageKey === 'object') {
+    imageKey =
+      imageKey.key ||
+      imageKey.url ||
+      imageKey.imageUrl ||
+      imageKey.Location ||
+      null;
+  }
+
+  if (typeof imageKey !== 'string') return null;
+
+  // Already a URL
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
     const separator = imageKey.includes('?') ? '&' : '?';
     return `${imageKey}${separator}_t=${Date.now()}`;
   }
-  
-  const url = getS3ImageUrl(imageKey);
+
+  // IMPORTANT: Await the S3 function
+  const url = await getS3ImageUrl(imageKey);
+
   if (!url) return null;
-  
+
   const separator = url.includes('?') ? '&' : '?';
+
   return `${url}${separator}_t=${Date.now()}`;
 };
 
@@ -128,14 +150,14 @@ const SectionTitle = ({ icon: Icon, title }) => (
 const DoctorProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const doctorId = user?.doctorId || user?.id;
-  
+
   // ✅ Fetch doctor data from API
   const { data: doctorResponse, isLoading, error: fetchError, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId,
   });
-  
+
   const [updateDoctor, { isLoading: isUpdating }] = useUpdateDoctorMutation();
 
   const [formData, setFormData] = useState({
@@ -170,7 +192,7 @@ const DoctorProfile = () => {
     createdAt: '',
     updatedAt: ''
   });
-  
+
   const [editForm, setEditForm] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -190,81 +212,94 @@ const DoctorProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
-  // ✅ Populate profile from API data
+  // ✅ FIXED: await async getFullImageUrl inside effect
   useEffect(() => {
-    if (doctorResponse) {
-      // ✅ The doctor data is in doctorResponse.data
+    let isMounted = true;
+
+    const loadDoctorData = async () => {
+      if (!doctorResponse) return;
+
       const doctor = doctorResponse.data || doctorResponse;
-      
-      if (doctor) {
-        const imageKey = 
-          doctor?.profilePicture ||
-          doctor?.imageUrl ||
-          doctor?.image ||
-          null;
-        
-        // Get address fields
-        const address = doctor?.address || {};
-        const place = address?.place || '';
-        const district = address?.district || '';
-        const state = address?.state || '';
-        const country = address?.country || '';
-        const pincode = address?.pincode || '';
-        
-        // Format address for display
-        const addressParts = [place, district, state, country].filter(Boolean);
-        const addressString = addressParts.length > 0 ? 
-          `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` : 
-          '';
-        
-        // Format date of birth
-        const dob = doctor?.dob ? 
-          doctor.dob.split('T')[0] : 
-          '';
-        
-        const newFormData = {
-          firstName: doctor?.firstName || doctor?.name?.split(' ')[0] || '',
-          lastName: doctor?.lastName || doctor?.name?.split(' ')[1] || '',
-          email: doctor?.email || '',
-          phone: doctor?.phone || '',
-          profileImage: imageKey,
-          imageUrl: imageKey,
-          imageKey: imageKey,
-          department: doctor?.department || '',
-          specialist: doctor?.specialist || doctor?.specialization || '',
-          qualification: doctor?.qualification || '',
-          experience: doctor?.experience || '',
-          regNo: doctor?.regNo || doctor?.registrationNumber || '',
-          hospitalName: doctor?.hospitalName || doctor?.hospital || '',
-          hospitalId: doctor?.hospitalId || '',
-          bio: doctor?.bio || doctor?.about || '',
-          consultationFee: doctor?.consultationFee || '',
-          availability: doctor?.availability || '',
-          gender: doctor?.gender || '',
-          dob: dob,
-          address: address,
-          place: place,
-          district: district,
-          state: state,
-          country: country,
-          pincode: pincode,
-          addressString: addressString,
-          roleId: doctor?.roleId || '',
-          isActive: doctor?.isActive ?? true,
-          createdAt: doctor?.createdAt || '',
-          updatedAt: doctor?.updatedAt || ''
-        };
-        
-        setFormData(newFormData);
-        setEditForm(newFormData);
-        
-        if (imageKey) {
-          const fullUrl = getFullImageUrl(imageKey);
+      if (!doctor) return;
+
+      const imageKey =
+        doctor?.profilePicture ||
+        doctor?.imageUrl ||
+        doctor?.image ||
+        null;
+
+      // Get address fields
+      const address = doctor?.address || {};
+      const place = address?.place || '';
+      const district = address?.district || '';
+      const state = address?.state || '';
+      const country = address?.country || '';
+      const pincode = address?.pincode || '';
+
+      // Format address for display
+      const addressParts = [place, district, state, country].filter(Boolean);
+      const addressString = addressParts.length > 0 ?
+        `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` :
+        '';
+
+      // Format date of birth
+      const dob = doctor?.dob ?
+        doctor.dob.split('T')[0] :
+        '';
+
+      const newFormData = {
+        firstName: doctor?.firstName || doctor?.name?.split(' ')[0] || '',
+        lastName: doctor?.lastName || doctor?.name?.split(' ')[1] || '',
+        email: doctor?.email || '',
+        phone: doctor?.phone || '',
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
+        department: doctor?.department || '',
+        specialist: doctor?.specialist || doctor?.specialization || '',
+        qualification: doctor?.qualification || '',
+        experience: doctor?.experience || '',
+        regNo: doctor?.regNo || doctor?.registrationNumber || '',
+        hospitalName: doctor?.hospitalName || doctor?.hospital || '',
+        hospitalId: doctor?.hospitalId || '',
+        bio: doctor?.bio || doctor?.about || '',
+        consultationFee: doctor?.consultationFee || '',
+        availability: doctor?.availability || '',
+        gender: doctor?.gender || '',
+        dob: dob,
+        address: address,
+        place: place,
+        district: district,
+        state: state,
+        country: country,
+        pincode: pincode,
+        addressString: addressString,
+        roleId: doctor?.roleId || '',
+        isActive: doctor?.isActive ?? true,
+        createdAt: doctor?.createdAt || '',
+        updatedAt: doctor?.updatedAt || ''
+      };
+
+      if (!isMounted) return;
+      setFormData(newFormData);
+      setEditForm(newFormData);
+
+      if (imageKey) {
+        const fullUrl = await getFullImageUrl(imageKey);
+        if (isMounted) {
           setPreviewImage(fullUrl);
           setImageError(false);
         }
+      } else {
+        setPreviewImage(null);
       }
-    }
+    };
+
+    loadDoctorData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [doctorResponse]);
 
   const resetUploadState = () => {
@@ -283,40 +318,40 @@ const DoctorProfile = () => {
   // ✅ Image upload with proper params
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showErrorToast('File size must be less than 5MB');
       return;
     }
-    
+
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
       showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
       return;
     }
-    
+
     setUploadProgress(10);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       setUploadProgress(30);
       const uploaded = await uploadToS3(
-        file, 
-        formData.imageKey || null, 
+        file,
+        formData.imageKey || null,
         doctorId,
         'doctor'
       );
       setUploadProgress(100);
-      
+
       setEditForm(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
+
       setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
@@ -324,8 +359,11 @@ const DoctorProfile = () => {
       console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
+
+      // ✅ FIXED: await async getFullImageUrl
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        const imageUrl = await getFullImageUrl(formData.profileImage);
+        setPreviewImage(imageUrl);
       } else {
         setPreviewImage(null);
       }
@@ -353,7 +391,7 @@ const DoctorProfile = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: Phone validation + robust error handling
+  // ✅ FIXED: Phone validation + robust error handling + awaited image URL
   // ============================================================
   const handleSave = async () => {
     // ✅ Validate phone before sending to backend
@@ -367,7 +405,7 @@ const DoctorProfile = () => {
 
     setIsSaving(true);
     setServerError(null);
-    
+
     try {
       const updateData = {
         firstName: editForm.firstName,
@@ -394,43 +432,46 @@ const DoctorProfile = () => {
           pincode: editForm.pincode
         }
       };
-      
-      const response = await updateDoctor({ 
-        id: doctorId, 
-        updateDoctor: updateData 
+
+      const response = await updateDoctor({
+        id: doctorId,
+        updateDoctor: updateData
       }).unwrap();
-      
+
       const updatedDoctor = response.data || response;
-      
-      let newProfilePicture = updatedDoctor.profilePicture || 
-                              updatedDoctor.profileImage || 
+
+      let newProfilePicture = updatedDoctor.profilePicture ||
+                              updatedDoctor.profileImage ||
                               updatedDoctor.imageUrl ||
                               updateData.profilePicture;
-      
-      const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
-      
+
+      // ✅ FIXED: await async getFullImageUrl
+      const newImageUrl = newProfilePicture
+        ? await getFullImageUrl(newProfilePicture)
+        : null;
+
       const updatedFormData = {
         ...editForm,
         profileImage: newProfilePicture,
         imageUrl: newProfilePicture,
         imageKey: newProfilePicture,
       };
-      
+
       setFormData(updatedFormData);
-      
+
       if (newImageUrl) {
         setPreviewImage(newImageUrl);
         setImageError(false);
       }
-      
+
       setIsEditing(false);
       resetUploadState();
       setServerError(null);
-      
+
       // Update localStorage
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = { 
-        ...storedUser, 
+      const updatedUser = {
+        ...storedUser,
         firstName: updateData.firstName,
         lastName: updateData.lastName,
         email: updateData.email,
@@ -438,7 +479,7 @@ const DoctorProfile = () => {
         profilePicture: newProfilePicture
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
+
       // Update authData
       const authData = JSON.parse(localStorage.getItem('authData') || '{}');
       localStorage.setItem('authData', JSON.stringify({
@@ -448,11 +489,11 @@ const DoctorProfile = () => {
         phone: updateData.phone,
         profilePicture: newProfilePicture
       }));
-      
+
       showSuccessToast('Profile updated successfully!');
-      
+
       refetch();
-      
+
     } catch (error) {
       console.error('Update Error:', error);
 
@@ -512,15 +553,22 @@ const DoctorProfile = () => {
       // ✅ Final fallback
       setServerError('Failed to update profile. Please try again.');
       showErrorToast('Failed to update profile. Please try again.'); // ✅ Shows toast only
-      
+
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ✅ FIXED: use .then for the async helper (handleCancel is not async)
   const handleCancel = () => {
     setEditForm({ ...formData });
-    setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
+
+    if (formData.profileImage) {
+      getFullImageUrl(formData.profileImage).then(setPreviewImage);
+    } else {
+      setPreviewImage(null);
+    }
+
     setUploadProgress(0);
     setIsEditing(false);
     setImageError(false);
@@ -528,19 +576,12 @@ const DoctorProfile = () => {
     showWarningToast('Changes discarded');
   };
 
+  // ✅ FIXED: synchronous — only returns state or fallback, no async call here
   const getProfileImage = () => {
     if (previewImage && !imageError) {
       return previewImage;
     }
-
-    if (formData.profileImage || formData.imageUrl || formData.imageKey) {
-      const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
-      const url = getFullImageUrl(imageValue);
-      if (url) return url;
-    }
-
-    const name = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Doctor')}&background=1C62A0&color=fff&length=2`;
+    return FALLBACK_IMAGE;
   };
 
   const handleImageError = (e) => {
@@ -566,8 +607,8 @@ const DoctorProfile = () => {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mt-4">Doctor Not Found</h2>
           <p className="text-gray-600 mt-2">No doctor found with ID: {doctorId}</p>
-          <button 
-            onClick={() => navigate('/dashboard')} 
+          <button
+            onClick={() => navigate('/dashboard')}
             className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a]"
           >
             Back to Dashboard
@@ -586,8 +627,6 @@ const DoctorProfile = () => {
           <h1 className="text-3xl font-bold text-gray-900">Doctor Profile</h1>
           <p className="text-gray-600 mt-1">Manage your professional information</p>
         </div>
-
-        {/* ❌ REMOVED: Large red error div - now only shows toast notifications */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Profile Card */}
@@ -631,11 +670,11 @@ const DoctorProfile = () => {
                       </button>
                     )}
                   </div>
-                  
+
                   {isEditing && isUploading && (
                     <div className="mt-4 w-full">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
                           style={{ width: `${uploadProgress}%` }}
                         />
@@ -644,7 +683,7 @@ const DoctorProfile = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
                   Dr. {doctor?.firstName || formData.firstName || ''} {doctor?.lastName || formData.lastName || ''}
                 </h2>
