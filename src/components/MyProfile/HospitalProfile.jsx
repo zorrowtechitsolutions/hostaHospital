@@ -53,31 +53,42 @@ const validatePhone = (phone) => {
   return '';
 };
 
-const getFullImageUrl = (imageKey) => {
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
-  
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+
+  // Extract key if backend returns an object
+  if (typeof imageKey === 'object') {
+    imageKey =
+      imageKey.key ||
+      imageKey.url ||
+      imageKey.imageUrl ||
+      imageKey.Location ||
+      null;
+  }
+
+  if (typeof imageKey !== 'string') return null;
+
+  // Already a URL
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
     const separator = imageKey.includes('?') ? '&' : '?';
     return `${imageKey}${separator}_t=${Date.now()}`;
   }
-  
-  const url = getS3ImageUrl(imageKey);
+
+  // IMPORTANT: Await the S3 function
+  const url = await getS3ImageUrl(imageKey);
+
   if (!url) return null;
-  
+
   const separator = url.includes('?') ? '&' : '?';
+
   return `${url}${separator}_t=${Date.now()}`;
 };
-
-// ==================== ❌ REMOVE THESE PLACEHOLDER FUNCTIONS ====================
-// const showSuccessToast = (message) => {
-//   // Toast implementation
-// };
-// const showErrorToast = (message) => {
-//   // Toast implementation
-// };
-// const showWarningToast = (message) => {
-//   // Toast implementation
-// };
 
 // ==================== SKELETON LOADER ====================
 const ProfileSkeleton = () => (
@@ -106,9 +117,9 @@ const ProfileSkeleton = () => (
 const HospitalProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const hospitalId = user?.hospitalId || user?.id;
-  
+
   const { data: hospitalData, isLoading: isLoadingHospital, error: fetchError, refetch } = useGetHospitalByIdQuery(hospitalId, {
     skip: !hospitalId,
   });
@@ -130,7 +141,7 @@ const HospitalProfile = () => {
     gender: '',
     dateOfBirth: ''
   });
-  
+
   const [editForm, setEditForm] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -140,11 +151,11 @@ const HospitalProfile = () => {
   const [serverError, setServerError] = useState(null); // Keep for logic, but not displayed
 
   // ==================== SOCKET EVENT HANDLERS ====================
-  
+
   const handleHospitalUpdated = (data) => {
     if (data && data.id === hospitalId) {
       refetch();
-      
+
       if (data.name || data.email || data.phone) {
         setFormData(prev => ({
           ...prev,
@@ -213,25 +224,30 @@ const HospitalProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
+  // ✅ FIXED: await async getFullImageUrl inside effect
   useEffect(() => {
-    if (hospitalData) {
+    let isMounted = true;
+
+    const loadHospitalData = async () => {
+      if (!hospitalData) return;
+
       const hospital = hospitalData.data || hospitalData;
-      
-      const imageKey = 
+
+      const imageKey =
         hospital?.profilePicture ||
         hospital?.imageUrl ||
         hospital?.image ||
         null;
-      
+
       const locationParts = [
         hospital.address?.place,
         hospital.address?.district,
         hospital.address?.state,
         hospital.address?.country
       ].filter(Boolean);
-      
+
       const locationString = locationParts.join(', ');
-      
+
       const newFormData = {
         fullName: hospital.name || '',
         username: '@' + (hospital.name || '').replace(/\s+/g, '').toLowerCase(),
@@ -248,16 +264,27 @@ const HospitalProfile = () => {
         gender: hospital.gender || '',
         dateOfBirth: hospital.dateOfBirth || ''
       };
-      
+
+      if (!isMounted) return;
       setFormData(newFormData);
       setEditForm(newFormData);
-      
+
       if (imageKey) {
-        const fullUrl = getFullImageUrl(imageKey);
-        setPreviewImage(fullUrl);
-        setImageError(false);
+        const fullUrl = await getFullImageUrl(imageKey);
+        if (isMounted) {
+          setPreviewImage(fullUrl);
+          setImageError(false);
+        }
+      } else {
+        setPreviewImage(null);
       }
-    }
+    };
+
+    loadHospitalData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [hospitalData]);
 
   const resetUploadState = () => {
@@ -275,40 +302,40 @@ const HospitalProfile = () => {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showErrorToast('File size must be less than 5MB');
       return;
     }
-    
+
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
       showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
       return;
     }
-    
+
     setUploadProgress(10);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       setUploadProgress(30);
       const uploaded = await uploadToS3(
-        file, 
-        formData.imageKey || null, 
+        file,
+        formData.imageKey || null,
         hospitalId,
         'hospital'
       );
       setUploadProgress(100);
-      
+
       setEditForm(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
+
       setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
@@ -316,8 +343,11 @@ const HospitalProfile = () => {
       console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
+
+      // ✅ FIXED: await async getFullImageUrl
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        const imageUrl = await getFullImageUrl(formData.profileImage);
+        setPreviewImage(imageUrl);
       } else {
         setPreviewImage(null);
       }
@@ -345,7 +375,7 @@ const HospitalProfile = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: Phone validation + robust error handling
+  // ✅ FIXED: Phone validation + robust error handling + awaited image URL
   // ============================================================
   const handleSave = async () => {
     // ✅ Validate phone before sending to backend
@@ -353,13 +383,13 @@ const HospitalProfile = () => {
 
     if (phoneError) {
       setServerError(phoneError);
-      showErrorToast(phoneError); // ✅ Shows toast only
+      showErrorToast(phoneError);
       return;
     }
 
     setIsSaving(true);
     setServerError(null);
-    
+
     try {
       const updateData = {
         name: editForm.fullName,
@@ -370,52 +400,55 @@ const HospitalProfile = () => {
         website: editForm.websiteLink,
         profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey,
       };
-      
-      const response = await updateHospital({ 
-        id: hospitalId, 
-        updateHospital: updateData 
+
+      const response = await updateHospital({
+        id: hospitalId,
+        updateHospital: updateData
       }).unwrap();
-      
+
       const updatedHospital = response.data || response;
-      
-      let newProfilePicture = updatedHospital.profilePicture || 
-                              updatedHospital.profileImage || 
+
+      let newProfilePicture = updatedHospital.profilePicture ||
+                              updatedHospital.profileImage ||
                               updatedHospital.imageUrl ||
                               updateData.profilePicture;
-      
-      const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
-      
+
+      // ✅ FIXED: await async getFullImageUrl
+      const newImageUrl = newProfilePicture
+        ? await getFullImageUrl(newProfilePicture)
+        : null;
+
       const updatedFormData = {
         ...editForm,
         profileImage: newProfilePicture,
         imageUrl: newProfilePicture,
         imageKey: newProfilePicture,
       };
-      
+
       setFormData(updatedFormData);
-      
+
       if (newImageUrl) {
         setPreviewImage(newImageUrl);
         setImageError(false);
       }
-      
+
       setIsEditing(false);
       resetUploadState();
       setServerError(null);
-      
+
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = { 
-        ...storedUser, 
+      const updatedUser = {
+        ...storedUser,
         name: updateData.name,
         email: updateData.email,
         phone: updateData.phone,
         profilePicture: newProfilePicture
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
+
       showSuccessToast('Profile updated successfully!');
       refetch();
-      
+
     } catch (error) {
       console.error('Update Error:', error);
 
@@ -440,50 +473,57 @@ const HospitalProfile = () => {
 
         const message = messages.join(', ');
         setServerError(message);
-        showErrorToast(message); // ✅ Shows toast only
+        showErrorToast(message);
         return;
       }
 
       // ✅ Backend error.message
       if (backendError?.message) {
         setServerError(backendError.message);
-        showErrorToast(backendError.message); // ✅ Shows toast only
+        showErrorToast(backendError.message);
         return;
       }
 
       // ✅ Direct API message
       if (error?.data?.message) {
         setServerError(error.data.message);
-        showErrorToast(error.data.message); // ✅ Shows toast only
+        showErrorToast(error.data.message);
         return;
       }
 
       // ✅ RTK / fetch error
       if (error?.error) {
         setServerError(error.error);
-        showErrorToast(error.error); // ✅ Shows toast only
+        showErrorToast(error.error);
         return;
       }
 
       // ✅ JavaScript error
       if (error?.message) {
         setServerError(error.message);
-        showErrorToast(error.message); // ✅ Shows toast only
+        showErrorToast(error.message);
         return;
       }
 
       // ✅ Final fallback
       setServerError('Failed to update profile. Please try again.');
-      showErrorToast('Failed to update profile. Please try again.'); // ✅ Shows toast only
-      
+      showErrorToast('Failed to update profile. Please try again.');
+
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ✅ FIXED: await async getFullImageUrl
   const handleCancel = () => {
     setEditForm({ ...formData });
-    setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
+
+    if (formData.profileImage) {
+      getFullImageUrl(formData.profileImage).then(setPreviewImage);
+    } else {
+      setPreviewImage(null);
+    }
+
     setUploadProgress(0);
     setIsEditing(false);
     setImageError(false);
@@ -495,13 +535,6 @@ const HospitalProfile = () => {
     if (previewImage && !imageError) {
       return previewImage;
     }
-
-    if (formData.profileImage || formData.imageUrl || formData.imageKey) {
-      const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
-      const url = getFullImageUrl(imageValue);
-      if (url) return url;
-    }
-
     return FALLBACK_IMAGE;
   };
 
@@ -524,8 +557,6 @@ const HospitalProfile = () => {
           <h1 className="text-3xl font-bold text-gray-900">Hospital Profile</h1>
           <p className="text-gray-600 mt-1">Manage your hospital information and preferences</p>
         </div>
-
-        {/* ❌ REMOVED: Large red error div - now only shows toast notifications */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
@@ -569,11 +600,11 @@ const HospitalProfile = () => {
                       </button>
                     )}
                   </div>
-                  
+
                   {isEditing && isUploading && (
                     <div className="mt-4 w-full">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
                           style={{ width: `${uploadProgress}%` }}
                         />
@@ -582,7 +613,7 @@ const HospitalProfile = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
                   {isEditing ? editForm.fullName : formData.fullName}
                 </h2>
@@ -632,7 +663,7 @@ const HospitalProfile = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className={CARD_CLASS}>
               <SectionTitle icon={Heart} title="About Hospital" />
-              
+
               <ProfileTextarea
                 label="Bio"
                 value={isEditing ? editForm.bio : formData.bio}
@@ -657,7 +688,7 @@ const HospitalProfile = () => {
                   formData.websiteLink && (
                     <div className="flex items-center text-sm">
                       <Globe className="w-4 h-4 text-gray-400 mr-2" />
-                      <a 
+                      <a
                         href={formData.websiteLink}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -680,14 +711,14 @@ const HospitalProfile = () => {
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('fullName', e.target.value)}
                 />
-                
+
                 <ProfileField
                   label="Username"
                   value={isEditing ? editForm.username : formData.username}
                   isEditing={isEditing}
                   onChange={(e) => updateEditForm('username', e.target.value)}
                 />
-                
+
                 <ProfileField
                   label="Email"
                   value={isEditing ? editForm.email : formData.email}
@@ -696,7 +727,7 @@ const HospitalProfile = () => {
                   type="email"
                   icon={Mail}
                 />
-                
+
                 {/* ✅ Phone input with 10-digit restriction */}
                 <ProfileField
                   label="Phone Number"

@@ -39,31 +39,42 @@ const validatePhone = (phone) => {
   return '';
 };
 
-const getFullImageUrl = (imageKey) => {
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
-  
-  if (imageKey.startsWith('http://') || imageKey.startsWith('https://')) {
+
+  // Extract key if backend returns an object
+  if (typeof imageKey === 'object') {
+    imageKey =
+      imageKey.key ||
+      imageKey.url ||
+      imageKey.imageUrl ||
+      imageKey.Location ||
+      null;
+  }
+
+  if (typeof imageKey !== 'string') return null;
+
+  // Already a URL
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
     const separator = imageKey.includes('?') ? '&' : '?';
     return `${imageKey}${separator}_t=${Date.now()}`;
   }
-  
-  const url = getS3ImageUrl(imageKey);
+
+  // IMPORTANT: Await the S3 function
+  const url = await getS3ImageUrl(imageKey);
+
   if (!url) return null;
-  
+
   const separator = url.includes('?') ? '&' : '?';
+
   return `${url}${separator}_t=${Date.now()}`;
 };
-
-// ==================== ❌ REMOVE THESE PLACEHOLDER FUNCTIONS ====================
-// const showSuccessToast = (message) => {
-//   // Toast implementation
-// };
-// const showErrorToast = (message) => {
-//   // Toast implementation
-// };
-// const showWarningToast = (message) => {
-//   // Toast implementation
-// };
 
 // ==================== SKELETON LOADER ====================
 const ProfileSkeleton = () => (
@@ -139,13 +150,13 @@ const SectionTitle = ({ icon: Icon, title }) => (
 const StaffProfile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const staffId = user?.staffId || user?.id;
-  
+
   const { data: staffResponse, isLoading, error: fetchError, refetch } = useGetStaffByIdQuery(staffId, {
     skip: !staffId,
   });
-  
+
   const [updateStaff, { isLoading: isUpdating }] = useUpdateStaffMutation();
 
   const [formData, setFormData] = useState({
@@ -179,7 +190,7 @@ const StaffProfile = () => {
     createdAt: '',
     updatedAt: ''
   });
-  
+
   const [editForm, setEditForm] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -199,80 +210,94 @@ const StaffProfile = () => {
     }
   }, [fetchError, logout, navigate]);
 
-  // Populate profile from API data
+  // ✅ FIXED: await async getFullImageUrl inside effect
   useEffect(() => {
-    if (staffResponse) {
+    let isMounted = true;
+
+    const loadStaffData = async () => {
+      if (!staffResponse) return;
+
       const staff = staffResponse.data;
-      
-      if (staff) {
-        const imageKey = 
-          staff?.profilePicture ||
-          staff?.imageUrl ||
-          staff?.image ||
-          null;
-        
-        const address = staff?.address || {};
-        const place = address?.place || '';
-        const district = address?.district || '';
-        const state = address?.state || '';
-        const country = address?.country || '';
-        const pincode = address?.pincode || '';
-        
-        const addressParts = [place, district, state, country].filter(Boolean);
-        const addressString = addressParts.length > 0 ? 
-          `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` : 
-          '';
-        
-        const joiningDate = staff?.joiningDate ? 
-          staff.joiningDate.split('T')[0] : 
-          '';
-        
-        const dob = staff?.dob ? 
-          staff.dob.split('T')[0] : 
-          '';
-        
-        const staffInfo = {
-          id: staff?.id || '',
-          name: staff?.name || '',
-          email: staff?.email || '',
-          phone: staff?.phone || '',
-          profileImage: imageKey,
-          imageUrl: imageKey,
-          imageKey: imageKey,
-          designation: staff?.designation || '',
-          staffType: staff?.staffType || '',
-          qualification: staff?.qualification || '',
-          hospitalName: staff?.hospitalName || '',
-          department: staff?.department || '',
-          bio: staff?.bio || '',
-          joiningDate: joiningDate,
-          staffId: staff?.staffId || staff?.id || '',
-          gender: staff?.gender || '',
-          dob: dob,
-          jobType: staff?.jobType || '',
-          place: place,
-          district: district,
-          state: state,
-          country: country,
-          pincode: pincode,
-          addressString: addressString,
-          knowLanguages: staff?.knowLanguages || [],
-          roleId: staff?.roleId || '',
-          isActive: staff?.isActive ?? true,
-          createdAt: staff?.createdAt || '',
-          updatedAt: staff?.updatedAt || ''
-        };
-                
-        setFormData(staffInfo);
-        setEditForm(staffInfo);
-        
-        if (imageKey) {
-          const fullUrl = getFullImageUrl(imageKey);
+      if (!staff) return;
+
+      const imageKey =
+        staff?.profilePicture ||
+        staff?.imageUrl ||
+        staff?.image ||
+        null;
+
+      const address = staff?.address || {};
+      const place = address?.place || '';
+      const district = address?.district || '';
+      const state = address?.state || '';
+      const country = address?.country || '';
+      const pincode = address?.pincode || '';
+
+      const addressParts = [place, district, state, country].filter(Boolean);
+      const addressString = addressParts.length > 0 ?
+        `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` :
+        '';
+
+      const joiningDate = staff?.joiningDate ?
+        staff.joiningDate.split('T')[0] :
+        '';
+
+      const dob = staff?.dob ?
+        staff.dob.split('T')[0] :
+        '';
+
+      const staffInfo = {
+        id: staff?.id || '',
+        name: staff?.name || '',
+        email: staff?.email || '',
+        phone: staff?.phone || '',
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
+        designation: staff?.designation || '',
+        staffType: staff?.staffType || '',
+        qualification: staff?.qualification || '',
+        hospitalName: staff?.hospitalName || '',
+        department: staff?.department || '',
+        bio: staff?.bio || '',
+        joiningDate: joiningDate,
+        staffId: staff?.staffId || staff?.id || '',
+        gender: staff?.gender || '',
+        dob: dob,
+        jobType: staff?.jobType || '',
+        place: place,
+        district: district,
+        state: state,
+        country: country,
+        pincode: pincode,
+        addressString: addressString,
+        knowLanguages: staff?.knowLanguages || [],
+        roleId: staff?.roleId || '',
+        isActive: staff?.isActive ?? true,
+        createdAt: staff?.createdAt || '',
+        updatedAt: staff?.updatedAt || ''
+      };
+
+      if (!isMounted) return;
+      setFormData(staffInfo);
+      setEditForm(staffInfo);
+
+      if (imageKey) {
+        const fullUrl = await getFullImageUrl(imageKey);
+        if (isMounted) {
           setPreviewImage(fullUrl);
           setImageError(false);
         }
+      } else {
+        setPreviewImage(null);
       }
-    }
+    };
+
+    loadStaffData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [staffResponse]);
 
   const resetUploadState = () => {
@@ -290,42 +315,42 @@ const StaffProfile = () => {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showErrorToast('File size must be less than 5MB');
       return;
     }
-    
+
     if (!VALID_IMAGE_TYPES.includes(file.type)) {
       showErrorToast('Invalid file type. Allowed: JPEG, PNG, GIF, WEBP');
       return;
     }
-    
+
     setUploadProgress(10);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       setUploadProgress(30);
       const numericId = formData.id || formData.staffNumericId || parseInt(formData.staffId?.replace(/\D/g, '') || '0');
       const uploaded = await uploadToS3(
-        file, 
-        formData.imageKey || null, 
+        file,
+        formData.imageKey || null,
         numericId,
         'staff'
       );
-      
+
       setUploadProgress(100);
-      
+
       setEditForm(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
+
       setImageError(false);
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully! Click Save to apply.');
@@ -333,8 +358,11 @@ const StaffProfile = () => {
       console.error('Upload error:', error);
       setUploadProgress(0);
       showErrorToast('Failed to upload image. Please try again.');
+
+      // ✅ FIXED: await async getFullImageUrl
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        const imageUrl = await getFullImageUrl(formData.profileImage);
+        setPreviewImage(imageUrl);
       } else {
         setPreviewImage(null);
       }
@@ -362,7 +390,7 @@ const StaffProfile = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: Phone validation + robust error handling
+  // ✅ FIXED: Phone validation + robust error handling + awaited image URL
   // ============================================================
   const handleSave = async () => {
     // ✅ Validate phone before sending to backend
@@ -376,10 +404,10 @@ const StaffProfile = () => {
 
     setIsSaving(true);
     setServerError(null);
-    
+
     try {
       const staffIdValue = formData.id || formData.staffNumericId || formData.staffId;
-      
+
       const updateData = {
         name: editForm.name,
         email: editForm.email,
@@ -403,50 +431,53 @@ const StaffProfile = () => {
           pincode: editForm.pincode
         }
       };
-      
-      const response = await updateStaff({ 
-        id: staffIdValue, 
-        data: updateData 
+
+      const response = await updateStaff({
+        id: staffIdValue,
+        data: updateData
       }).unwrap();
-      
+
       const updatedStaff = response.data;
-      
-      let newProfilePicture = updatedStaff?.profilePicture || 
-                              updatedStaff?.profileImage || 
+
+      let newProfilePicture = updatedStaff?.profilePicture ||
+                              updatedStaff?.profileImage ||
                               updatedStaff?.imageUrl ||
                               updateData.profilePicture;
-      
-      const newImageUrl = newProfilePicture ? getFullImageUrl(newProfilePicture) : null;
-      
+
+      // ✅ FIXED: await async getFullImageUrl
+      const newImageUrl = newProfilePicture
+        ? await getFullImageUrl(newProfilePicture)
+        : null;
+
       const updatedFormData = {
         ...editForm,
         profileImage: newProfilePicture,
         imageUrl: newProfilePicture,
         imageKey: newProfilePicture,
       };
-      
+
       setFormData(updatedFormData);
-      
+
       if (newImageUrl) {
         setPreviewImage(newImageUrl);
         setImageError(false);
       }
-      
+
       setIsEditing(false);
       resetUploadState();
       setServerError(null);
-      
+
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = { 
-        ...storedUser, 
+      const updatedUser = {
+        ...storedUser,
         staffId: staffIdValue,
-        name: updateData.name, 
-        email: updateData.email, 
-        phone: updateData.phone, 
-        profilePicture: newProfilePicture 
+        name: updateData.name,
+        email: updateData.email,
+        phone: updateData.phone,
+        profilePicture: newProfilePicture
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
+
       const authData = JSON.parse(localStorage.getItem('authData') || '{}');
       localStorage.setItem('authData', JSON.stringify({
         ...authData,
@@ -455,11 +486,11 @@ const StaffProfile = () => {
         phone: updateData.phone,
         profilePicture: newProfilePicture
       }));
-      
+
       showSuccessToast('Profile updated successfully!');
-      
+
       refetch();
-      
+
     } catch (error) {
       console.error('Update Error:', error);
 
@@ -519,15 +550,22 @@ const StaffProfile = () => {
       // ✅ Final fallback
       setServerError('Failed to update profile. Please try again.');
       showErrorToast('Failed to update profile. Please try again.'); // ✅ Shows toast only
-      
+
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ✅ FIXED: use .then for the async helper (handleCancel is not async)
   const handleCancel = () => {
     setEditForm({ ...formData });
-    setPreviewImage(formData.profileImage ? getFullImageUrl(formData.profileImage) : null);
+
+    if (formData.profileImage) {
+      getFullImageUrl(formData.profileImage).then(setPreviewImage);
+    } else {
+      setPreviewImage(null);
+    }
+
     setUploadProgress(0);
     setIsEditing(false);
     setImageError(false);
@@ -535,19 +573,12 @@ const StaffProfile = () => {
     showWarningToast('Changes discarded');
   };
 
+  // ✅ FIXED: synchronous — only returns state or fallback, no async call here
   const getProfileImage = () => {
     if (previewImage && !imageError) {
       return previewImage;
     }
-
-    if (formData.profileImage || formData.imageUrl || formData.imageKey) {
-      const imageValue = formData.profileImage || formData.imageUrl || formData.imageKey;
-      const url = getFullImageUrl(imageValue);
-      if (url) return url;
-    }
-
-    const name = formData.name || 'Staff';
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1C62A0&color=fff&length=2`;
+    return FALLBACK_IMAGE;
   };
 
   const handleImageError = (e) => {
@@ -572,8 +603,8 @@ const StaffProfile = () => {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mt-4">Staff Not Found</h2>
           <p className="text-gray-600 mt-2">No staff found with ID: {staffId}</p>
-          <button 
-            onClick={() => navigate('/dashboard')} 
+          <button
+            onClick={() => navigate('/dashboard')}
             className="mt-4 px-4 py-2 bg-[#1C62A0] text-white rounded-lg hover:bg-[#155a8a]"
           >
             Back to Dashboard
@@ -592,8 +623,6 @@ const StaffProfile = () => {
           <h1 className="text-3xl font-bold text-gray-900">Staff Profile</h1>
           <p className="text-gray-600 mt-1">Manage your staff information</p>
         </div>
-
-        {/* ❌ REMOVED: Large red error div - now only shows toast notifications */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Profile Card */}
@@ -637,11 +666,11 @@ const StaffProfile = () => {
                       </button>
                     )}
                   </div>
-                  
+
                   {isEditing && isUploading && (
                     <div className="mt-4 w-full">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
                           style={{ width: `${uploadProgress}%` }}
                         />
@@ -650,7 +679,7 @@ const StaffProfile = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <h2 className="mt-4 text-xl font-semibold text-gray-900">
                   {staff?.name || formData.name || 'Staff'}
                 </h2>

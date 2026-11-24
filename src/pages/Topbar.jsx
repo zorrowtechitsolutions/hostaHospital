@@ -1,8 +1,8 @@
 // src/components/layout/TopBar.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Bell, ChevronDown, Maximize2, Minimize2, Menu, 
+import {
+  Bell, ChevronDown, Maximize2, Minimize2, Menu,
   UserCheck, Settings, LogOut, Bell as BellIcon
 } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
@@ -27,12 +27,38 @@ import { registerStaffEvents, unregisterStaffEvents } from '../socket/staffEvent
 
 // ================= HELPER FUNCTIONS =================
 
-// Get S3 image URL with cache busting
-const getImageUrlWithCache = (imageUrl) => {
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+const getImageUrlWithCache = async (imageUrl) => {
   if (!imageUrl) return null;
-  const url = getS3ImageUrl(imageUrl);
+
+  if (typeof imageUrl === 'object') {
+    imageUrl =
+      imageUrl.key ||
+      imageUrl.url ||
+      imageUrl.imageUrl ||
+      imageUrl.Location ||
+      null;
+  }
+
+  if (typeof imageUrl !== 'string') return null;
+
+  if (
+    imageUrl.startsWith('http://') ||
+    imageUrl.startsWith('https://') ||
+    imageUrl.startsWith('data:') ||
+    imageUrl.startsWith('blob:')
+  ) {
+    const separator = imageUrl.includes('?') ? '&' : '?';
+    return `${imageUrl}${separator}_t=${Date.now()}`;
+  }
+
+  // IMPORTANT: Await S3 response
+  const url = await getS3ImageUrl(imageUrl);
+
   if (!url) return null;
+
   const separator = url.includes('?') ? '&' : '?';
+
   return `${url}${separator}_t=${Date.now()}`;
 };
 
@@ -50,7 +76,7 @@ const getInitials = (name) => {
 // Generate a consistent color from a string
 const getColorFromName = (name) => {
   if (!name) return 'from-blue-500 to-purple-500';
-  
+
   const colors = [
     'from-blue-500 to-blue-600',
     'from-purple-500 to-purple-600',
@@ -63,7 +89,7 @@ const getColorFromName = (name) => {
     'from-orange-500 to-orange-600',
     'from-cyan-500 to-cyan-600',
   ];
-  
+
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -90,25 +116,28 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [menuImageError, setMenuImageError] = useState(false);
-  
+
+  // ✅ NEW: async-loaded profile image URL
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
+
   // Notification toggle state
   const [notificationEnabled, setNotificationEnabled] = useState(
     user?.notificationEnabled ?? true
   );
-  
+
   const profileMenuRef = useRef(null);
   const notificationRef = useRef(null);
-  
+
   const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
-  
+
   // Toggle notification mutation
   const [
     toggleNotificationStatus,
     { isLoading: isTogglingNotification }
   ] = useToggleNotificationStatusMutation();
-  
+
   const userRole = user?.role || 'hospital';
-  
+
   // ================= FIX: CORRECT ID LOGIC (matches HospitalProfile) =================
   const hospitalId = Number(
     user?.hospitalId ||
@@ -123,26 +152,25 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       ? Number(localStorage.getItem("staffId") || user?.staffId)
       : hospitalId;
   // ================= END FIX =================
-  
+
   // Fetch data based on user role
   const { data: hospitalData, isLoading: isHospitalLoading } = useGetHospitalByIdQuery(
     userId,
     { skip: userRole !== 'hospital' || !userId }
   );
-  
+
   const { data: doctorData, isLoading: isDoctorLoading } = useGetDoctorByIdQuery(
     userId,
     { skip: userRole !== 'doctor' || !userId }
   );
-  
+
   const { data: staffData, isLoading: isStaffLoading } = useGetStaffByIdQuery(
     userId,
     { skip: userRole !== 'staff' || !userId }
   );
-  
+
   // ================= FIXED NOTIFICATION LOGIC =================
-  // Use role-specific notification APIs based on user role
-  
+
   // 1. Role-based notifications (for doctors and staff)
   const { data: roleNotificationsData } = useGetNotificationsByRoleQuery(
     {
@@ -154,7 +182,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       pollingInterval: 10000,
     }
   );
-  
+
   // 2. Hospital notifications (for hospital admins only)
   const { data: hospitalNotificationsData } = useGetNotificationsByHospitalQuery(
     { hospitalId },
@@ -163,46 +191,46 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       pollingInterval: 10000,
     }
   );
-  
+
   // 3. Select the correct notifications based on role
   const notifications =
     userRole === "hospital"
       ? hospitalNotificationsData?.data || []
       : roleNotificationsData?.data || [];
-  
+
   // 4. Calculate unread count based on role-specific read status
   const unreadCount = notifications.filter((n) => {
     switch (userRole) {
       case "hospital":
         return !n.hospitalReadStatus?.[hospitalId];
-      
+
       case "doctor":
         return !n.doctorReadStatus?.[userId];
-      
+
       case "staff":
         return !n.staffReadStatus?.[userId];
-      
+
       default:
         return false;
     }
   }).length;
   // ================= END FIXED NOTIFICATION LOGIC =================
-  
+
   // Update notificationEnabled when user changes
   useEffect(() => {
     setNotificationEnabled(user?.notificationEnabled ?? true);
   }, [user?.notificationEnabled]);
-  
+
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  
+
   // Determine which data source to use based on role
   const getProfileData = () => {
     if (userRole === 'doctor' && doctorData) {
       const doctor = doctorData.data || doctorData;
-      
+
       const profileImage = doctor?.profilePicture || doctor?.profileImage || doctor?.imageUrl || doctor?.image || user?.profilePicture || storedUser?.profilePicture || null;
-      
-      const doctorName = 
+
+      const doctorName =
         doctor?.doctorName ||
         doctor?.displayName ||
         doctor?.name ||
@@ -211,7 +239,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         user?.name ||
         storedUser?.name ||
         "Doctor";
-      
+
       return {
         name: doctorName,
         email: doctor?.email || user?.email || storedUser?.email || '',
@@ -221,12 +249,12 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         id: doctor?.id || userId
       };
     }
-    
+
     if (userRole === 'staff' && staffData) {
       const staff = staffData.data || staffData;
-      
+
       const profileImage = staff?.profilePicture || staff?.profileImage || staff?.imageUrl || staff?.image || user?.profilePicture || storedUser?.profilePicture || null;
-      
+
       const staffName =
         staff?.staffName ||
         staff?.displayName ||
@@ -236,7 +264,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         user?.name ||
         storedUser?.name ||
         "Staff";
-      
+
       return {
         name: staffName,
         email: staff?.email || user?.email || storedUser?.email || '',
@@ -246,13 +274,13 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         id: staff?.id || userId
       };
     }
-    
+
     // Default: Hospital
     const hospital = hospitalData?.data || hospitalData;
-    
+
     const profileImage = hospital?.profilePicture || hospital?.profileImage || hospital?.imageUrl || hospital?.image || user?.profilePicture || storedUser?.profilePicture || null;
-    
-    const hospitalName = 
+
+    const hospitalName =
       hospital?.displayName ||
       hospital?.name ||
       hospital?.hospitalName ||
@@ -261,7 +289,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       storedUser?.name ||
       storedUser?.hospitalName ||
       'Hospital';
-    
+
     return {
       name: hospitalName,
       email: user?.email || hospital?.email || storedUser?.email || '',
@@ -271,18 +299,36 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       id: hospital?.id || userId
     };
   };
-  
+
   const profileData = getProfileData();
   const isLoading = isHospitalLoading || isDoctorLoading || isStaffLoading;
-  
-  // Get profile image URL with proper handling
-  const getProfileImageUrl = () => {
-    if (!profileData.profileImage) return null;
-    const url = getImageUrlWithCache(profileData.profileImage);
-    return url;
-  };
-  
-  const profileImageUrl = getProfileImageUrl();
+
+  // ✅ NEW: async effect to load the profile image URL
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfileImage = async () => {
+      const image = profileData.profileImage;
+
+      if (!image) {
+        if (isMounted) setProfileImageUrl(null);
+        return;
+      }
+
+      const url = await getImageUrlWithCache(image);
+
+      if (isMounted) {
+        setProfileImageUrl(url);
+      }
+    };
+
+    loadProfileImage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profileData.profileImage]);
+
   const initials = getInitials(profileData.name);
   const gradientColor = getColorFromName(profileData.name);
 
@@ -297,15 +343,8 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     try {
       const response = await toggleNotificationStatus().unwrap();
       setNotificationEnabled(response.notificationEnabled);
-      
-      // Optional: Show success toast
-      // toast.success(`Notifications ${response.notificationEnabled ? 'enabled' : 'disabled'}`);
     } catch (error) {
       console.error("Failed to update notification status:", error);
-      
-      // Optional: Show error toast
-      // toast.error('Failed to update notification settings');
-      
       // Revert the toggle state if the API call fails
       setNotificationEnabled(prev => !prev);
     }
@@ -315,60 +354,26 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   useEffect(() => {
     // Initialize socket connection
     const socketInstance = initSocket();
-    
+
     // Define event handlers based on user role
     const eventHandlers = {
-      onHospitalRegistered: (data) => {
-        // Refresh data or show notification
-      },
-      onHospitalUpdated: (data) => {
-        // Refresh data or show notification
-      },
-      onHospitalDeleted: (data) => {
-        // Handle deletion
-      },
-      onHospitalBlacklisted: (data) => {
-        // Handle blacklist
-      },
-      onHospitalRecovered: (data) => {
-        // Handle recovery
-      },
-      onDoctorRegistered: (data) => {
-        // Refresh data or show notification
-      },
-      onDoctorUpdated: (data) => {
-        // Refresh data or show notification
-      },
-      onDoctorDeleted: (data) => {
-        // Handle deletion
-      },
-      onDoctorRecovered: (data) => {
-        // Handle recovery
-      },
-      onDoctorPasswordReset: (data) => {
-        // Handle password reset
-      },
-      onDoctorPasswordChanged: (data) => {
-        // Handle password change
-      },
-      onStaffRegistered: (data) => {
-        // Refresh data or show notification
-      },
-      onStaffUpdated: (data) => {
-        // Refresh data or show notification
-      },
-      onStaffDeleted: (data) => {
-        // Handle deletion
-      },
-      onStaffRecovered: (data) => {
-        // Handle recovery
-      },
-      onStaffPasswordReset: (data) => {
-        // Handle password reset
-      },
-      onStaffPasswordChanged: (data) => {
-        // Handle password change
-      }
+      onHospitalRegistered: (data) => {},
+      onHospitalUpdated: (data) => {},
+      onHospitalDeleted: (data) => {},
+      onHospitalBlacklisted: (data) => {},
+      onHospitalRecovered: (data) => {},
+      onDoctorRegistered: (data) => {},
+      onDoctorUpdated: (data) => {},
+      onDoctorDeleted: (data) => {},
+      onDoctorRecovered: (data) => {},
+      onDoctorPasswordReset: (data) => {},
+      onDoctorPasswordChanged: (data) => {},
+      onStaffRegistered: (data) => {},
+      onStaffUpdated: (data) => {},
+      onStaffDeleted: (data) => {},
+      onStaffRecovered: (data) => {},
+      onStaffPasswordReset: (data) => {},
+      onStaffPasswordChanged: (data) => {}
     };
 
     // Register events based on user role
@@ -382,7 +387,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
 
     // Join the appropriate room
     if (userId) {
-      const room = userRole === 'hospital' ? `hospital_${userId}` : 
+      const room = userRole === 'hospital' ? `hospital_${userId}` :
                    userRole === 'doctor' ? `doctor_${userId}` :
                    `staff_${userId}`;
       socket.emit('join-room', room);
@@ -398,15 +403,15 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       } else if (userRole === 'staff') {
         unregisterStaffEvents();
       }
-      
+
       // Leave the room
       if (userId) {
-        const room = userRole === 'hospital' ? `hospital_${userId}` : 
+        const room = userRole === 'hospital' ? `hospital_${userId}` :
                      userRole === 'doctor' ? `doctor_${userId}` :
                      `staff_${userId}`;
         socket.emit('leave-room', room);
       }
-      
+
       // Disconnect socket on unmount
       socket.disconnect();
     };
@@ -416,7 +421,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
   useEffect(() => {
     const handleReconnect = () => {
       if (userId) {
-        const room = userRole === 'hospital' ? `hospital_${userId}` : 
+        const room = userRole === 'hospital' ? `hospital_${userId}` :
                      userRole === 'doctor' ? `doctor_${userId}` :
                      `staff_${userId}`;
         socket.emit('join-room', room);
@@ -447,19 +452,19 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
       const storedUserRole = localStorage.getItem('userRole') || 'hospital';
       const storedHospitalId = localStorage.getItem('hospitalId') || '';
-      
+
       let userId = profileData.id || authData?.id || authData?.userId || authData?.hospitalId || '';
-      
+
       if (!userId) {
         userId = userData?.id || userData?.hospitalId || userData?.doctorId || userData?.staffId || '';
       }
-      
+
       if (!userId) {
         userId = storedHospitalId;
       }
-      
+
       const role = userRole || storedUserRole || 'hospital';
-      
+
       let deviceId = null;
       try {
         const tokens = await tokenManager.getDeviceTokens();
@@ -469,28 +474,27 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       } catch (error) {
         // Could not get deviceId from IndexedDB
       }
-      
+
       if (!deviceId) {
         deviceId = getDeviceId();
       }
-      
+
       const isSuperAdmin = role === 'super_admin';
-      
+
       const logoutParams = {
         id: userId,
         role: role,
         deviceId: deviceId,
         useGlobalEndpoint: isSuperAdmin
       };
-      
+
       if (!isSuperAdmin && storedHospitalId) {
         logoutParams.hospitalId = storedHospitalId;
       }
-      
+
       await logoutApi(logoutParams).unwrap();
-      
+
     } catch (error) {
-      // Logout API error - silently handle
       if (error?.status === 401 || error?.status === 403) {
         // Authentication error during logout - likely already logged out
       }
@@ -504,7 +508,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           // Could not clear tokens
         }
       }
-      
+
       const localStorageItems = [
         'accessToken',
         'refreshToken',
@@ -526,13 +530,13 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
         'profilePicture',
         'userImage'
       ];
-      
+
       localStorageItems.forEach(key => {
         localStorage.removeItem(key);
       });
-      
+
       sessionStorage.clear();
-      
+
       if (window.caches) {
         try {
           const cacheNames = await caches.keys();
@@ -543,7 +547,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
           // Could not clear caches
         }
       }
-      
+
       logout();
       navigate("/sign-in", { replace: true });
     }
@@ -575,7 +579,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('mousedown', handleClickOutside);
-    
+
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('mousedown', handleClickOutside);
@@ -586,7 +590,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
     <header className="bg-[#0f172a] border-b border-slate-700 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
       {/* Left side - Menu button */}
       <div className="flex items-center gap-4 flex-1">
-        <button 
+        <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 rounded-md hover:bg-slate-700 transition-colors"
           aria-label="Toggle sidebar"
@@ -598,7 +602,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
       {/* Right side - Fullscreen, Notifications, Profile */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Fullscreen Toggle */}
-        <button 
+        <button
           onClick={toggleFullscreen}
           className="p-2 rounded-full hover:bg-slate-700 transition-colors"
           aria-label="Toggle fullscreen"
@@ -612,7 +616,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
 
         {/* Notifications */}
         <div className="relative" ref={notificationRef}>
-          <button 
+          <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative p-2 rounded-full hover:bg-slate-700 transition-colors"
             aria-label="Toggle notifications"
@@ -625,7 +629,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
             )}
           </button>
 
-          <NotificationPanel 
+          <NotificationPanel
             isOpen={showNotifications}
             onClose={() => setShowNotifications(false)}
           />
@@ -633,7 +637,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
 
         {/* Profile Menu */}
         <div className="relative" ref={profileMenuRef}>
-          <button 
+          <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded-lg transition-colors hover:bg-slate-700"
             aria-label="Toggle profile menu"
@@ -643,7 +647,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
               {isLoading ? (
                 <div className="w-full h-full animate-pulse bg-slate-700"></div>
               ) : profileImageUrl && !imageError ? (
-                <img 
+                <img
                   src={profileImageUrl}
                   alt={profileData.name}
                   className="w-full h-full object-cover"
@@ -659,7 +663,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </div>
               )}
             </div>
-            
+
             <div className="hidden lg:block text-left">
               <p className="text-sm font-medium text-white truncate max-w-[160px]">
                 {profileData.name}
@@ -679,7 +683,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                   {isLoading ? (
                     <div className="w-full h-full animate-pulse bg-gray-300 dark:bg-gray-600"></div>
                   ) : profileImageUrl && !menuImageError ? (
-                    <img 
+                    <img
                       src={profileImageUrl}
                       alt={profileData.name}
                       className="w-full h-full object-cover"
@@ -689,7 +693,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                     />
                   ) : (
                     <div className={`w-full h-full bg-gradient-to-r ${gradientColor} flex items-center justify-center`}>
-                      <span className="text-white font-medium text-sm"> 
+                      <span className="text-white font-medium text-sm">
                         {initials}
                       </span>
                     </div>
@@ -708,7 +712,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </div>
               </div>
               <div className="py-2">
-                <button 
+                <button
                   onClick={handleProfile}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
                 >
@@ -752,10 +756,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                     />
                   </button>
                 </div>
-                
+
                 {/* Show Settings ONLY for Hospital Admin */}
                 {userRole === 'hospital' && (
-                  <button 
+                  <button
                     onClick={handleSettings}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
                   >
@@ -763,10 +767,10 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                     <span>Settings</span>
                   </button>
                 )}
-                
+
                 <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                <button 
-                  onClick={handleLogout} 
+                <button
+                  onClick={handleLogout}
                   disabled={isLoggingOut}
                   className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -775,7 +779,7 @@ const TopBar = ({ sidebarOpen, setSidebarOpen }) => {
                 </button>
               </div>
             </div>
-          )} 
+          )}
         </div>
       </div>
     </header>
