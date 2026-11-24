@@ -39,11 +39,11 @@ const validatePhone = (phone) => {
   return '';
 };
 
-// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys, NEVER modifies signed URLs
 const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
 
-  // Extract key if backend returns an object
+  // Extract image key if API returns an object
   if (typeof imageKey === 'object') {
     imageKey =
       imageKey.key ||
@@ -55,25 +55,23 @@ const getFullImageUrl = async (imageKey) => {
 
   if (typeof imageKey !== 'string') return null;
 
-  // Already a URL
+  // Already a complete image URL
   if (
     imageKey.startsWith('http://') ||
     imageKey.startsWith('https://') ||
     imageKey.startsWith('data:') ||
     imageKey.startsWith('blob:')
   ) {
-    const separator = imageKey.includes('?') ? '&' : '?';
-    return `${imageKey}${separator}_t=${Date.now()}`;
+    return imageKey;
   }
 
-  // IMPORTANT: Await the S3 function
+  // Get signed URL from S3
   const url = await getS3ImageUrl(imageKey);
 
   if (!url) return null;
 
-  const separator = url.includes('?') ? '&' : '?';
-
-  return `${url}${separator}_t=${Date.now()}`;
+  // IMPORTANT: Do not modify signed URLs
+  return url;
 };
 
 // ==================== SKELETON LOADER ====================
