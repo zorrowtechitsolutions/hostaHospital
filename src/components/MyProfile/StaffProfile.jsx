@@ -1,13 +1,15 @@
-// src/components/MyProfile/StaffProfile.jsx - COMPLETE FIXED VERSION
-import React, { useState, useEffect } from 'react';
+// src/components/MyProfile/StaffProfile.jsx - COMPLETE WITH PHONE + PINCODE + LOCAL AREA
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, Phone, Edit, Save, X, Upload, CheckCircle,
   User, Briefcase, Award, Building, Info, Calendar, Users, IdCard,
-  MapPin, CalendarDays, Clock, GraduationCap, Home, AlertCircle
+  MapPin, CalendarDays, Clock, GraduationCap, Home, AlertCircle, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useGetStaffByIdQuery, useUpdateStaffMutation } from '../../../app/service/staffApi';
+// ✅ PINCODE API
+import { useGetPincodeQuery } from '../../../app/service/pincodeApi';
 import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 import { formatDate } from "../../utils/dateFormatter";
 // ✅ IMPORT TOAST FUNCTIONS
@@ -36,6 +38,13 @@ const validatePhone = (phone) => {
     return 'Phone number must be exactly 10 digits';
   }
 
+  return '';
+};
+
+// ✅ Pincode validation helper
+const validatePincode = (pincode) => {
+  if (!pincode) return 'Pincode is required';
+  if (!/^\d{6}$/.test(String(pincode))) return 'Pincode must be exactly 6 digits';
   return '';
 };
 
@@ -143,6 +152,83 @@ const SectionTitle = ({ icon: Icon, title }) => (
   </h3>
 );
 
+// ✅ Searchable dropdown for Local Area (post offices from pincode lookup)
+const SearchableLocalAreaDropdown = ({ label, options, value, onChange, placeholder, disabled = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : (value || '')}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm('');
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`${INPUT_CLASS} pl-9 pr-10 ${disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''}`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={index}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== MAIN PROFILE COMPONENT ====================
 
 const StaffProfile = () => {
@@ -178,6 +264,7 @@ const StaffProfile = () => {
     jobType: '',
     place: '',
     district: '',
+    localArea: '',
     state: '',
     country: '',
     pincode: '',
@@ -196,6 +283,44 @@ const StaffProfile = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [serverError, setServerError] = useState(null); // Keep for logic, but not displayed
+
+  // ✅ PINCODE API - only runs while editing and when a full 6-digit pincode is entered
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(editForm.pincode, {
+    skip: !isEditing || !/^\d{6}$/.test(String(editForm.pincode || '')),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success' ? pincodeData[0].PostOffice || [] : [];
+
+  // Unique post office names for the Local Area dropdown
+  const localAreaOptions = [
+    ...new Map(postOffices.map((office) => [office.Name, { name: office.Name }])).values()
+  ];
+
+  // ✅ Auto-fill state / district / country when pincode lookup returns
+  useEffect(() => {
+    if (!isEditing) return;
+    // Pincode unchanged from saved value -> keep saved address as-is
+    if (String(editForm.pincode || '') === String(formData.pincode || '')) return;
+
+    if (postOffices.length > 0) {
+      const { State, District } = postOffices[0];
+      setEditForm(prev => ({
+        ...prev,
+        state: State,
+        district: District,
+        country: 'India',
+        localArea: ''
+      }));
+    } else if (pincodeData && String(editForm.pincode || '').length === 6) {
+      setEditForm(prev => ({ ...prev, state: '', district: '', localArea: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
 
   // Handle fetch error (401 unauthorized)
   useEffect(() => {
@@ -227,11 +352,12 @@ const StaffProfile = () => {
       const address = staff?.address || {};
       const place = address?.place || '';
       const district = address?.district || '';
+      const localArea = address?.localArea || '';
       const state = address?.state || '';
       const country = address?.country || '';
-      const pincode = address?.pincode || '';
+      const pincode = address?.pincode ? String(address.pincode) : '';
 
-      const addressParts = [place, district, state, country].filter(Boolean);
+      const addressParts = [localArea, place, district, state, country].filter(Boolean);
       const addressString = addressParts.length > 0 ?
         `${addressParts.join(', ')}${pincode ? ` - ${pincode}` : ''}` :
         '';
@@ -265,6 +391,7 @@ const StaffProfile = () => {
         jobType: staff?.jobType || '',
         place: place,
         district: district,
+        localArea: localArea,
         state: state,
         country: country,
         pincode: pincode,
@@ -308,6 +435,29 @@ const StaffProfile = () => {
       [field]: value
     }));
     // Clear server error when user makes changes
+    if (serverError) setServerError(null);
+  };
+
+  // ✅ Pincode change handler: digits only, max 6, resets / restores location fields
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
+    setEditForm(prev => {
+      // Back to the saved pincode -> restore the saved address fields
+      if (cleaned === String(formData.pincode || '')) {
+        return {
+          ...prev,
+          pincode: cleaned,
+          state: formData.state,
+          district: formData.district,
+          localArea: formData.localArea,
+          country: formData.country
+        };
+      }
+      // Different pincode -> clear until the lookup fills them in
+      return { ...prev, pincode: cleaned, state: '', district: '', localArea: '' };
+    });
+
     if (serverError) setServerError(null);
   };
 
@@ -388,7 +538,7 @@ const StaffProfile = () => {
   };
 
   // ============================================================
-  // ✅ FIXED: Phone validation + robust error handling + awaited image URL
+  // ✅ FIXED: Phone + Pincode + Local Area validation + robust error handling
   // ============================================================
   const handleSave = async () => {
     // ✅ Validate phone before sending to backend
@@ -397,6 +547,34 @@ const StaffProfile = () => {
     if (phoneError) {
       setServerError(phoneError);
       showErrorToast(phoneError); // ✅ Shows toast only
+      return;
+    }
+
+    // ✅ Validate pincode before sending to backend
+    const pincodeError = validatePincode(editForm.pincode);
+
+    if (pincodeError) {
+      setServerError(pincodeError);
+      showErrorToast(pincodeError);
+      return;
+    }
+
+    // ✅ If pincode was changed, it must resolve to a real location
+    if (
+      String(editForm.pincode) !== String(formData.pincode || '') &&
+      (postOffices.length === 0 || !editForm.state || !editForm.district)
+    ) {
+      const msg = 'Invalid pincode or no location found';
+      setServerError(msg);
+      showErrorToast(msg);
+      return;
+    }
+
+    // ✅ Local area must be selected from the pincode's post offices
+    if (!editForm.localArea) {
+      const msg = 'Please select your local area';
+      setServerError(msg);
+      showErrorToast(msg);
       return;
     }
 
@@ -424,9 +602,10 @@ const StaffProfile = () => {
         address: {
           place: editForm.place,
           district: editForm.district,
+          localArea: editForm.localArea,
           state: editForm.state,
           country: editForm.country,
-          pincode: editForm.pincode
+          pincode: editForm.pincode ? Number(editForm.pincode) : ''
         }
       };
 
@@ -447,11 +626,24 @@ const StaffProfile = () => {
         ? await getFullImageUrl(newProfilePicture)
         : null;
 
+      // Rebuild the display address string from the saved values
+      const addressParts = [
+        editForm.localArea,
+        editForm.place,
+        editForm.district,
+        editForm.state,
+        editForm.country
+      ].filter(Boolean);
+      const newAddressString = addressParts.length > 0
+        ? `${addressParts.join(', ')}${editForm.pincode ? ` - ${editForm.pincode}` : ''}`
+        : '';
+
       const updatedFormData = {
         ...editForm,
         profileImage: newProfilePicture,
         imageUrl: newProfilePicture,
         imageKey: newProfilePicture,
+        addressString: newAddressString,
       };
 
       setFormData(updatedFormData);
@@ -709,7 +901,7 @@ const StaffProfile = () => {
                   <>
                     <button
                       onClick={handleSave}
-                      disabled={isSaving || isUpdating}
+                      disabled={isSaving || isUpdating || isPincodeLoading}
                       className={`${ACTION_BUTTON_CLASS} bg-[#1C62A0] text-white hover:bg-[#4c6c88] disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <Save className="w-4 h-4" />
@@ -845,59 +1037,107 @@ const StaffProfile = () => {
               </div>
             </div>
 
-            {/* Address Information */}
+            {/* Address Information - ✅ PINCODE DRIVEN */}
             <div className={CARD_CLASS}>
               <SectionTitle icon={MapPin} title="Address Information" />
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileField
-                  label="Place"
-                  value={isEditing ? editForm.place : formData.place}
+                  label="Pincode"
+                  value={isEditing ? editForm.pincode : formData.pincode}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('place', e.target.value)}
-                  icon={Home}
-                  placeholder="Place"
+                  onChange={(e) => handlePincodeChange(e.target.value)}
+                  icon={MapPin}
+                  placeholder="Enter 6 digit pincode"
+                />
+
+                {/* Pincode lookup status */}
+                {isEditing && (
+                  <div className="flex items-end pb-2">
+                    {isPincodeLoading && (
+                      <div className="flex items-center gap-2 text-xs text-blue-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                        Finding your location...
+                      </div>
+                    )}
+                    {!isPincodeLoading && isPincodeError && (
+                      <p className="text-xs text-red-500">
+                        Unable to fetch pincode details. Please try again.
+                      </p>
+                    )}
+                    {!isPincodeLoading && !isPincodeError && postOffices.length > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle className="w-4 h-4" />
+                        Location detected
+                      </div>
+                    )}
+                    {!isPincodeLoading && !isPincodeError && pincodeData &&
+                      String(editForm.pincode || '').length === 6 &&
+                      postOffices.length === 0 && (
+                        <p className="text-xs text-red-500">
+                          Invalid pincode or no location found.
+                        </p>
+                      )}
+                  </div>
+                )}
+
+                {/* State / District / Country are auto-filled, read-only */}
+                <ProfileField
+                  label="State"
+                  value={isEditing ? editForm.state : formData.state}
+                  isEditing={false}
+                  icon={MapPin}
                 />
                 <ProfileField
                   label="District"
                   value={isEditing ? editForm.district : formData.district}
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm('district', e.target.value)}
+                  isEditing={false}
                   icon={MapPin}
-                  placeholder="District"
-                />
-                <ProfileField
-                  label="State"
-                  value={isEditing ? editForm.state : formData.state}
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm('state', e.target.value)}
-                  icon={MapPin}
-                  placeholder="State"
                 />
                 <ProfileField
                   label="Country"
                   value={isEditing ? editForm.country : formData.country}
-                  isEditing={isEditing}
-                  onChange={(e) => updateEditForm('country', e.target.value)}
+                  isEditing={false}
                   icon={MapPin}
-                  placeholder="Country"
                 />
+
+                {/* ✅ Local Area - dropdown of post offices while editing */}
+                {isEditing ? (
+                  <SearchableLocalAreaDropdown
+                    label="Local Area"
+                    options={localAreaOptions}
+                    value={editForm.localArea}
+                    onChange={(name) => updateEditForm('localArea', name)}
+                    placeholder={
+                      localAreaOptions.length === 0
+                        ? 'Enter pincode first'
+                        : 'Select your local area'
+                    }
+                    disabled={localAreaOptions.length === 0}
+                  />
+                ) : (
+                  <ProfileField
+                    label="Local Area"
+                    value={formData.localArea}
+                    isEditing={false}
+                    icon={Home}
+                  />
+                )}
                 <ProfileField
-                  label="Pincode"
-                  value={isEditing ? editForm.pincode : formData.pincode}
+                  label="Street Address / Place"
+                  value={isEditing ? editForm.place : formData.place}
                   isEditing={isEditing}
-                  onChange={(e) => updateEditForm('pincode', e.target.value)}
-                  icon={MapPin}
-                  placeholder="Pincode"
+                  onChange={(e) => updateEditForm('place', e.target.value)}
+                  icon={Home}
+                  placeholder="Place / Locality"
                 />
                 <div className="md:col-span-2">
-                  <ProfileField
-                    label="Full Address"
-                    value={isEditing ? editForm.addressString : formData.addressString}
-                    isEditing={isEditing}
-                    onChange={(e) => updateEditForm('addressString', e.target.value)}
-                    icon={MapPin}
-                    placeholder="Full address"
-                  />
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Full Address</label>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">
+                      {formData.addressString || 'Not specified'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

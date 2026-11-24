@@ -1,5 +1,5 @@
 // src/components/Settings/Settings.jsx
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Button,
@@ -12,10 +12,13 @@ import Security from './Security';
 import Map from './Map';
 import PrescriptionTemplate from './PrescriptionTemplate';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../ui/Toast';
-// ✅ Use the same local JSON location service as AddStaff / AddDoctor / EditDoctor / Register
-import { Country, State, City } from '../../data/locationService';
-import { MapPin, ChevronDown, Clock, Save, X, Edit2, Plus, Minus, Sun } from 'lucide-react';
+import {
+  MapPin, ChevronDown, Clock, Edit2, Sun,
+  CreditCard, CheckCircle, Home
+} from 'lucide-react';
 import { useGetHospitalByIdQuery, useUpdateHospitalMutation } from '../../../app/service/hospitalApi';
+// ✅ Pincode API integration (same as AddDoctor / AddPatient / EditPatient)
+import { useGetPincodeQuery } from '../../../app/service/pincodeApi';
 import { useAuth } from '../../context/AuthContext';
 import HospitalReviews from "./HospitalReviews";
 import { useGetCategoryQuery } from '../../../app/service/category';
@@ -201,51 +204,46 @@ const buildWorkingHoursPayload = (type, normalHours, clinicHours, clinicBreakHou
 };
 
 /* ------------------------------------------------------------------ */
-/* SearchableDropdown                                                  */
+/* Searchable dropdown for local area (post offices)                   */
 /* ------------------------------------------------------------------ */
 
-const SearchableDropdown = ({
+const SearchableCityDropdown = ({
   label,
   options,
   value,
   onChange,
   placeholder,
-  icon: Icon,
   disabled = false,
   required = false,
-  getOptionLabel = (option) => option.name || option,
-  getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index
+  error = '',
+  touched = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => {
-    const label = getOptionLabel(option).toLowerCase();
-    return label.includes(searchTerm.toLowerCase());
-  });
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearchTerm("");
+        setSearchTerm('');
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleSelect = (option) => {
-    onChange(getOptionValue(option), getOptionLabel(option));
-    setSearchTerm("");
+    onChange(option.name);
+    setSearchTerm('');
     setIsOpen(false);
   };
 
-  const displayValue = value
-    ? getOptionLabel(options.find(opt => getOptionValue(opt) === value) || {})
-    : "";
+  const showError = touched && error;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -253,21 +251,23 @@ const SearchableDropdown = ({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
-        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
         <input
           type="text"
-          value={isOpen ? searchTerm : displayValue}
+          value={isOpen ? searchTerm : value}
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setIsOpen(true);
           }}
           onFocus={() => {
             setIsOpen(true);
-            setSearchTerm("");
+            setSearchTerm('');
           }}
           placeholder={placeholder}
           disabled={disabled}
-          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
             disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
@@ -275,20 +275,23 @@ const SearchableDropdown = ({
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
-          onClick={() => setIsOpen(prev => !prev)}
+          onClick={() => !disabled && setIsOpen(prev => !prev)}
         />
       </div>
 
       {isOpen && filteredOptions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div
+          className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {filteredOptions.map((option, index) => (
             <div
-              key={optionKey(option, index)}
+              key={index}
               className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => handleSelect(option)}
             >
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-700">{getOptionLabel(option)}</span>
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
             </div>
           ))}
         </div>
@@ -298,6 +301,10 @@ const SearchableDropdown = ({
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No results found
         </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
       )}
     </div>
   );
@@ -399,12 +406,12 @@ const Settings = () => {
     email: '',
     hospitalType: '',
     mobileNumber: '',
+    // ✅ Pincode-based address
     streetAddress: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
+    countryName: 'India',
     stateName: '',
-    cityName: '',
+    cityName: '',      // district
+    localArea: '',
     pincode: '',
     workingHourType: 'normal',
     normalHours: DEFAULT_NORMAL_HOURS,
@@ -412,17 +419,44 @@ const Settings = () => {
     clinicBreakHours: DEFAULT_CLINIC_BREAK_HOURS,
   });
 
-  // ✅ Memoized location lookups from local JSON
-  const countries = useMemo(() => Country.getAllCountries(), []);
-  const states = useMemo(
-    () => State.getStatesOfCountry(editForm.countryCode),
-    [editForm.countryCode]
-  );
-  const cities = useMemo(
-    () => City.getCitiesOfState(editForm.countryCode, editForm.stateCode),
-    [editForm.countryCode, editForm.stateCode]
-  );
+  const [addressTouched, setAddressTouched] = useState({});
+
+  // Saved address (as stored in the API) so Edit / Cancel can restore it.
+  // `place` is saved as "street, localArea".
+  const addressSnapshotRef = useRef({
+    place: '', stateName: '', cityName: '', pincode: ''
+  });
+  // Holds the saved place string until the pincode lookup runs once,
+  // so the local area can be restored without being wiped.
+  const pendingPlaceRef = useRef('');
+
   const isFormSaving = isSaving || isUpdating;
+
+  // ✅ Pincode API integration (only while editing)
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(editForm.pincode, {
+    skip: !isEditing || !/^\d{6}$/.test(editForm.pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success'
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // De-duplicated post office names (note: `Map` is shadowed by the Map component import)
+  const localAreaOptions = (() => {
+    const seen = new Set();
+    return postOffices
+      .filter(o => {
+        if (seen.has(o.Name)) return false;
+        seen.add(o.Name);
+        return true;
+      })
+      .map(o => ({ name: o.Name }));
+  })();
 
   const hospitalTypes = categoriesData?.data
     ? (Array.isArray(categoriesData.data)
@@ -434,6 +468,50 @@ const Settings = () => {
     value: category.name,
     label: category.name,
   }));
+
+  /* ------------------- Pincode → state / district ------------------ */
+
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const first = postOffices[0];
+      const names = postOffices.map(o => o.Name);
+      const pending = pendingPlaceRef.current;
+      pendingPlaceRef.current = '';
+
+      setEditForm(prev => {
+        let street = prev.streetAddress;
+
+        // keep the current local area if it is still valid for this pincode
+        let local =
+          names.find(n => n.trim().toLowerCase() === (prev.localArea || '').trim().toLowerCase()) || '';
+
+        // otherwise try to restore it from the saved "street, localArea" string
+        if (!local && pending) {
+          const parts = pending.split(',').map(p => p.trim()).filter(Boolean);
+          const last = parts[parts.length - 1];
+          const match = last
+            ? names.find(n => n.trim().toLowerCase() === last.toLowerCase())
+            : null;
+          if (match) {
+            local = match;
+            street = parts.slice(0, -1).join(', ');
+          }
+        }
+
+        return {
+          ...prev,
+          stateName: first.State,
+          cityName: first.District,
+          localArea: local,
+          streetAddress: street
+        };
+      });
+    } else if (editForm.pincode.length === 6 && pincodeData) {
+      pendingPlaceRef.current = '';
+      setEditForm(prev => ({ ...prev, stateName: '', cityName: '', localArea: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
 
   /* ---------------------------- Sockets ---------------------------- */
 
@@ -552,7 +630,7 @@ const Settings = () => {
       const is247 =
         parsed.type !== 'clinic-break' &&
         DAY_KEYS.every(d => {
-          const h = parsed.hours[d.key];
+          const h = parsed.hours[d];
           return h && !h.isHoliday && h.start === '00:00' && (h.end === '23:59' || h.end === '24:00');
         });
       setIs24x7(is247);
@@ -570,27 +648,30 @@ const Settings = () => {
       };
 
       if (hospital.address) {
-        const country = countries.find(c => c.name === hospital.address.country);
-        const state = country
-          ? State.getStatesOfCountry(country.isoCode).find(s => s.name === hospital.address.state)
-          : null;
+        const snapshot = {
+          place: hospital.address.place || '',
+          stateName: hospital.address.state || '',
+          cityName: hospital.address.district || '',
+          pincode: hospital.address.pincode?.toString() || '',
+        };
+        addressSnapshotRef.current = snapshot;
+        pendingPlaceRef.current = snapshot.place;
 
         setEditForm(prev => ({
           ...prev,
           ...nextEditForm,
-          streetAddress: hospital.address.place || '',
-          countryCode: country?.isoCode || '',
-          countryName: hospital.address.country || '',
-          stateCode: state?.isoCode || '',
-          stateName: hospital.address.state || '',
-          cityName: hospital.address.district || '',
-          pincode: hospital.address.pincode?.toString() || '',
+          streetAddress: snapshot.place,
+          countryName: 'India',
+          stateName: snapshot.stateName,
+          cityName: snapshot.cityName,
+          localArea: '',
+          pincode: snapshot.pincode,
         }));
       } else {
         setEditForm(prev => ({ ...prev, ...nextEditForm }));
       }
     }
-  }, [hospitalData, countries]);
+  }, [hospitalData]);
 
   useEffect(() => {
     if (location.state?.tab) setActiveTab(location.state.tab);
@@ -603,28 +684,42 @@ const Settings = () => {
     setEditForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleCountryChange = (code, name) => {
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
+    // user is typing a new pincode → forget the saved local area
+    pendingPlaceRef.current = '';
+
     setEditForm(prev => ({
       ...prev,
-      countryCode: code,
-      countryName: name,
-      stateCode: '',
+      pincode: cleaned,
       stateName: '',
-      cityName: ''
+      cityName: '',
+      localArea: ''
     }));
   };
 
-  const handleStateChange = (code, name) => {
+  // ✅ Handle local area change
+  const handleLocalAreaChange = (name) => {
+    setEditForm(prev => ({ ...prev, localArea: name }));
+    setAddressTouched(prev => ({ ...prev, localArea: true }));
+  };
+
+  // Restore address fields from the last saved address
+  const restoreAddress = () => {
+    const s = addressSnapshotRef.current;
+    pendingPlaceRef.current = s.place;
     setEditForm(prev => ({
       ...prev,
-      stateCode: code,
-      stateName: name,
-      cityName: ''
+      streetAddress: s.place,
+      countryName: 'India',
+      stateName: s.stateName,
+      cityName: s.cityName,
+      localArea: '',
+      pincode: s.pincode,
     }));
-  };
-
-  const handleCityChange = (name) => {
-    setEditForm(prev => ({ ...prev, cityName: name }));
+    setAddressTouched({});
   };
 
   // Working hours handlers (per-type)
@@ -693,6 +788,7 @@ const Settings = () => {
       clinicHours: clinicHours,
       clinicBreakHours: clinicBreakHours,
     }));
+    restoreAddress();
     setIsEditing(true);
   };
 
@@ -705,8 +801,16 @@ const Settings = () => {
       clinicHours: clinicHours,
       clinicBreakHours: clinicBreakHours,
     }));
+    restoreAddress();
     showWarningToast('Edit cancelled. Changes discarded.', 2000);
   };
+
+  // ✅ place is saved as "street, localArea"
+  const buildPlace = () =>
+    [editForm.streetAddress, editForm.localArea]
+      .map(part => part?.trim())
+      .filter(Boolean)
+      .join(', ');
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -714,6 +818,21 @@ const Settings = () => {
     const phone = String(editForm.mobileNumber || '').trim();
     if (!/^\d{10}$/.test(phone)) {
       showErrorToast('Phone number must be exactly 10 digits', 4000);
+      return;
+    }
+
+    // Address validation
+    setAddressTouched({ pincode: true, localArea: true });
+    if (!/^\d{6}$/.test(editForm.pincode)) {
+      showErrorToast('Please enter a valid 6-digit pin code', 4000);
+      return;
+    }
+    if (!editForm.stateName || !editForm.cityName) {
+      showErrorToast('Location not found for this pin code. Please check it.', 4000);
+      return;
+    }
+    if (!editForm.localArea) {
+      showErrorToast('Please select a local area', 4000);
       return;
     }
 
@@ -757,16 +876,18 @@ const Settings = () => {
     setIsSaving(true);
 
     try {
+      const place = buildPlace();
+
       const updateData = {
         name: editForm.name,
         email: editForm.email,
         type: editForm.hospitalType,
         phone: editForm.mobileNumber,
         address: {
-          country: editForm.countryName,
+          country: 'India',
           state: editForm.stateName,
           district: editForm.cityName,
-          place: editForm.streetAddress,
+          place,
           pincode: Number(editForm.pincode),
         },
         // Send the correct field for the active type
@@ -816,6 +937,16 @@ const Settings = () => {
       setNormalHours(editForm.normalHours);
       setClinicHours(editForm.clinicHours);
       setClinicBreakHours(editForm.clinicBreakHours);
+
+      // Sync saved address
+      addressSnapshotRef.current = {
+        place,
+        stateName: editForm.stateName,
+        cityName: editForm.cityName,
+        pincode: editForm.pincode,
+      };
+      pendingPlaceRef.current = place;
+      setEditForm(prev => ({ ...prev, streetAddress: place, localArea: '' }));
 
       showSuccessToast('Hospital information updated successfully!', 4000);
       setIsEditing(false);
@@ -1074,6 +1205,14 @@ const Settings = () => {
 
   /* --------------------------- General Tab ------------------------- */
 
+  const pincodeError =
+    addressTouched.pincode && editForm.pincode && !/^\d{6}$/.test(editForm.pincode)
+      ? 'Please enter a valid 6-digit pin code'
+      : '';
+
+  const localAreaError =
+    addressTouched.localArea && !editForm.localArea ? 'Local area is required' : '';
+
   const GeneralTab = (
     <div className="space-y-8">
       <Card>
@@ -1116,7 +1255,7 @@ const Settings = () => {
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Address Information</h3>
                 <div className="grid grid-cols-1 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Street Address</label>
+                    <label className="block text-sm font-medium text-gray-700">Address</label>
                     <p className="mt-1 text-gray-900">{editForm.streetAddress || 'Not provided'}</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1182,50 +1321,121 @@ const Settings = () => {
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <h3 className="text-md font-semibold text-gray-900 mb-4">Edit Address Information</h3>
                 <div className="space-y-4">
-                  <SearchableDropdown
-                    label="Country"
-                    options={countries}
-                    value={editForm.countryCode}
-                    onChange={handleCountryChange}
-                    placeholder="Search for a country..."
-                    icon={MapPin}
-                  />
-                  <SearchableDropdown
-                    label="State"
-                    options={states}
-                    value={editForm.stateCode}
-                    onChange={handleStateChange}
-                    placeholder="Search for a state..."
-                    icon={MapPin}
-                    disabled={!editForm.countryCode}
-                  />
-                  <SearchableDropdown
-                    label="District"
-                    options={cities}
-                    value={editForm.cityName}
-                    onChange={handleCityChange}
-                    placeholder="Search for a District..."
-                    icon={MapPin}
-                    disabled={!editForm.stateCode}
-                    getOptionLabel={(option) => option.name}
-                    getOptionValue={(option) => option.name}
-                    optionKey={(option, index) => index}
-                  />
-                  <Input
-                    label="Street Address"
-                    name="streetAddress"
-                    value={editForm.streetAddress}
-                    onChange={handleInputChange}
-                    placeholder="Enter street address"
-                  />
-                  <Input
-                    label="Pincode"
-                    name="pincode"
-                    value={editForm.pincode}
-                    onChange={handleInputChange}
-                    placeholder="Enter pincode (5-6 digits)"
-                    maxLength={6}
-                  />
+                  {/* Country (fixed India) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <div className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-100 flex justify-between">
+                      <span>🇮🇳 India</span>
+                      <span className="text-green-600 font-medium text-sm">✓ Default</span>
+                    </div>
+                  </div>
+
+                  {/* Pincode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="pincode"
+                        value={editForm.pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                        onBlur={() => setAddressTouched(prev => ({ ...prev, pincode: true }))}
+                        placeholder="Enter 6 digit pincode"
+                        maxLength={6}
+                        className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+                          pincodeError ? 'border-red-500' : 'border-gray-300'
+                        } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent`}
+                      />
+                      {isPincodeLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                        </div>
+                      )}
+                      {!isPincodeLoading && postOffices.length > 0 && (
+                        <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Enter pincode to automatically find the location.
+                    </p>
+                    {isPincodeLoading && (
+                      <p className="text-xs text-blue-600 mt-2">Finding location...</p>
+                    )}
+                    {isPincodeError && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Unable to fetch pincode details. Please try again.
+                      </p>
+                    )}
+                    {editForm.pincode.length === 6 &&
+                      !isPincodeLoading &&
+                      !isPincodeError &&
+                      postOffices.length === 0 && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Invalid pincode or no location found.
+                        </p>
+                      )}
+                    {pincodeError && (
+                      <p className="text-sm text-red-600 mt-1">{pincodeError}</p>
+                    )}
+                  </div>
+
+                  {/* State + District (read-only, auto-filled) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={editForm.stateName}
+                          readOnly
+                          placeholder="Automatically detected state"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={editForm.cityName}
+                          readOnly
+                          placeholder="Automatically detected district"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Local area (post offices) + Street address */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <SearchableCityDropdown
+                      label="Local Area"
+                      options={localAreaOptions}
+                      value={editForm.localArea}
+                      onChange={handleLocalAreaChange}
+                      placeholder={
+                        postOffices.length === 0
+                          ? 'Enter pincode first'
+                          : 'Select local area'
+                      }
+                      required={true}
+                      disabled={postOffices.length === 0}
+                      error={localAreaError}
+                      touched={addressTouched.localArea}
+                    />
+                    <Input
+                      label="Street Address"
+                      name="streetAddress"
+                      value={editForm.streetAddress}
+                      onChange={handleInputChange}
+                      placeholder="House no., street, place"
+                    />
+                  </div>
                 </div>
               </div>
 

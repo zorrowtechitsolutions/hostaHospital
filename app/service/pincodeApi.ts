@@ -32,5 +32,5 @@ export const pincodeApi = createApi({
 });
 
 export const {
-  useGetPincodeQuery
+  useGetPincodeQuery,
 } = pincodeApi;

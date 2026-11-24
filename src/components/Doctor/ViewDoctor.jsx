@@ -72,7 +72,7 @@ const SkeletonTabs = () => (
 const SkeletonSection = ({ rows = 6, cols = 2 }) => {
   const itemsPerRow = cols;
   const totalItems = rows * itemsPerRow;
-  
+
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
@@ -223,14 +223,14 @@ const InfoCard = ({ title, children, icon: Icon }) => (
 
 const RatingDisplay = ({ rating, totalReviews }) => {
   if (!rating && rating !== 0) return null;
-  
+
   const renderStars = () => {
     return [...Array(5)].map((_, index) => (
       <Star
         key={index}
         className={`h-4 w-4 ${
-          index < Math.floor(rating) 
-            ? "fill-yellow-400 text-yellow-400" 
+          index < Math.floor(rating)
+            ? "fill-yellow-400 text-yellow-400"
             : "text-gray-300"
         }`}
       />
@@ -257,7 +257,7 @@ const ViewDoctor = () => {
   const navigate = useNavigate();
   const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
   const [activeTab, setActiveTab] = useState("basic");
-  
+
   const {
     data: doctorResponse,
     isLoading,
@@ -266,7 +266,7 @@ const ViewDoctor = () => {
   } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
   });
-  
+
   const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
   const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
   const doctorName = getDoctorName(doctor);
@@ -312,8 +312,8 @@ const ViewDoctor = () => {
   );
 
   const outDoorConsulting = doctor?.outDoorConsulting;
-  const hasOutDoorConsulting = outDoorConsulting?.time?.open && 
-                                outDoorConsulting?.time?.close && 
+  const hasOutDoorConsulting = outDoorConsulting?.time?.open &&
+                                outDoorConsulting?.time?.close &&
                                 outDoorConsulting?.place;
 
   // ============ SKELETON LOADING STATE ============
@@ -321,7 +321,7 @@ const ViewDoctor = () => {
     return <ViewDoctorSkeleton />;
   }
   // ============ END SKELETON LOADING STATE ============
-  
+
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -338,8 +338,8 @@ const ViewDoctor = () => {
               <Button onClick={() => refetch()} className="px-4 py-2">
                 Retry
               </Button>
-              <Button 
-                onClick={() => navigate('/doctors')} 
+              <Button
+                onClick={() => navigate('/doctors')}
                 variant="outline"
                 className="px-4 py-2"
               >
@@ -351,7 +351,7 @@ const ViewDoctor = () => {
       </div>
     );
   }
-  
+
   if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -387,8 +387,8 @@ const ViewDoctor = () => {
         <div className={`${CARD_CLASS} p-6 mb-6`}>
           <div className="flex flex-col md:flex-row items-start gap-6">
             <Avatar className="w-24 h-24">
-              <AvatarImage 
-                src={getS3ImageUrl(imageKey)} 
+              <AvatarImage
+                src={getS3ImageUrl(imageKey)}
                 alt={doctorName}
                 className="object-cover"
               />
@@ -406,7 +406,7 @@ const ViewDoctor = () => {
                   {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
                 </SmallBadge>
               </div>
-              
+
               <div className="mb-2">
                 <p className="text-gray-600 text-sm flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-blue-500" />
@@ -414,7 +414,7 @@ const ViewDoctor = () => {
                   <span className="text-gray-800 font-semibold">{getValue(doctor?.department)}</span>
                 </p>
               </div>
-              
+
               {doctor?.specialist && doctor?.specialist !== doctor?.department && (
                 <p className="text-gray-500 text-sm flex items-center gap-2 mb-2">
                   <IdCard className="h-4 w-4 text-gray-400" />
@@ -422,9 +422,9 @@ const ViewDoctor = () => {
                   <span>{doctor?.specialist}</span>
                 </p>
               )}
-              
+
               <p className="text-gray-500 text-sm mb-3">{getValue(doctor?.about, "No description available")}</p>
-              
+
               <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm">
                 <div className="flex items-center gap-2">
                   <Phone size={14} />
@@ -507,6 +507,8 @@ const ViewDoctor = () => {
                         <DetailRow label="Country" value={doctor?.address?.country} icon={MapPin} />
                         <DetailRow label="State" value={doctor?.address?.state} icon={MapPin} />
                         <DetailRow label="District" value={doctor?.address?.district} icon={MapPin} />
+                        {/* ✅ Added: Local Area (post office) from pincode-based address */}
+                        <DetailRow label="Local Area" value={doctor?.address?.localArea} icon={Home} />
                         <DetailRow label="Place" value={doctor?.address?.place} icon={MapPin} />
                         <DetailRow label="Pincode" value={doctor?.address?.pincode} icon={MapPin} />
                       </div>
@@ -549,8 +551,8 @@ const ViewDoctor = () => {
                   {sortedHours.length > 0 ? (
                     <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
                       {sortedHours.map((item, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 ${
                             index !== sortedHours.length - 1 ? 'border-b border-gray-100' : ''
                           }`}
@@ -660,21 +662,21 @@ const ViewDoctor = () => {
             )}
 
             {activeTab === "appointments" && (
-              <Appointments 
+              <Appointments
                 doctorId={doctor?.id}
                 doctorName={doctorName}
               />
             )}
 
             {activeTab === "requests" && (
-              <RequestTable 
+              <RequestTable
                 doctorId={doctor?.id}
                 doctorName={doctorName}
               />
             )}
 
             {activeTab === "reviews" && (
-              <ReviewTable 
+              <ReviewTable
                 doctorId={doctor?.id}
                 doctorName={doctorName}
               />

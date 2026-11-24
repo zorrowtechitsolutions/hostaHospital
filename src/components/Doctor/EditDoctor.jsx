@@ -1,15 +1,15 @@
-// src/components/Doctor/EditDoctor.jsx - Complete Fixed Version with authId/hospitalId and password change
+// src/components/Doctor/EditDoctor.jsx - Complete with pincode API integration
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   User, Mail, Phone, Calendar, MapPin, Lock, Image,
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield, CreditCard
 } from 'lucide-react';
 import {
   Button, Input, Select, Textarea, Card, Alert, Loader
 } from '../ui';
-import CustomSelect from '../ui/CustomSelect'; // ✅ direct default import
+import CustomSelect from '../ui/CustomSelect';
 import DatePicker from '../ui/DatePicker';
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../ui/Toast';
 import {
@@ -21,65 +21,41 @@ import { useChangeDoctorPasswordMutation } from "../../../app/service/doctorApi"
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
 import { getAuthUser } from '../../utils/auth';
-// ✅ Use the same local JSON location service as AddStaff
-import { Country, State, City } from '../../data/locationService';
+import { useGetPincodeQuery } from '../../../app/service/pincodeApi';
 import { uploadToS3, getS3ImageUrl } from '../../../app/service/S3';
 
-// ✅ Gender options — capitalized to match EditDoctor's existing submit convention
-// (handleSubmit does formData.gender?.toLowerCase())
 const GENDER_OPTIONS = [
   { value: 'Male', label: 'Male' },
   { value: 'Female', label: 'Female' },
   { value: 'Other', label: 'Other' }
 ];
 
-// Helper function to get hospital ID
 const getHospitalId = () => {
   const storedHospitalId = localStorage.getItem('hospitalId');
-  if (storedHospitalId) {
-    return storedHospitalId;
-  }
-
+  if (storedHospitalId) return storedHospitalId;
   const authUser = getAuthUser();
-  if (authUser?.hospitalId) {
-    return authUser.hospitalId;
-  }
-
+  if (authUser?.hospitalId) return authUser.hospitalId;
   return null;
 };
 
-// Helper function to get auth ID
 const getAuthId = () => {
   const authUser = getAuthUser();
   return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// Helper function to get a fully-resolved, displayable image URL.
-// - If the stored value is already a full URL (http(s)/data:), use it as-is.
-// - Otherwise it's an S3 key — resolve it via the presign endpoint.
-// NOTE: This function is async; always `await` / `.then()` its result before
-// setting it into state, otherwise you'll render `<img src="[object Promise]">`.
 const getFullImageUrl = async (imageKey) => {
   if (!imageKey) return null;
-
   if (
     imageKey.startsWith("http://") ||
     imageKey.startsWith("https://") ||
     imageKey.startsWith("data:")
-  ) {
-    return imageKey;
-  }
-
-  const url = await getS3ImageUrl(imageKey);
-
-  return url;
+  ) return imageKey;
+  return await getS3ImageUrl(imageKey);
 };
 
-// Lazy load heavy components
 const DeleteDoctor = lazy(() => import("./DeleteDoctor"));
 const AppointmentManagement = lazy(() => import("./AppointmentManagment"));
 
-// Lazy Image Component with Intersection Observer
 const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,16 +66,14 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       setIsLoading(false);
       return;
     }
-
     let cancelled = false;
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(async (entry) => {
           if (!entry.isIntersecting) return;
           observer.disconnect();
           try {
-            const url = await getFullImageUrl(imageKey); // ✅ await
+            const url = await getFullImageUrl(imageKey);
             if (!cancelled) setImageSrc(url);
           } catch (e) {
             console.error('image load failed', e);
@@ -111,7 +85,6 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       },
       { rootMargin: '50px' }
     );
-
     if (imgRef.current) observer.observe(imgRef.current);
     return () => { cancelled = true; observer.disconnect(); };
   }, [imageKey, refreshKey]);
@@ -131,14 +104,8 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
           src={imageSrc}
           alt="Profile"
           className="w-full h-full object-cover rounded-full"
-          onLoad={() => {
-            setIsLoading(false);
-            onLoad?.();
-          }}
-          onError={(e) => {
-            setIsLoading(false);
-            onError?.(e);
-          }}
+          onLoad={() => { setIsLoading(false); onLoad?.(); }}
+          onError={(e) => { setIsLoading(false); onError?.(e); }}
         />
       )}
       {!imageSrc && !isLoading && (
@@ -152,7 +119,6 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
   );
 };
 
-// Form Section Skeleton Loader
 const FormSectionSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="h-8 w-40 bg-gray-200 rounded"></div>
@@ -167,7 +133,6 @@ const FormSectionSkeleton = () => (
   </div>
 );
 
-// Profile Section Skeleton
 const ProfileSectionSkeleton = () => (
   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg animate-pulse">
     <div className="w-24 h-24 bg-gray-200 rounded-full"></div>
@@ -179,7 +144,6 @@ const ProfileSectionSkeleton = () => (
   </div>
 );
 
-// SearchableDropdown Component with Lazy Loading
 const SearchableDropdownComponent = ({
   label,
   options,
@@ -238,14 +202,8 @@ const SearchableDropdownComponent = ({
         <input
           type="text"
           value={isOpen ? searchTerm : displayValue()}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-            setSearchTerm("");
-          }}
+          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
           placeholder={isLoading ? "Loading departments..." : placeholder}
           disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
@@ -293,7 +251,104 @@ const SearchableDropdownComponent = ({
   );
 };
 
-// Day Schedule Row Component
+// Dropdown for pincode post-office selection
+const SearchablePostOfficeDropdown = ({
+  label,
+  options = [],
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  // India Post API returns "Name" (capital N); support both just in case
+  const getName = (option) => option?.Name || option?.name || '';
+
+  const filteredOptions = (options || []).filter(option =>
+    getName(option).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getName(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const showError = touched && error;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : (value || '')}
+          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && !disabled && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={`${getName(option)}-${index}`}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getName(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && !disabled && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
+
 const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
@@ -416,7 +471,6 @@ const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   );
 });
 
-// Centered Loader Component
 const CenteredLoader = ({ text = "Loading..." }) => (
   <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
     <div className="text-center">
@@ -426,10 +480,8 @@ const CenteredLoader = ({ text = "Loading..." }) => (
   </div>
 );
 
-// Status Toggle Component
 const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
   const isActive = status;
-
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
@@ -501,7 +553,6 @@ const EditDoctor = () => {
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ], [rolesData, hospitalId]);
 
-  // ✅ Options for role CustomSelect — normalized to strings for strict ===
   const roleOptions = useMemo(
     () =>
       rolesList.map(role => ({
@@ -553,11 +604,10 @@ const EditDoctor = () => {
     registrationNumber: '',
     knownLanguages: [],
     about: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
+    countryName: 'India',
     stateName: '',
     district: '',
+    localArea: '',
     place: '',
     pincode: '',
     displayName: '',
@@ -577,6 +627,7 @@ const EditDoctor = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
@@ -586,10 +637,40 @@ const EditDoctor = () => {
 
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
 
-  // ✅ Use the local JSON service for countries/states/cities
-  const countries = useMemo(() => Country.getAllCountries(), []);
-  const [availableStates, setAvailableStates] = useState([]);
-  const [availableCities, setAvailableCities] = useState([]);
+  // Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === "Success"
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // Auto-populate state and district when pincode data arrives
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+      setFormData(prev => ({
+        ...prev,
+        stateName: firstOffice.State,
+        district: firstOffice.District,
+        localArea: '' // reset so user picks one
+      }));
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
 
   const languageOptions = [
     { value: 'mal', label: 'Malayalam' },
@@ -672,11 +753,10 @@ const EditDoctor = () => {
       registrationNumber: '',
       knownLanguages: [],
       about: '',
-      countryCode: '',
-      countryName: '',
-      stateCode: '',
+      countryName: 'India',
       stateName: '',
       district: '',
+      localArea: '',
       place: '',
       pincode: '',
       displayName: '',
@@ -699,6 +779,7 @@ const EditDoctor = () => {
     setImageLoaded(false);
     setImageRefreshKey(Date.now());
     setErrors({});
+    setTouched({});
 
     if (doctorId) {
       refetch();
@@ -716,15 +797,6 @@ const EditDoctor = () => {
         doctor?.profileImage ||
         doctor?.image ||
         null;
-
-      const country = countries.find(c =>
-        c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
-      );
-
-      const stateList = State.getStatesOfCountry(country?.isoCode || '');
-      const state = stateList.find(s =>
-        s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
-      );
 
       const schedule = getDefaultSchedule();
 
@@ -746,7 +818,6 @@ const EditDoctor = () => {
       if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
         doctor.consultingTwo.forEach(item => {
           const dayKey = item.day?.toLowerCase();
-
           if (schedule[dayKey]) {
             schedule[dayKey] = {
               ...schedule[dayKey],
@@ -782,13 +853,13 @@ const EditDoctor = () => {
         registrationNumber: doctor.regNo || doctor.registrationNumber || "",
         knownLanguages: doctor.knowLanguages || [],
         about: doctor.about || "",
-        place: doctor.address?.place || "",
-        countryCode: country?.isoCode || '',
-        countryName: doctor.address?.country || "",
-        stateCode: state?.isoCode || '',
+        // ✅ Pincode based address
+        countryName: doctor.address?.country || 'India',
         stateName: doctor.address?.state || "",
         district: doctor.address?.district || "",
-        pincode: doctor.address?.pincode || "",
+        localArea: doctor.address?.localArea || "",
+        place: doctor.address?.place || "",
+        pincode: doctor.address?.pincode ? String(doctor.address.pincode) : "",
         displayName: doctor.displayName || "",
         userName: doctor.userName || "",
         password: "",
@@ -796,7 +867,6 @@ const EditDoctor = () => {
         joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
         experience: doctor.experience || "",
         appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
-        // ✅ keep roleId as a string throughout the form state
         roleId: doctor.roleId != null ? String(doctor.roleId) : "",
         weeklySchedule: schedule,
         outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
@@ -808,7 +878,6 @@ const EditDoctor = () => {
 
       setFormData(newFormData);
 
-      // ✅ FIX (Bug #2b): await / .then() the async URL resolver before setState
       if (imageKey) {
         let cancelled = false;
         getFullImageUrl(imageKey)
@@ -821,21 +890,11 @@ const EditDoctor = () => {
             console.error('Failed to resolve preview image:', err);
             if (!cancelled) setPreviewImage(null);
           });
-        // Note: no cleanup here because this effect's own cancellation is
-        // handled by `formInitialized`; the `cancelled` flag is a defensive
-        // guard against setting state after unmount in StrictMode.
-      }
-
-      if (country?.isoCode) {
-        setAvailableStates(State.getStatesOfCountry(country.isoCode));
-        if (state?.isoCode) {
-          setAvailableCities(City.getCitiesOfState(country.isoCode, state.isoCode));
-        }
       }
 
       setFormInitialized(true);
     }
-  }, [doctor, formInitialized, countries]);
+  }, [doctor, formInitialized]);
 
   const updateScheduleForDay = useCallback((day, newSchedule) => {
     setFormData(prev => ({
@@ -893,7 +952,6 @@ const EditDoctor = () => {
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
 
-      // ✅ FIX (Bug #2c): await / .then() the async URL resolver before setState
       if (formData.profileImage) {
         getFullImageUrl(formData.profileImage)
           .then(url => setPreviewImage(url))
@@ -931,35 +989,30 @@ const EditDoctor = () => {
     showSuccessToast('Image removed', 2000);
   };
 
-  const handleCountryChange = useCallback((code, name) => {
+  // ✅ Pincode change handler
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 6);
     setFormData(prev => ({
       ...prev,
-      countryCode: String(code),
-      countryName: String(name),
-      stateCode: '',
+      pincode: cleaned,
       stateName: '',
-      district: ''
+      district: '',
+      localArea: ''
     }));
-    setAvailableStates(State.getStatesOfCountry(code));
-    setAvailableCities([]);
-  }, []);
+    setTouched(prev => ({ ...prev, pincode: true }));
+    if (errors.pincode) {
+      setErrors(prev => ({ ...prev, pincode: '' }));
+    }
+  };
 
-  const handleStateChange = useCallback((code, name) => {
-    setFormData(prev => ({
-      ...prev,
-      stateCode: String(code),
-      stateName: String(name),
-      district: ''
-    }));
-    setAvailableCities(City.getCitiesOfState(formData.countryCode, code));
-  }, [formData.countryCode]);
-
-  const handleCityChange = useCallback((value, name) => {
-    setFormData(prev => ({
-      ...prev,
-      district: String(name)
-    }));
-  }, []);
+  // ✅ Local area change handler
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({ ...prev, localArea: name }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) {
+      setErrors(prev => ({ ...prev, localArea: '' }));
+    }
+  };
 
   const handleLanguageSelect = useCallback((languageValue) => {
     setFormData(prev => {
@@ -1015,6 +1068,20 @@ const EditDoctor = () => {
       return;
     }
 
+    if (!/^\d{6}$/.test(formData.pincode)) {
+      showErrorToast('❌ Please enter a valid 6-digit pincode.');
+      setTouched(prev => ({ ...prev, pincode: true }));
+      setErrors(prev => ({ ...prev, pincode: 'Please enter a valid 6-digit pincode' }));
+      return;
+    }
+
+    if (postOffices.length > 0 && !formData.localArea) {
+      showErrorToast('❌ Please select a local area.');
+      setTouched(prev => ({ ...prev, localArea: true }));
+      setErrors(prev => ({ ...prev, localArea: 'Local area is required' }));
+      return;
+    }
+
     if (formData.password && formData.password !== formData.confirmPassword) {
       showErrorToast('❌ Passwords do not match!');
       return;
@@ -1055,6 +1122,7 @@ const EditDoctor = () => {
           country: formData.countryName,
           state: formData.stateName,
           district: formData.district,
+          localArea: formData.localArea,
           place: formData.place,
           pincode: formData.pincode ? Number(formData.pincode) : null
         },
@@ -1362,7 +1430,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Joining Date & Experience — DatePicker for Joining Date */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1419,7 +1486,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* ✅ Assign Role — CustomSelect */}
                   <div className="md:col-span-2">
                     <CustomSelect
                       label="Assign Role"
@@ -1487,7 +1553,6 @@ const EditDoctor = () => {
                     />
                   </div>
 
-                  {/* Date of Birth & Gender — DatePicker for DOB, CustomSelect for Gender */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1504,7 +1569,6 @@ const EditDoctor = () => {
                         />
                       </div>
                     </div>
-                    {/* ✅ Replaced shared Select with CustomSelect */}
                     <CustomSelect
                       label="Gender"
                       icon={Users}
@@ -1587,42 +1651,65 @@ const EditDoctor = () => {
                     onChange={(e) => handleFieldChange('about', e.target.value)}
                   />
 
+                  {/* ✅ Address Information — Pincode API based */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                     <div className="space-y-5">
-                      <SearchableDropdownComponent
-                        label="Country"
-                        options={countries}
-                        value={formData.countryCode}
-                        onChange={handleCountryChange}
-                        placeholder="Search for a country..."
-                        icon={MapPin}
-                        required={true}
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <Input
+                          label="Pincode"
+                          name="pincode"
+                          icon={MapPin}
+                          placeholder="Enter 6-digit pincode"
+                          value={formData.pincode}
+                          onChange={(e) => handlePincodeChange(e.target.value)}
+                          required
+                        />
+                        <Input
+                          label="State"
+                          name="stateName"
+                          placeholder={isPincodeLoading ? "Looking up..." : "Auto-filled from pincode"}
+                          value={formData.stateName}
+                          disabled
+                        />
+                      </div>
 
-                      <SearchableDropdownComponent
-                        label="State"
-                        options={availableStates}
-                        value={formData.stateCode}
-                        onChange={handleStateChange}
-                        placeholder="Search for a state..."
-                        icon={MapPin}
-                        disabled={!formData.countryCode}
-                        required={true}
-                      />
+                      {isPincodeLoading && (
+                        <p className="text-xs text-gray-500">Looking up pincode...</p>
+                      )}
+                      {isPincodeError && /^\d{6}$/.test(formData.pincode) && (
+                        <p className="text-xs text-red-500">Could not find details for this pincode</p>
+                      )}
+                      {errors.pincode && (
+                        <p className="text-xs text-red-500">{errors.pincode}</p>
+                      )}
 
-                      <SearchableDropdownComponent
-                        label="District"
-                        options={availableCities}
-                        value={formData.district}
-                        onChange={handleCityChange}
-                        placeholder="Search for a district..."
-                        icon={MapPin}
-                        disabled={!formData.stateCode}
-                        required={true}
-                        getOptionLabel={(option) => option.name}
-                        getOptionValue={(option) => option.name}
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <Input
+                          label="District"
+                          name="district"
+                          placeholder="Auto-filled from pincode"
+                          value={formData.district}
+                          disabled
+                        />
+                        <SearchablePostOfficeDropdown
+                          label="Local Area"
+                          options={postOffices}
+                          value={formData.localArea}
+                          onChange={handleLocalAreaChange}
+                          placeholder={
+                            !/^\d{6}$/.test(formData.pincode)
+                              ? "Enter pincode first"
+                              : postOffices.length === 0
+                              ? "No post offices found"
+                              : "Search post office / local area"
+                          }
+                          disabled={postOffices.length === 0}
+                          required
+                          error={errors.localArea}
+                          touched={touched.localArea}
+                        />
+                      </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <Input
@@ -1631,13 +1718,6 @@ const EditDoctor = () => {
                           placeholder="Place/Locality"
                           value={formData.place}
                           onChange={(e) => handleFieldChange('place', e.target.value)}
-                        />
-                        <Input
-                          label="Pincode"
-                          name="pincode"
-                          placeholder="Postal code"
-                          value={formData.pincode}
-                          onChange={(e) => handleFieldChange('pincode', e.target.value)}
                         />
                       </div>
                     </div>
@@ -1712,14 +1792,12 @@ const EditDoctor = () => {
                     ))}
                   </div>
 
-                  {/* OUT DOOR CONSULTING SECTION */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Home className="h-5 w-5" /> Out Door Consulting
                   </h3>
 
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Consulting Time Section */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Consulting Time
@@ -1748,7 +1826,6 @@ const EditDoctor = () => {
                         </div>
                       </div>
 
-                      {/* Consulting Place Section */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Consulting Place

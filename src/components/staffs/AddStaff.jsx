@@ -1,5 +1,5 @@
-// src/components/staffs/AddStaff.jsx - Single Tab Version with Shift Times
-import { useState, useRef, useEffect, useMemo } from 'react';
+// src/components/staffs/AddStaff.jsx - Single Tab Version with Shift Times + Pincode address
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,12 +22,12 @@ import {
   ChevronDown,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  CreditCard
 } from 'lucide-react';
 import {
   Button,
   Input,
-  Card,
   Switch
 } from '../ui';
 import CustomSelect from '../ui/CustomSelect';
@@ -36,11 +36,10 @@ import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from
 import { useCreateStaffMutation } from '../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../app/service/role';
+// ✅ Pincode API integration (same as AddDoctor / AddPatient)
+import { useGetPincodeQuery } from '../../../app/service/pincodeApi';
 import { getAuthUser } from '../../utils/auth';
 import { uploadToS3 } from '../../../app/service/S3';
-
-// ✅ Local JSON-backed location service (replaces country-state-city)
-import { Country, State, City } from '../../data/locationService';
 
 // Constants
 const TOAST_DURATION = 3000;
@@ -89,7 +88,12 @@ const removeUndefined = obj => {
   return obj;
 };
 
-const buildPlace = (line1, line2) => `${line1} ${line2}`.trim();
+// ✅ place is saved as "line 1, line 2, local area"
+const buildPlace = (...parts) =>
+  parts
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(', ');
 
 // Validation functions
 const validateName = (name) => {
@@ -160,46 +164,44 @@ const validateField = (name, value, formData) => {
   return validators[name]?.(value) || '';
 };
 
-// Searchable Dropdown Component
-const SearchableDropdown = ({
-  label, options, value, onChange, placeholder, icon: Icon,
-  disabled = false, required = false,
-  getOptionLabel = (option) => option.name || option,
-  getOptionValue = (option) => option.isoCode || option,
-  optionKey = (option, index) => option.isoCode || index,
-  isLoading = false
+// ✅ Searchable dropdown for local area (post offices)
+const SearchableCityDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
 
-  const filteredOptions = options.filter(option => {
-    const label = getOptionLabel(option).toLowerCase();
-    return label.includes(searchTerm.toLowerCase());
-  });
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearchTerm("");
+        setSearchTerm('');
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleSelect = (option) => {
-    onChange(getOptionValue(option), getOptionLabel(option));
-    setSearchTerm("");
+    onChange(option.name);
+    setSearchTerm('');
     setIsOpen(false);
   };
 
-  const displayValue = () => {
-    if (!value) return "";
-    const selected = options.find(opt => getOptionValue(opt) === value);
-    return selected ? getOptionLabel(selected) : "";
-  };
+  const showError = touched && error;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -207,43 +209,60 @@ const SearchableDropdown = ({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
-        {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />}
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
         <input
           type="text"
-          value={isOpen ? searchTerm : displayValue()}
-          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
-          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
-          placeholder={isLoading ? "Loading..." : placeholder}
-          disabled={disabled || isLoading}
-          className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
-            (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          value={isOpen ? searchTerm : value}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm('');
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
         <ChevronDown
-          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          onClick={() => !isLoading && setIsOpen(!isOpen)}
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
         />
       </div>
 
-      {isOpen && !isLoading && filteredOptions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+      {isOpen && filteredOptions.length > 0 && (
+        <div
+          className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {filteredOptions.map((option, index) => (
             <div
-              key={optionKey(option, index)}
+              key={index}
               className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => handleSelect(option)}
             >
-              <Briefcase className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-700">{getOptionLabel(option)}</span>
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
             </div>
           ))}
         </div>
       )}
 
-      {isOpen && !isLoading && filteredOptions.length === 0 && (
+      {isOpen && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-          No options found
+          No results found
         </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
       )}
     </div>
   );
@@ -407,25 +426,13 @@ const AddStaff = () => {
     phone: '', designation: '', roleId: '', joiningDate: '',
     jobType: '', staffType: '', dob: '', gender: 'male',
     knowLanguages: [], qualification: '',
-    countryCode: '', countryName: '', stateCode: '', stateName: '',
-    district: '', place: '', pincode: '',
+    // ✅ Pincode-based address
+    countryName: 'India', stateName: '', district: '', localArea: '',
+    pincode: '',
     addressLine1: '', addressLine2: '',
     status: 'active', profileImage: null, imageKey: '',
     shiftStartTime: '', shiftEndTime: '',
   });
-
-  // ✅ Memoized location lookups from local JSON
-  const countries = useMemo(() => Country.getAllCountries(), []);
-
-  const states = useMemo(
-    () => State.getStatesOfCountry(formData.countryCode),
-    [formData.countryCode]
-  );
-
-  const cities = useMemo(
-    () => City.getCitiesOfState(formData.countryCode, formData.stateCode),
-    [formData.countryCode, formData.stateCode]
-  );
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -435,6 +442,42 @@ const AddStaff = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
 
+  // ✅ Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success'
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // ✅ Automatically populate state and district
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+
+      setFormData(prev => ({
+        ...prev,
+        stateName: firstOffice.State,
+        district: firstOffice.District,
+        localArea: ''
+      }));
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
+
   const requiresShiftTime = SHIFT_TYPES_WITH_TIME.includes(formData.jobType);
 
   const updateFormData = (updates) => setFormData(prev => ({ ...prev, ...updates }));
@@ -442,22 +485,26 @@ const AddStaff = () => {
 
   const handleGoBack = () => navigate(STAFFS_ROUTE);
 
-  // Address handlers
-  const handleCountryChange = (code, name) => {
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
     setFormData(prev => ({
-      ...prev, countryCode: code, countryName: name,
-      stateCode: '', stateName: '', district: ''
+      ...prev,
+      pincode: cleaned,
+      stateName: '',
+      district: '',
+      localArea: ''
     }));
+
+    if (errors.pincode) clearFieldError('pincode');
   };
 
-  const handleStateChange = (code, name) => {
-    setFormData(prev => ({
-      ...prev, stateCode: code, stateName: name, district: ''
-    }));
-  };
-
-  const handleCityChange = (name) => {
-    setFormData(prev => ({ ...prev, district: name }));
+  // ✅ Handle local area change
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({ ...prev, localArea: name }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) clearFieldError('localArea');
   };
 
   // Form handlers
@@ -471,26 +518,18 @@ const AddStaff = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    if (name.startsWith('address.')) {
-      const addressField = name.split('.')[1];
+    if (name === 'jobType' && !SHIFT_TYPES_WITH_TIME.includes(value)) {
       setFormData(prev => ({
         ...prev,
-        address: { ...prev.address, [addressField]: value }
+        jobType: value,
+        shiftStartTime: '',
+        shiftEndTime: ''
       }));
-    } else {
-      if (name === 'jobType' && !SHIFT_TYPES_WITH_TIME.includes(value)) {
-        setFormData(prev => ({
-          ...prev,
-          jobType: value,
-          shiftStartTime: '',
-          shiftEndTime: ''
-        }));
-        setErrors(prev => ({ ...prev, shiftStartTime: '', shiftEndTime: '' }));
-        setTouched(prev => ({ ...prev, shiftStartTime: false, shiftEndTime: false }));
-        return;
-      }
-      updateFormData({ [name]: type === 'checkbox' ? checked : value });
+      setErrors(prev => ({ ...prev, shiftStartTime: '', shiftEndTime: '' }));
+      setTouched(prev => ({ ...prev, shiftStartTime: false, shiftEndTime: false }));
+      return;
     }
+    updateFormData({ [name]: type === 'checkbox' ? checked : value });
 
     if (name === 'password' && formData.confirmPassword) {
       const confirmError = validateConfirmPassword(formData.confirmPassword, value);
@@ -518,19 +557,6 @@ const AddStaff = () => {
     } else {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
-  };
-
-  const handleAddressLineChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => {
-      const updatedData = { ...prev, [name]: value };
-      const combinedPlace = buildPlace(
-        name === 'addressLine1' ? value : prev.addressLine1,
-        name === 'addressLine2' ? value : prev.addressLine2
-      );
-      updatedData.place = combinedPlace;
-      return updatedData;
-    });
   };
 
   // Language handlers
@@ -626,8 +652,19 @@ const AddStaff = () => {
       if (!formData.shiftEndTime) newErrors.shiftEndTime = 'Shift end time is required';
     }
 
+    // ✅ Address is optional, but if a pincode is given it must be complete
+    if (formData.pincode) {
+      if (!/^\d{6}$/.test(formData.pincode)) {
+        newErrors.pincode = 'Please enter a valid 6-digit pincode';
+      } else if (!formData.stateName || !formData.district) {
+        newErrors.pincode = 'Invalid pincode or no location found';
+      } else if (!formData.localArea) {
+        newErrors.localArea = 'Local area is required';
+      }
+    }
+
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async (e) => {
@@ -639,7 +676,7 @@ const AddStaff = () => {
     }
 
     const touchedFields = {};
-    ['name', 'email', 'password', 'confirmPassword', 'designation', 'roleId'].forEach(field => {
+    ['name', 'email', 'password', 'confirmPassword', 'designation', 'roleId', 'pincode', 'localArea'].forEach(field => {
       touchedFields[field] = true;
     });
     if (requiresShiftTime) {
@@ -648,7 +685,8 @@ const AddStaff = () => {
     }
     setTouched(touchedFields);
 
-    if (!validateForm()) {
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
       showWarningToast('Please fix the validation errors before submitting', TOAST_DURATION);
       return;
     }
@@ -656,7 +694,7 @@ const AddStaff = () => {
     setIsSubmitting(true);
 
     try {
-      const combinedPlace = buildPlace(formData.addressLine1, formData.addressLine2);
+      const combinedPlace = buildPlace(formData.addressLine1, formData.addressLine2, formData.localArea);
       const isActive = formData.status === 'active';
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
@@ -680,10 +718,10 @@ const AddStaff = () => {
         shiftStartTime: requiresShiftTime ? formData.shiftStartTime : undefined,
         shiftEndTime: requiresShiftTime ? formData.shiftEndTime : undefined,
         address: {
-          country: formData.countryName || undefined,
+          country: formData.pincode ? 'India' : undefined,
           state: formData.stateName || undefined,
           district: formData.district || undefined,
-          place: combinedPlace || formData.place || undefined,
+          place: combinedPlace || undefined,
           pincode: formData.pincode ? Number(formData.pincode) : undefined
         },
         status: formData.status,
@@ -796,7 +834,8 @@ const AddStaff = () => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <Card className="overflow-hidden">
+          {/* Plain container (overflow-visible) so dropdowns are not clipped */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-visible">
             <div className="p-6 space-y-6">
               {/* Profile Image Upload */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
@@ -1068,47 +1107,122 @@ const AddStaff = () => {
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                 <div className="space-y-5">
-                  <SearchableDropdown
-                    label="Country" options={countries}
-                    value={formData.countryCode} onChange={handleCountryChange}
-                    placeholder="Search for a country..." icon={MapPin}
-                  />
-                  <SearchableDropdown
-                    label="State" options={states}
-                    value={formData.stateCode} onChange={handleStateChange}
-                    placeholder="Search for a state..." icon={MapPin}
-                    disabled={!formData.countryCode}
-                  />
-                  <SearchableDropdown
-                    label="District" options={cities}
-                    value={formData.district} onChange={handleCityChange}
-                    placeholder="Search for a district..." icon={MapPin}
-                    disabled={!formData.stateCode}
-                    getOptionLabel={(option) => option.name}
-                    getOptionValue={(option) => option.name}
-                  />
-                  <div className={GRID_CLASS}>
-                    <Input
-                      label="Address Line 1" name="addressLine1" icon={Home}
-                      placeholder="Street address"
-                      value={formData.addressLine1} onChange={handleAddressLineChange}
-                    />
-                    <Input
-                      label="Address Line 2" name="addressLine2" icon={Home}
-                      placeholder="Apt, suite, unit (optional)"
-                      value={formData.addressLine2} onChange={handleAddressLineChange}
-                    />
+                  {/* Country (fixed India) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <div className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-100 flex justify-between">
+                      <span>🇮🇳 India</span>
+                      <span className="text-green-600 font-medium text-sm">✓ Default</span>
+                    </div>
                   </div>
-                  <div className={GRID_CLASS}>
-                    <Input
-                      label="Place" name="place" placeholder="Place/Locality"
-                      value={formData.place} onChange={handleChange}
-                    />
-                    <Input
-                      label="Pincode" name="pincode" placeholder="Postal code"
-                      value={formData.pincode} onChange={handleChange} maxLength={6}
-                    />
+
+                  {/* Pincode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="pincode"
+                        value={formData.pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                        onBlur={() => setTouched(prev => ({ ...prev, pincode: true }))}
+                        placeholder="Enter 6 digit pincode (Optional)"
+                        maxLength={6}
+                        className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+                          errors.pincode && touched.pincode ? 'border-red-500' : 'border-gray-300'
+                        } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent`}
+                      />
+                      {isPincodeLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                        </div>
+                      )}
+                      {!isPincodeLoading && postOffices.length > 0 && (
+                        <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Enter pincode to automatically find the location.
+                    </p>
+                    {isPincodeLoading && (
+                      <p className="text-xs text-blue-600 mt-2">Finding location...</p>
+                    )}
+                    {isPincodeError && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Unable to fetch pincode details. Please try again.
+                      </p>
+                    )}
+                    {formData.pincode.length === 6 &&
+                      !isPincodeLoading &&
+                      !isPincodeError &&
+                      postOffices.length === 0 && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Invalid pincode or no location found.
+                        </p>
+                      )}
+                    {touched.pincode && errors.pincode && (
+                      <p className="text-sm text-red-600 mt-1">{errors.pincode}</p>
+                    )}
                   </div>
+
+                  {/* State + District (read-only, auto-filled) */}
+                  <div className={GRID_CLASS}>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.stateName}
+                          readOnly
+                          placeholder="Automatically detected state"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.district}
+                          readOnly
+                          placeholder="Automatically detected district"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Local Area (post offices) */}
+                  <SearchableCityDropdown
+                    label="Local Area"
+                    options={[
+                      ...new Map(
+                        postOffices.map((office) => [
+                          office.Name,
+                          { name: office.Name }
+                        ])
+                      ).values()
+                    ]}
+                    value={formData.localArea}
+                    onChange={handleLocalAreaChange}
+                    placeholder={
+                      postOffices.length === 0
+                        ? 'Enter pincode first'
+                        : 'Select local area'
+                    }
+                    required={postOffices.length > 0}
+                    disabled={postOffices.length === 0}
+                    error={errors.localArea}
+                    touched={touched.localArea}
+                  />
+
+                  {/* Address lines → saved together with local area as `place` */}
+                  
                 </div>
               </div>
 
@@ -1147,8 +1261,8 @@ const AddStaff = () => {
             </div>
 
             {/* Actions */}
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-              <Button variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
                 Cancel
               </Button>
               <Button
@@ -1158,7 +1272,7 @@ const AddStaff = () => {
                 {isFormSubmitting ? 'Saving...' : 'Save Staff'}
               </Button>
             </div>
-          </Card>
+          </div>
         </form>
       </div>
     </div>
