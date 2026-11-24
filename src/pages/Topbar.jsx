@@ -27,7 +27,7 @@ import { registerStaffEvents, unregisterStaffEvents } from '../socket/staffEvent
 
 // ================= HELPER FUNCTIONS =================
 
-// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys
+// ✅ FIXED: async, awaits getS3ImageUrl, handles object keys, NEVER modifies signed URLs
 const getImageUrlWithCache = async (imageUrl) => {
   if (!imageUrl) return null;
 
@@ -48,18 +48,13 @@ const getImageUrlWithCache = async (imageUrl) => {
     imageUrl.startsWith('data:') ||
     imageUrl.startsWith('blob:')
   ) {
-    const separator = imageUrl.includes('?') ? '&' : '?';
-    return `${imageUrl}${separator}_t=${Date.now()}`;
+    return imageUrl;
   }
 
-  // IMPORTANT: Await S3 response
   const url = await getS3ImageUrl(imageUrl);
 
-  if (!url) return null;
-
-  const separator = url.includes('?') ? '&' : '?';
-
-  return `${url}${separator}_t=${Date.now()}`;
+  // Never append cache parameters to signed URLs
+  return url || null;
 };
 
 // Get initials from name
