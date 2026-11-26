@@ -1,5 +1,5 @@
 // src/components/super-admin/HospitalDetails.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -17,6 +17,7 @@ import {
   Globe,
   Loader2,
   ChevronRight,
+  ChevronDown,
   Bell,
   UserPlus,
   Edit2,
@@ -31,7 +32,8 @@ import {
   Monitor,
   ClipboardCheck,
   Cpu,
-  IdCard, // ✅ Added for Attendance Devices card
+  IdCard,
+  Home,
 } from 'lucide-react';
 import { Card, Button } from '../../ui';
 import { showSuccessToast, showErrorToast, showWarningToast } from '../../ui/Toast';
@@ -43,6 +45,8 @@ import { useGetBookingsQuery } from '../../../../app/service/request';
 import { useGetAmbulanceQuery } from '../../../../app/service/ambulance';
 import { useGetBloodBankQuery } from '../../../../app/service/bloodbank';
 import { useGetDevicesQuery } from '../../../../app/service/device';
+// ✅ PINCODE API
+import { useGetPincodeQuery } from '../../../../app/service/pincodeApi';
 import {
   useGetUnreadNotificationsQuery,
   useGetReadNotificationsQuery
@@ -54,6 +58,65 @@ import { uploadToS3, deleteFromS3, getS3ImageUrl } from '../../../../app/service
 const getImageUrlWithCache = (imageUrl) => {
   if (!imageUrl) return null;
   return getS3ImageUrl(imageUrl);
+};
+
+// ✅ Async image URL resolver (handles S3 object keys + signed URLs)
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey) return null;
+
+  // Extract image key if API returns an object
+  if (typeof imageKey === 'object') {
+    imageKey =
+      imageKey.key ||
+      imageKey.url ||
+      imageKey.imageUrl ||
+      imageKey.Location ||
+      null;
+  }
+
+  if (typeof imageKey !== 'string') return null;
+
+  // Already a complete image URL
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  // Get signed URL from S3
+  const url = await getS3ImageUrl(imageKey);
+  if (!url) return null;
+
+  // IMPORTANT: Do not modify signed URLs
+  return url;
+};
+
+// ✅ Phone validation helper
+const validatePhone = (phone) => {
+  if (!phone || phone.trim() === '') {
+    return 'Phone number is required';
+  }
+  if (!/^\d{10}$/.test(phone)) {
+    return 'Phone number must be exactly 10 digits';
+  }
+  return '';
+};
+
+// ✅ Pincode validation helper
+const validatePincode = (pincode) => {
+  if (!pincode) return 'Pincode is required';
+  if (!/^\d{6}$/.test(String(pincode))) return 'Pincode must be exactly 6 digits';
+  return '';
+};
+
+// ✅ Build "Local Area, Place, District, State, Country - Pincode"
+const buildLocationString = ({ localArea, place, district, state, country, pincode }) => {
+  const parts = [localArea, place, district, state, country].filter(Boolean);
+  if (parts.length === 0) return '';
+  return `${parts.join(', ')}${pincode ? ` - ${pincode}` : ''}`;
 };
 
 // ================= CONSTANTS =================
@@ -108,7 +171,7 @@ const SectionTitle = ({ icon: Icon, title }) => (
 
 // ================= PROFILE FIELD COMPONENT =================
 
-const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon }) => (
+const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: Icon, placeholder = '' }) => (
   <div>
     <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
     {isEditing ? (
@@ -117,6 +180,7 @@ const ProfileField = ({ label, value, isEditing, onChange, type = 'text', icon: 
         value={value || ''}
         onChange={onChange}
         className={INPUT_CLASS}
+        placeholder={placeholder}
       />
     ) : (
       <div className="flex items-center space-x-2">
@@ -146,42 +210,134 @@ const ProfileTextarea = ({ label, value, isEditing, onChange }) => (
   </div>
 );
 
+// ================= SEARCHABLE LOCAL AREA DROPDOWN =================
+
+const SearchableLocalAreaDropdown = ({ label, options, value, onChange, placeholder, disabled = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-500 mb-1">{label}</label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : (value || '')}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm('');
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`${INPUT_CLASS} pl-9 pr-10 ${disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''}`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={index}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ================= EDIT HOSPITAL MODAL =================
 
 const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    about: '',
-    website: '',
-    type: '',
-    location: '',
-    profileImage: null,
-    imageUrl: null,
-    imageKey: null,
-  });
-
+  const [formData, setFormData] = useState({});
   const [editForm, setEditForm] = useState({});
-  const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageFile, setImageFile] = useState(null);
   const [imageError, setImageError] = useState(false);
-  const [removeExistingImage, setRemoveExistingImage] = useState(false);
+  const [serverError, setServerError] = useState(null);
 
+  const hospitalId = hospital?.id;
+
+  // ✅ PINCODE API - only runs while modal is open and a full 6-digit pincode is entered
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(editForm.pincode, {
+    skip: !isOpen || !/^\d{6}$/.test(String(editForm.pincode || '')),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success' ? pincodeData[0].PostOffice || [] : [];
+
+  // Unique post office names for the Local Area dropdown
+  const localAreaOptions = [
+    ...new Map(postOffices.map((office) => [office.Name, { name: office.Name }])).values()
+  ];
+
+  // ✅ Load hospital into form when modal opens
   useEffect(() => {
-    if (hospital && isOpen) {
-      const existingImageUrl = hospital.imageUrl || hospital.profilePicture || hospital.profileImage;
-      const previewUrl = existingImageUrl ? getImageUrlWithCache(existingImageUrl) : null;
+    let isMounted = true;
 
-      const locationParts = [
-        hospital.address?.place,
-        hospital.address?.district,
-        hospital.address?.state,
-        hospital.address?.country
-      ].filter(Boolean);
-      const locationString = locationParts.join(', ');
+    const load = async () => {
+      if (!hospital || !isOpen) return;
+
+      const imageKey =
+        hospital.imageUrl ||
+        hospital.profilePicture ||
+        hospital.profileImage ||
+        null;
+
+      const address = hospital.address || {};
+      const place = address.place || '';
+      const district = address.district || '';
+      const localArea = address.localArea || '';
+      const state = address.state || '';
+      const country = address.country || '';
+      const pincode = address.pincode ? String(address.pincode) : '';
 
       const newFormData = {
         name: hospital.name || '',
@@ -190,31 +346,91 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
         about: hospital.about || '',
         website: hospital.website || '',
         type: hospital.type || 'Hospital',
-        location: locationString,
-        profileImage: existingImageUrl || null,
-        imageUrl: existingImageUrl || null,
-        imageKey: existingImageUrl || null,
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
+        // Address fields
+        place,
+        district,
+        localArea,
+        state,
+        country,
+        pincode,
+        location: buildLocationString({ localArea, place, district, state, country, pincode }),
       };
 
+      if (!isMounted) return;
       setFormData(newFormData);
       setEditForm(newFormData);
-      setPreviewImage(previewUrl);
-      setRemoveExistingImage(false);
       setImageFile(null);
       setImageError(false);
-      setIsEditing(true);
-    }
+      setServerError(null);
+
+      if (imageKey) {
+        const fullUrl = await getFullImageUrl(imageKey);
+        if (isMounted) setPreviewImage(fullUrl);
+      } else {
+        setPreviewImage(null);
+      }
+    };
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, [hospital, isOpen]);
 
-  const resetUploadState = () => {
-    setUploadProgress(0);
-  };
+  // ✅ Auto-fill state / district / country when pincode lookup returns
+  useEffect(() => {
+    if (!isOpen) return;
+    // Pincode unchanged from saved value -> keep saved address as-is
+    if (String(editForm.pincode || '') === String(formData.pincode || '')) return;
+
+    if (postOffices.length > 0) {
+      const { State, District } = postOffices[0];
+      setEditForm(prev => ({
+        ...prev,
+        state: State,
+        district: District,
+        country: 'India',
+        localArea: ''
+      }));
+    } else if (pincodeData && String(editForm.pincode || '').length === 6) {
+      setEditForm(prev => ({ ...prev, state: '', district: '', localArea: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
 
   const updateEditForm = (field, value) => {
     setEditForm(prev => ({
       ...prev,
       [field]: value
     }));
+    if (serverError) setServerError(null);
+  };
+
+  // ✅ Pincode change handler: digits only, max 6, resets / restores location fields
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
+    setEditForm(prev => {
+      // Back to the saved pincode -> restore the saved address fields
+      if (cleaned === String(formData.pincode || '')) {
+        return {
+          ...prev,
+          pincode: cleaned,
+          state: formData.state,
+          district: formData.district,
+          localArea: formData.localArea,
+          country: formData.country
+        };
+      }
+      // Different pincode -> clear until the lookup fills them in
+      return { ...prev, pincode: cleaned, state: '', district: '', localArea: '' };
+    });
+
+    if (serverError) setServerError(null);
   };
 
   const handleImageUpload = async (file) => {
@@ -231,12 +447,40 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
     }
 
     setUploadProgress(10);
-    setImageFile(file);
-    setPreviewImage(URL.createObjectURL(file));
-    setRemoveExistingImage(false);
-    setImageError(false);
-    setUploadProgress(100);
-    setTimeout(() => setUploadProgress(0), 1000);
+
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewImage(reader.result);
+    reader.readAsDataURL(file);
+
+    try {
+      setUploadProgress(30);
+      const uploaded = await uploadToS3(
+        file,
+        formData.imageKey || null,
+        hospitalId,
+        'hospital'
+      );
+      setUploadProgress(100);
+      setImageFile(uploaded.key);
+      setEditForm(prev => ({
+        ...prev,
+        imageUrl: uploaded.key,
+        profileImage: uploaded.key,
+        imageKey: uploaded.key
+      }));
+      setImageError(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setUploadProgress(0);
+      showErrorToast('Failed to upload image. Please try again.', 3000);
+      if (formData.profileImage) {
+        const url = await getFullImageUrl(formData.profileImage);
+        setPreviewImage(url);
+      } else {
+        setPreviewImage(null);
+      }
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -248,18 +492,12 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
     setPreviewImage(null);
     setUploadProgress(0);
     setImageFile(null);
-    if (formData.profileImage) {
-      setRemoveExistingImage(true);
-    }
+    setEditForm(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
     setImageError(false);
     showSuccessToast('Image removed', 2000);
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    updateEditForm(name, value);
-  };
-
+  // ✅ Save with full validation (phone + pincode + local area)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -268,37 +506,42 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
       return;
     }
 
+    // ✅ Validate phone before sending to backend
+    const phoneError = validatePhone(editForm.phone);
+    if (phoneError) {
+      setServerError(phoneError);
+      showErrorToast(phoneError, 3000);
+      return;
+    }
+
+    // ✅ Validate pincode before sending to backend
+    const pincodeError = validatePincode(editForm.pincode);
+    if (pincodeError) {
+      setServerError(pincodeError);
+      showErrorToast(pincodeError, 3000);
+      return;
+    }
+
+    // ✅ If pincode was changed, it must resolve to a real location
+    if (
+      String(editForm.pincode) !== String(formData.pincode || '') &&
+      (postOffices.length === 0 || !editForm.state || !editForm.district)
+    ) {
+      const msg = 'Invalid pincode or no location found';
+      setServerError(msg);
+      showErrorToast(msg, 3000);
+      return;
+    }
+
+    // ✅ Local area must be selected from the pincode's post offices
+    if (!editForm.localArea) {
+      const msg = 'Please select your local area';
+      setServerError(msg);
+      showErrorToast(msg, 3000);
+      return;
+    }
+
     try {
-      setUploadProgress(10);
-
-      let finalImageUrl = formData.profileImage;
-      const hospitalId = hospital?.id;
-
-      // Handle image removal
-      if (removeExistingImage && formData.profileImage) {
-        await deleteFromS3(formData.profileImage, hospitalId, "hospital");
-        finalImageUrl = null;
-        setUploadProgress(30);
-      }
-
-      // Upload new image if selected
-      if (imageFile) {
-        // Delete existing image if it exists (and not already removed)
-        if (formData.profileImage && !removeExistingImage) {
-          await deleteFromS3(formData.profileImage, hospitalId, "hospital");
-        }
-
-        setUploadProgress(50);
-        const uploadResult = await uploadToS3(
-          imageFile,
-          null,
-          hospitalId,
-          "hospital"
-        );
-        finalImageUrl = uploadResult.key;
-        setUploadProgress(80);
-      }
-
       const updateData = {
         name: editForm.name,
         email: editForm.email,
@@ -306,25 +549,21 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
         about: editForm.about,
         website: editForm.website,
         type: editForm.type,
-        profilePicture: finalImageUrl,
-        profileImage: finalImageUrl,
-        imageUrl: finalImageUrl,
-        imageKey: finalImageUrl,
+        profilePicture: editForm.imageUrl || editForm.profileImage || editForm.imageKey || null,
+        address: {
+          place: editForm.place,
+          district: editForm.district,
+          localArea: editForm.localArea,
+          state: editForm.state,
+          country: editForm.country,
+          pincode: editForm.pincode ? Number(editForm.pincode) : '',
+        },
       };
 
       await onSave(updateData);
-
-      setUploadProgress(100);
-      setTimeout(() => setUploadProgress(0), 1000);
-
-      setImageFile(null);
-      setPreviewImage(null);
-      setRemoveExistingImage(false);
-
     } catch (error) {
+      // Parent's handleUpdateHospital already shows the error toast
       setUploadProgress(0);
-      showErrorToast(error?.message || 'Failed to update hospital', 3000);
-      throw error;
     }
   };
 
@@ -332,10 +571,9 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
   const handleClose = () => {
     setImageFile(null);
     setPreviewImage(null);
-    setRemoveExistingImage(false);
     setImageError(false);
     setUploadProgress(0);
-    setIsEditing(false);
+    setServerError(null);
     onClose();
   };
 
@@ -343,8 +581,19 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
 
   const isUploading = uploadProgress > 0 && uploadProgress < 100;
 
+  const getProfileImage = () => {
+    if (previewImage && !imageError) return previewImage;
+    return FALLBACK_IMAGE;
+  };
+
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    setImageError(true);
+    e.target.src = FALLBACK_IMAGE;
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           {/* Modal Header */}
@@ -368,12 +617,10 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
               <div className="flex flex-col items-center">
                 <div className="relative group">
                   <img
-                    src={previewImage || getImageUrlWithCache(formData.profileImage) || FALLBACK_IMAGE}
+                    src={getProfileImage()}
                     alt="Hospital Profile"
                     className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-200"
-                    onError={() => {
-                      setImageError(true);
-                    }}
+                    onError={handleImageError}
                     loading="lazy"
                   />
                   <input
@@ -390,7 +637,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                   >
                     <Upload className="w-4 h-4 text-white" />
                   </button>
-                  {(previewImage || formData.profileImage) && (
+                  {(previewImage || editForm.profileImage) && (
                     <button
                       type="button"
                       onClick={removeImage}
@@ -464,12 +711,18 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
                   icon={Mail}
                 />
 
+                {/* ✅ Phone with 10-digit restriction */}
                 <ProfileField
                   label="Phone Number"
                   value={editForm.phone || ''}
                   isEditing={true}
-                  onChange={(e) => updateEditForm('phone', e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateEditForm('phone', value);
+                  }}
+                  type="tel"
                   icon={Phone}
+                  placeholder="10 digit phone number"
                 />
 
                 <ProfileField
@@ -482,16 +735,109 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
               </div>
             </div>
 
-            {/* Location Information Section */}
+            {/* Location Information Section - ✅ PINCODE DRIVEN */}
             <div className="bg-gray-50 rounded-xl p-6">
               <SectionTitle icon={MapPin} title="Location Information" />
-              <ProfileField
-                label="Location"
-                value={editForm.location || ''}
-                isEditing={true}
-                onChange={(e) => updateEditForm('location', e.target.value)}
-                icon={MapPin}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Pincode */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Pincode *</label>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={editForm.pincode || ''}
+                      onChange={(e) => handlePincodeChange(e.target.value)}
+                      className={INPUT_CLASS}
+                      placeholder="Enter 6 digit pincode"
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+
+                {/* Pincode lookup status */}
+                <div className="flex items-end pb-2">
+                  {isPincodeLoading && (
+                    <div className="flex items-center gap-2 text-xs text-blue-600">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Finding your location...
+                    </div>
+                  )}
+                  {!isPincodeLoading && isPincodeError && (
+                    <p className="text-xs text-red-500">
+                      Unable to fetch pincode details. Please try again.
+                    </p>
+                  )}
+                  {!isPincodeLoading && !isPincodeError && postOffices.length > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle className="w-4 h-4" />
+                      Location detected
+                    </div>
+                  )}
+                  {!isPincodeLoading && !isPincodeError && pincodeData &&
+                    String(editForm.pincode || '').length === 6 &&
+                    postOffices.length === 0 && (
+                      <p className="text-xs text-red-500">
+                        Invalid pincode or no location found.
+                      </p>
+                    )}
+                </div>
+
+                {/* State / District / Country are auto-filled, read-only */}
+                <ProfileField
+                  label="State"
+                  value={editForm.state}
+                  isEditing={false}
+                  icon={MapPin}
+                />
+                <ProfileField
+                  label="District"
+                  value={editForm.district}
+                  isEditing={false}
+                  icon={MapPin}
+                />
+                <ProfileField
+                  label="Country"
+                  value={editForm.country}
+                  isEditing={false}
+                  icon={MapPin}
+                />
+
+                {/* ✅ Local Area - dropdown of post offices */}
+                <SearchableLocalAreaDropdown
+                  label="Local Area *"
+                  options={localAreaOptions}
+                  value={editForm.localArea}
+                  onChange={(name) => updateEditForm('localArea', name)}
+                  placeholder={
+                    localAreaOptions.length === 0
+                      ? 'Enter pincode first'
+                      : 'Select your local area'
+                  }
+                  disabled={localAreaOptions.length === 0}
+                />
+
+                {/* Street Address / Place */}
+                <ProfileField
+                  label="Street Address / Place"
+                  value={editForm.place || ''}
+                  isEditing={true}
+                  onChange={(e) => updateEditForm('place', e.target.value)}
+                  icon={Home}
+                  placeholder="Place / Locality"
+                />
+
+                {/* Full Address preview */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Full Address</label>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">
+                      {buildLocationString(editForm) || 'Not specified'}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Form Actions */}
@@ -505,7 +851,7 @@ const EditHospitalModal = ({ isOpen, onClose, hospital, onSave, isSaving }) => {
               </button>
               <button
                 type="submit"
-                disabled={isSaving || isUploading}
+                disabled={isSaving || isUploading || isPincodeLoading}
                 className="flex-1 px-4 py-2 bg-[#1C62A0] hover:bg-[#4c6c88] text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {(isSaving || isUploading) && (
@@ -653,7 +999,52 @@ const HospitalDetails = () => {
 
     } catch (error) {
       console.error("Update error:", error);
-      showErrorToast(error?.data?.message || 'Failed to update hospital', 3000);
+
+      // ✅ 401 Unauthorized - Session expired
+      if (error?.status === 401) {
+        showErrorToast('Session expired. Please login again.', 3000);
+        return;
+      }
+
+      // ✅ Get backend error safely
+      const backendError = error?.data?.error;
+
+      // ✅ Backend validation/details
+      if (Array.isArray(backendError?.details) && backendError.details.length > 0) {
+        const messages = backendError.details
+          .map(detail => detail?.message)
+          .filter(Boolean);
+        const message = messages.join(', ');
+        showErrorToast(message, 3000);
+        throw error;
+      }
+
+      // ✅ Backend error.message
+      if (backendError?.message) {
+        showErrorToast(backendError.message, 3000);
+        throw error;
+      }
+
+      // ✅ Direct API message
+      if (error?.data?.message) {
+        showErrorToast(error.data.message, 3000);
+        throw error;
+      }
+
+      // ✅ RTK / fetch error
+      if (error?.error) {
+        showErrorToast(error.error, 3000);
+        throw error;
+      }
+
+      // ✅ JavaScript error
+      if (error?.message) {
+        showErrorToast(error.message, 3000);
+        throw error;
+      }
+
+      // ✅ Final fallback
+      showErrorToast('Failed to update hospital. Please try again.', 3000);
       throw error;
     } finally {
       setIsSaving(false);

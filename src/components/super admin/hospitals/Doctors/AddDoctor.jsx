@@ -1,10 +1,11 @@
-// src/components/Doctor/AddDoctors.jsx
+// src/components/superadmin/Doctor/AddDoctors.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  User, Mail, Phone, Calendar, MapPin, Lock, Image, 
+import {
+  User, Mail, Phone, Calendar, MapPin, Lock, Image,
   DollarSign, IdCard, ArrowLeft, Upload, X, GraduationCap,
-  Home, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Shield
+  Home, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Shield,
+  CreditCard
 } from 'lucide-react';
 import {
   Button,
@@ -12,6 +13,8 @@ import {
   Textarea,
   Card,
 } from "../../../ui";
+import DatePicker from "../../../ui/DatePicker";
+import CustomSelect from "../../../ui/CustomSelect";
 import {
   showSuccessToast,
   showErrorToast,
@@ -21,8 +24,105 @@ import { useAddNewDoctorMutation, useGetSpecialitiesQuery } from "../../../../..
 import { useAssignPermissionsMutation } from '../../../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../../../app/service/role';
 import { getHospitalId, getAuthUser } from '../../../../utils/auth';
-import { Country, State, City } from 'country-state-city';
+// ✅ Pincode API integration
+import { useGetPincodeQuery } from '../../../../../app/service/pincodeApi';
 import { uploadToS3 } from '../../../../../app/service/S3';
+
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonCard = ({ className = "" }) => (
+  <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className="border-b border-gray-200 px-6">
+      <div className="flex gap-8 py-4">
+        <SkeletonText width="w-24" height="h-6" />
+        <SkeletonText width="w-28" height="h-6" />
+      </div>
+    </div>
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
+        <div className="flex-shrink-0">
+          <div className="w-24 h-24 bg-gray-200 rounded-full animate-pulse"></div>
+        </div>
+        <div className="flex-1 w-full space-y-2">
+          <SkeletonText width="w-32" height="h-4" />
+          <SkeletonText width="w-36" height="h-9" className="rounded-lg" />
+          <SkeletonText width="w-48" height="h-3" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {[...Array(8)].map((_, index) => (
+          <div key={index} className="space-y-2">
+            <SkeletonText width="w-28" height="h-4" />
+            <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <SkeletonText width="w-48" height="h-6" className="mb-4" />
+        <div className="space-y-5">
+          {[...Array(3)].map((_, index) => (
+            <div key={index} className="space-y-2">
+              <SkeletonText width="w-24" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <SkeletonText width="w-16" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <SkeletonText width="w-16" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <SkeletonText width="w-48" height="h-6" className="mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[...Array(3)].map((_, index) => (
+            <div key={index} className="space-y-2">
+              <SkeletonText width="w-28" height="h-4" />
+              <SkeletonText width="w-full" height="h-10" className="rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 pt-4 flex justify-end gap-3">
+        <SkeletonText width="w-24" height="h-10" className="rounded-lg" />
+        <SkeletonText width="w-28" height="h-10" className="rounded-lg" />
+      </div>
+    </div>
+  </div>
+);
+
+const AddDoctorSkeleton = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <SkeletonText width="w-10" height="h-10" className="rounded-lg" />
+          <div>
+            <SkeletonText width="w-48" height="h-7" />
+            <SkeletonText width="w-64" height="h-4" className="mt-1" />
+          </div>
+        </div>
+      </div>
+      <SkeletonCard />
+    </div>
+  </div>
+);
+
+// ============ END SKELETON LOADING COMPONENTS ============
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
@@ -42,9 +142,9 @@ const TABS = [
 ];
 
 const REQUIRED_FIELDS = [
-  'firstName', 'lastName', 'department', 'qualification', 'fees', 
+  'firstName', 'lastName', 'department', 'qualification', 'fees',
   'phoneNumber', 'email', 'dob', 'gender', 'registrationNumber', 'joiningDate',
-  'knownLanguages', 'countryName', 'stateName', 'district', 'displayName', 
+  'knownLanguages', 'stateName', 'district', 'displayName',
   'password', 'confirmPassword', 'experience', 'roleId'
 ];
 
@@ -100,12 +200,12 @@ const validatePasswordStrength = (password) => {
   return '';
 };
 
-const SearchableDropdown = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -170,14 +270,14 @@ const SearchableDropdown = ({
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -192,7 +292,7 @@ const SearchableDropdown = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No options found
@@ -211,63 +311,103 @@ const SearchableDropdown = ({
   );
 };
 
-const GenderDropdown = ({ value, onChange, error, touched, required, onBlur }) => {
+// ✅ Searchable dropdown for local area (post offices)
+const SearchableCityDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
+}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearchTerm("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selectedGender = GENDER_OPTIONS.find(option => option.value === value);
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const showError = touched && error;
 
   return (
     <div className="relative" ref={dropdownRef}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        Gender {required && <span className="text-red-500">*</span>}
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
-        <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          onBlur={onBlur}
-          className={`w-full pl-10 pr-10 py-2 text-left border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between ${
-            error && touched ? 'border-red-500' : 'border-gray-300'
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : value}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm("");
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
-        >
-          <span className={!selectedGender ? 'text-gray-400' : 'text-gray-700'}>
-            {selectedGender ? selectedGender.label : 'Select gender'}
-          </span>
-          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => setIsOpen(!isOpen)}
+        />
       </div>
-      
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-          {GENDER_OPTIONS.map((option) => (
+
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
             <div
-              key={option.value}
+              key={index}
               className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
-              onClick={() => {
-                onChange({ target: { name: 'gender', value: option.value } });
-                setIsOpen(false);
-              }}
+              onClick={() => handleSelect(option)}
             >
-              <Users className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-700">{option.label}</span>
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
             </div>
           ))}
         </div>
       )}
-      
-      {touched && error && <p className="text-sm text-red-600 mt-1">{error}</p>}
+
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
     </div>
   );
 };
@@ -417,71 +557,62 @@ const AddDoctor = () => {
   const navigate = useNavigate();
   // Get hospital ID from route params
   const { id: hospitalIdFromRoute } = useParams();
-  
+
   // Use route param for hospital ID, fallback to auth
   const hospitalId = hospitalIdFromRoute || getHospitalId();
-  
+
   const authUser = getAuthUser();
   const hospitalName = authUser?.name || '';
-  
-  // ✅ FIXED: Properly destructure the mutation hook
-  const [addNewDoctor, { isLoading: isAddingDoctor }] = useAddNewDoctorMutation();
-  
-  const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // ✅ FIXED: Fetch roles with proper hospitalId
-  const { 
-    data: rolesData, 
+
+  const [addNewDoctor] = useAddNewDoctorMutation();
+  const [assignPermissions] = useAssignPermissionsMutation();
+
+  const {
+    data: rolesData,
     isLoading: rolesLoading,
-    error: rolesError 
+    error: rolesError
   } = useGetRolesQuery({
     hospitalId: hospitalId,
     limit: 100
+  }, {
+    skip: !hospitalId
   });
-  
-  // ✅ FIXED: Properly extract roles from the response
+
   const rolesList = React.useMemo(() => {
-    
-    // Check if we have roles in the response
     if (!rolesData) return [];
-    
-    // Try to get roles from different possible response structures
     let roles = [];
-    
-    // Check for admin roles (id=2)
+
     if (rolesData.admin && Array.isArray(rolesData.admin)) {
       roles = [...roles, ...rolesData.admin.filter(role => role.id === 2)];
     }
-    
-    // Check for hospital-specific roles
+
     if (rolesData.data && Array.isArray(rolesData.data)) {
       const hospitalRoles = rolesData.data.filter(role => role.hospitalId === Number(hospitalId));
       roles = [...roles, ...hospitalRoles];
     }
-    
-    // If no roles found, try to get from data directly
+
     if (roles.length === 0 && Array.isArray(rolesData)) {
       roles = rolesData.filter(role => role.hospitalId === Number(hospitalId));
     }
-    
-    // If still no roles, try to get from rolesData.roles
+
     if (roles.length === 0 && rolesData.roles && Array.isArray(rolesData.roles)) {
       roles = rolesData.roles.filter(role => role.hospitalId === Number(hospitalId));
     }
-    
+
     return roles;
   }, [rolesData, hospitalId]);
 
-  // ✅ FIXED: Log roles for debugging
   useEffect(() => {
-    if (rolesData) {
-    }
     if (rolesError) {
       console.error("❌ Roles Error:", rolesError);
     }
   }, [rolesData, rolesError]);
 
-  const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
+  const { data: specialitiesData, isLoading: isLoadingSpecialities } =
+    useGetSpecialitiesQuery({
+      page: 1,
+      limit: 1000,
+    });
 
   const departmentOptions = React.useMemo(() => {
     const rows = specialitiesData?.data || [];
@@ -492,6 +623,13 @@ const AddDoctor = () => {
       label: spec.name.toUpperCase()
     }));
   }, [specialitiesData]);
+
+  const roleOptions = React.useMemo(() => {
+    return rolesList.map(role => ({
+      value: String(role.id),
+      label: role.name || role.roleName || String(role.id),
+    }));
+  }, [rolesList]);
 
   const [formData, setFormData] = useState({
     profileImage: null,
@@ -509,11 +647,11 @@ const AddDoctor = () => {
     registrationNumber: '',
     knownLanguages: [],
     about: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
+    // ✅ Pincode-based location states
+    countryName: 'India',
     stateName: '',
     district: '',
+    localArea: '',
     place: '',
     pincode: '',
     displayName: '',
@@ -552,10 +690,60 @@ const AddDoctor = () => {
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState('');
 
-  const countries = Country.getAllCountries();
-  const states = State.getStatesOfCountry(formData.countryCode);
-  const cities = City.getCitiesOfState(formData.countryCode, formData.stateCode);
+  // ✅ Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === "Success"
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // ✅ Automatically populate state and district
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+
+      setFormData(prev => ({
+        ...prev,
+        stateName: firstOffice.State,
+        district: firstOffice.District,
+        localArea: ''
+      }));
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
+
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 6);
+
+    setFormData(prev => ({
+      ...prev,
+      pincode: cleaned,
+      stateName: '',
+      district: '',
+      localArea: ''
+    }));
+
+    if (errors.pincode) {
+      setErrors(prev => ({ ...prev, pincode: '' }));
+    }
+  };
 
   const updateScheduleForDay = (day, newSchedule) => {
     setFormData(prev => ({
@@ -567,39 +755,12 @@ const AddDoctor = () => {
     }));
   };
 
-  const handleCountryChange = (code, name) => {
-    setFormData(prev => ({
-      ...prev,
-      countryCode: code,
-      countryName: name,
-      stateCode: '',
-      stateName: '',
-      district: ''
-    }));
-  };
-
-  const handleStateChange = (code, name) => {
-    setFormData(prev => ({
-      ...prev,
-      stateCode: code,
-      stateName: name,
-      district: ''
-    }));
-  };
-
-  const handleCityChange = (name) => {
-    setFormData(prev => ({
-      ...prev,
-      district: name
-    }));
-  };
-
   const handleDepartmentChange = (departmentValue) => {
     setFormData(prev => ({
       ...prev,
       department: departmentValue
     }));
-    
+
     if (touched.department) {
       const error = validateField('department', departmentValue);
       setErrors(prev => ({ ...prev, department: error }));
@@ -620,6 +781,18 @@ const AddDoctor = () => {
       ...prev,
       knownLanguages: prev.knownLanguages.filter(lang => lang !== languageValue)
     }));
+  };
+
+  // ✅ Handle local area change
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({
+      ...prev,
+      localArea: name
+    }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) {
+      setErrors(prev => ({ ...prev, localArea: '' }));
+    }
   };
 
   const getRoleNameById = (roleId) => {
@@ -662,11 +835,15 @@ const AddDoctor = () => {
         return '';
       case 'dob':
       case 'gender':
-      case 'countryName':
       case 'stateName':
       case 'district':
+      case 'localArea':
       case 'roleId':
         if (!value) return `${name.charAt(0).toUpperCase() + name.slice(1)} is required`;
+        return '';
+      case 'pincode':
+        if (!value) return 'Pincode is required';
+        if (!/^\d{6}$/.test(String(value))) return 'Please enter a valid 6-digit pincode';
         return '';
       case 'knownLanguages':
         if (!value || value.length === 0) return 'At least one language is required';
@@ -693,21 +870,30 @@ const AddDoctor = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    REQUIRED_FIELDS.forEach(field => {
+
+    // ✅ Validate required fields + pincode & localArea
+    const fieldsToValidate = [...REQUIRED_FIELDS, 'localArea', 'pincode'];
+
+    fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
     }));
-    
+
+    if (name === 'password') {
+      setPasswordStrength(validatePasswordStrength(value));
+    }
+
     if (touched[name]) {
       const error = validateField(name, type === 'checkbox' ? (checked ? 'true' : 'false') : value);
       setErrors(prev => ({ ...prev, [name]: error }));
@@ -721,9 +907,25 @@ const AddDoctor = () => {
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
+  const handleJoiningDateChange = (isoDate) => {
+    setFormData(prev => ({ ...prev, joiningDate: isoDate }));
+    setTouched(prev => ({ ...prev, joiningDate: true }));
+
+    const error = validateField('joiningDate', isoDate);
+    setErrors(prev => ({ ...prev, joiningDate: error }));
+  };
+
+  const handleDobChange = (isoDate) => {
+    setFormData(prev => ({ ...prev, dob: isoDate }));
+    setTouched(prev => ({ ...prev, dob: true }));
+
+    const error = validateField('dob', isoDate);
+    setErrors(prev => ({ ...prev, dob: error }));
+  };
+
   const handleImageUpload = async (file) => {
     if (!file) return false;
-    
+
     if (file.size > MAX_FILE_SIZE) {
       showWarningToast('File size must be less than 5MB');
       return false;
@@ -741,8 +943,8 @@ const AddDoctor = () => {
 
     try {
       const uploaded = await uploadToS3(file);
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData(prev => ({
+        ...prev,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
@@ -772,29 +974,27 @@ const AddDoctor = () => {
     const consultingTwoArray = [];
 
     Object.entries(formData.weeklySchedule).forEach(([day, schedule]) => {
-      if (!schedule.isHoliday) {
-        if (schedule.hasBreak) {
-          consultingTwoArray.push({
-            day: day,
-            morning_session: {
-              open: schedule.morningOpen,
-              close: schedule.morningClose
-            },
-            evening_session: {
-              open: schedule.eveningOpen,
-              close: schedule.eveningClose
-            },
-            is_holiday: false,
-            has_break: true
-          });
-        } else {
-          consultingOneArray.push({
-            day: day,
-            opening_time: schedule.morningOpen,
-            closing_time: schedule.morningClose,
-            is_holiday: false
-          });
-        }
+      if (schedule.hasBreak) {
+        consultingTwoArray.push({
+          day,
+          morning_session: {
+            open: schedule.morningOpen,
+            close: schedule.morningClose,
+          },
+          evening_session: {
+            open: schedule.eveningOpen,
+            close: schedule.eveningClose,
+          },
+          is_holiday: schedule.isHoliday === true,
+          has_break: true,
+        });
+      } else {
+        consultingOneArray.push({
+          day,
+          opening_time: schedule.morningOpen,
+          closing_time: schedule.morningClose,
+          is_holiday: schedule.isHoliday === true,
+        });
       }
     });
 
@@ -807,27 +1007,36 @@ const AddDoctor = () => {
       gender: formData.gender?.toLowerCase(),
       knowLanguages: formData.knownLanguages,
       qualification: formData.qualification,
+
+      // ✅ Address with localArea
       address: {
         country: formData.countryName,
         state: formData.stateName,
         district: formData.district,
+        localArea: formData.localArea,
         place: formData.place || "",
-        pincode: formData.pincode ? Number(formData.pincode) : ""
+        pincode: formData.pincode ? Number(formData.pincode) : "",
       },
+
       firstName: formData.firstName,
       lastName: formData.lastName,
       fees: Number(formData.fees),
       department: formData.department,
       specialist: formData.specialist || "",
+
       consultingOne: consultingOneArray,
       consultingTwo: consultingTwoArray,
+
       bookingOpen: formData.bookingOpen,
-      displayName: formData.displayName || `${formData.firstName} ${formData.lastName}`,
+      displayName:
+        formData.displayName ||
+        `${formData.firstName} ${formData.lastName}`,
       experience: formData.experience,
       profileImage: formData.profileImage || undefined,
       imageKey: formData.imageKey || undefined,
       roleId: Number(formData.roleId),
       hospitalName: hospitalName,
+      hospitalId: hospitalId,
     };
 
     if (formData.registrationNumber) {
@@ -838,9 +1047,11 @@ const AddDoctor = () => {
       doctorData.appoimentCount = Number(formData.appointmentCount);
     }
 
-    if (formData.outDoorConsultingOpen && 
-        formData.outDoorConsultingClose && 
-        formData.outDoorConsultingPlace) {
+    if (
+      formData.outDoorConsultingOpen &&
+      formData.outDoorConsultingClose &&
+      formData.outDoorConsultingPlace
+    ) {
       doctorData.outDoorConsulting = {
         time: {
           open: formData.outDoorConsultingOpen,
@@ -855,29 +1066,27 @@ const AddDoctor = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please try again.');
+      return;
+    }
+
     const touchedFields = {};
-    REQUIRED_FIELDS.forEach(field => touchedFields[field] = true);
+    [...REQUIRED_FIELDS, 'localArea', 'pincode'].forEach(field => touchedFields[field] = true);
     setTouched(touchedFields);
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
-      
+
       try {
         const doctorData = prepareDoctorData();
         const roleId = Number(formData.roleId);
         const selectedRoleName = getRoleNameById(roleId);
-        
-        
-        // ✅ FIXED: Now addNewDoctor is properly defined
-const result = await addNewDoctor({
-  ...doctorData,
-  hospitalId: Number(hospitalId),
-}).unwrap();
 
-const doctor = result.data || result;
-        
-        
+        const result = await addNewDoctor(doctorData).unwrap();
+        const doctor = result.data || result;
+
         if (doctor?.id && roleId) {
           const payload = {
             hospitalId: Number(hospitalId),
@@ -890,23 +1099,32 @@ const doctor = result.data || result;
               }
             ]
           };
-          
           await assignPermissions(payload).unwrap();
         }
-        
+
         showSuccessToast(
           `Dr. ${formData.firstName} ${formData.lastName} has been added with role ${selectedRoleName}!`
         );
-        
-        // Navigate back to the hospital's doctors list
+
         setTimeout(() => {
           navigate(`/super-admin/hospitals/${hospitalId}/doctors`);
         }, 2000);
-        
+
       } catch (error) {
-        console.error("❌ Error adding doctor:", error);
+        console.error("Error adding doctor:", error);
+
         if (error.status === 409) {
-          showErrorToast('Email already exists! Please use a different email address.');
+          showErrorToast(
+            'Email already exists! Please use a different email address.'
+          );
+        } else if (error.data?.error?.details?.length) {
+          const validationMessages = error.data.error.details
+            .map(detail => detail.message)
+            .filter(Boolean);
+
+          showErrorToast(`❌ ${validationMessages.join(', ')}`);
+        } else if (error.data?.error?.message) {
+          showErrorToast(`❌ ${error.data.error.message}`);
         } else if (error.data?.message) {
           showErrorToast(`❌ ${error.data.message}`);
         } else {
@@ -923,20 +1141,32 @@ const doctor = result.data || result;
     }
   };
 
-  // Navigate back to the hospital's doctors list
   const handleGoBack = () => {
     navigate(`/super-admin/hospitals/${hospitalId}/doctors`);
   };
 
-  if (rolesLoading) {
+  if (!hospitalId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading roles...</p>
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">
+            Please go back and try again.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => navigate('/super-admin/hospitals')}
+          >
+            Go to Hospitals
+          </Button>
         </div>
       </div>
     );
+  }
+
+  if (rolesLoading) {
+    return <AddDoctorSkeleton />;
   }
 
   return (
@@ -980,7 +1210,6 @@ const doctor = result.data || result;
 
             {activeTab === 'basic' && (
               <div className="p-6 space-y-6">
-                {/* Profile Image Section */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                   <div className="flex-shrink-0">
                     <div className="relative">
@@ -1016,7 +1245,28 @@ const doctor = result.data || result;
                 </div>
 
                 <div className={GRID_CLASS}>
-                  <Input label="Joining Date" name="joiningDate" type="date" icon={Calendar} value={formData.joiningDate} onChange={handleChange} onBlur={handleBlur} error={errors.joiningDate} touched={touched.joiningDate} required />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Joining Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                      <DatePicker
+                        value={formData.joiningDate}
+                        onChange={handleJoiningDateChange}
+                        mode="any"
+                        placeholder="DD/MM/YYYY"
+                        className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent ${
+                          errors.joiningDate && touched.joiningDate
+                            ? 'border-red-500 focus:ring-red-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                    {errors.joiningDate && touched.joiningDate && (
+                      <p className="text-sm text-red-600 mt-1">{errors.joiningDate}</p>
+                    )}
+                  </div>
                   <Input label="Experience (years)" name="experience" icon={Briefcase} placeholder="e.g., 5" value={formData.experience} onChange={handleChange} onBlur={handleBlur} error={errors.experience} touched={touched.experience} required />
                 </div>
 
@@ -1037,55 +1287,42 @@ const doctor = result.data || result;
                   {touched.department && errors.department && (
                     <p className="text-sm text-red-600 -mt-4">{errors.department}</p>
                   )}
-                  
-                  <Input 
-                    label="Specialist" 
-                    name="specialist" 
-                    icon={IdCard} 
-                    placeholder="e.g., Cardiologist (Optional)" 
-                    value={formData.specialist} 
-                    onChange={handleChange} 
-                    onBlur={handleBlur} 
-                    error={errors.specialist} 
-                    touched={touched.specialist} 
+
+                  <Input
+                    label="Specialist"
+                    name="specialist"
+                    icon={IdCard}
+                    placeholder="e.g., Cardiologist (Optional)"
+                    value={formData.specialist}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.specialist}
+                    touched={touched.specialist}
                   />
                 </div>
 
-                {/* ✅ FIXED: Role Selection with proper data */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign Role <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <select
-                      name="roleId"
-                      value={formData.roleId}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select a role</option>
-                      {rolesList && rolesList.length > 0 ? (
-                        rolesList.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name || role.roleName || `Role ${role.id}`}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="" disabled>No roles available</option>
-                      )}
-                    </select>
-                    {formData.roleId && (
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
-                          {getRoleNameById(formData.roleId)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {touched.roleId && errors.roleId && (
-                    <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>
+                  <CustomSelect
+                    label="Assign Role"
+                    icon={Shield}
+                    placeholder="Select a role"
+                    value={formData.roleId}
+                    options={roleOptions}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, roleId: value }));
+                      setTouched(prev => ({ ...prev, roleId: true }));
+                      setErrors(prev => ({ ...prev, roleId: validateField('roleId', value) }));
+                    }}
+                    error={errors.roleId}
+                    touched={touched.roleId}
+                    required
+                  />
+                  {formData.roleId && (
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                        {getRoleNameById(formData.roleId)}
+                      </span>
+                    </div>
                   )}
                   {rolesList && rolesList.length === 0 && !rolesLoading && (
                     <p className="mt-1 text-xs text-yellow-600">
@@ -1105,14 +1342,43 @@ const doctor = result.data || result;
                 </div>
 
                 <div className={GRID_CLASS}>
-                  <Input label="Date of Birth" name="dob" type="date" icon={Calendar} value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} required />
-                  <GenderDropdown 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Date of Birth <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                      <DatePicker
+                        value={formData.dob}
+                        onChange={handleDobChange}
+                        mode="dob"
+                        placeholder="DD/MM/YYYY"
+                        className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent ${
+                          errors.dob && touched.dob
+                            ? 'border-red-500 focus:ring-red-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                    </div>
+                    {errors.dob && touched.dob && (
+                      <p className="text-sm text-red-600 mt-1">{errors.dob}</p>
+                    )}
+                  </div>
+
+                  <CustomSelect
+                    label="Gender"
+                    icon={Users}
+                    placeholder="Select gender"
                     value={formData.gender}
-                    onChange={handleChange}
+                    options={GENDER_OPTIONS}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, gender: value }));
+                      setTouched(prev => ({ ...prev, gender: true }));
+                      setErrors(prev => ({ ...prev, gender: validateField('gender', value) }));
+                    }}
                     error={errors.gender}
                     touched={touched.gender}
-                    required={true}
-                    onBlur={handleBlur}
+                    required
                   />
                 </div>
 
@@ -1124,7 +1390,7 @@ const doctor = result.data || result;
                   <label className="block text-sm font-medium text-gray-700">
                     Known Languages <span className="text-red-500">*</span>
                   </label>
-                  
+
                   {formData.knownLanguages.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {formData.knownLanguages.map(lang => (
@@ -1137,7 +1403,7 @@ const doctor = result.data || result;
                       ))}
                     </div>
                   )}
-                  
+
                   <div className="relative">
                     <button
                       type="button"
@@ -1149,7 +1415,7 @@ const doctor = result.data || result;
                       <span>{formData.knownLanguages.length === 0 ? 'Select languages' : `${formData.knownLanguages.length} language(s) selected`}</span>
                       <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
-                    
+
                     {isLanguageDropdownOpen && (
                       <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
                         {LANGUAGE_OPTIONS.map(lang => (
@@ -1171,49 +1437,138 @@ const doctor = result.data || result;
 
                 <Textarea label="About" name="about" rows={3} placeholder="Write a brief description..." value={formData.about} onChange={handleChange} />
 
+                {/* ✅ REPLACED: Address Information with Pincode API */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                   <div className="space-y-5">
-                    <SearchableDropdown
-                      label="Country"
-                      options={countries}
-                      value={formData.countryCode}
-                      onChange={handleCountryChange}
-                      placeholder="Search for a country..."
-                      icon={MapPin}
-                      required={true}
-                    />
-                    {touched.countryName && errors.countryName && <p className="text-sm text-red-600">{errors.countryName}</p>}
+                    {/* Country (fixed India) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Country
+                      </label>
+                      <div className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-100 flex justify-between">
+                        <span>🇮🇳 India</span>
+                        <span className="text-green-600 font-medium text-sm">✓ Default</span>
+                      </div>
+                    </div>
 
-                    <SearchableDropdown
-                      label="State"
-                      options={states}
-                      value={formData.stateCode}
-                      onChange={handleStateChange}
-                      placeholder="Search for a state..."
-                      icon={MapPin}
-                      disabled={!formData.countryCode}
-                      required={true}
-                    />
-                    {touched.stateName && errors.stateName && <p className="text-sm text-red-600">{errors.stateName}</p>}
+                    {/* Pincode */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pincode <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={formData.pincode}
+                          onChange={(e) => handlePincodeChange(e.target.value)}
+                          onBlur={() => setTouched(prev => ({ ...prev, pincode: true }))}
+                          placeholder="Enter 6 digit pincode"
+                          maxLength={6}
+                          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+                            errors.pincode && touched.pincode ? 'border-red-500' : 'border-gray-300'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                        />
+                        {isPincodeLoading && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                          </div>
+                        )}
+                        {!isPincodeLoading && postOffices.length > 0 && (
+                          <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Enter pincode to automatically find your location.
+                      </p>
+                      {isPincodeLoading && (
+                        <p className="text-xs text-blue-600 mt-2">Finding your location...</p>
+                      )}
+                      {isPincodeError && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Unable to fetch pincode details. Please try again.
+                        </p>
+                      )}
+                      {formData.pincode.length === 6 &&
+                        !isPincodeLoading &&
+                        !isPincodeError &&
+                        postOffices.length === 0 && (
+                          <p className="text-xs text-red-500 mt-2">
+                            Invalid pincode or no location found.
+                          </p>
+                        )}
+                      {touched.pincode && errors.pincode && (
+                        <p className="text-sm text-red-600 mt-1">{errors.pincode}</p>
+                      )}
+                    </div>
 
-                    <SearchableDropdown
-                      label="District"
-                      options={cities}
-                      value={formData.district}
-                      onChange={handleCityChange}
-                      placeholder="Search for a district..."
-                      icon={MapPin}
-                      disabled={!formData.stateCode}
-                      required={true}
-                      getOptionLabel={(option) => option.name}
-                      getOptionValue={(option) => option.name}
-                    />
-                    {touched.district && errors.district && <p className="text-sm text-red-600">{errors.district}</p>}
+                    {/* State (read-only, auto-filled) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        State
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.stateName}
+                          readOnly
+                          placeholder="Automatically detected state"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                      {touched.stateName && errors.stateName && (
+                        <p className="text-sm text-red-600 mt-1">{errors.stateName}</p>
+                      )}
+                    </div>
 
+                    {/* District (read-only, auto-filled) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        District <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.district}
+                          readOnly
+                          placeholder="Automatically detected district"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                      {touched.district && errors.district && (
+                        <p className="text-sm text-red-600 mt-1">{errors.district}</p>
+                      )}
+                    </div>
+
+                    {/* Local Area / Place (post offices dropdown) */}
+                    <SearchableCityDropdown
+                      label="Local Area / Place"
+                      options={[
+                        ...new Map(
+                          postOffices.map((office) => [
+                            office.Name,
+                            { name: office.Name }
+                          ])
+                        ).values()
+                      ]}
+                      value={formData.localArea}
+                      onChange={handleLocalAreaChange}
+                      placeholder={
+                        postOffices.length === 0
+                          ? 'Enter pincode first'
+                          : 'Select your local area'
+                      }
+                      required={true}
+                      disabled={postOffices.length === 0}
+                      error={errors.localArea}
+                      touched={touched.localArea}
+                    />
+
+                    {/* Street Address / Place */}
                     <div className={GRID_CLASS}>
-                      <Input label="Place" name="place" placeholder="Place/Locality" value={formData.place} onChange={handleChange} />
-                      <Input label="Pincode" name="pincode" placeholder="Postal code" value={formData.pincode} onChange={handleChange} />
+                      <Input label="Street Address / Place" name="place" placeholder="Place/Locality" value={formData.place} onChange={handleChange} />
                     </div>
                   </div>
                 </div>
@@ -1222,7 +1577,7 @@ const doctor = result.data || result;
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                   <div className={GRID_CLASS}>
                     <Input label="Display Name" name="displayName" icon={User} placeholder="How name appears on profile" value={formData.displayName} onChange={handleChange} onBlur={handleBlur} error={errors.displayName} touched={touched.displayName} required />
-                    
+
                     <div className="relative">
                       <Input label="Password" name="password" type={showPassword ? "text" : "password"} required icon={Lock} placeholder="Create password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={errors.password} touched={touched.password} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400">
@@ -1238,7 +1593,7 @@ const doctor = result.data || result;
                         Password must contain: 8+ chars, uppercase, lowercase, number & special character
                       </p>
                     </div>
-                    
+
                     <div className="relative">
                       <Input label="Confirm Password" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} required icon={Lock} placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur} error={errors.confirmPassword} touched={touched.confirmPassword} />
                       <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400">
@@ -1253,7 +1608,7 @@ const doctor = result.data || result;
             {activeTab === 'professional' && (
               <div className="p-6 space-y-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
-                
+
                 <div className="space-y-4">
                   {WEEK_DAYS.map((day) => (
                     <DayScheduleRow
@@ -1268,11 +1623,11 @@ const doctor = result.data || result;
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-6">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                     <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-                      <Home className="h-5 w-5 text-blue-600" /> 
+                      <Home className="h-5 w-5 text-blue-600" />
                       Out Door Consulting
                     </h3>
                   </div>
-                  
+
                   <div className="p-5 space-y-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1301,7 +1656,7 @@ const doctor = result.data || result;
                         </div>
                       </div>
                     </div>
- 
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Consulting Place
@@ -1367,8 +1722,8 @@ const doctor = result.data || result;
 
             <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
               <Button variant="outline" onClick={handleGoBack}>Cancel</Button>
-              <Button type="submit" variant="primary" disabled={isSubmitting || isAddingDoctor || isAssigning} loading={isSubmitting || isAddingDoctor || isAssigning}>
-                {isSubmitting || isAddingDoctor || isAssigning ? 'Saving...' : 'Save Doctor'}
+              <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Doctor'}
               </Button>
             </div>
           </Card>

@@ -1,12 +1,75 @@
 // src/components/super-admin/StaffDetailsModal.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Badge, Button } from '../../../ui';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // ✅ Import shared S3 helper (env-driven base URL)
 import { getS3ImageUrl } from "../../../../../app/service/S3";
 
+// ================= ✅ S3 HELPERS (same pattern as HospitalDoctorsList) =================
+
+// Async resolver — no cache-busting on signed S3 URLs
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey || typeof imageKey !== 'string') return null;
+
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  const url = await getS3ImageUrl(imageKey);
+  return url || null;
+};
+
+// Extract the raw image field from a staff record (handles all possible backend keys)
+const getStaffRawImage = (staff) =>
+  staff?.imageUrl ||
+  staff?.profileImage ||
+  staff?.imageKey ||
+  staff?.image ||
+  null;
+
 const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
+  // ✅ Resolved S3 image URL (matches HospitalDoctorsList pattern)
+  const [imageUrl, setImageUrl] = useState(null);
+  const [imageError, setImageError] = useState(false);
+
+  // ✅ Resolve the signed S3 URL whenever the staff prop changes
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadImage = async () => {
+      const raw = getStaffRawImage(staff);
+      if (!raw) {
+        setImageUrl(null);
+        return;
+      }
+
+      try {
+        const url = await getFullImageUrl(raw);
+        if (!cancelled) {
+          setImageUrl(url);
+          setImageError(false);
+        }
+      } catch (err) {
+        console.error('Staff image loading failed:', err);
+        if (!cancelled) {
+          setImageUrl(null);
+        }
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [staff]);
+
   if (!staff) return null;
 
   // Format date helper
@@ -26,13 +89,11 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
   // Format address helper - handles both string and object addresses
   const formatAddress = (address) => {
     if (!address) return 'N/A';
-    
-    // If it's already a string, return it
+
     if (typeof address === 'string') {
       return address;
     }
-    
-    // If it's an object, format it nicely
+
     if (typeof address === 'object') {
       const parts = [
         address.place,
@@ -42,10 +103,10 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
         address.country,
         address.pincode || address.zipCode
       ].filter(Boolean);
-      
+
       return parts.length > 0 ? parts.join(', ') : 'N/A';
     }
-    
+
     return 'N/A';
   };
 
@@ -55,11 +116,8 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return value.toString();
     if (typeof value === 'object') {
-      // If it's an object with a name property
       if (value.name) return value.name;
-      // If it's an object with a title property
       if (value.title) return value.title;
-      // Otherwise, try to stringify
       try {
         return JSON.stringify(value);
       } catch {
@@ -79,13 +137,18 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
       {/* Staff Photo + Name + ID */}
       <div className="flex items-center gap-4 mb-6">
         <Avatar className="w-16 h-16">
-          <AvatarImage
-            src={getS3ImageUrl(staff.imageUrl)}
-            alt={staff.name}
-          />
-          <AvatarFallback className="text-xl font-medium bg-gradient-to-br from-purple-100 to-purple-200">
-            {staff.name?.charAt(0)?.toUpperCase() || '?'}
-          </AvatarFallback>
+          {/* ✅ Conditional render — only show image if it resolved and hasn't errored */}
+          {imageUrl && !imageError ? (
+            <AvatarImage
+              src={imageUrl}
+              alt={staff.name}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <AvatarFallback className="text-xl font-medium bg-gradient-to-br from-purple-100 to-purple-200">
+              {staff.name?.charAt(0)?.toUpperCase() || '?'}
+            </AvatarFallback>
+          )}
         </Avatar>
 
         <div>
@@ -105,7 +168,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
 
       {/* Staff Details Grid */}
       <div className="grid grid-cols-2 gap-4">
-        {/* Designation */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Designation
@@ -113,7 +175,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatField(staff.designation)}</p>
         </div>
 
-        {/* Department */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Department
@@ -123,7 +184,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           </p>
         </div>
 
-        {/* Gender */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Gender
@@ -131,7 +191,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatField(staff.gender)}</p>
         </div>
 
-        {/* Phone */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Phone
@@ -139,7 +198,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatField(staff.phone)}</p>
         </div>
 
-        {/* Email */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Email
@@ -147,7 +205,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1 break-words">{formatField(staff.email)}</p>
         </div>
 
-        {/* Joining Date */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Joining Date
@@ -155,7 +212,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatDate(staff.joiningDate)}</p>
         </div>
 
-        {/* Date of Birth */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Date of Birth
@@ -163,7 +219,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatDate(staff.dob)}</p>
         </div>
 
-        {/* Status Badge */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Status
@@ -177,7 +232,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           </div>
         </div>
 
-        {/* Hospital ID */}
         {staff.hospitalId && (
           <div>
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -187,7 +241,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           </div>
         )}
 
-        {/* Address (full width) */}
         <div className="col-span-2">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
             Address
@@ -195,7 +248,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           <p className="text-sm text-gray-800 mt-1">{formatAddress(staff.address)}</p>
         </div>
 
-        {/* Qualifications (if available) */}
         {staff.qualifications && (
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -205,7 +257,6 @@ const StaffDetailsModal = ({ staff, onClose, onEdit }) => {
           </div>
         )}
 
-        {/* Experience (if available) */}
         {staff.experience && (
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
